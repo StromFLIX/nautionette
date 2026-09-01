@@ -446,6 +446,15 @@ async def cancel_run(workflow_id: str) -> dict[str, Any]:
     return {"ok": True}
 
 
+@app.post("/api/runs/{workflow_id}/terminate", dependencies=[Depends(require_user)])
+async def terminate_run(workflow_id: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    """For a run that cannot be asked nicely, because its worker cannot load it."""
+    await temporal.terminate(workflow_id, payload.get("reason") or "terminated from the app")
+    db.update_run(workflow_id, "terminated")
+    bus.publish("run.terminated", {"workflow_id": workflow_id})
+    return {"ok": True}
+
+
 # -------------------------------------------------------------------- trigger
 
 

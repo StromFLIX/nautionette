@@ -95,6 +95,15 @@ class TemporalGateway:
         client = await self.client()
         await client.get_workflow_handle(workflow_id).cancel()
 
+    async def terminate(self, workflow_id: str, reason: str = "terminated from the app") -> None:
+        """Stop a run without asking it to agree.
+
+        Cancellation is delivered to the workflow, so a run whose file has been
+        deleted or whose worker cannot load it will never act on one.
+        """
+        client = await self.client()
+        await client.get_workflow_handle(workflow_id).terminate(reason)
+
     # --------------------------------------------------------------- schedules
 
     def _schedule_id(self, workflow: str) -> str:
