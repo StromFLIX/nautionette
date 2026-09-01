@@ -80,6 +80,17 @@ function checkSchema(value, schema) {
   return problems;
 }
 
+function explain(error) {
+  // The one failure everybody hits first deserves a sentence, not a status code.
+  if (/401/.test(error) && /auth/i.test(error)) {
+    return (
+      "the gateway has no model provider key: set OPENROUTER_API_KEY and restart agentgateway " +
+      `(upstream said: ${error.slice(0, 200)})`
+    );
+  }
+  return error;
+}
+
 async function main() {
   const job = readJob();
   const mode = job.mode ?? "interactive";
@@ -154,7 +165,7 @@ async function main() {
         const message = event.message;
         if (message?.role === "assistant") {
           if (message.stopReason === "error" && message.errorMessage) {
-            runError = message.errorMessage;
+            runError = explain(message.errorMessage);
             emit({ type: "error", message: runError });
           }
           const text = (message.content ?? [])

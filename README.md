@@ -1,4 +1,7 @@
 # Nautionette
+
+[Site](http://nautionette.94.130.151.7.sslip.io) · [App](http://app.nautionette.94.130.151.7.sslip.io)
+
 ## What it is
 
 A chat app where chats and workflows are the same thing. You talk to the system. When a conversation is something you want again, you say so — *"run this every day at 8"* — and the chat becomes a durable Temporal workflow on a schedule.

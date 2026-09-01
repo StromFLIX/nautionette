@@ -10,6 +10,7 @@ endpoint, and no shell. Two things happen here:
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -17,6 +18,7 @@ import threading
 import time
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 import docker
@@ -86,7 +88,30 @@ def discovered_agent_sets() -> list[str]:
 
 
 def image_tag(agent_set: str) -> str:
-    return f"{IMAGE_PREFIX}agent-{agent_set}:dev"
+    """Tagged by the hash of its build context, so a changed agent set is a new image."""
+    return f"{IMAGE_PREFIX}agent-{agent_set}:{_agent_set_hash(agent_set)}"
+
+
+def _context_hash(path: str) -> str:
+    digest = hashlib.sha256()
+    root = Path(path)
+    for file in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest.update(str(file.relative_to(root)).encode())
+        digest.update(file.read_bytes())
+    return digest.hexdigest()[:12]
+
+
+def _base_hash() -> str:
+    return _context_hash(os.path.join(AGENT_IMAGES_DIR, "pi-base"))
+
+
+def _agent_set_hash(agent_set: str) -> str:
+    directory = os.path.join(AGENT_IMAGES_DIR, "agent-sets", agent_set)
+    if not os.path.isdir(directory):
+        return "missing"
+    return hashlib.sha256(
+        (_context_hash(directory) + _base_hash()).encode()
+    ).hexdigest()[:12]
 
 
 def _has_image(tag: str) -> bool:
@@ -115,12 +140,16 @@ def ensure_images(force: bool = False) -> None:
         image_state["error"] = None
     try:
         base_dir = os.path.join(AGENT_IMAGES_DIR, "pi-base")
-        if force or not _has_image(BASE_IMAGE):
-            _build(base_dir, BASE_IMAGE)
+        base_tag = f"{IMAGE_PREFIX}base:{_base_hash()}"
+        if force or not _has_image(base_tag):
+            _build(base_dir, base_tag)
         else:
-            _note(f"{BASE_IMAGE} already present")
+            _note(f"{base_tag} already present")
+        # Agent set Dockerfiles say FROM <BASE_IMAGE>, so point that alias here.
+        repository, _, alias = BASE_IMAGE.rpartition(":")
+        docker_client().images.get(base_tag).tag(repository, alias)
 
-        images: dict[str, Any] = {"base": BASE_IMAGE}
+        images: dict[str, Any] = {"base": base_tag}
         for agent_set in discovered_agent_sets():
             tag = image_tag(agent_set)
             if force or not _has_image(tag):
