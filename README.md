@@ -172,7 +172,7 @@ stream into `delta`, `tool`, `error` and a final `result` line. Nothing else cro
 ## Layout
 
 ```
-docker-compose.yml            every component; only the backend and the site publish a port
+docker-compose.yaml            every component; only the backend and the site publish a port
 pyproject.toml / uv.lock      one uv workspace for every Python service
 .env.example                  copy to .env; no secrets are committed
 libs/nautionette/             manifest schema and source helpers, shared by the services
