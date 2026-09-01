@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
 #
-# Declarative config, mounted read-only: UI edits will not persist by design.
+# Declarative config, baked into the image: UI edits will not persist by design.
 # One gateway on 4000 serves LLM, MCP and the UI. Nothing is published to the
 # host - the backend is the only door.
 

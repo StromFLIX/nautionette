@@ -46,7 +46,6 @@ services:
       - workflows:/workflows
       - artifacts:/artifacts
       - backend-data:/data
-      - ./workflows:/seed:ro
     networks: [edge, internal, control]
     depends_on:
       temporal:
@@ -106,15 +105,18 @@ services:
 
   # ------------------------------------------------------------------- tooling
 
-  # https://agentgateway.dev - fronts MCP servers and the model provider.
+  # https://agentgateway.dev - fronts MCP servers and the model provider. The
+  # upstream image with our config baked in, so nothing depends on a host path.
   agentgateway:
-    image: cr.agentgateway.dev/agentgateway:${AGENTGATEWAY_VERSION:-v1.5.0}
+    build:
+      context: ./services/agentgateway
+      args:
+        AGENTGATEWAY_VERSION: ${AGENTGATEWAY_VERSION:-v1.5.0}
+    image: nautionette/agentgateway:dev
     restart: unless-stopped
     command: ["-f", "/config/config.yaml"]
     environment:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-    volumes:
-      - ./services/agentgateway/config:/config:ro
     # Upstream image runs as uid 65532; its local state is a cache, not data.
     tmpfs:
       - /data:uid=65532,gid=65532,mode=0700
@@ -171,7 +173,11 @@ services:
     <<: *logging
 
   temporal:
-    image: temporalio/auto-setup:${TEMPORAL_VERSION:-1.29.0}
+    build:
+      context: ./infra/temporal
+      args:
+        TEMPORAL_VERSION: ${TEMPORAL_VERSION:-1.29.0}
+    image: nautionette/temporal:dev
     restart: unless-stopped
     environment:
       DB: postgres12
@@ -180,8 +186,9 @@ services:
       POSTGRES_PWD: ${POSTGRES_PASSWORD}
       POSTGRES_SEEDS: postgres
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
-    volumes:
-      - ./infra/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+      # Temporal is on more than one network; without this it binds to whichever
+      # interface it happens to see first and the rest of the stack gets refused.
+      BIND_ON_IP: 0.0.0.0
     networks: [internal, data]
     depends_on:
       postgres:

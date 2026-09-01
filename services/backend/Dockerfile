@@ -16,6 +16,9 @@ COPY libs/ libs/
 COPY services/backend/ services/backend/
 RUN uv sync --locked --no-dev --package nautionette-backend
 
+# Committed workflows travel with the image and are seeded into the volume.
+COPY workflows/ /seed/
+
 # Backend, workflow-mcp and worker share one uid: the shared volume has to be
 # writable by all three, and a fresh named volume inherits these permissions.
 RUN useradd --create-home --uid 10001 app \
