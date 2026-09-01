@@ -36,39 +36,16 @@
         <span class="material-icons pick__icon">memory</span>
         <span class="truncate">{{ shortModel }}</span>
         <span class="material-icons pick__caret">expand_more</span>
-        <q-menu anchor="top left" self="bottom left" class="pick-menu">
-          <div class="pick-menu__label section-label">Model</div>
-          <div class="pick-menu__scroll scroll-y">
-            <button
-              v-for="option in models" :key="option.id" class="pick-menu__item"
-              @click="$emit('update:model', option.id)"
-            >
-              <span class="grow truncate">{{ option.id }}</span>
-              <span v-if="option.id === model" class="material-icons pick-menu__check">check</span>
-            </button>
-          </div>
-        </q-menu>
+        <ModelPicker :model-value="model" @update:model-value="$emit('update:model', $event)" />
         <q-tooltip>Model used for this chat</q-tooltip>
       </button>
 
-      <button class="pick" :class="{ 'pick--quiet': !tools.length }">
+      <button class="pick" :class="{ 'pick--quiet': !toolCount }">
         <span class="material-icons pick__icon">handyman</span>
-        <span>{{ tools.length }} tools</span>
-        <q-menu anchor="top left" self="bottom left" class="pick-menu">
-          <div class="pick-menu__label section-label">MCP tools available</div>
-          <div v-if="!tools.length" class="pick-menu__note caption">
-            No MCP server answered. Check the gateway in Settings.
-          </div>
-          <div v-else class="pick-menu__scroll scroll-y">
-            <div v-for="tool in tools" :key="tool.name" class="pick-menu__tool">
-              <span class="mono">{{ tool.name }}</span>
-              <span v-if="tool.description" class="caption dim clamp-2">{{ tool.description }}</span>
-            </div>
-          </div>
-          <div class="pick-menu__foot">
-            <button class="btn btn--sm" @click="actions.openSettings('mcp')">Manage MCP servers</button>
-          </div>
-        </q-menu>
+        <span>{{ toolLabel }}</span>
+        <span class="material-icons pick__caret">expand_more</span>
+        <ToolPicker :model-value="tools" @update:model-value="$emit('update:tools', $event)" />
+        <q-tooltip>MCP tools this chat may call</q-tooltip>
       </button>
 
       <div class="composer__context">
@@ -90,26 +67,31 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { actions, store } from '../store'
+import ModelPicker from './ModelPicker.vue'
+import ToolPicker from './ToolPicker.vue'
+import { store } from '../store'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
   agentSet: { type: String, default: '' },
   model: { type: String, default: '' },
+  tools: { type: Array, default: null },
   busy: { type: Boolean, default: false },
   contextUsed: { type: Number, default: 0 },
   variant: { type: String, default: 'docked' },
   placeholder: { type: String, default: 'Ask anything. Say “every morning at 8” to make it recur.' }
 })
 
-const emit = defineEmits(['update:modelValue', 'update:agentSet', 'update:model', 'send'])
+const emit = defineEmits(['update:modelValue', 'update:agentSet', 'update:model', 'update:tools', 'send'])
 
 const input = ref(null)
 const focused = ref(false)
 
 const agentSets = computed(() => store.catalog.agent_sets || [])
-const models = computed(() => store.catalog.models || [])
-const tools = computed(() => store.catalog.tools || [])
+const allTools = computed(() => store.catalog.tools || [])
+const toolCount = computed(() => (props.tools === null ? allTools.value.length : props.tools.length))
+const toolLabel = computed(() =>
+  props.tools === null ? `${allTools.value.length} tools` : `${props.tools.length}/${allTools.value.length} tools`)
 const contextWindow = computed(() => store.catalog.context_window || 24000)
 const contextPercent = computed(() =>
   Math.min(100, Math.round((props.contextUsed / contextWindow.value) * 100)))
@@ -281,10 +263,6 @@ defineExpose({ focus: () => input.value?.focus() })
   padding: 8px 10px 6px;
 }
 
-.pick-menu__scroll {
-  max-height: 300px;
-}
-
 .pick-menu__item {
   display: flex;
   align-items: center;
@@ -308,28 +286,5 @@ defineExpose({ focus: () => input.value?.focus() })
 .pick-menu__check {
   font-size: 16px;
   color: var(--accent-hover);
-}
-
-.pick-menu__tool {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
-}
-
-.pick-menu__tool:hover {
-  background: var(--surface-hover);
-}
-
-.pick-menu__note {
-  padding: 4px 10px 10px;
-  color: var(--text-dim);
-}
-
-.pick-menu__foot {
-  border-top: 1px solid var(--border);
-  margin-top: 4px;
-  padding: 6px 6px 2px;
 }
 </style>

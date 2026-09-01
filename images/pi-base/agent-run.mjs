@@ -113,7 +113,13 @@ async function main() {
 
   const child = spawn("pi", args, {
     cwd: workspace,
-    env: { ...process.env, AGENT_MODEL: model, NAUTIONETTE_MODE: mode },
+    env: {
+      ...process.env,
+      AGENT_MODEL: model,
+      NAUTIONETTE_MODE: mode,
+      // Empty means "every federated tool"; a list narrows the bridge.
+      NAUTIONETTE_TOOLS: Array.isArray(job.tools) ? job.tools.join(",") : "",
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
 

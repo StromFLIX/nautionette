@@ -124,6 +124,29 @@ class GatewayClient:
                 "code": response.status_code,
             }
 
+    async def config(self) -> dict[str, Any]:
+        """The gateway's own view of itself: which upstream, which MCP targets.
+
+        Only the naming is taken. Anything that could carry a key stays here.
+        """
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(f"{self.base_url}/api/config")
+            response.raise_for_status()
+            payload = response.json()
+        providers: list[str] = []
+        wildcard = False
+        for entry in (payload.get("llm") or {}).get("models", []) or []:
+            provider = entry.get("provider")
+            if provider and provider not in providers:
+                providers.append(provider)
+            if entry.get("name") == "*":
+                wildcard = True
+        targets = [
+            {"name": entry.get("name") or "mcp", "host": _strip_userinfo(entry.get("mcp", {}).get("host", ""))}
+            for entry in (payload.get("mcp") or {}).get("targets", []) or []
+        ]
+        return {"providers": providers, "wildcard_models": wildcard, "targets": targets}
+
     async def models(self) -> list[dict[str, Any]]:
         """Whatever the provider behind the gateway is willing to serve."""
         async with httpx.AsyncClient(timeout=15) as client:
@@ -133,9 +156,9 @@ class GatewayClient:
         # A "*" entry is the gateway saying "any model", not something to pick.
         return [item for item in payload.get("data", []) if item.get("id") not in {None, "", "*"}]
 
-    async def mcp_tools(self) -> list[dict[str, Any]]:
-        """One handshake against the federated /mcp endpoint, for the tool picker."""
-        url = settings.mcp_url
+    async def mcp_tools(self, url: str | None = None) -> list[dict[str, Any]]:
+        """One handshake against an MCP endpoint, for the tool picker."""
+        url = url or settings.mcp_url
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
@@ -171,6 +194,43 @@ class GatewayClient:
         ]
 
 
+class ModelCatalogClient:
+    """The upstream list of models, for when the gateway is configured as "*"."""
+
+    CATALOGS = {"openrouter": "https://openrouter.ai/api/v1/models"}
+
+    async def models(self, provider: str) -> list[dict[str, Any]]:
+        url = self.CATALOGS.get(provider)
+        if not url:
+            return []
+        async with httpx.AsyncClient(timeout=25) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            payload = response.json()
+        out: list[dict[str, Any]] = []
+        for item in payload.get("data", []):
+            identifier = item.get("id")
+            if not identifier:
+                continue
+            out.append(
+                {
+                    "id": identifier,
+                    "name": item.get("name") or identifier,
+                    "context_length": item.get("context_length"),
+                    "created": item.get("created"),
+                }
+            )
+        return out
+
+
+def _strip_userinfo(url: str) -> str:
+    """A host may carry credentials; the picker only ever needs the address."""
+    if "@" not in url or "://" not in url:
+        return url
+    scheme, rest = url.split("://", 1)
+    return f"{scheme}://{rest.rsplit('@', 1)[1]}"
+
+
 def _rpc(request_id: int | None, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     message: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "params": params or {}}
     if request_id is not None:
@@ -192,3 +252,4 @@ def _rpc_result(response: httpx.Response) -> dict[str, Any]:
 broker = BrokerClient()
 authoring = AuthoringClient()
 gateway = GatewayClient()
+model_catalog = ModelCatalogClient()

@@ -54,10 +54,12 @@
         v-model="draft"
         :agent-set="chat?.agent_set || ''"
         :model="chat?.model || store.catalog.default_model"
+        :tools="chat?.tools ?? null"
         :busy="streaming"
         :context-used="contextUsed"
         @update:agent-set="patch({ agent_set: $event })"
         @update:model="patch({ model: $event })"
+        @update:tools="patch({ tools: $event })"
         @send="send"
       />
       <p class="thread__note caption dim">
@@ -110,11 +112,11 @@ function scrollDown (behavior = 'smooth') {
   })
 }
 
-async function start ({ text, agentSet, model }) {
+async function start ({ text, agentSet, model, tools }) {
   if (!text.trim()) return
   starting.value = true
   try {
-    const created = await api.createChat({ agent_set: agentSet, model })
+    const created = await api.createChat({ agent_set: agentSet, model, tools })
     await actions.loadChats()
     await router.push(`/chats/${created.id}`)
     await load(created.id)

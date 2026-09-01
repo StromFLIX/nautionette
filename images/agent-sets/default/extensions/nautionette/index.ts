@@ -13,6 +13,10 @@ const GATEWAY = (process.env.AGENTGATEWAY_URL ?? "http://agentgateway:4000").rep
 const MODEL = process.env.AGENT_MODEL ?? "openai/gpt-4o-mini";
 const MCP_URL = process.env.MCP_URL ?? `${GATEWAY}/mcp`;
 const PROVIDER = "nautionette";
+// Empty means every tool the gateway federates; a list narrows this run to those.
+const ALLOWED = new Set(
+  (process.env.NAUTIONETTE_TOOLS ?? "").split(",").map((name) => name.trim()).filter(Boolean),
+);
 
 type JsonRpcResult = Record<string, any>;
 
@@ -95,7 +99,8 @@ export default async function (pi: ExtensionAPI) {
     });
     await rpc("notifications/initialized");
     const listed = await rpc("tools/list");
-    const tools: any[] = listed.tools ?? [];
+    const all: any[] = listed.tools ?? [];
+    const tools = ALLOWED.size ? all.filter((tool) => ALLOWED.has(tool.name)) : all;
 
     for (const tool of tools) {
       pi.registerTool({
@@ -112,7 +117,7 @@ export default async function (pi: ExtensionAPI) {
         },
       });
     }
-    console.error(`[nautionette] bridged ${tools.length} MCP tool(s) from ${MCP_URL}`);
+    console.error(`[nautionette] bridged ${tools.length} of ${all.length} MCP tool(s) from ${MCP_URL}`);
   } catch (error) {
     // A missing gateway must not cost the agent its built-in tools.
     console.error(`[nautionette] MCP bridge unavailable: ${(error as Error).message}`);

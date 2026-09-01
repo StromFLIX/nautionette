@@ -74,14 +74,20 @@
           </div>
 
           <div class="setting">
-            <div class="setting__label">Models offered by the gateway</div>
+            <div class="setting__label">Models reachable through the gateway</div>
             <p v-if="!(store.catalog.models || []).length" class="caption dim">
               The gateway returned no models. Check that a provider key is set.
             </p>
-            <div v-for="model in store.catalog.models || []" :key="model.id" class="line">
-              <span class="grow truncate mono">{{ model.id }}</span>
-              <span v-if="model.id === store.catalog.default_model" class="chip chip--accent">default</span>
-            </div>
+            <template v-for="gateway in modelGroups" :key="gateway.name">
+              <p class="caption dim" style="margin-top: 10px">
+                via <code class="mono">{{ gateway.name }}</code> · {{ gateway.total }} models
+              </p>
+              <div v-for="provider in gateway.providers" :key="provider.name" class="line">
+                <span class="grow truncate">{{ provider.name }}</span>
+                <span v-if="provider.hasDefault" class="chip chip--accent">default</span>
+                <span class="caption dim">{{ provider.count }}</span>
+              </div>
+            </template>
           </div>
         </template>
 
@@ -95,18 +101,25 @@
 
           <div class="setting">
             <div class="row">
-              <div class="setting__label grow">Available tools ({{ (store.catalog.tools || []).length }})</div>
+              <div class="setting__label grow">Connected servers</div>
               <button class="btn btn--sm btn--outline" :disabled="refreshing" @click="refreshCatalog">
                 {{ refreshing ? 'Checking…' : 'Refresh' }}
               </button>
             </div>
-            <p v-if="!(store.catalog.tools || []).length" class="caption dim">
+            <p v-if="!toolGroups.length" class="caption dim">
               No MCP server answered. Check the gateway under System.
             </p>
-            <div v-for="tool in store.catalog.tools || []" :key="tool.name" class="line line--stacked">
-              <span class="mono">{{ tool.name }}</span>
-              <span v-if="tool.description" class="caption dim">{{ tool.description }}</span>
-            </div>
+            <template v-for="group in toolGroups" :key="group.name">
+              <div class="line">
+                <span class="grow truncate">{{ group.name }}</span>
+                <span v-if="group.host" class="caption dim mono truncate">{{ group.host }}</span>
+                <span class="chip chip--success">{{ group.tools.length }} tools</span>
+              </div>
+              <div v-for="tool in group.tools" :key="tool.name" class="line line--stacked line--nested">
+                <span class="mono">{{ tool.name }}</span>
+                <span v-if="tool.description" class="caption dim">{{ tool.description }}</span>
+              </div>
+            </template>
           </div>
 
           <div class="setting">
@@ -198,6 +211,34 @@ const open = computed({
   get: () => store.settingsOpen,
   set: (value) => { store.settingsOpen = value }
 })
+
+const modelGroups = computed(() => {
+  const byGateway = new Map()
+  for (const model of store.catalog.models || []) {
+    const gateway = model.gateway || 'gateway'
+    if (!byGateway.has(gateway)) byGateway.set(gateway, new Map())
+    const byProvider = byGateway.get(gateway)
+    const provider = model.provider || 'other'
+    byProvider.set(provider, [...(byProvider.get(provider) || []), model])
+  }
+  return [...byGateway].map(([name, byProvider]) => ({
+    name,
+    total: [...byProvider.values()].reduce((sum, list) => sum + list.length, 0),
+    providers: [...byProvider]
+      .map(([provider, list]) => ({
+        name: provider,
+        count: list.length,
+        hasDefault: list.some((model) => model.id === store.catalog.default_model)
+      }))
+      .sort((a, b) => b.count - a.count)
+  }))
+})
+
+const toolGroups = computed(() =>
+  (store.catalog.tool_servers || []).map((server) => ({
+    ...server,
+    tools: (store.catalog.tools || []).filter((tool) => tool.server === server.name)
+  })))
 
 function render (detail) {
   return typeof detail === 'string' ? detail : JSON.stringify(detail)
@@ -350,6 +391,11 @@ watch(() => store.settingsOpen, (value) => {
   flex-direction: column;
   align-items: stretch;
   gap: 2px;
+}
+
+.line--nested {
+  margin-left: 14px;
+  background: transparent;
 }
 
 .line--stacked > .row {

@@ -31,7 +31,7 @@ from .agent import (
     stream_agent,
     summarise_for_title,
 )
-from .clients import authoring, broker, gateway
+from .clients import authoring, broker, gateway, model_catalog
 from .config import settings
 from .db import Database
 from .events import bus, sse
@@ -174,31 +174,108 @@ _catalog_cache: dict[str, Any] = {"at": 0.0, "value": None}
 _CATALOG_TTL = 60.0
 
 
+async def _attempt(coro, fallback):
+    try:
+        return await coro
+    except Exception:  # noqa: BLE001 - a catalog that fails is an empty picker
+        return fallback
+
+
+async def _model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Models the gateway will serve, tagged with who owns them and who fronts them."""
+    gateways = config.get("providers") or ["gateway"]
+    listed = await _attempt(gateway.models(), [])
+    upstream: list[dict[str, Any]] = []
+    if config.get("wildcard_models") or not listed:
+        # A "*" model means "ask the upstream", so that is where the list comes from.
+        for provider in gateways:
+            upstream.extend(
+                {**model, "gateway": provider} for model in await _attempt(model_catalog.models(provider), [])
+            )
+    merged = {
+        model["id"]: model
+        for model in [
+            *({"id": item["id"], "name": item.get("id"), "gateway": gateways[0]} for item in listed),
+            *upstream,
+        ]
+    }
+    merged.setdefault(
+        settings.agent_model,
+        {"id": settings.agent_model, "name": settings.agent_model, "gateway": gateways[0]},
+    )
+    out = []
+    for model in merged.values():
+        # A leading "~" marks an always-latest alias, not a separate vendor.
+        alias = model["id"].startswith("~")
+        owner, separator, _ = model["id"].lstrip("~").partition("/")
+        out.append(
+            {
+                "id": model["id"],
+                "name": model.get("name") or model["id"],
+                "provider": owner if separator else "other",
+                "gateway": model.get("gateway") or gateways[0],
+                "context_length": model.get("context_length"),
+                "created": model.get("created"),
+                "alias": alias,
+            }
+        )
+    return sorted(out, key=lambda model: (model["gateway"], model["provider"], model["id"]))
+
+
+async def _tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Federated tools, each attributed to the MCP server it came from."""
+    targets = config.get("targets") or []
+    federated = await _attempt(gateway.mcp_tools(), [])
+    per_target = await asyncio.gather(
+        *(_attempt(gateway.mcp_tools(target["host"]), []) for target in targets)
+    )
+    owner_of: dict[str, str] = {}
+    for target, tools in zip(targets, per_target, strict=True):
+        for tool in tools:
+            owner_of[tool["name"]] = target["name"]
+
+    def server_for(name: str) -> str:
+        if name in owner_of:
+            return owner_of[name]
+        # A federating gateway may prefix a name with the target it came from.
+        for target in targets:
+            prefix = target["name"]
+            if name.startswith(f"{prefix}_") or name.startswith(f"{prefix}-") or name.startswith(f"{prefix}:"):
+                return prefix
+        return "other"
+
+    tools = [{**tool, "server": server_for(tool["name"])} for tool in federated]
+    servers = [
+        {"name": target["name"], "host": target["host"], "count": sum(1 for t in tools if t["server"] == target["name"])}
+        for target in targets
+    ]
+    if any(tool["server"] == "other" for tool in tools):
+        servers.append(
+            {"name": "other", "host": "", "count": sum(1 for t in tools if t["server"] == "other")}
+        )
+    return tools, servers
+
+
 @app.get("/api/catalog", dependencies=[Depends(require_user)])
 async def catalog(refresh: bool = False) -> dict[str, Any]:
     """What a chat can be pointed at: agent sets, models, MCP tools."""
     if not refresh and _catalog_cache["value"] and time.time() - _catalog_cache["at"] < _CATALOG_TTL:
         return _catalog_cache["value"]
 
-    async def attempt(coro, fallback):
-        try:
-            return await coro
-        except Exception:  # noqa: BLE001 - a catalog that fails is an empty picker
-            return fallback
-
-    agent_sets, models, tools = await asyncio.gather(
-        attempt(broker.agent_sets(), []),
-        attempt(gateway.models(), []),
-        attempt(gateway.mcp_tools(), []),
+    config = await _attempt(gateway.config(), {"providers": [], "targets": [], "wildcard_models": False})
+    agent_sets, models, (tools, servers) = await asyncio.gather(
+        _attempt(broker.agent_sets(), []),
+        _model_catalog(config),
+        _tool_catalog(config),
     )
-    if not any(model.get("id") == settings.agent_model for model in models):
-        models = [{"id": settings.agent_model}, *models]
     value = {
         "agent_sets": agent_sets or [{"name": settings.default_agent_set, "ready": True}],
         "default_agent_set": settings.default_agent_set,
         "models": models,
         "default_model": settings.agent_model,
+        "gateways": config.get("providers") or [],
         "tools": tools,
+        "tool_servers": servers,
         "context_window": MAX_HISTORY_CHARS,
     }
     _catalog_cache.update(at=time.time(), value=value)
@@ -219,6 +296,7 @@ async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, A
         title=(payload.get("title") or "New chat").strip()[:120],
         agent_set=payload.get("agent_set") or settings.default_agent_set,
         model=payload.get("model") or None,
+        tools=payload.get("tools"),
     )
     bus.publish("chat.created", {"chat_id": chat["id"], "title": chat["title"]})
     return chat
@@ -235,6 +313,9 @@ async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) 
         fields["agent_set"] = payload.get("agent_set") or settings.default_agent_set
     if "model" in payload:
         fields["model"] = payload.get("model") or None
+    if "tools" in payload:
+        selected = payload.get("tools")
+        fields["tools"] = [str(name) for name in selected] if isinstance(selected, list) else None
     return db.update_chat(chat_id, fields)  # type: ignore[return-value]
 
 
@@ -273,6 +354,7 @@ async def send_message(chat_id: str, payload: dict[str, Any] = Body(...)) -> Str
         history=history,
         agent_set=chat["agent_set"],
         model=chat.get("model"),
+        tools=chat.get("tools"),
         run_id=f"chat-{chat_id}",
     )
 

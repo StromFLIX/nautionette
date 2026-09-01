@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS chats (
     title TEXT NOT NULL,
     agent_set TEXT NOT NULL DEFAULT 'default',
     model TEXT,
+    tools TEXT,
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL,
     promoted_to TEXT
@@ -61,7 +62,15 @@ CREATE TABLE IF NOT EXISTS settings (
 """
 
 # Applied on every start; each one fails harmlessly once it is already in place.
-_MIGRATIONS = ("ALTER TABLE chats ADD COLUMN model TEXT",)
+_MIGRATIONS = (
+    "ALTER TABLE chats ADD COLUMN model TEXT",
+    "ALTER TABLE chats ADD COLUMN tools TEXT",
+)
+
+
+def _dump_tools(tools: list[str] | None) -> str | None:
+    """None means every tool the gateway federates; a list narrows it."""
+    return None if tools is None else json.dumps(sorted(set(tools)))
 
 
 class Database:
@@ -100,18 +109,26 @@ class Database:
 
     # ------------------------------------------------------------------- chats
 
-    def create_chat(self, title: str, agent_set: str, model: str | None = None) -> dict[str, Any]:
+    def create_chat(
+        self,
+        title: str,
+        agent_set: str,
+        model: str | None = None,
+        tools: list[str] | None = None,
+    ) -> dict[str, Any]:
         now = time.time()
         chat_id = uuid.uuid4().hex[:12]
         self.execute(
-            "INSERT INTO chats (id, title, agent_set, model, created_at, updated_at)"
-            " VALUES (?,?,?,?,?,?)",
-            (chat_id, title, agent_set, model, now, now),
+            "INSERT INTO chats (id, title, agent_set, model, tools, created_at, updated_at)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (chat_id, title, agent_set, model, _dump_tools(tools), now, now),
         )
         return self.get_chat(chat_id)  # type: ignore[return-value]
 
     def update_chat(self, chat_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
-        allowed = {k: v for k, v in fields.items() if k in {"title", "agent_set", "model"}}
+        allowed = {k: v for k, v in fields.items() if k in {"title", "agent_set", "model", "tools"}}
+        if "tools" in allowed:
+            allowed["tools"] = _dump_tools(allowed["tools"])
         if allowed:
             assignments = ", ".join(f"{key} = ?" for key in allowed)
             self.execute(
@@ -120,7 +137,10 @@ class Database:
         return self.get_chat(chat_id)
 
     def get_chat(self, chat_id: str) -> dict[str, Any] | None:
-        return self.one("SELECT * FROM chats WHERE id = ?", (chat_id,))
+        row = self.one("SELECT * FROM chats WHERE id = ?", (chat_id,))
+        if row:
+            row["tools"] = json.loads(row["tools"]) if row.get("tools") else None
+        return row
 
     def list_chats(self) -> list[dict[str, Any]]:
         rows = self.query("SELECT * FROM chats ORDER BY updated_at DESC LIMIT 200")

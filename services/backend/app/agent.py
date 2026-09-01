@@ -131,6 +131,7 @@ def agent_job(
     output_schema: dict[str, Any] | None = None,
     agent_set: str | None = None,
     model: str | None = None,
+    tools: list[str] | None = None,
     run_id: str = "",
     timeout_seconds: int = 900,
 ) -> dict[str, Any]:
@@ -142,6 +143,8 @@ def agent_job(
         "output_schema": output_schema,
         "agent_set": agent_set or settings.default_agent_set,
         "model": model or settings.agent_model,
+        # None means every federated tool; a list narrows the agent to those names.
+        "tools": tools,
         "run_id": run_id,
         "timeout_seconds": timeout_seconds,
     }

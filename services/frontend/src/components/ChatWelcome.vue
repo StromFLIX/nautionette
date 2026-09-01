@@ -13,10 +13,11 @@
         v-model="text"
         v-model:agent-set="agentSet"
         v-model:model="model"
+        v-model:tools="tools"
         variant="welcome"
         :busy="busy"
         placeholder="e.g. Summarise the changelog at this URL every morning at 8."
-        @send="$emit('start', { text, agentSet, model })"
+        @send="$emit('start', { text, agentSet, model, tools })"
       />
       <div class="welcome__chips">
         <button v-for="prompt in prompts" :key="prompt" class="starter" @click="use(prompt)">
@@ -42,7 +43,7 @@
         <div class="fact">
           <span class="material-icons">handyman</span>
           <div>
-            <div class="fact__title">{{ (store.catalog.tools || []).length }} MCP tools</div>
+            <div class="fact__title">{{ toolSummary }}</div>
             <button class="caption fact__link" @click="actions.openSettings('mcp')">manage servers</button>
           </div>
         </div>
@@ -65,7 +66,7 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import Composer from './Composer.vue'
 import { actions, store } from '../store'
 
@@ -82,12 +83,18 @@ const prompts = [
 const text = ref('')
 const agentSet = ref(store.catalog.default_agent_set || 'default')
 const model = ref(store.catalog.default_model || '')
+const tools = ref(null)
 const composer = ref(null)
 
 function use (prompt) {
   text.value = prompt
   nextTick(() => composer.value?.focus())
 }
+
+const toolSummary = computed(() => {
+  const total = (store.catalog.tools || []).length
+  return tools.value === null ? `${total} MCP tools` : `${tools.value.length} of ${total} tools`
+})
 
 watch(() => store.catalog, (catalog) => {
   if (!model.value) model.value = catalog.default_model || ''
