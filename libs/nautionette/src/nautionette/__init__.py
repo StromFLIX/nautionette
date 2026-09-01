@@ -8,13 +8,17 @@ from .manifest import (
     normalise_manifest,
     validate_manifest,
 )
+from .source import MAX_DEPENDENCIES, SourceError, parse_dependencies
 
 __all__ = [
     "MANIFEST_SCHEMA",
+    "MAX_DEPENDENCIES",
     "SCHEMA_VERSION",
     "ManifestError",
+    "SourceError",
     "input_problems",
     "normalise_manifest",
+    "parse_dependencies",
     "validate_manifest",
     "ACTIVITIES",
 ]
@@ -24,6 +28,7 @@ __all__ = [
 ACTIVITIES = (
     "agent_call",
     "http_fetch",
+    "mcp_call",
     "emit_event",
     "save_artifact",
     "read_artifact",

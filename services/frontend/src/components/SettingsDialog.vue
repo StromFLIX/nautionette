@@ -67,13 +67,20 @@
           <div class="setting">
             <div class="setting__label">History sent to each call</div>
             <div class="row">
-              <input v-model.number="form.history_chars" class="field" type="number" min="2000" step="10000" />
-              <span class="caption dim">characters · about {{ Math.round(form.history_chars / 4000) }}k tokens</span>
+              <select v-model="historyMode" class="field" style="max-width: 190px">
+                <option value="auto">From the model</option>
+                <option value="fixed">A fixed number</option>
+              </select>
+              <input
+                v-if="historyMode === 'fixed'" v-model.number="form.history_chars"
+                class="field" type="number" min="2000" step="10000"
+              />
+              <span class="caption dim">{{ contextHint }}</span>
             </div>
           </div>
 
           <div class="row settings__save">
-            <span class="caption dim grow">Defaults: {{ defaults.default_model }} · {{ defaults.history_chars.toLocaleString() }} chars</span>
+            <span class="caption dim grow">Default: {{ defaults.default_model }}</span>
             <button class="btn" @click="resetSettings">Reset</button>
             <button class="btn btn--primary" :disabled="saving" @click="saveSettings">
               {{ saving ? 'Saving…' : 'Save' }}
@@ -194,7 +201,8 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import ModelPicker from './ModelPicker.vue'
-import { actions, store } from '../store'
+import { compactChars } from '../format'
+import { actions, historyBudget, store } from '../store'
 import { api, auth, isNative, server } from '../api'
 
 const $q = useQuasar()
@@ -215,6 +223,16 @@ const saving = ref(false)
 const form = reactive({ default_model: '', default_agent_set: '', history_chars: 0 })
 const defaults = reactive({ default_model: '', default_agent_set: '', history_chars: 0 })
 const origin = window.location.origin
+const historyMode = ref('auto')
+
+const contextHint = computed(() => {
+  if (historyMode.value === 'fixed') {
+    return `${Math.round((form.history_chars || 0) / 4000)}k tokens`
+  }
+  const model = (store.catalog.models || []).find((item) => item.id === form.default_model)
+  if (!model?.context_length) return 'this model publishes no window; the fallback is used'
+  return `${compactChars(model.context_length)} token window \u2192 ${compactChars(historyBudget(form.default_model))} chars`
+})
 
 const snippet = `mcp:
   targets:
@@ -289,13 +307,18 @@ async function loadSettings () {
   const data = await api.settings()
   Object.assign(form, data.settings)
   Object.assign(defaults, data.defaults)
+  historyMode.value = data.settings.history_chars > 0 ? 'fixed' : 'auto'
 }
 
 async function saveSettings () {
   saving.value = true
   try {
-    const data = await api.saveSettings({ ...form })
+    const data = await api.saveSettings({
+      ...form,
+      history_chars: historyMode.value === 'auto' ? 0 : form.history_chars
+    })
     Object.assign(form, data.settings)
+    historyMode.value = data.settings.history_chars > 0 ? 'fixed' : 'auto'
     await actions.loadCatalog(true)
     $q.notify({ type: 'positive', message: 'Saved' })
   } catch (error) {
@@ -308,6 +331,7 @@ async function saveSettings () {
 async function resetSettings () {
   const data = await api.saveSettings({ default_model: null, default_agent_set: null, history_chars: null })
   Object.assign(form, data.settings)
+  historyMode.value = 'auto'
   await actions.loadCatalog(true)
 }
 

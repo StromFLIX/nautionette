@@ -10,6 +10,7 @@ Extensible by design: a new rule is a new step in `run_checks`.
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,10 +18,15 @@ from pathlib import Path
 from typing import Any
 
 from nautionette.manifest import normalise_manifest, validate_manifest
-from nautionette.source import SourceError, find_workflow_classes, parse_manifest
+from nautionette.source import (
+    SourceError,
+    find_workflow_classes,
+    parse_dependencies,
+    parse_manifest,
+)
 
 CHECKER = str(Path(__file__).with_name("checker.py"))
-IMPORT_TIMEOUT_SECONDS = 30
+IMPORT_TIMEOUT_SECONDS = 120
 MAX_SOURCE_BYTES = 256_000
 
 
@@ -76,8 +82,17 @@ def run_checks(name: str, code: str) -> dict[str, Any]:
         errors.append("no class decorated with @workflow.defn found")
     step("workflow_class", bool(classes), ", ".join(classes))
 
-    # 3b. it actually imports and registers
-    import_result = _import_check(name, code)
+    # 3b. anything the file declares in its PEP 723 header must resolve
+    dependencies: list[str] = []
+    try:
+        dependencies = parse_dependencies(code)
+        step("dependencies", True, ", ".join(dependencies) or "none declared")
+    except SourceError as exc:
+        errors.append(str(exc))
+        step("dependencies", False, str(exc))
+
+    # 3c. it actually imports and registers, with those dependencies present
+    import_result = _import_check(name, code, dependencies)
     errors.extend(import_result["errors"])
     step("import", import_result["ok"], "; ".join(import_result["errors"]) or "imports cleanly")
 
@@ -91,6 +106,7 @@ def run_checks(name: str, code: str) -> dict[str, Any]:
         "warnings": warnings,
         "manifest": manifest,
         "classes": classes,
+        "dependencies": dependencies,
         "steps": steps,
     }
 
@@ -117,13 +133,25 @@ def _determinism_notes(code: str) -> list[str]:
     return notes
 
 
-def _import_check(name: str, code: str) -> dict[str, Any]:
+def _import_check(name: str, code: str, dependencies: list[str] | None = None) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="wfcheck-") as tmp:
         path = Path(tmp) / f"{name}.py"
         path.write_text(code, encoding="utf-8")
+        # Declared packages are resolved by uv into a throwaway environment; without
+        # any, the checker runs in this interpreter and never touches the network.
+        if dependencies:
+            uv = shutil.which("uv")
+            if not uv:
+                return {"ok": False, "errors": ["uv is not available to resolve dependencies"]}
+            argv = [uv, "run", "--quiet", "--with", "temporalio"]
+            for spec in dependencies:
+                argv += ["--with", spec]
+            argv += ["python", CHECKER, str(path), name]
+        else:
+            argv = [sys.executable, CHECKER, str(path), name]
         try:
-            completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-                [sys.executable, CHECKER, str(path), name],
+            completed = subprocess.run(  # noqa: S603 - resolved binary, fixed argv, no shell
+                argv,
                 capture_output=True,
                 text=True,
                 timeout=IMPORT_TIMEOUT_SECONDS,

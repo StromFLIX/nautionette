@@ -69,7 +69,7 @@
 import { computed, ref } from 'vue'
 import ModelPicker from './ModelPicker.vue'
 import ToolPicker from './ToolPicker.vue'
-import { store } from '../store'
+import { historyBudget, store } from '../store'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -92,7 +92,7 @@ const allTools = computed(() => store.catalog.tools || [])
 const toolCount = computed(() => (props.tools === null ? allTools.value.length : props.tools.length))
 const toolLabel = computed(() =>
   props.tools === null ? `${allTools.value.length} tools` : `${props.tools.length}/${allTools.value.length} tools`)
-const contextWindow = computed(() => store.catalog.context_window || 24000)
+const contextWindow = computed(() => historyBudget(props.model))
 const contextPercent = computed(() =>
   Math.min(100, Math.round((props.contextUsed / contextWindow.value) * 100)))
 const shortModel = computed(() => {

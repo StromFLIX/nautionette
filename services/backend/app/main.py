@@ -122,18 +122,39 @@ def _remember_agent_result(ok: bool) -> None:
 
 # ------------------------------------------------------------------- settings
 
+# Rough but stable: a token is about four characters of English.
+CHARS_PER_TOKEN = 4
+# Half the window for transcript, leaving room for the system prompt, the new
+# turn, tool schemas and the answer itself.
+HISTORY_SHARE = 0.5
+
+# Context length per model id, refreshed whenever the catalog is built.
+_model_windows: dict[str, int] = {}
+
 
 # The environment sets the floor; anything saved in the app wins over it.
 def _defaults() -> dict[str, Any]:
     return {
         "default_model": settings.agent_model,
         "default_agent_set": settings.default_agent_set,
-        "history_chars": DEFAULT_HISTORY_CHARS,
+        # 0 means "work it out from the model", which is what you want by default.
+        "history_chars": 0,
     }
 
 
 def runtime(key: str) -> Any:
     return db.get_setting(key, _defaults()[key])
+
+
+def history_budget(model: str | None) -> int:
+    """How much transcript this model can actually be handed."""
+    override = int(runtime("history_chars") or 0)
+    if override > 0:
+        return override
+    window = _model_windows.get(model or runtime("default_model"))
+    if window:
+        return int(window * CHARS_PER_TOKEN * HISTORY_SHARE)
+    return DEFAULT_HISTORY_CHARS
 
 
 @app.get("/api/settings", dependencies=[Depends(require_user)])
@@ -150,7 +171,8 @@ async def put_settings(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
         if value in (None, ""):
             db.execute("DELETE FROM settings WHERE key = ?", (key,))
         elif key == "history_chars":
-            db.set_setting(key, max(2_000, min(2_000_000, int(value))))
+            chars = int(value)
+            db.set_setting(key, 0 if chars <= 0 else max(2_000, min(2_000_000, chars)))
         else:
             db.set_setting(key, str(value))
     _catalog_cache.update(at=0.0, value=None)
@@ -335,8 +357,18 @@ async def catalog(refresh: bool = False) -> dict[str, Any]:
         "gateways": config.get("providers") or [],
         "tools": tools,
         "tool_servers": servers,
-        "context_window": runtime("history_chars"),
+        # The clients work the budget out per model with the same arithmetic.
+        "context": {
+            "chars_per_token": CHARS_PER_TOKEN,
+            "history_share": HISTORY_SHARE,
+            "override": int(runtime("history_chars") or 0),
+            "fallback": DEFAULT_HISTORY_CHARS,
+        },
     }
+    _model_windows.clear()
+    _model_windows.update(
+        {model["id"]: model["context_length"] for model in models if model.get("context_length")}
+    )
     _catalog_cache.update(at=time.time(), value=value)
     return value
 
@@ -402,7 +434,7 @@ async def send_message(chat_id: str, payload: dict[str, Any] = Body(...)) -> Str
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
 
-    history = build_history(db.list_messages(chat_id), max_chars=runtime("history_chars"))
+    history = build_history(db.list_messages(chat_id), max_chars=history_budget(chat.get("model")))
     user_message = db.add_message(chat_id, "user", text)
     if chat["title"] in {"New chat", ""} and not history:
         db.execute("UPDATE chats SET title = ? WHERE id = ?", (summarise_for_title(text), chat_id))

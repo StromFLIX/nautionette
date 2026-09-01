@@ -31,6 +31,12 @@ export function fullTime (seconds) {
   return seconds ? new Date(seconds * 1000).toLocaleString() : ''
 }
 
+export function compactChars (chars) {
+  if (!chars) return '0'
+  if (chars >= 1_000_000) return `${+(chars / 1_000_000).toFixed(1)}M`
+  return `${Math.round(chars / 1000)}k`
+}
+
 export function duration (from, to) {
   if (!from || !to) return ''
   const total = Math.max(0, Math.round(to - from))

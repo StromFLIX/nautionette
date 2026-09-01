@@ -46,7 +46,7 @@
         <div class="fact">
           <span class="material-icons">history</span>
           <div>
-            <div class="fact__title">{{ Math.round((store.catalog.context_window || 0) / 1000) }}k chars</div>
+            <div class="fact__title">{{ compactChars(historyBudget(model)) }} chars</div>
             <button class="caption fact__link" @click="actions.openSettings('general')">context</button>
           </div>
         </div>
@@ -64,7 +64,8 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import Composer from './Composer.vue'
-import { actions, store } from '../store'
+import { compactChars } from '../format'
+import { actions, historyBudget, store } from '../store'
 
 defineProps({ busy: { type: Boolean, default: false } })
 defineEmits(['start'])

@@ -12,6 +12,7 @@ import contextlib
 import logging
 import os
 import signal
+import sys
 from datetime import timedelta
 
 import httpx
@@ -19,7 +20,7 @@ from temporalio.client import Client
 from temporalio.worker import UnsandboxedWorkflowRunner, Worker
 
 from .activities import ALL as ACTIVITIES
-from .loader import load_workflows
+from .loader import install_dependencies, load_workflows
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s worker %(levelname)s %(message)s")
 log = logging.getLogger("worker")
@@ -31,6 +32,10 @@ WORKFLOWS_DIR = os.environ.get("WORKFLOWS_DIR", "/workflows")
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8080").rstrip("/")
 INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "").strip()
 GRACE_SECONDS = int(os.environ.get("WORKER_GRACE_SECONDS", "50"))
+
+# Filled in before the event loop starts; a file with a broken header is reported,
+# never imported.
+BAD_HEADERS: dict[str, str] = {}
 
 
 async def announce(report: list[dict]) -> None:
@@ -63,7 +68,7 @@ async def connect_with_retry() -> Client:
 
 async def main() -> None:
     client = await connect_with_retry()
-    workflows, report = load_workflows(WORKFLOWS_DIR)
+    workflows, report = load_workflows(WORKFLOWS_DIR, BAD_HEADERS)
     log.info(
         "starting worker on %s with %d workflow(s) and %d activities",
         TASK_QUEUE,
@@ -98,4 +103,10 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    # Dependencies first, then a clean interpreter: a package that appears part way
+    # through a process does not import reliably.
+    installed, BAD_HEADERS = install_dependencies(WORKFLOWS_DIR)
+    if installed:
+        log.info("dependencies installed, restarting into a clean interpreter")
+        os.execv(sys.executable, [sys.executable, "-m", "app.main"])  # noqa: S606 - own interpreter
     asyncio.run(main())

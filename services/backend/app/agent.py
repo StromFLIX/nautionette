@@ -53,6 +53,16 @@ Rules for the file you produce:
   `urllib.parse`, `html`, `textwrap`, `base64`, `hashlib`, `collections`, `itertools`,
   `functools`, `dataclasses`. Never import anything that talks to the network, the clock
   or the filesystem -- that is what activities are for.
+- You may also use third-party packages, declared in a PEP 723 header at the very top of
+  the file. uv installs them before the worker loads the workflow:
+
+      # /// script
+      # dependencies = ["feedparser", "python-dateutil"]
+      # ///
+
+  Use this for parsing and shaping -- `feedparser`, `dateutil`, `bs4`, `markdownify`,
+  `pydantic` -- which is usually how you replace an agent_call with real code. Declare
+  only what you import, and never a package that performs I/O from workflow code.
 - A module level `MANIFEST` dict literal: schema=1, name (snake_case), title, description,
   inputs and outputs as JSON Schema objects with "type": "object", agent_set.
 - Exactly one class decorated with `@workflow.defn(name=<same name as MANIFEST>)` and one

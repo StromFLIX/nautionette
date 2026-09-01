@@ -4,13 +4,53 @@ from __future__ import annotations
 
 import ast
 import difflib
+import re
+import tomllib
 from typing import Any
 
 WORKFLOW_DECORATORS = ("workflow.defn", "defn")
 
+# PEP 723 inline metadata, the same block `uv run` reads from a script.
+_SCRIPT_BLOCK = re.compile(
+    r"(?m)^# /// script\s*$\s(?P<body>(?:^#(?:| .*)$\s)+)^# ///\s*$",
+)
+# A dependency is a name, not an option: never let a spec become a uv flag.
+_DEPENDENCY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*(\[[A-Za-z0-9,._-]+\])?\s*[<>=!~^ 0-9a-zA-Z.,*+-]*$")
+
+MAX_DEPENDENCIES = 20
+
 
 class SourceError(ValueError):
     """Raised when a workflow file cannot be understood."""
+
+
+def parse_dependencies(source: str) -> list[str]:
+    """Third-party packages a workflow declares in its PEP 723 header."""
+    match = _SCRIPT_BLOCK.search(source)
+    if not match:
+        return []
+    body = "".join(
+        line[2:] if line.startswith("# ") else line[1:]
+        for line in match.group("body").splitlines(keepends=True)
+    )
+    try:
+        meta = tomllib.loads(body)
+    except tomllib.TOMLDecodeError as exc:
+        raise SourceError(f"the script block is not valid TOML: {exc}") from exc
+
+    declared = meta.get("dependencies", [])
+    if not isinstance(declared, list) or not all(isinstance(item, str) for item in declared):
+        raise SourceError("dependencies must be a list of strings")
+    if len(declared) > MAX_DEPENDENCIES:
+        raise SourceError(f"more than {MAX_DEPENDENCIES} dependencies declared")
+
+    out: list[str] = []
+    for spec in declared:
+        cleaned = spec.strip()
+        if not _DEPENDENCY.match(cleaned):
+            raise SourceError(f"dependency {spec!r} is not a plain package requirement")
+        out.append(cleaned)
+    return out
 
 
 def parse_manifest(source: str) -> dict[str, Any]:

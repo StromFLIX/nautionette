@@ -143,3 +143,15 @@ export const health = computed(() => {
 })
 
 export const draftCount = computed(() => state.drafts.length)
+
+/** What this model can actually be handed, using the backend's own arithmetic. */
+export function historyBudget (modelId) {
+  const context = state.catalog.context || {}
+  if (context.override) return context.override
+  const id = modelId || state.catalog.default_model
+  const model = (state.catalog.models || []).find((item) => item.id === id)
+  if (model?.context_length) {
+    return Math.round(model.context_length * context.chars_per_token * context.history_share)
+  }
+  return context.fallback || 200000
+}
