@@ -8,7 +8,7 @@
  * Nothing is remembered between runs: the container starts, works and exits.
  */
 import { spawn } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 
 const OUT = process.stdout;
 
@@ -98,11 +98,18 @@ async function main() {
   const workspace = "/workspace";
 
   mkdirSync(workspace, { recursive: true });
+  // Whatever the agent set ships (AGENTS.md and friends) becomes the context for
+  // this call. The container is new every time, so this is the only way in.
+  if (existsSync("/workspace-defaults")) {
+    cpSync("/workspace-defaults", workspace, { recursive: true });
+  }
   writeFileSync(`${workspace}/JOB.json`, JSON.stringify({ ...job, history: undefined }, null, 2));
 
   const prompt = renderPrompt(job);
-  const args = ["--mode", "json", "--no-session", "--no-context-files", "--provider", "nautionette",
-                "--model", model, "--approve", "--", prompt];
+  const args = ["--mode", "json", "--no-session", "--provider", "nautionette",
+                "--model", model, "--approve"];
+  if (job.system_prompt) args.push("--append-system-prompt", job.system_prompt);
+  args.push("--", prompt);
 
   const child = spawn("pi", args, {
     cwd: workspace,

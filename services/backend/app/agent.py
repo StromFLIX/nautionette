@@ -51,6 +51,56 @@ Rules for the file you produce:
 - Anything the chat fixed (a date, a repo, a customer) becomes a key in MANIFEST["inputs"]
   and is read from `params`.
 - Return a dict that matches MANIFEST["outputs"].
+
+This is the shape. Follow it exactly; only the names, the schemas and the body change.
+
+```python
+from datetime import timedelta
+
+from temporalio import workflow
+
+MANIFEST = {
+    "schema": 1,
+    "name": "release_digest",
+    "title": "Release digest",
+    "description": "Summarise release notes for one product.",
+    "inputs": {
+        "type": "object",
+        "properties": {"url": {"type": "string"}},
+        "required": ["url"],
+    },
+    "outputs": {"type": "object", "properties": {"summary": {"type": "string"}}},
+    "agent_set": "default",
+    "source": "chat",
+}
+
+
+@workflow.defn(name="release_digest")
+class ReleaseDigest:
+    @workflow.run
+    async def run(self, params: dict) -> dict:
+        page = await workflow.execute_activity(
+            "http_fetch",
+            {"url": params["url"]},
+            start_to_close_timeout=timedelta(minutes=5),
+        )
+        answer = await workflow.execute_activity(
+            "agent_call",
+            {
+                "prompt": f"Summarise these release notes:\\n\\n{page['body'][:4000]}",
+                "output_schema": {
+                    "type": "object",
+                    "properties": {"summary": {"type": "string"}},
+                    "required": ["summary"],
+                },
+            },
+            start_to_close_timeout=timedelta(minutes=10),
+        )
+        return answer.get("output") or {"summary": answer.get("text", "")}
+```
+
+Do not write a plain script. Do not use `requests`, `schedule`, `time.sleep` or `__main__`:
+scheduling and retries belong to Temporal, not to the file.
 """
 
 
