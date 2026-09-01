@@ -124,6 +124,7 @@ export const actions = {
       if (kind.startsWith('run.')) actions.loadRuns()
       if (kind.startsWith('workflow.') || kind.startsWith('promote.')) actions.loadWorkflows()
       if (kind.startsWith('chat.')) actions.loadChats()
+      if (kind === 'model.integration.changed') actions.loadCatalog(true)
       emit(event)
     })
   },

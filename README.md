@@ -73,7 +73,7 @@ Five rules the diagram encodes:
 | **Website** | The promotional site. Static, its own container and its own domain, so the app and the pitch never share a deploy. |
 | **Backend** | The only entrypoint: auth, triggers, webhooks, streaming to clients. Also memory, search and metadata in a SQLite store. Calls the broker, but does not hold the Docker socket. |
 | **Docker broker** | Holds `/var/run/docker.sock`. Runs one Pi container per agent call (`docker run --rm`) and restarts workers, using fixed commands and an image allowlist. Builds the agent images once at startup, so a call never waits on a build. |
-| **agentgateway** | Upstream image, run as-is. One data plane for tools and models: federates MCP servers on `/mcp`, fronts OpenRouter on `/v1`, adds per-tool authorization and an audit trail. Config in [services/agentgateway/config/config.yaml](services/agentgateway/config/config.yaml). |
+| **agentgateway** | Upstream image, run as-is. One data plane for tools and models: federates MCP servers on `/mcp`, fronts every configured model provider on `/v1`, adds per-tool authorization and an audit trail. Its checked-in config is the baseline; the integrations added in the app persist as runtime resources in its own SQLite volume. Config in [services/agentgateway/config/config.yaml](services/agentgateway/config/config.yaml). |
 | **workflow-mcp** | Our own MCP server, registered behind the gateway. Provides the validated tools that create, update and delete workflow files, plus the REST side the backend uses for approval. |
 | **Pi runs** | The agent runtime ([Pi](https://pi.dev), `@earendil-works/pi-coding-agent`). Pi is a CLI, so a call is a container run: start, work, exit. The base image is Node plus the Pi CLI plus `agent-run`, the wrapper that turns a job into NDJSON. An agent set extends it with Pi extensions and packages. |
 | **Temporal** | Orchestrator and workers. Durable runs, retries, schedules and history, stored in PostgreSQL. A workflow step can call MCP tools, invoke Pi, or run plain Python. |
@@ -199,13 +199,29 @@ Networks: `edge` (published), `internal` (services, outbound allowed so the gate
 ## Run it
 
 ```
-cp .env.example .env                    # OPENROUTER_API_KEY, POSTGRES_PASSWORD, APP_TOKEN
+cp .env.example .env                    # provider keys, POSTGRES_PASSWORD, APP_TOKEN
 docker compose up -d
 ```
 
 The backend answers on `${BACKEND_PORT}` and the site on `${WEBSITE_PORT}`, both bound to
 loopback. The broker builds `pi-base` and every agent set on first start; until that finishes,
 `/api/system` reports the agent sets as not ready and says so in the UI.
+
+Model providers are managed under **Settings > Agents > Model integrations**: pick one from the
+list, add it, test it, and remove it again. OpenRouter, GitHub Copilot, OpenAI, Anthropic, Groq,
+Mistral, DeepSeek and xAI ship as entries in one registry, and **Custom** covers any other endpoint
+that speaks the OpenAI chat completions API. Every integration becomes an agentgateway route, so
+they all behave the same way; OpenRouter is added automatically on first start for continuity.
+
+Nautionette never stores a model list. It asks each provider what it serves — OpenRouter and custom
+endpoints through their own catalog, Copilot through the authenticated account — and labels every
+entry in the pickers by both integration and model vendor. A prefixed integration wins over the
+OpenRouter wildcard for its own namespace, so `openai/*` goes direct once OpenAI is configured.
+
+Credentials live only on agentgateway. Put a provider's key in `.env`, recreate the gateway with
+`docker compose up -d --force-recreate agentgateway`, then add the integration; the key is never
+sent to the backend API or the frontend. A custom integration that needs a key also needs its
+variable added to the `agentgateway` service in [docker-compose.yaml](docker-compose.yaml).
 
 Working on the Python services:
 

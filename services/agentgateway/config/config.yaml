@@ -1,10 +1,12 @@
 # yaml-language-server: $schema=https://agentgateway.dev/schema/config
 #
-# Declarative config, baked into the image: UI edits will not persist by design.
-# One gateway on 4000 serves LLM, MCP and the UI. Nothing is published to the
-# host - the backend is the only door.
+# This file is the read-only baseline. Runtime resources are persisted in the
+# gateway database and merged over it. One gateway on 4000 serves LLM, MCP and
+# the UI. Nothing is published to the host - the backend is the only door.
 
 config:
+  storage:
+    mode: hybrid
   database:
     url: sqlite:///data/agentgateway.db
 
@@ -15,14 +17,12 @@ gateways:
 ui:
   gateways: default
 
-# LLM traffic: OpenAI-compatible on /v1, fronted by OpenRouter. Point this
-# somewhere else and every agent follows, without touching an image.
+# LLM integrations are runtime resources managed by the authenticated backend.
+# OpenRouter is added once on upgrade to preserve the default experience.
 llm:
-  models:
-    - name: "*"
-      provider: openrouter
-      params:
-        apiKey: "$OPENROUTER_API_KEY"
+  providers: []
+  models: []
+  virtualModels: []
 
 # MCP traffic: one federated endpoint on /mcp for both workers and Pi agents.
 mcp:

@@ -126,7 +126,9 @@ const quick = computed(() => {
 function shortName (model) {
   // "Anthropic: Claude Sonnet 4" reads as "Claude Sonnet 4" under its own heading.
   const name = model.name || model.id
-  return name.includes(': ') ? name.split(': ').slice(1).join(': ') : name
+  if (name.includes(': ')) return name.split(': ').slice(1).join(': ')
+  const prefix = `${model.provider}/`
+  return name.startsWith(prefix) ? name.slice(prefix.length) : name
 }
 
 /** Vendors spell themselves properly in the model name; the slug is a fallback. */

@@ -117,10 +117,18 @@ services:
     restart: unless-stopped
     command: ["-f", "/config/config.yaml"]
     environment:
+      # Provider credentials, read only by agentgateway. Each one enables the matching
+      # integration in Settings > Agents; a custom integration needs its variable added here.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-    # Upstream image runs as uid 65532; its local state is a cache, not data.
-    tmpfs:
-      - /data:uid=65532,gid=65532,mode=0700
+      GH_COPILOT_TOKEN: ${GH_COPILOT_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+    volumes:
+      - agentgateway-data:/data
     networks: [internal]
     depends_on:
       - workflow-mcp
@@ -280,4 +288,5 @@ volumes:
     name: nautionette-workflows
   artifacts:
   backend-data:
+  agentgateway-data:
   postgres-data:

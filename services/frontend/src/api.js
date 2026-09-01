@@ -68,6 +68,13 @@ export const api = {
   events: () => request('/api/events/recent'),
   settings: () => request('/api/settings'),
   saveSettings: (payload) => request('/api/settings', { method: 'PUT', ...json(payload) }),
+  modelIntegrations: () => request('/api/model-integrations'),
+  addModelIntegration: (id, config = {}) =>
+    request(`/api/model-integrations/${encodeURIComponent(id)}`, { method: 'PUT', ...json(config) }),
+  removeModelIntegration: (id) =>
+    request(`/api/model-integrations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  testModelIntegration: (id) =>
+    request(`/api/model-integrations/${encodeURIComponent(id)}/test`, { method: 'POST' }),
 
   chats: () => request('/api/chats'),
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),

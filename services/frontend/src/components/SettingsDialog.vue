@@ -104,6 +104,138 @@
           </div>
 
           <div class="setting">
+            <div class="row integration-head">
+              <div class="setting__label grow">Model integrations</div>
+              <button
+                class="btn btn--sm btn--outline" :disabled="integrationLoading"
+                @click="refreshIntegrations"
+              >
+                {{ integrationLoading ? 'Checking…' : 'Refresh models' }}
+              </button>
+              <button
+                class="btn btn--sm btn--primary"
+                :disabled="!integrations.writable || !availableIntegrations.length"
+                @click="toggleIntegrationAdd"
+              >
+                Add integration
+              </button>
+            </div>
+            <p class="caption dim">
+              Provider routes live in agentgateway. Their models are discovered automatically and
+              labeled by both integration and model vendor in every picker.
+            </p>
+
+            <div v-if="integrationAdding" class="integration-add">
+              <template v-if="!selectedIntegration">
+                <div class="section-label">Available integrations</div>
+                <button
+                  v-for="integration in availableIntegrations" :key="integration.type"
+                  class="integration-option" @click="chooseIntegration(integration)"
+                >
+                  <span class="material-icons">add_circle_outline</span>
+                  <span class="grow">
+                    <strong>{{ integration.name }}</strong>
+                    <span class="caption dim">{{ integration.description }}</span>
+                  </span>
+                </button>
+              </template>
+              <template v-else>
+                <div class="row">
+                  <button class="btn btn--icon btn--sm" @click="backFromIntegrationForm">
+                    <span class="material-icons">arrow_back</span>
+                  </button>
+                  <strong class="grow">
+                    {{ selectedIntegration.configured ? 'Configure' : 'Add' }} {{ selectedIntegration.name }}
+                  </strong>
+                </div>
+                <p class="caption dim">{{ selectedIntegration.description }}</p>
+                <label v-for="field in selectedIntegration.fields" :key="field.key" class="integration-field">
+                  <span class="caption">{{ field.label }}{{ field.optional ? ' (optional)' : '' }}</span>
+                  <input
+                    v-model="integrationDraft[field.key]" class="field mono"
+                    :placeholder="field.placeholder || ''" :disabled="selectedIntegration.configured && field.key === 'slug'"
+                  />
+                  <span class="caption dim">{{ field.help }}</span>
+                </label>
+                <p class="caption dim">
+                  Credentials stay on agentgateway and are never returned to this page.
+                </p>
+                <div class="row integration-actions">
+                  <button class="btn btn--sm" @click="cancelIntegrationAdd">Cancel</button>
+                  <button
+                    class="btn btn--sm btn--primary"
+                    :disabled="Boolean(integrationBusy) || !integrationDraftValid"
+                    @click="addIntegration"
+                  >
+                    {{ integrationBusy
+                      ? 'Saving…'
+                      : selectedIntegration.configured ? 'Save configuration' : 'Add integration' }}
+                  </button>
+                </div>
+              </template>
+            </div>
+
+            <p v-if="!configuredIntegrations.length && !integrationLoading" class="caption dim integration-empty">
+              No model integration is configured.
+            </p>
+            <div
+              v-for="integration in configuredIntegrations" :key="integration.instance"
+              class="integration-card"
+            >
+              <div class="row">
+                <span class="material-icons integration-card__icon">hub</span>
+                <strong class="grow">{{ integration.name }}</strong>
+                <span
+                  class="chip"
+                  :class="integration.discovery.ok ? 'chip--success' : 'chip--warning'"
+                >
+                  {{ integration.discovery.ok ? `${integration.model_count} models` : 'needs attention' }}
+                </span>
+              </div>
+              <p class="caption dim">{{ integration.description }}</p>
+              <div class="integration-meta caption dim">
+                <span>route <code class="mono">{{ integration.model_match }}</code></span>
+                <span>credential <code class="mono">{{ integration.credential }}</code></span>
+              </div>
+              <p v-if="!integration.discovery.ok" class="caption integration-warning">
+                {{ integration.discovery.message }}
+              </p>
+              <div v-if="integrationTests[integration.instance]" class="line">
+                <span
+                  class="dot"
+                  :class="integrationTests[integration.instance].ok ? 'dot--ok' : 'dot--bad'"
+                />
+                <span class="caption grow">{{ integrationTests[integration.instance].message }}</span>
+                <span v-if="integrationTests[integration.instance].status" class="caption dim">
+                  HTTP {{ integrationTests[integration.instance].status }}
+                </span>
+              </div>
+              <div class="row integration-actions">
+                <button
+                  v-if="integration.fields.length" class="btn btn--sm"
+                  :disabled="Boolean(integrationBusy)" @click="chooseIntegration(integration)"
+                >
+                  Configure
+                </button>
+                <button
+                  class="btn btn--sm btn--outline" :disabled="Boolean(integrationBusy)"
+                  @click="testIntegration(integration)"
+                >
+                  {{ integrationBusy === integration.instance && integrationAction === 'test'
+                    ? 'Testing…' : 'Test' }}
+                </button>
+                <span class="grow" />
+                <button
+                  class="btn btn--sm btn--danger" :disabled="Boolean(integrationBusy)"
+                  @click="removeIntegration(integration)"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting">
             <div class="setting__label">Models reachable through the gateway</div>
             <template v-for="gateway in modelGroups" :key="gateway.name">
               <p class="caption dim" style="margin-top: 10px">
@@ -222,6 +354,14 @@ const refreshing = ref(false)
 const saving = ref(false)
 const form = reactive({ default_model: '', default_agent_set: '', history_chars: 0 })
 const defaults = reactive({ default_model: '', default_agent_set: '', history_chars: 0 })
+const integrations = reactive({ integrations: [], available: [], storage_mode: 'unknown', writable: false })
+const integrationLoading = ref(false)
+const integrationAdding = ref(false)
+const integrationChoice = ref('')
+const integrationDraft = reactive({})
+const integrationBusy = ref('')
+const integrationAction = ref('')
+const integrationTests = reactive({})
 const origin = window.location.origin
 const historyMode = ref('auto')
 
@@ -244,6 +384,21 @@ const open = computed({
   get: () => store.settingsOpen,
   set: (value) => { store.settingsOpen = value }
 })
+
+const configuredIntegrations = computed(() => integrations.integrations)
+
+const availableIntegrations = computed(() => integrations.available)
+
+const selectedIntegration = computed(() =>
+  [...integrations.integrations, ...integrations.available]
+    .find((integration) => (integration.instance || integration.type) === integrationChoice.value))
+
+const integrationDraftValid = computed(() =>
+  (selectedIntegration.value?.fields || []).every((field) => {
+    const value = (integrationDraft[field.key] || '').trim()
+    if (!value) return Boolean(field.optional)
+    return new RegExp(`^(?:${field.pattern})$`).test(value)
+  }))
 
 const modelGroups = computed(() => {
   const byGateway = new Map()
@@ -298,6 +453,123 @@ async function refreshCatalog () {
   refreshing.value = false
 }
 
+function applyIntegrations (data) {
+  integrations.integrations = data.integrations || []
+  integrations.available = data.available || []
+  integrations.storage_mode = data.storage_mode || 'unknown'
+  integrations.writable = Boolean(data.writable)
+}
+
+async function loadIntegrations () {
+  integrationLoading.value = true
+  try {
+    applyIntegrations(await api.modelIntegrations())
+  } catch (error) {
+    $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    integrationLoading.value = false
+  }
+}
+
+async function refreshIntegrations () {
+  await Promise.all([loadIntegrations(), actions.loadCatalog(true)])
+}
+
+function chooseIntegration (integration) {
+  integrationAdding.value = true
+  integrationChoice.value = integration.instance || integration.type
+  for (const key of Object.keys(integrationDraft)) delete integrationDraft[key]
+  for (const field of integration.fields || []) {
+    integrationDraft[field.key] = integration.config?.[field.key] || field.default || ''
+  }
+}
+
+function clearIntegrationDraft () {
+  integrationChoice.value = ''
+  for (const key of Object.keys(integrationDraft)) delete integrationDraft[key]
+}
+
+function backFromIntegrationForm () {
+  if (selectedIntegration.value?.configured) cancelIntegrationAdd()
+  else clearIntegrationDraft()
+}
+
+function cancelIntegrationAdd () {
+  integrationAdding.value = false
+  clearIntegrationDraft()
+}
+
+function toggleIntegrationAdd () {
+  if (integrationAdding.value) cancelIntegrationAdd()
+  else {
+    clearIntegrationDraft()
+    integrationAdding.value = true
+  }
+}
+
+async function addIntegration () {
+  const integration = selectedIntegration.value
+  if (!integration) return
+  const target = integration.instance || integration.type
+  integrationBusy.value = target
+  integrationAction.value = 'save'
+  try {
+    const data = await api.addModelIntegration(target, { ...integrationDraft })
+    applyIntegrations(data)
+    cancelIntegrationAdd()
+    await actions.loadCatalog(true)
+    $q.notify({
+      type: 'positive',
+      message: `${integration.name} ${integration.configured ? 'updated' : 'added'}`
+    })
+  } catch (error) {
+    $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    integrationBusy.value = ''
+    integrationAction.value = ''
+  }
+}
+
+function removeIntegration (integration) {
+  $q.dialog({
+    title: `Remove ${integration.name}`,
+    message: 'Its models will disappear from the pickers. Existing chats keep their selected model.',
+    cancel: true
+  }).onOk(async () => {
+    integrationBusy.value = integration.instance
+    integrationAction.value = 'remove'
+    try {
+      const data = await api.removeModelIntegration(integration.instance)
+      applyIntegrations(data)
+      delete integrationTests[integration.instance]
+      if (data.default_reset) await loadSettings()
+      await actions.loadCatalog(true)
+      $q.notify({ type: 'positive', message: `${integration.name} removed` })
+    } catch (error) {
+      $q.notify({ type: 'negative', message: error.message })
+    } finally {
+      integrationBusy.value = ''
+      integrationAction.value = ''
+    }
+  })
+}
+
+async function testIntegration (integration) {
+  integrationBusy.value = integration.instance
+  integrationAction.value = 'test'
+  delete integrationTests[integration.instance]
+  try {
+    const result = await api.testModelIntegration(integration.instance)
+    integrationTests[integration.instance] = result
+    if (result.ok) await Promise.all([loadIntegrations(), actions.loadCatalog(true)])
+  } catch (error) {
+    integrationTests[integration.instance] = { ok: false, message: error.message }
+  } finally {
+    integrationBusy.value = ''
+    integrationAction.value = ''
+  }
+}
+
 async function copy (text) {
   await navigator.clipboard.writeText(text)
   $q.notify({ message: 'Copied' })
@@ -335,11 +607,17 @@ async function resetSettings () {
   await actions.loadCatalog(true)
 }
 
+function loadTab (value) {
+  if (value === 'agents') loadIntegrations()
+  if (value === 'activity') actions.loadEvents()
+}
+
 watch(() => store.settingsTab, (value) => { tab.value = value })
+watch(tab, loadTab)
 watch(() => store.settingsOpen, (value) => {
   if (!value) return
   loadSettings()
-  if (tab.value === 'activity') actions.loadEvents()
+  loadTab(tab.value)
 })
 </script>
 
@@ -460,6 +738,73 @@ watch(() => store.settingsOpen, (value) => {
   text-align: left;
 }
 
+.integration-add,
+.integration-card {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-panel);
+}
+
+.integration-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.integration-option:hover {
+  background: var(--surface-hover);
+}
+
+.integration-option .material-icons,
+.integration-card__icon {
+  flex: none;
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.integration-option .grow,
+.integration-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.integration-field {
+  margin-top: 10px;
+}
+
+.integration-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+}
+
+.integration-warning {
+  margin-top: 6px !important;
+  color: var(--warning);
+}
+
+.integration-empty {
+  margin-top: 12px !important;
+}
+
+.integration-actions {
+  margin-top: 10px;
+}
+
 select.field {
   appearance: none;
 }
@@ -528,8 +873,17 @@ select.field {
   }
 
   .setting > .row,
-  .settings__save {
+  .settings__save,
+  .integration-actions {
     flex-wrap: wrap;
+  }
+
+  .integration-head .setting__label {
+    flex-basis: 100%;
+  }
+
+  .integration-head .btn {
+    flex: 1;
   }
 
   .settings__save .grow {

@@ -9,14 +9,17 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hmac
+import ipaddress
 import json
 import os
+import re
 import shutil
 import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
@@ -33,7 +36,7 @@ from .agent import (
     stream_agent,
     summarise_for_title,
 )
-from .clients import authoring, broker, gateway, model_catalog
+from .clients import authoring, broker, gateway, model_catalog, upstream_problem
 from .config import settings
 from .db import Database
 from .events import bus, sse
@@ -57,8 +60,12 @@ def seed_workflows() -> None:
 async def lifespan(_: FastAPI):
     Path(settings.artifacts_dir).mkdir(parents=True, exist_ok=True)
     seed_workflows()
+    integration_bootstrap = asyncio.create_task(_bootstrap_default_integrations())
     bus.publish("system.start", {"version": settings.version})
     yield
+    integration_bootstrap.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await integration_bootstrap
 
 
 app = FastAPI(
@@ -245,6 +252,382 @@ async def events_recent() -> dict[str, Any]:
 
 _catalog_cache: dict[str, Any] = {"at": 0.0, "value": None}
 _CATALOG_TTL = 60.0
+_INTEGRATION_RESOURCE_PREFIX = "nautionette-integration-"
+_LEGACY_COPILOT_RESOURCE_PREFIX = "nautionette-copilot-"
+_INTEGRATIONS_INITIALIZED = "model_integrations_initialized_v2"
+_INSTANCE_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+_integration_lock = asyncio.Lock()
+
+# Field values are display state; agentgateway stays the source of truth for what is configured.
+_INTEGRATION_SETTING = "model_integration:"
+
+_SLUG = r"[a-z0-9][a-z0-9-]{0,23}"
+_ENV_NAME = r"[A-Z][A-Z0-9_]{0,63}"
+_HTTPS_URL = r"https://[A-Za-z0-9.-]+(?::\d{1,5})?(?:/[A-Za-z0-9._~/-]*)?"
+
+# How to read a provider's model list. Paths are dotted lookups into each entry.
+_OPENAI_MODELS = {"items": "data", "id": "id", "name": "name"}
+
+# Every integration is data: adding a provider here needs no new code.
+_INTEGRATION_TYPES: dict[str, dict[str, Any]] = {
+    "openrouter": {
+        "name": "OpenRouter",
+        "description": "A unified catalog of hosted models from many vendors.",
+        "provider": "openrouter",
+        "prefix": "",
+        "auth": {"kind": "key", "env": "OPENROUTER_API_KEY"},
+        "discovery": {
+            "url": "https://openrouter.ai/api/v1/models",
+            "models": {**_OPENAI_MODELS, "context": ["context_length"]},
+        },
+        "default": True,
+    },
+    "copilot": {
+        "name": "GitHub Copilot",
+        "description": "Models the GitHub account behind this Copilot token may use.",
+        "provider": "copilot",
+        "prefix": "copilot",
+        "auth": {"kind": "copilot", "env": "GH_COPILOT_TOKEN"},
+        "headers": {"Copilot-Integration-Id": "{integration_id}"},
+        "discovery": {
+            "host": "api.githubcopilot.com:443",
+            "path": "/models",
+            "models": {
+                **_OPENAI_MODELS,
+                "vendor": "vendor",
+                "enabled": "model_picker_enabled",
+                "include": {"path": "capabilities.type", "values": ["chat"]},
+                "context": [
+                    "capabilities.limits.max_context_window_tokens",
+                    "capabilities.limits.max_prompt_tokens",
+                ],
+            },
+        },
+        "fields": [
+            {
+                "key": "integration_id",
+                "label": "Copilot integration ID",
+                "default": "copilot-developer-cli",
+                "pattern": r"[a-z0-9][a-z0-9._-]{0,63}",
+                "help": "Keep the official CLI default unless GitHub assigned this app another ID.",
+            }
+        ],
+    },
+    "openai": {
+        "name": "OpenAI",
+        "description": "OpenAI's own API, billed to your OpenAI account.",
+        "provider": "openAI",
+        "prefix": "openai",
+        "auth": {"kind": "key", "env": "OPENAI_API_KEY"},
+        "discovery": {"host": "api.openai.com:443", "path": "/v1/models", "models": _OPENAI_MODELS},
+    },
+    "anthropic": {
+        "name": "Anthropic",
+        "description": "Claude models straight from Anthropic.",
+        "provider": "anthropic",
+        "prefix": "anthropic",
+        "auth": {
+            "kind": "key",
+            "env": "ANTHROPIC_API_KEY",
+            "location": {"header": {"name": "x-api-key"}},
+        },
+        "discovery": {
+            "host": "api.anthropic.com:443",
+            "path": "/v1/models",
+            "headers": {"anthropic-version": "2023-06-01"},
+            "models": {**_OPENAI_MODELS, "name": "display_name"},
+        },
+    },
+    "groq": {
+        "name": "Groq",
+        "description": "Open models on Groq's low-latency inference stack.",
+        "provider": "groq",
+        "prefix": "groq",
+        "auth": {"kind": "key", "env": "GROQ_API_KEY"},
+        "discovery": {
+            "host": "api.groq.com:443",
+            "path": "/openai/v1/models",
+            "models": {**_OPENAI_MODELS, "vendor": "owned_by", "context": ["context_window"]},
+        },
+    },
+    "mistral": {
+        "name": "Mistral",
+        "description": "Mistral's hosted models.",
+        "provider": "mistral",
+        "prefix": "mistral",
+        "auth": {"kind": "key", "env": "MISTRAL_API_KEY"},
+        "discovery": {
+            "host": "api.mistral.ai:443",
+            "path": "/v1/models",
+            "models": {**_OPENAI_MODELS, "context": ["max_context_length"]},
+        },
+    },
+    "deepseek": {
+        "name": "DeepSeek",
+        "description": "DeepSeek's hosted models.",
+        "provider": "deepseek",
+        "prefix": "deepseek",
+        "auth": {"kind": "key", "env": "DEEPSEEK_API_KEY"},
+        "discovery": {"host": "api.deepseek.com:443", "path": "/models", "models": _OPENAI_MODELS},
+    },
+    "xai": {
+        "name": "xAI",
+        "description": "Grok models from xAI.",
+        "provider": "xai",
+        "prefix": "xai",
+        "auth": {"kind": "key", "env": "XAI_API_KEY"},
+        "discovery": {"host": "api.x.ai:443", "path": "/v1/models", "models": _OPENAI_MODELS},
+    },
+    "custom": {
+        "name": "Custom",
+        "description": "Any other endpoint that speaks the OpenAI chat completions API.",
+        "provider": {"custom": {"formats": [{"type": "completions"}]}},
+        "prefix": "{slug}",
+        "vendor": "{slug}",
+        "instance": "custom-{slug}",
+        "multiple": True,
+        "params": {"baseUrl": "{base_url}"},
+        "auth": {"kind": "key", "env": "{credential_env}", "optional": True},
+        "discovery": {
+            "host": "{base_url_host}",
+            "path": "{base_url_path}/models",
+            "models": _OPENAI_MODELS,
+        },
+        "fields": [
+            {
+                "key": "slug",
+                "label": "Name",
+                "pattern": _SLUG,
+                "placeholder": "my-provider",
+                "help": "Also the model prefix, so its models appear as my-provider/<model>.",
+            },
+            {
+                "key": "base_url",
+                "label": "Base URL",
+                "kind": "url",
+                "pattern": _HTTPS_URL,
+                "placeholder": "https://api.example.com/v1",
+                "help": "The OpenAI-compatible base, without the /chat/completions suffix.",
+            },
+            {
+                "key": "credential_env",
+                "label": "Credential variable",
+                "kind": "env",
+                "optional": True,
+                "pattern": _ENV_NAME,
+                "placeholder": "MY_PROVIDER_API_KEY",
+                "help": "Name of the variable holding the key on agentgateway. Leave empty if it needs none.",
+            },
+        ],
+    },
+}
+
+
+def _integration_resource_id(instance: str) -> str:
+    return f"{_INTEGRATION_RESOURCE_PREFIX}{instance}"
+
+
+def _integration_discovery_resource_id(instance: str) -> str:
+    return f"{_integration_resource_id(instance)}-discovery"
+
+
+def _integration_type(instance: str) -> str | None:
+    """Resolve which integration type an instance belongs to, e.g. custom-mylab -> custom."""
+    spec = _INTEGRATION_TYPES.get(instance)
+    if spec and not spec.get("multiple"):
+        return instance
+    return next(
+        (
+            type_id
+            for type_id, candidate in _INTEGRATION_TYPES.items()
+            if candidate.get("multiple") and instance.startswith(f"{type_id}-")
+        ),
+        None,
+    )
+
+
+def _integration_spec(type_id: str) -> dict[str, Any]:
+    spec = _INTEGRATION_TYPES.get(type_id)
+    if not spec:
+        raise HTTPException(status_code=404, detail="unknown model integration")
+    return spec
+
+
+def _render(value: Any, context: dict[str, str]) -> Any:
+    if isinstance(value, str):
+        return value.format_map(context) if "{" in value else value
+    if isinstance(value, dict):
+        return {key: _render(item, context) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_render(item, context) for item in value]
+    return value
+
+
+def _integration_context(spec: dict[str, Any], config: dict[str, str]) -> dict[str, str]:
+    context: dict[str, str] = {}
+    for field in spec.get("fields", []):
+        value = str(config.get(field["key"]) or field.get("default", "")).strip()
+        context[field["key"]] = value
+        if field.get("kind") == "url" and value:
+            parts = urlsplit(value)
+            context[f"{field['key']}_host"] = f"{parts.hostname}:{parts.port or 443}"
+            context[f"{field['key']}_path"] = parts.path.rstrip("/")
+    return context
+
+
+def _reachable_host(url: str) -> None:
+    """A user-supplied endpoint must be public: the gateway can also see this network."""
+    host = urlsplit(url).hostname or ""
+    with contextlib.suppress(ValueError):
+        address = ipaddress.ip_address(host)
+        if not address.is_global:
+            raise HTTPException(status_code=400, detail="the base URL must be a public address")
+    if "." not in host or host.endswith((".local", ".internal")):
+        raise HTTPException(status_code=400, detail="the base URL must be a public hostname")
+
+
+def _normalise_integration_config(spec: dict[str, Any], payload: dict[str, Any]) -> dict[str, str]:
+    config: dict[str, str] = {}
+    for field in spec.get("fields", []):
+        value = str(payload.get(field["key"]) or field.get("default", "")).strip()
+        if not value and field.get("optional"):
+            config[field["key"]] = ""
+            continue
+        if not re.fullmatch(field["pattern"], value):
+            raise HTTPException(status_code=400, detail=f"invalid value for {field['label']}")
+        if field.get("kind") == "url":
+            _reachable_host(value)
+        config[field["key"]] = value
+    return config
+
+
+def _integration_prefix(spec: dict[str, Any], context: dict[str, str]) -> str:
+    return str(_render(spec.get("prefix", ""), context))
+
+
+def _integration_model_value(
+    spec: dict[str, Any], instance: str, config: dict[str, str]
+) -> dict[str, Any]:
+    context = _integration_context(spec, config)
+    prefix = _integration_prefix(spec, context)
+    value: dict[str, Any] = {
+        "id": _integration_resource_id(instance),
+        "name": f"{prefix}/*" if prefix else "*",
+        "provider": _render(spec["provider"], context),
+    }
+    params = dict(_render(spec.get("params", {}), context))
+    auth = spec.get("auth", {})
+    environment = str(_render(auth.get("env", ""), context))
+    if auth.get("kind") == "key" and environment:
+        params["apiKey"] = f"${environment}"
+    if params:
+        value["params"] = params
+    if prefix:
+        value["transformation"] = {"model": f'llmRequest.model.stripPrefix("{prefix}/")'}
+    headers = _render(spec.get("headers", {}), context)
+    if headers:
+        value["requestHeaders"] = {"set": headers}
+    return value
+
+
+def _integration_discovery_value(
+    spec: dict[str, Any], instance: str, config: dict[str, str]
+) -> dict[str, Any] | None:
+    """The route that lets the backend read a provider's own model list, credential included."""
+    discovery = spec.get("discovery", {})
+    if "host" not in discovery:
+        return None
+    context = _integration_context(spec, config)
+    policies: dict[str, Any] = {
+        "urlRewrite": {"path": {"full": _render(discovery["path"], context)}},
+        "backendTLS": {},
+    }
+    headers = _render({**spec.get("headers", {}), **discovery.get("headers", {})}, context)
+    if headers:
+        policies["requestHeaderModifier"] = {"set": headers}
+    backend: dict[str, Any] = {"host": _render(discovery["host"], context)}
+    auth = spec.get("auth", {})
+    environment = str(_render(auth.get("env", ""), context))
+    if auth.get("kind") == "copilot":
+        backend["policies"] = {"backendAuth": "copilot"}
+    elif auth.get("kind") == "key" and environment:
+        key: dict[str, Any] = {"value": f"${environment}"}
+        if auth.get("location"):
+            key["location"] = auth["location"]
+        backend["policies"] = {"backendAuth": {"key": key}}
+    return {
+        "name": _integration_discovery_resource_id(instance),
+        "gateways": ["default"],
+        "matches": [
+            {"path": {"exact": f"/_nautionette/integrations/{instance}/models"}, "method": "GET"}
+        ],
+        "policies": policies,
+        "backends": [backend],
+    }
+
+
+def _integration_credential(spec: dict[str, Any], config: dict[str, str]) -> str:
+    environment = str(_render(spec.get("auth", {}).get("env", ""), _integration_context(spec, config)))
+    return environment or "none"
+
+
+def _stored_config(instance: str) -> dict[str, str]:
+    stored = db.get_setting(f"{_INTEGRATION_SETTING}{instance}", {})
+    return stored if isinstance(stored, dict) else {}
+
+
+def _configured_instances(config: dict[str, Any]) -> list[str]:
+    out: list[str] = []
+    for route in config.get("model_routes") or []:
+        identifier = route.get("id") or ""
+        if identifier.startswith(_INTEGRATION_RESOURCE_PREFIX):
+            instance = identifier.removeprefix(_INTEGRATION_RESOURCE_PREFIX)
+            if _integration_type(instance):
+                out.append(instance)
+    return out
+
+
+def _provider_slug(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+    return slug or "other"
+
+
+def _pluck(item: dict[str, Any], path: str) -> Any:
+    value: Any = item
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def _route_for_model(model_id: str, config: dict[str, Any]) -> dict[str, Any] | None:
+    """The route agentgateway itself would pick, so labels match where a call really goes."""
+    winner: dict[str, Any] | None = None
+    winner_score = -1
+    for route in config.get("model_routes") or []:
+        pattern = route.get("name", "")
+        if not pattern or not route.get("provider"):
+            continue
+        if pattern == model_id:
+            score = 10_000 + len(pattern)
+        elif pattern.endswith("*") and model_id.startswith(pattern[:-1]):
+            score = len(pattern) - 1
+        else:
+            continue
+        if score > winner_score:
+            winner, winner_score = route, score
+    return winner
+
+
+def _instance_label(instance: str) -> str:
+    type_id = _integration_type(instance)
+    if not type_id:
+        return instance
+    spec = _INTEGRATION_TYPES[type_id]
+    if not spec.get("multiple"):
+        return str(spec["name"])
+    return f"{spec['name']}: {instance.removeprefix(f'{type_id}-')}"
 
 
 async def _attempt(coro, fallback):
@@ -254,41 +637,92 @@ async def _attempt(coro, fallback):
         return fallback
 
 
+async def _discover_integration_models(instance: str) -> list[dict[str, Any]]:
+    """Ask a provider what it serves, mapped through the declaration in the registry."""
+    type_id = _integration_type(instance)
+    if not type_id:
+        return []
+    spec = _INTEGRATION_TYPES[type_id]
+    discovery = spec.get("discovery", {})
+    config = _stored_config(instance)
+    context = _integration_context(spec, config)
+    if "url" in discovery:
+        payload = await model_catalog.payload(str(_render(discovery["url"], context)))
+    else:
+        payload = await gateway.integration_models(instance)
+
+    mapping = discovery["models"]
+    prefix = _integration_prefix(spec, context)
+    fallback_vendor = str(_render(spec.get("vendor", spec["name"]), context))
+    models: list[dict[str, Any]] = []
+    for item in payload.get(mapping.get("items", "data")) or []:
+        if not isinstance(item, dict):
+            continue
+        identifier = _pluck(item, mapping["id"])
+        if not isinstance(identifier, str) or not identifier or "*" in identifier:
+            continue
+        include = mapping.get("include")
+        if include and _pluck(item, include["path"]) not in include["values"]:
+            continue
+        if mapping.get("enabled") and _pluck(item, mapping["enabled"]) is False:
+            continue
+        vendor = _pluck(item, mapping["vendor"]) if mapping.get("vendor") else None
+        label = _pluck(item, mapping["name"]) if mapping.get("name") else None
+        window = next(
+            (
+                value
+                for path in mapping.get("context", [])
+                if isinstance(value := _pluck(item, path), int)
+            ),
+            None,
+        )
+        owner, separator, _ = identifier.partition("/")
+        models.append(
+            {
+                "id": f"{prefix}/{identifier}" if prefix else identifier,
+                "name": f"{vendor}: {label}" if vendor and label else (label or identifier),
+                "provider": _provider_slug(
+                    str(vendor) if vendor else (owner if separator else fallback_vendor)
+                ),
+                "instance": instance,
+                "context_length": window,
+            }
+        )
+    return models
+
+
 async def _model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
     """Models the gateway will serve, tagged with who owns them and who fronts them."""
-    gateways = config.get("providers") or ["gateway"]
     listed = await _attempt(gateway.models(), [])
-    upstream: list[dict[str, Any]] = []
-    if config.get("wildcard_models") or not listed:
-        # A "*" model means "ask the upstream", so that is where the list comes from.
-        for provider in gateways:
-            upstream.extend(
-                {**model, "gateway": provider} for model in await _attempt(model_catalog.models(provider), [])
-            )
-    merged = {
-        model["id"]: model
-        for model in [
-            *({"id": item["id"], "name": item.get("id"), "gateway": gateways[0]} for item in listed),
-            *upstream,
-        ]
-    }
-    merged.setdefault(
-        settings.agent_model,
-        {"id": settings.agent_model, "name": settings.agent_model, "gateway": gateways[0]},
+    instances = _configured_instances(config)
+    discoveries = await asyncio.gather(
+        *(_attempt(_discover_integration_models(instance), []) for instance in instances)
     )
+    merged: dict[str, dict[str, Any]] = {}
+    for model in [*({"id": item["id"]} for item in listed), *(m for d in discoveries for m in d)]:
+        merged.setdefault(model["id"], {}).update(model)
+
     out = []
     for model in merged.values():
         # A leading "~" marks an always-latest alias, not a separate vendor.
         alias = model["id"].startswith("~")
         owner, separator, _ = model["id"].lstrip("~").partition("/")
+        route = _route_for_model(model["id"], config) or {}
+        identifier = str(route.get("id") or "")
+        serving = (
+            identifier.removeprefix(_INTEGRATION_RESOURCE_PREFIX)
+            if identifier.startswith(_INTEGRATION_RESOURCE_PREFIX)
+            else ""
+        )
         out.append(
             {
                 "id": model["id"],
                 "name": model.get("name") or model["id"],
-                "provider": owner if separator else "other",
-                "gateway": model.get("gateway") or gateways[0],
+                "provider": model.get("provider") or (owner if separator else "other"),
+                # Attribution follows the winning route, so the label matches where calls go.
+                "gateway": _instance_label(serving) if serving else str(route.get("provider") or "gateway"),
+                "integration": serving or None,
                 "context_length": model.get("context_length"),
-                "created": model.get("created"),
                 "alias": alias,
             }
         )
@@ -343,6 +777,8 @@ async def catalog(refresh: bool = False) -> dict[str, Any]:
     if not refresh and _catalog_cache["value"] and time.time() - _catalog_cache["at"] < _CATALOG_TTL:
         return _catalog_cache["value"]
 
+    with contextlib.suppress(HTTPException):
+        await _ensure_default_integrations()
     config = await _attempt(gateway.config(), {"providers": [], "targets": [], "wildcard_models": False})
     agent_sets, models, (tools, servers) = await asyncio.gather(
         _attempt(broker.agent_sets(), []),
@@ -354,7 +790,7 @@ async def catalog(refresh: bool = False) -> dict[str, Any]:
         "default_agent_set": runtime("default_agent_set"),
         "models": models,
         "default_model": runtime("default_model"),
-        "gateways": config.get("providers") or [],
+        "gateways": sorted({model["gateway"] for model in models}),
         "tools": tools,
         "tool_servers": servers,
         # The clients work the budget out per model with the same arithmetic.
@@ -371,6 +807,333 @@ async def catalog(refresh: bool = False) -> dict[str, Any]:
     )
     _catalog_cache.update(at=time.time(), value=value)
     return value
+
+
+# --------------------------------------------------------- model integrations
+
+
+def _resource_map(resources: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {
+        resource["id"]: resource
+        for resource in resources
+        if isinstance(resource.get("id"), str)
+        and isinstance(resource.get("value"), dict)
+    }
+
+
+def _gateway_problem(exc: httpx.HTTPError, credential: str = "") -> HTTPException:
+    response_status = 502
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        body = exc.response.text
+        missing = re.search(r"key '([A-Z0-9_]+)' up: environment variable not found", body)
+        # agentgateway refuses a credential it cannot read, and refuses an empty one outright.
+        if missing or (credential and "BackendAuthCompat" in body):
+            variable = missing.group(1) if missing else credential
+            return HTTPException(
+                status_code=400,
+                detail=(
+                    f"agentgateway has no value for {variable}. Set it on the agentgateway "
+                    "service, recreate it, then add this integration."
+                ),
+            )
+        if status == 409:
+            response_status = 409
+            detail = "agentgateway rejected a conflicting integration resource"
+        else:
+            detail = f"agentgateway configuration request failed (HTTP {status})"
+    else:
+        detail = "agentgateway is unavailable"
+    return HTTPException(status_code=response_status, detail=detail)
+
+
+def _discovery_failure(spec: dict[str, Any], config: dict[str, str], exc: Exception) -> dict[str, Any]:
+    status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+    body = exc.response.text if isinstance(exc, httpx.HTTPStatusError) else ""
+    return {
+        "ok": False,
+        "status": status,
+        "message": upstream_problem(
+            str(spec["name"]), _integration_credential(spec, config), status, body
+        ),
+    }
+
+
+async def _gateway_integration_resources() -> tuple[
+    str, list[dict[str, Any]], list[dict[str, Any]]
+]:
+    try:
+        runtime_state, models, routes = await asyncio.gather(
+            gateway.runtime(),
+            gateway.config_resources("llm.model"),
+            gateway.config_resources("traffic.route"),
+        )
+    except httpx.HTTPError as exc:
+        raise _gateway_problem(exc) from exc
+    mode = (runtime_state.get("ui") or {}).get("configStoreMode", "unknown")
+    return mode, models, routes
+
+
+async def _ensure_default_integrations() -> None:
+    if db.get_setting(_INTEGRATIONS_INITIALIZED, False):
+        return
+    async with _integration_lock:
+        if db.get_setting(_INTEGRATIONS_INITIALIZED, False):
+            return
+        mode, models, routes = await _gateway_integration_resources()
+        if mode != "hybrid":
+            return
+        try:
+            model_resources = _resource_map(models)
+            for type_id, spec in _INTEGRATION_TYPES.items():
+                if not spec.get("default"):
+                    continue
+                value = _integration_model_value(spec, type_id, {})
+                if model_resources.get(value["id"], {}).get("value") != value:
+                    await gateway.put_config_resources("llm.model", [value])
+
+            # Copilot was once configured one model at a time; fold those into its integration.
+            legacy = [
+                resource["id"]
+                for resource in models
+                if isinstance(resource.get("id"), str)
+                and resource["id"].startswith(_LEGACY_COPILOT_RESOURCE_PREFIX)
+            ]
+            if legacy:
+                await _write_integration("copilot", "copilot", {}, models, routes)
+                for resource_id in legacy:
+                    await gateway.delete_config_resource("llm.model", resource_id)
+        except httpx.HTTPError as exc:
+            raise _gateway_problem(exc) from exc
+        db.set_setting(_INTEGRATIONS_INITIALIZED, True)
+        _catalog_cache.update(at=0.0, value=None)
+
+
+async def _bootstrap_default_integrations() -> None:
+    for attempt in range(8):
+        try:
+            await _ensure_default_integrations()
+            if db.get_setting(_INTEGRATIONS_INITIALIZED, False):
+                return
+        except (HTTPException, httpx.HTTPError):
+            pass
+        await asyncio.sleep(min(0.25 * 2**attempt, 5.0))
+
+
+async def _integration_summary(instance: str, configured: bool) -> dict[str, Any]:
+    type_id = _integration_type(instance) or instance
+    spec = _INTEGRATION_TYPES[type_id]
+    config = _stored_config(instance) if configured else {}
+    discovery: dict[str, Any] = {
+        "ok": False,
+        "status": None,
+        "message": "Add this integration to discover its models.",
+    }
+    models: list[dict[str, Any]] = []
+    if configured:
+        try:
+            models = await _discover_integration_models(instance)
+            discovery = {"ok": True, "status": 200, "message": f"Discovered {len(models)} models."}
+        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            discovery = _discovery_failure(spec, config, exc)
+    context = _integration_context(spec, config)
+    prefix = _integration_prefix(spec, context)
+    return {
+        "instance": instance,
+        "type": type_id,
+        "name": _instance_label(instance) if configured else str(spec["name"]),
+        "description": str(spec["description"]),
+        "configured": configured,
+        "multiple": bool(spec.get("multiple")),
+        "model_count": len(models),
+        "model_match": f"{prefix}/*" if prefix else "*",
+        "credential": _integration_credential(spec, config),
+        "fields": spec.get("fields", []),
+        "config": config,
+        "discovery": discovery,
+    }
+
+
+async def _model_integrations_payload() -> dict[str, Any]:
+    mode, models, _ = await _gateway_integration_resources()
+    instances = [
+        resource_id.removeprefix(_INTEGRATION_RESOURCE_PREFIX)
+        for resource_id in _resource_map(models)
+        if resource_id.startswith(_INTEGRATION_RESOURCE_PREFIX)
+    ]
+    instances = sorted(instance for instance in instances if _integration_type(instance))
+    configured = await asyncio.gather(
+        *(_integration_summary(instance, True) for instance in instances)
+    )
+    taken = {summary["type"] for summary in configured}
+    available = await asyncio.gather(
+        *(
+            _integration_summary(type_id, False)
+            for type_id, spec in _INTEGRATION_TYPES.items()
+            if spec.get("multiple") or type_id not in taken
+        )
+    )
+    return {
+        "integrations": list(configured),
+        "available": list(available),
+        "storage_mode": mode,
+        "writable": mode == "hybrid",
+    }
+
+
+async def _upsert_resource_if_changed(
+    kind: str,
+    value: dict[str, Any],
+    resources: list[dict[str, Any]],
+) -> None:
+    resource_id = value.get("id") or value.get("name")
+    current = _resource_map(resources).get(resource_id, {})
+    if current.get("value") != value:
+        await gateway.put_config_resources(kind, [value])
+
+
+async def _write_integration(
+    type_id: str,
+    instance: str,
+    config: dict[str, str],
+    models: list[dict[str, Any]],
+    routes: list[dict[str, Any]],
+) -> None:
+    spec = _INTEGRATION_TYPES[type_id]
+    await _upsert_resource_if_changed(
+        "llm.model", _integration_model_value(spec, instance, config), models
+    )
+    discovery = _integration_discovery_value(spec, instance, config)
+    if discovery:
+        await _upsert_resource_if_changed("traffic.route", discovery, routes)
+    db.set_setting(f"{_INTEGRATION_SETTING}{instance}", config)
+
+
+async def _reset_default_to_available_model(excluded: str | None = None) -> bool:
+    config = await _attempt(
+        gateway.config(), {"providers": [], "targets": [], "model_routes": []}
+    )
+    models = [
+        model for model in await _model_catalog(config) if model.get("integration") != excluded
+    ]
+    ids = {model["id"] for model in models}
+    current = str(runtime("default_model") or "")
+    if current in ids:
+        return False
+    replacement = settings.agent_model if settings.agent_model in ids else None
+    replacement = replacement or (models[0]["id"] if models else None)
+    if replacement:
+        db.set_setting("default_model", replacement)
+    else:
+        db.execute("DELETE FROM settings WHERE key = ?", ("default_model",))
+    bus.publish("settings.changed", {})
+    return True
+
+
+@app.get("/api/model-integrations", dependencies=[Depends(require_user)])
+async def get_model_integrations() -> dict[str, Any]:
+    await _ensure_default_integrations()
+    return await _model_integrations_payload()
+
+
+@app.put("/api/model-integrations/{target}", dependencies=[Depends(require_user)])
+async def put_model_integration(
+    target: str, payload: dict[str, Any] = Body(default={})
+) -> dict[str, Any]:
+    """`target` is a type when adding, or an existing instance when reconfiguring."""
+    type_id = _integration_type(target) or target
+    spec = _integration_spec(type_id)
+    config = _normalise_integration_config(spec, payload)
+    instance = str(_render(spec.get("instance", type_id), _integration_context(spec, config)))
+    if not _INSTANCE_PATTERN.fullmatch(instance) or _integration_type(instance) != type_id:
+        raise HTTPException(status_code=400, detail="invalid integration name")
+
+    await _ensure_default_integrations()
+    mode, models, routes = await _gateway_integration_resources()
+    if mode != "hybrid":
+        raise HTTPException(
+            status_code=409,
+            detail=f"agentgateway configuration storage is {mode!r}; hybrid mode is required",
+        )
+    try:
+        await _write_integration(type_id, instance, config, models, routes)
+    except httpx.HTTPError as exc:
+        if _integration_resource_id(instance) not in _resource_map(models):
+            # Never leave a route behind that the discovery half could not be written for.
+            with contextlib.suppress(httpx.HTTPError):
+                await gateway.delete_config_resource(
+                    "llm.model", _integration_resource_id(instance)
+                )
+        raise _gateway_problem(exc, _integration_credential(spec, config)) from exc
+
+    db.set_setting(_INTEGRATIONS_INITIALIZED, True)
+    _catalog_cache.update(at=0.0, value=None)
+    bus.publish("model.integration.changed", {"integration": instance, "configured": True})
+    return await _model_integrations_payload()
+
+
+@app.delete("/api/model-integrations/{instance}", dependencies=[Depends(require_user)])
+async def delete_model_integration(instance: str) -> dict[str, Any]:
+    if not _integration_type(instance):
+        raise HTTPException(status_code=404, detail="unknown model integration")
+    mode, models, routes = await _gateway_integration_resources()
+    if mode != "hybrid":
+        raise HTTPException(
+            status_code=409,
+            detail=f"agentgateway configuration storage is {mode!r}; hybrid mode is required",
+        )
+    try:
+        if _integration_resource_id(instance) in _resource_map(models):
+            await gateway.delete_config_resource("llm.model", _integration_resource_id(instance))
+        if _integration_discovery_resource_id(instance) in _resource_map(routes):
+            await gateway.delete_config_resource(
+                "traffic.route", _integration_discovery_resource_id(instance)
+            )
+    except httpx.HTTPError as exc:
+        raise _gateway_problem(exc) from exc
+
+    db.execute("DELETE FROM settings WHERE key = ?", (f"{_INTEGRATION_SETTING}{instance}",))
+    _catalog_cache.update(at=0.0, value=None)
+    default_reset = await _reset_default_to_available_model(instance)
+    bus.publish("model.integration.changed", {"integration": instance, "configured": False})
+    return {
+        **await _model_integrations_payload(),
+        "default_model": runtime("default_model"),
+        "default_reset": default_reset,
+    }
+
+
+@app.post("/api/model-integrations/{instance}/test", dependencies=[Depends(require_user)])
+async def test_model_integration(instance: str) -> dict[str, Any]:
+    type_id = _integration_type(instance)
+    if not type_id:
+        raise HTTPException(status_code=404, detail="unknown model integration")
+    spec = _INTEGRATION_TYPES[type_id]
+    config = _stored_config(instance)
+    _, models, _ = await _gateway_integration_resources()
+    if _integration_resource_id(instance) not in _resource_map(models):
+        raise HTTPException(status_code=409, detail=f"add {spec['name']} first")
+    try:
+        discovered = await _discover_integration_models(instance)
+    except (httpx.HTTPError, ValueError, KeyError) as exc:
+        return _discovery_failure(spec, config, exc)
+    if not discovered:
+        return {"ok": False, "status": None, "message": "No chat models were discovered."}
+
+    default_model = str(runtime("default_model") or "")
+    model = next(
+        (item for item in discovered if item["id"] == default_model),
+        discovered[0],
+    )
+    try:
+        result = await gateway.test_model(
+            model["id"], str(spec["name"]), _integration_credential(spec, config)
+        )
+    except httpx.HTTPError as exc:
+        raise _gateway_problem(exc) from exc
+    _remember_agent_result(bool(result["ok"]))
+    bus.publish("model.integration.test", {"integration": instance, "ok": result["ok"]})
+    return result
 
 
 # ---------------------------------------------------------------------- chats

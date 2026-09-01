@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -130,15 +131,24 @@ class GatewayClient:
         Only the naming is taken. Anything that could carry a key stays here.
         """
         async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(f"{self.base_url}/api/config")
+            # The effective view includes resources layered in through hybrid
+            # storage; /api/config contains only the file-owned baseline.
+            response = await client.get(f"{self.base_url}/api/config/effective")
             response.raise_for_status()
             payload = response.json()
         providers: list[str] = []
         wildcard = False
+        model_routes: list[dict[str, str]] = []
         for entry in (payload.get("llm") or {}).get("models", []) or []:
-            provider = entry.get("provider")
-            if provider and provider not in providers:
-                providers.append(provider)
+            provider = _provider_name(entry.get("provider"))
+            if provider:
+                if provider not in providers:
+                    providers.append(provider)
+                if isinstance(entry.get("name"), str):
+                    route = {"name": entry["name"], "provider": provider}
+                    if isinstance(entry.get("id"), str):
+                        route["id"] = entry["id"]
+                    model_routes.append(route)
             if entry.get("name") == "*":
                 wildcard = True
         targets = [
@@ -148,7 +158,76 @@ class GatewayClient:
             }
             for entry in (payload.get("mcp") or {}).get("targets", []) or []
         ]
-        return {"providers": providers, "wildcard_models": wildcard, "targets": targets}
+        return {
+            "providers": providers,
+            "wildcard_models": wildcard,
+            "model_routes": model_routes,
+            "targets": targets,
+        }
+
+    async def runtime(self) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(f"{self.base_url}/api/runtime")
+            response.raise_for_status()
+            return response.json()
+
+    async def config_resources(self, kind: str) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(f"{self.base_url}/api/config/resources/{kind}")
+            response.raise_for_status()
+            return response.json().get("resources", [])
+
+    async def put_config_resources(
+        self, kind: str, values: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.put(
+                f"{self.base_url}/api/config/resources/{kind}",
+                json={"resources": [{"value": value} for value in values]},
+            )
+            response.raise_for_status()
+            return response.json().get("resources", [])
+
+    async def delete_config_resource(self, kind: str, resource_id: str) -> None:
+        encoded = quote(resource_id, safe="")
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.delete(f"{self.base_url}/api/config/resources/{kind}/{encoded}")
+            response.raise_for_status()
+
+    async def integration_models(self, instance: str) -> dict[str, Any]:
+        """Read a provider's own model list through the route configured for it."""
+        encoded = quote(instance, safe="")
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.get(f"{self.base_url}/_nautionette/integrations/{encoded}/models")
+            response.raise_for_status()
+            return response.json()
+
+    async def test_model(self, model: str, name: str, credential: str) -> dict[str, Any]:
+        """Make one small generation to prove an integration's auth and routing."""
+        async with httpx.AsyncClient(timeout=90) as client:
+            response = await client.post(
+                f"{self.base_url}/v1/chat/completions",
+                json={
+                    "model": model,
+                    "messages": [{"role": "user", "content": "Reply with OK."}],
+                    "max_tokens": 32,
+                    "stream": False,
+                },
+            )
+        if response.status_code < 400:
+            payload = response.json()
+            return {
+                "ok": True,
+                "status": response.status_code,
+                "model": payload.get("model") or model,
+                "message": f"{name} answered through agentgateway.",
+            }
+        return {
+            "ok": False,
+            "status": response.status_code,
+            "model": model,
+            "message": upstream_problem(name, credential, response.status_code, response.text),
+        }
 
     async def models(self) -> list[dict[str, Any]]:
         """Whatever the provider behind the gateway is willing to serve."""
@@ -156,8 +235,12 @@ class GatewayClient:
             response = await client.get(f"{self.base_url}/v1/models")
             response.raise_for_status()
             payload = response.json()
-        # A "*" entry is the gateway saying "any model", not something to pick.
-        return [item for item in payload.get("data", []) if item.get("id") not in {None, "", "*"}]
+        # Wildcard entries describe integration routes, not selectable models.
+        return [
+            item
+            for item in payload.get("data", [])
+            if item.get("id") and "*" not in item["id"]
+        ]
 
     async def mcp_tools(self, url: str | None = None) -> list[dict[str, Any]]:
         """One handshake against an MCP endpoint, for the tool picker."""
@@ -198,32 +281,36 @@ class GatewayClient:
 
 
 class ModelCatalogClient:
-    """The upstream list of models, for when the gateway is configured as "*"."""
+    """A provider's public model catalog, for integrations that publish one."""
 
-    CATALOGS = {"openrouter": "https://openrouter.ai/api/v1/models"}
-
-    async def models(self, provider: str) -> list[dict[str, Any]]:
-        url = self.CATALOGS.get(provider)
-        if not url:
-            return []
+    async def payload(self, url: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=25) as client:
             response = await client.get(url)
             response.raise_for_status()
-            payload = response.json()
-        out: list[dict[str, Any]] = []
-        for item in payload.get("data", []):
-            identifier = item.get("id")
-            if not identifier:
-                continue
-            out.append(
-                {
-                    "id": identifier,
-                    "name": item.get("name") or identifier,
-                    "context_length": item.get("context_length"),
-                    "created": item.get("created"),
-                }
-            )
-        return out
+            return response.json()
+
+
+def upstream_problem(name: str, credential: str, status: int | None, body: str) -> str:
+    """One actionable sentence, whichever provider refused the call."""
+    text = body.lower()
+    if "token not found" in text:
+        return f"agentgateway found no {name} credential. Set {credential} and recreate it."
+    if "copilot-integration-id" in text:
+        return f"{name} rejected the configured integration ID."
+    # xAI answers a rejected key with 400, so the body decides alongside the status.
+    if status in {401, 403} or "api key" in text or "unauthorized" in text:
+        return f"{name} rejected the credential in {credential}."
+    suffix = f" (HTTP {status})" if status else ""
+    return f"agentgateway could not reach {name}{suffix}."
+
+
+def _provider_name(provider: Any) -> str:
+    """A model's provider is a name, a reference to one, or an inline definition."""
+    if isinstance(provider, str):
+        return provider
+    if isinstance(provider, dict) and provider:
+        return str(provider.get("reference") or next(iter(provider)))
+    return ""
 
 
 def _strip_userinfo(url: str) -> str:
