@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response, Streami
 from nautionette import input_problems
 
 from .agent import (
+    MAX_HISTORY_CHARS,
     agent_job,
     build_history,
     call_agent,
@@ -162,10 +163,46 @@ async def events_stream() -> StreamingResponse:
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
-
 @app.get("/api/events/recent", dependencies=[Depends(require_user)])
 async def events_recent() -> dict[str, Any]:
     return {"events": bus.history()[-100:]}
+
+
+# -------------------------------------------------------------------- catalog
+
+_catalog_cache: dict[str, Any] = {"at": 0.0, "value": None}
+_CATALOG_TTL = 60.0
+
+
+@app.get("/api/catalog", dependencies=[Depends(require_user)])
+async def catalog(refresh: bool = False) -> dict[str, Any]:
+    """What a chat can be pointed at: agent sets, models, MCP tools."""
+    if not refresh and _catalog_cache["value"] and time.time() - _catalog_cache["at"] < _CATALOG_TTL:
+        return _catalog_cache["value"]
+
+    async def attempt(coro, fallback):
+        try:
+            return await coro
+        except Exception:  # noqa: BLE001 - a catalog that fails is an empty picker
+            return fallback
+
+    agent_sets, models, tools = await asyncio.gather(
+        attempt(broker.agent_sets(), []),
+        attempt(gateway.models(), []),
+        attempt(gateway.mcp_tools(), []),
+    )
+    if not any(model.get("id") == settings.agent_model for model in models):
+        models = [{"id": settings.agent_model}, *models]
+    value = {
+        "agent_sets": agent_sets or [{"name": settings.default_agent_set, "ready": True}],
+        "default_agent_set": settings.default_agent_set,
+        "models": models,
+        "default_model": settings.agent_model,
+        "tools": tools,
+        "context_window": MAX_HISTORY_CHARS,
+    }
+    _catalog_cache.update(at=time.time(), value=value)
+    return value
 
 
 # ---------------------------------------------------------------------- chats
@@ -181,9 +218,24 @@ async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, A
     chat = db.create_chat(
         title=(payload.get("title") or "New chat").strip()[:120],
         agent_set=payload.get("agent_set") or settings.default_agent_set,
+        model=payload.get("model") or None,
     )
     bus.publish("chat.created", {"chat_id": chat["id"], "title": chat["title"]})
     return chat
+
+
+@app.patch("/api/chats/{chat_id}", dependencies=[Depends(require_user)])
+async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    if not db.get_chat(chat_id):
+        raise HTTPException(status_code=404, detail="chat not found")
+    fields: dict[str, Any] = {}
+    if "title" in payload:
+        fields["title"] = (payload.get("title") or "Untitled").strip()[:120]
+    if "agent_set" in payload:
+        fields["agent_set"] = payload.get("agent_set") or settings.default_agent_set
+    if "model" in payload:
+        fields["model"] = payload.get("model") or None
+    return db.update_chat(chat_id, fields)  # type: ignore[return-value]
 
 
 @app.get("/api/chats/{chat_id}", dependencies=[Depends(require_user)])
@@ -220,6 +272,7 @@ async def send_message(chat_id: str, payload: dict[str, Any] = Body(...)) -> Str
         mode="interactive",
         history=history,
         agent_set=chat["agent_set"],
+        model=chat.get("model"),
         run_id=f"chat-{chat_id}",
     )
 

@@ -124,6 +124,70 @@ class GatewayClient:
                 "code": response.status_code,
             }
 
+    async def models(self) -> list[dict[str, Any]]:
+        """Whatever the provider behind the gateway is willing to serve."""
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(f"{self.base_url}/v1/models")
+            response.raise_for_status()
+            payload = response.json()
+        # A "*" entry is the gateway saying "any model", not something to pick.
+        return [item for item in payload.get("data", []) if item.get("id") not in {None, "", "*"}]
+
+    async def mcp_tools(self) -> list[dict[str, Any]]:
+        """One handshake against the federated /mcp endpoint, for the tool picker."""
+        url = settings.mcp_url
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        }
+        async with httpx.AsyncClient(timeout=15) as client:
+            handshake = await client.post(
+                url,
+                headers=headers,
+                json=_rpc(
+                    1,
+                    "initialize",
+                    {
+                        "protocolVersion": "2025-06-18",
+                        "capabilities": {},
+                        "clientInfo": {"name": "nautionette", "version": settings.version},
+                    },
+                ),
+            )
+            handshake.raise_for_status()
+            session = handshake.headers.get("mcp-session-id")
+            if session:
+                headers["Mcp-Session-Id"] = session
+            await client.post(url, headers=headers, json=_rpc(None, "notifications/initialized"))
+            listing = await client.post(url, headers=headers, json=_rpc(2, "tools/list"))
+            listing.raise_for_status()
+            body = _rpc_result(listing)
+        return [
+            {
+                "name": tool.get("name", "?"),
+                "description": (tool.get("description") or "").strip().split("\n")[0][:200],
+            }
+            for tool in body.get("tools", [])
+        ]
+
+
+def _rpc(request_id: int | None, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    message: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "params": params or {}}
+    if request_id is not None:
+        message["id"] = request_id
+    return message
+
+
+def _rpc_result(response: httpx.Response) -> dict[str, Any]:
+    """Streamable HTTP answers either as JSON or as a one-frame SSE body."""
+    text = response.text
+    if response.headers.get("content-type", "").startswith("text/event-stream"):
+        for line in text.splitlines():
+            if line.startswith("data:"):
+                return json.loads(line[5:].strip()).get("result", {})
+        return {}
+    return json.loads(text).get("result", {})
+
 
 broker = BrokerClient()
 authoring = AuthoringClient()

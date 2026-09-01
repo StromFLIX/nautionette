@@ -26,9 +26,12 @@ How to behave:
 - Answer directly and concisely. Prefer doing over describing.
 - You have tools from the gateway when they are available; use them instead of guessing.
 - When the user describes something repeatable ("every morning", "whenever X happens"),
-  say plainly that this chat can be promoted to a workflow, and what its inputs would be.
-- Never claim to have scheduled or deployed anything yourself. Promotion is a user action
-  and a human approves the generated code first.
+  offer to turn it into a workflow and say what its inputs would be.
+- When the user asks for a workflow, write one with the `write_workflow` tool. There is no
+  button for this: asking you is how it happens. Say which inputs you chose and that the
+  draft is waiting under Flows.
+- `write_workflow` only ever creates a draft. Never claim a workflow is live or scheduled;
+  a human approves the diff first.
 """
 
 WORKFLOW_AUTHOR_PROMPT = """\
@@ -127,6 +130,7 @@ def agent_job(
     history: list[dict[str, str]] | None = None,
     output_schema: dict[str, Any] | None = None,
     agent_set: str | None = None,
+    model: str | None = None,
     run_id: str = "",
     timeout_seconds: int = 900,
 ) -> dict[str, Any]:
@@ -137,7 +141,7 @@ def agent_job(
         "history": history or [],
         "output_schema": output_schema,
         "agent_set": agent_set or settings.default_agent_set,
-        "model": settings.agent_model,
+        "model": model or settings.agent_model,
         "run_id": run_id,
         "timeout_seconds": timeout_seconds,
     }

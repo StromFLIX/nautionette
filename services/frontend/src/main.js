@@ -1,16 +1,20 @@
 import { createApp } from 'vue'
-import { Quasar, Dark, Notify, Dialog, Loading } from 'quasar'
+import { Dark, Dialog, Notify, Quasar } from 'quasar'
 import '@quasar/extras/material-icons/material-icons.css'
 import 'quasar/dist/quasar.css'
-import './style.css'
+import './styles/base.css'
 
 import App from './App.vue'
 import router from './router'
 
 const app = createApp(App)
 app.use(Quasar, {
-  plugins: { Notify, Dialog, Loading },
-  config: { dark: true, brand: { primary: '#6ee7b7', secondary: '#3b82f6', dark: '#0b1020' } }
+  plugins: { Notify, Dialog },
+  config: {
+    dark: true,
+    brand: { primary: '#4f8cff', secondary: '#3fb950', negative: '#f0616d', dark: '#15181f' },
+    notify: { position: 'bottom', timeout: 4000, textColor: 'white' }
+  }
 })
 app.use(router)
 Dark.set(true)

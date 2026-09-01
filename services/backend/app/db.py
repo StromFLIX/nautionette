@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS chats (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     agent_set TEXT NOT NULL DEFAULT 'default',
+    model TEXT,
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL,
     promoted_to TEXT
@@ -59,6 +60,9 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 """
 
+# Applied on every start; each one fails harmlessly once it is already in place.
+_MIGRATIONS = ("ALTER TABLE chats ADD COLUMN model TEXT",)
+
 
 class Database:
     def __init__(self, path: str) -> None:
@@ -70,6 +74,11 @@ class Database:
         self._conn.execute("PRAGMA foreign_keys=ON")
         with self._lock:
             self._conn.executescript(_SCHEMA)
+            for statement in _MIGRATIONS:
+                try:
+                    self._conn.execute(statement)
+                except sqlite3.OperationalError:
+                    pass  # already applied
             self._conn.commit()
 
     # ------------------------------------------------------------------ basics
@@ -91,14 +100,24 @@ class Database:
 
     # ------------------------------------------------------------------- chats
 
-    def create_chat(self, title: str, agent_set: str) -> dict[str, Any]:
+    def create_chat(self, title: str, agent_set: str, model: str | None = None) -> dict[str, Any]:
         now = time.time()
         chat_id = uuid.uuid4().hex[:12]
         self.execute(
-            "INSERT INTO chats (id, title, agent_set, created_at, updated_at) VALUES (?,?,?,?,?)",
-            (chat_id, title, agent_set, now, now),
+            "INSERT INTO chats (id, title, agent_set, model, created_at, updated_at)"
+            " VALUES (?,?,?,?,?,?)",
+            (chat_id, title, agent_set, model, now, now),
         )
         return self.get_chat(chat_id)  # type: ignore[return-value]
+
+    def update_chat(self, chat_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
+        allowed = {k: v for k, v in fields.items() if k in {"title", "agent_set", "model"}}
+        if allowed:
+            assignments = ", ".join(f"{key} = ?" for key in allowed)
+            self.execute(
+                f"UPDATE chats SET {assignments} WHERE id = ?", (*allowed.values(), chat_id)
+            )
+        return self.get_chat(chat_id)
 
     def get_chat(self, chat_id: str) -> dict[str, Any] | None:
         return self.one("SELECT * FROM chats WHERE id = ?", (chat_id,))
@@ -108,6 +127,16 @@ class Database:
         for row in rows:
             counts = self.one("SELECT COUNT(*) AS n FROM messages WHERE chat_id = ?", (row["id"],))
             row["message_count"] = counts["n"] if counts else 0
+            last = self.one(
+                "SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at DESC"
+                " LIMIT 1",
+                (row["id"],),
+            )
+            row["last_message"] = (
+                {"role": last["role"], "preview": " ".join(last["content"].split())[:120]}
+                if last
+                else None
+            )
         return rows
 
     def touch_chat(self, chat_id: str) -> None:

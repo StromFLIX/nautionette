@@ -44,13 +44,14 @@ const json = (body) => ({ body: JSON.stringify(body ?? {}) })
 
 export const api = {
   system: () => request('/api/system'),
+  catalog: (refresh = false) => request(`/api/catalog${refresh ? '?refresh=true' : ''}`),
   events: () => request('/api/events/recent'),
 
   chats: () => request('/api/chats'),
-  createChat: (title) => request('/api/chats', { method: 'POST', ...json({ title }) }),
+  createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
   chat: (id) => request(`/api/chats/${id}`),
+  updateChat: (id, payload) => request(`/api/chats/${id}`, { method: 'PATCH', ...json(payload) }),
   deleteChat: (id) => request(`/api/chats/${id}`, { method: 'DELETE' }),
-  promote: (id) => request(`/api/chats/${id}/promote`, { method: 'POST' }),
 
   workflows: () => request('/api/workflows'),
   workflow: (name) => request(`/api/workflows/${name}`),
@@ -67,7 +68,8 @@ export const api = {
 
   runs: (workflow) => request(`/api/runs${workflow ? `?workflow=${encodeURIComponent(workflow)}` : ''}`),
   run: (id) => request(`/api/runs/${id}`),
-  cancelRun: (id) => request(`/api/runs/${id}/cancel`, { method: 'POST' })
+  cancelRun: (id) => request(`/api/runs/${id}/cancel`, { method: 'POST' }),
+  terminateRun: (id) => request(`/api/runs/${id}/terminate`, { method: 'POST', ...json({}) })
 }
 
 /** POST that streams server-sent events back, so a chat answer arrives as it is written. */
