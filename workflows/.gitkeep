@@ -1,0 +1,3 @@
+# Workflow definitions committed to the repo. Mounted read-only into the
+# backend at /seed and copied into the shared volume on first boot. Workflows
+# promoted from chats at runtime are written to the volume, not here.

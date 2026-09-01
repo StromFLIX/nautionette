@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Declarative config, mounted read-only: UI edits will not persist by design.
+# One gateway on 4000 serves LLM, MCP and the UI. Nothing is published to the
+# host - the backend reverse-proxies what should be reachable.
+
+config:
+  database:
+    url: sqlite:///data/agentgateway.db
+
+gateways:
+  default:
+    port: 4000
+
+ui:
+  gateways: default
+
+# LLM traffic: OpenAI-compatible on /v1, fronted by OpenRouter.
+llm:
+  models:
+    - name: "*"
+      provider: openrouter
+      params:
+        apiKey: "$OPENROUTER_API_KEY"
+
+# MCP traffic: one federated endpoint on /mcp for both workers and Pi agents.
+mcp:
+  targets:
+    # Deterministic workflow authoring. This is how a promoted chat becomes a
+    # workflow file, so scope it with mcpAuthorization before exposing it widely.
+    - name: workflows
+      mcp:
+        host: http://workflow-mcp:8000/mcp
+    # Add further MCP servers here, one target per server.
