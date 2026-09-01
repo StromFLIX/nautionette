@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response, StreamingResponse
+from nautionette import input_problems
 
 from .agent import (
     agent_job,
@@ -370,6 +371,9 @@ async def discard_draft(name: str) -> dict[str, Any]:
 async def _start_run(name: str, payload: dict[str, Any], trigger: str) -> dict[str, Any]:
     workflow = await authoring.get_workflow(name)
     manifest = workflow.get("manifest") or {}
+    problems = input_problems(manifest.get("inputs"), payload)
+    if problems:
+        raise HTTPException(status_code=400, detail={"workflow": name, "input": problems})
     workflow_id = f"{name}-{int(time.time())}-{uuid.uuid4().hex[:6]}"
     started = await temporal.start(
         name, workflow_id, payload, timeout_minutes=manifest.get("timeout_minutes", 30)

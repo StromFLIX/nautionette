@@ -79,6 +79,9 @@ async def main() -> None:
         activities=ACTIVITIES,
         # Workflow files are user code loaded at runtime; the sandbox cannot see them.
         workflow_runner=UnsandboxedWorkflowRunner(),
+        # Without this a bug in a workflow file fails the workflow task and Temporal
+        # retries it forever, so the run sits at RUNNING and nobody is told why.
+        workflow_failure_exception_types=[Exception],
         graceful_shutdown_timeout=timedelta(seconds=GRACE_SECONDS),
         max_concurrent_activities=8,
     )

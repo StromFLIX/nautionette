@@ -106,3 +106,28 @@ def normalise_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
     out.setdefault("tags", [])
     out.setdefault("source", "hand-written")
     return out
+
+
+def input_problems(schema: Any, payload: Any) -> list[str]:
+    """Check a run's input against the manifest before Temporal ever sees it.
+
+    A missing key would otherwise surface as a KeyError deep inside the workflow,
+    which reads as a broken system rather than a missing field.
+    """
+    if not isinstance(schema, dict) or schema.get("type") != "object":
+        return []
+    if not isinstance(payload, dict):
+        return ["input must be a JSON object"]
+
+    try:
+        import jsonschema
+    except ImportError:  # pragma: no cover - jsonschema ships in every image
+        missing = [key for key in schema.get("required", []) if key not in payload]
+        return [f"'{key}' is required" for key in missing]
+
+    validator = jsonschema.Draft202012Validator(schema)
+    problems = []
+    for error in sorted(validator.iter_errors(payload), key=lambda e: list(e.path)):
+        where = "/".join(str(part) for part in error.path)
+        problems.append(f"{where}: {error.message}" if where else error.message)
+    return problems

@@ -4,6 +4,7 @@ from .manifest import (
     MANIFEST_SCHEMA,
     SCHEMA_VERSION,
     ManifestError,
+    input_problems,
     normalise_manifest,
     validate_manifest,
 )
@@ -12,6 +13,7 @@ __all__ = [
     "MANIFEST_SCHEMA",
     "SCHEMA_VERSION",
     "ManifestError",
+    "input_problems",
     "normalise_manifest",
     "validate_manifest",
     "ACTIVITIES",
