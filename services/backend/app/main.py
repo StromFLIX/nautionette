@@ -66,6 +66,10 @@ app = FastAPI(
 )
 db = Database(os.path.join(settings.data_dir, "nautionette.db"))
 
+# Flipped by the first agent call that comes back clean, so the status page can
+# say "a model answered" without anyone configuring a second flag.
+_agent_has_answered = False
+
 
 # ----------------------------------------------------------------------- auth
 
@@ -94,6 +98,12 @@ async def require_internal(x_internal_token: str | None = Header(default=None)) 
         return
     if not _token_matches(x_internal_token, settings.internal_token):
         raise HTTPException(status_code=401, detail="unauthorized")
+
+
+def _remember_agent_result(ok: bool) -> None:
+    global _agent_has_answered
+    if ok:
+        _agent_has_answered = True
 
 
 # --------------------------------------------------------------------- health
@@ -128,7 +138,7 @@ async def system_status() -> dict[str, Any]:
         "version": settings.version,
         "auth_enabled": settings.auth_enabled,
         "model": settings.agent_model,
-        "model_key_present": settings.model_key_present,
+        "model_key_present": settings.model_key_present or _agent_has_answered,
         "components": [
             {
                 "name": "temporal",
@@ -226,8 +236,10 @@ async def send_message(chat_id: str, payload: dict[str, Any] = Body(...)) -> Str
                     tools.append(event.get("name", "?"))
                 elif kind == "error":
                     failure = event.get("message")
-                elif kind == "result" and not collected and event.get("text"):
-                    collected.append(event["text"])
+                elif kind == "result":
+                    _remember_agent_result(bool(event.get("ok")))
+                    if not collected and event.get("text"):
+                        collected.append(event["text"])
                 yield sse(event)
         except Exception as exc:  # noqa: BLE001 - always close the stream cleanly
             failure = str(exc)
@@ -469,7 +481,9 @@ async def internal_agent_call(payload: dict[str, Any] = Body(...)) -> dict[str, 
         timeout_seconds=int(payload.get("timeout_seconds") or 900),
     )
     bus.publish("agent.activity", {"run_id": job["run_id"], "agent_set": job["agent_set"]})
-    return await call_agent(job)
+    result = await call_agent(job)
+    _remember_agent_result(bool(result.get("ok")))
+    return result
 
 
 @app.post("/internal/events", dependencies=[Depends(require_internal)])
