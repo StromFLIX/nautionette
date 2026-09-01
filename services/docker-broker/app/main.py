@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import os
+import socket
 import threading
 import time
 from collections.abc import Iterator
@@ -35,6 +36,8 @@ BASE_IMAGE = os.environ.get("BASE_IMAGE", "nautionette/pi-base:dev")
 TARGET_NETWORK = os.environ.get("TARGET_NETWORK", "nautionette-internal")
 WORKFLOWS_VOLUME = os.environ.get("WORKFLOWS_VOLUME", "nautionette-workflows")
 WORKER_LABEL = os.environ.get("WORKER_SERVICE_LABEL", "com.docker.compose.service=worker")
+# Set only if this broker cannot read its own compose project label.
+PROJECT_OVERRIDE = os.environ.get("COMPOSE_PROJECT", "").strip()
 RUN_TIMEOUT = int(os.environ.get("AGENT_RUN_TIMEOUT_SECONDS", "900"))
 AGENT_MEMORY = os.environ.get("AGENT_MEMORY_LIMIT", "1g")
 INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "").strip()
@@ -81,9 +84,7 @@ def discovered_agent_sets() -> list[str]:
     if not os.path.isdir(sets_dir):
         return []
     return sorted(
-        name
-        for name in os.listdir(sets_dir)
-        if os.path.isfile(os.path.join(sets_dir, name, "Dockerfile"))
+        name for name in os.listdir(sets_dir) if os.path.isfile(os.path.join(sets_dir, name, "Dockerfile"))
     )
 
 
@@ -109,9 +110,7 @@ def _agent_set_hash(agent_set: str) -> str:
     directory = os.path.join(AGENT_IMAGES_DIR, "agent-sets", agent_set)
     if not os.path.isdir(directory):
         return "missing"
-    return hashlib.sha256(
-        (_context_hash(directory) + _base_hash()).encode()
-    ).hexdigest()[:12]
+    return hashlib.sha256((_context_hash(directory) + _base_hash()).encode()).hexdigest()[:12]
 
 
 def _has_image(tag: str) -> bool:
@@ -244,9 +243,7 @@ def _run_container(job: dict[str, Any]) -> Iterator[str]:
         return
 
     environment = dict(AGENT_ENVIRONMENT)
-    environment["AGENT_JOB"] = base64.b64encode(
-        json.dumps(job, default=str).encode("utf-8")
-    ).decode("ascii")
+    environment["AGENT_JOB"] = base64.b64encode(json.dumps(job, default=str).encode("utf-8")).decode("ascii")
     if INTERNAL_TOKEN:
         environment["INTERNAL_TOKEN"] = INTERNAL_TOKEN
 
@@ -288,9 +285,7 @@ def _run_container(job: dict[str, Any]) -> Iterator[str]:
         code = status.get("StatusCode", 0)
         if code != 0:
             stderr = container.logs(stdout=False, stderr=True).decode("utf-8", "replace")
-            yield _ndjson(
-                {"type": "error", "message": f"agent container exited {code}: {stderr[-800:]}"}
-            )
+            yield _ndjson({"type": "error", "message": f"agent container exited {code}: {stderr[-800:]}"})
     except Exception as exc:  # noqa: BLE001 - always tell the caller what happened
         log.exception("agent run failed")
         yield _ndjson({"type": "error", "message": str(exc)[:500]})
@@ -314,15 +309,45 @@ def agent_run(
 # ------------------------------------------------------------ worker restart
 
 
+def _own_compose_project() -> str | None:
+    """Which stack this broker belongs to.
+
+    The host may run other people's containers, and plenty of them call a service
+    "worker". Restarting one of those would be someone else's outage, so every
+    lookup is scoped to this broker's own compose project.
+    """
+    try:
+        me = docker_client().containers.get(socket.gethostname())
+        return me.labels.get("com.docker.compose.project")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("could not determine own compose project: %s", exc)
+        return None
+
+
+def _worker_filters() -> dict[str, Any] | None:
+    labels = [WORKER_LABEL]
+    project = PROJECT_OVERRIDE or _own_compose_project()
+    if not project:
+        return None
+    labels.append(f"com.docker.compose.project={project}")
+    return {"label": labels}
+
+
 @app.post("/worker/restart")
 def worker_restart(x_internal_token: str | None = Header(default=None)) -> dict[str, Any]:
     _check_internal(x_internal_token)
+    filters = _worker_filters()
+    if filters is None:
+        raise HTTPException(
+            status_code=503,
+            detail="refusing to restart: this broker cannot tell which stack it belongs to",
+        )
     try:
-        containers = docker_client().containers.list(filters={"label": WORKER_LABEL})
+        containers = docker_client().containers.list(filters=filters)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"docker unavailable: {exc}") from exc
     if not containers:
-        return {"restarted": [], "detail": f"no container matched {WORKER_LABEL}"}
+        return {"restarted": [], "detail": f"no container matched {filters['label']}"}
     restarted = []
     for container in containers:
         # A grace period, so in-flight activities finish instead of being killed.
