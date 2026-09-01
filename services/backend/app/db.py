@@ -67,6 +67,8 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN tools TEXT",
 )
 
+_EDITABLE_CHAT_COLUMNS = ("title", "agent_set", "model", "tools")
+
 
 def _dump_tools(tools: list[str] | None) -> str | None:
     """None means every tool the gateway federates; a list narrows it."""
@@ -126,13 +128,15 @@ class Database:
         return self.get_chat(chat_id)  # type: ignore[return-value]
 
     def update_chat(self, chat_id: str, fields: dict[str, Any]) -> dict[str, Any] | None:
-        allowed = {k: v for k, v in fields.items() if k in {"title", "agent_set", "model", "tools"}}
+        allowed = {k: v for k, v in fields.items() if k in _EDITABLE_CHAT_COLUMNS}
         if "tools" in allowed:
             allowed["tools"] = _dump_tools(allowed["tools"])
         if allowed:
+            # Column names come from the tuple above, never from the caller.
             assignments = ", ".join(f"{key} = ?" for key in allowed)
             self.execute(
-                f"UPDATE chats SET {assignments} WHERE id = ?", (*allowed.values(), chat_id)
+                f"UPDATE chats SET {assignments} WHERE id = ?",  # noqa: S608
+                (*allowed.values(), chat_id),
             )
         return self.get_chat(chat_id)
 
@@ -148,14 +152,11 @@ class Database:
             counts = self.one("SELECT COUNT(*) AS n FROM messages WHERE chat_id = ?", (row["id"],))
             row["message_count"] = counts["n"] if counts else 0
             last = self.one(
-                "SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at DESC"
-                " LIMIT 1",
+                "SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1",
                 (row["id"],),
             )
             row["last_message"] = (
-                {"role": last["role"], "preview": " ".join(last["content"].split())[:120]}
-                if last
-                else None
+                {"role": last["role"], "preview": " ".join(last["content"].split())[:120]} if last else None
             )
         return rows
 

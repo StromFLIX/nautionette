@@ -142,7 +142,10 @@ class GatewayClient:
             if entry.get("name") == "*":
                 wildcard = True
         targets = [
-            {"name": entry.get("name") or "mcp", "host": _strip_userinfo(entry.get("mcp", {}).get("host", ""))}
+            {
+                "name": entry.get("name") or "mcp",
+                "host": _strip_userinfo(entry.get("mcp", {}).get("host", "")),
+            }
             for entry in (payload.get("mcp") or {}).get("targets", []) or []
         ]
         return {"providers": providers, "wildcard_models": wildcard, "targets": targets}

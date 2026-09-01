@@ -163,6 +163,7 @@ async def events_stream() -> StreamingResponse:
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
+
 @app.get("/api/events/recent", dependencies=[Depends(require_user)])
 async def events_recent() -> dict[str, Any]:
     return {"events": bus.history()[-100:]}
@@ -240,18 +241,26 @@ async def _tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], l
         # A federating gateway may prefix a name with the target it came from.
         for target in targets:
             prefix = target["name"]
-            if name.startswith(f"{prefix}_") or name.startswith(f"{prefix}-") or name.startswith(f"{prefix}:"):
+            if any(name.startswith(f"{prefix}{sep}") for sep in ("_", "-", ":")):
                 return prefix
         return "other"
 
     tools = [{**tool, "server": server_for(tool["name"])} for tool in federated]
     servers = [
-        {"name": target["name"], "host": target["host"], "count": sum(1 for t in tools if t["server"] == target["name"])}
+        {
+            "name": target["name"],
+            "host": target["host"],
+            "count": sum(1 for tool in tools if tool["server"] == target["name"]),
+        }
         for target in targets
     ]
     if any(tool["server"] == "other" for tool in tools):
         servers.append(
-            {"name": "other", "host": "", "count": sum(1 for t in tools if t["server"] == "other")}
+            {
+                "name": "other",
+                "host": "",
+                "count": sum(1 for tool in tools if tool["server"] == "other"),
+            }
         )
     return tools, servers
 

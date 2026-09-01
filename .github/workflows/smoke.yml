@@ -1,0 +1,105 @@
+name: Smoke
+
+# The end-to-end walk: talk, promote, approve, run, schedule. It needs a real
+# model key and it starts the whole stack, so it runs nightly and on demand
+# rather than on every push.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: End to end
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # A fork has no key, and a red run there would only ever mean "no secret".
+    if: github.repository == 'StromFLIX/nautionette'
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Refuse to run half-blind
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          test -n "$OPENROUTER_API_KEY" \
+            || { echo "::error::OPENROUTER_API_KEY is not set; the agent checks cannot pass"; exit 1; }
+
+      - name: Write .env
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          AGENT_MODEL: ${{ vars.AGENT_MODEL || 'openai/gpt-4o-mini' }}
+        run: |
+          cp .env.example .env
+          {
+            echo "APP_TOKEN=$(openssl rand -hex 24)"
+            echo "INTERNAL_TOKEN=$(openssl rand -hex 24)"
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
+            echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}"
+            echo "AGENT_MODEL=${AGENT_MODEL}"
+            echo "MODEL_KEY_PRESENT=1"
+          } >> .env
+
+      - name: Build and start the stack
+        run: |
+          docker compose build
+          docker compose up -d
+
+      - name: Wait for the backend
+        run: |
+          for _ in $(seq 60); do
+            curl -fsS http://127.0.0.1:8080/healthz >/dev/null && exit 0
+            sleep 5
+          done
+          echo "::error::backend never became healthy"
+          exit 1
+
+      # The broker builds the Pi images at startup and a call never waits on it.
+      - name: Wait for an agent set
+        env:
+          BASE: http://127.0.0.1:8080
+        run: |
+          source .env
+          for _ in $(seq 90); do
+            ready=$(curl -fsS -H "Authorization: Bearer $APP_TOKEN" "$BASE/api/system" \
+              | python3 -c "import json,sys; print(any(a.get('ready') for a in json.load(sys.stdin).get('agent_sets', [])))" 2>/dev/null || echo False)
+            [ "$ready" = "True" ] && exit 0
+            sleep 10
+          done
+          echo "::error::no agent set became ready"
+          exit 1
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Smoke test
+        env:
+          BASE: http://127.0.0.1:8080
+          WEBSITE: http://127.0.0.1:8081
+        run: |
+          source .env
+          APP_TOKEN="$APP_TOKEN" uv run --with httpx python scripts/smoke.py
+
+      - name: Schedule round trip
+        env:
+          BASE: http://127.0.0.1:8080
+        run: |
+          source .env
+          APP_TOKEN="$APP_TOKEN" uv run --with httpx python scripts/check_schedule_roundtrip.py
+
+      - name: Logs
+        if: failure()
+        run: docker compose logs --tail 200 --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v --remove-orphans
