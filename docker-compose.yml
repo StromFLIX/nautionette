@@ -1,4 +1,4 @@
-name: agentic-flow
+name: nautionette
 
 x-logging: &logging
   logging:
@@ -12,61 +12,93 @@ services:
   # --------------------------------------------------------------- entrypoint
 
   backend:
-    build: ./services/backend
-    image: agentic-flow/backend:dev
+    build:
+      context: .
+      dockerfile: services/backend/Dockerfile
+    image: nautionette/backend:dev
     restart: unless-stopped
-    # The only service in the stack that publishes a port.
+    # The only service in the stack that reaches the outside world.
     ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     environment:
+      APP_VERSION: ${APP_VERSION:-dev}
+      APP_TOKEN: ${APP_TOKEN:-}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
-      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-agentic-flow}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-nautionette}
       AGENTGATEWAY_URL: http://agentgateway:4000
       LLM_BASE_URL: http://agentgateway:4000/v1
       MCP_URL: http://agentgateway:4000/mcp
       BROKER_URL: http://docker-broker:9100
+      WORKFLOW_MCP_URL: http://workflow-mcp:8000
       FRONTEND_WEB_URL: http://frontend-web:80
       WORKFLOWS_DIR: /workflows
       WORKFLOWS_SEED_DIR: /seed
-      S3_ENDPOINT: http://maxio:9000
-      S3_BUCKET: ${S3_BUCKET:-agentic-flow}
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+      DATA_DIR: /data
+      ARTIFACTS_DIR: /artifacts
+      DEFAULT_AGENT_SET: ${DEFAULT_AGENT_SET:-default}
+      AGENT_MODEL: ${AGENT_MODEL:-openai/gpt-4o-mini}
+      # Empty unless a provider key is actually configured on the gateway.
+      MODEL_KEY_PRESENT: ${OPENROUTER_API_KEY:+configured}
     volumes:
       - workflows:/workflows
+      - artifacts:/artifacts
       - backend-data:/data
       - ./workflows:/seed:ro
     networks: [edge, internal, control]
     depends_on:
-      - temporal
-      - agentgateway
-      - docker-broker
-      - frontend-web
+      temporal:
+        condition: service_started
+      agentgateway:
+        condition: service_started
+      docker-broker:
+        condition: service_started
+      frontend-web:
+        condition: service_started
+    <<: *logging
+
+  # The promotional site. Static, separate from the app, its own domain.
+  website:
+    build:
+      context: ./services/website
+    image: nautionette/website:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEBSITE_PORT:-8081}:80"
+    environment:
+      APP_URL: ${APP_URL:-}
+    networks: [edge]
     <<: *logging
 
   # -------------------------------------------------------------- control plane
 
   docker-broker:
-    build: ./services/docker-broker
-    image: agentic-flow/docker-broker:dev
+    build:
+      context: .
+      dockerfile: services/docker-broker/Dockerfile
+    image: nautionette/docker-broker:dev
     restart: unless-stopped
-    # Trust boundary. Only container with the Docker socket, so it must expose
-    # fixed verbs (spawn / stop / restart_worker) and never a generic run call.
+    # Trust boundary. Only container with the Docker socket, so it exposes fixed
+    # verbs (run_agent / restart_worker) and never a generic run call.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      BROKER_PORT: 9100
-      TARGET_NETWORK: agentic-flow-internal
-      WORKFLOWS_VOLUME: agentic-flow-workflows
-      ALLOWED_IMAGE_PREFIX: agentic-flow/pi-
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
+      TARGET_NETWORK: nautionette-internal
+      WORKFLOWS_VOLUME: nautionette-workflows
+      IMAGE_PREFIX: nautionette/pi-
+      BASE_IMAGE: nautionette/pi-base:dev
       WORKER_SERVICE_LABEL: com.docker.compose.service=worker
-      AGENT_IDLE_TIMEOUT_SECONDS: ${AGENT_IDLE_TIMEOUT_SECONDS:-900}
-      PINNED_AGENT_SETS: ${PINNED_AGENT_SETS:-}
-      # Injected into the Pi containers this broker spawns.
+      # One container per agent call, so the only knob is how long a single call
+      # may take before it is killed.
+      AGENT_RUN_TIMEOUT_SECONDS: ${AGENT_RUN_TIMEOUT_SECONDS:-900}
+      AGENT_MEMORY_LIMIT: ${AGENT_MEMORY_LIMIT:-1g}
+      WORKER_STOP_GRACE_SECONDS: ${WORKER_STOP_GRACE_SECONDS:-60}
+      # Injected into the Pi containers this broker runs.
       AGENT_AGENTGATEWAY_URL: http://agentgateway:4000
       AGENT_BACKEND_URL: http://backend:8080
-    networks: [control]
+    networks: [control, internal]
     security_opt:
       - no-new-privileges:true
     <<: *logging
@@ -79,23 +111,27 @@ services:
     restart: unless-stopped
     command: ["-f", "/config/config.yaml"]
     environment:
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in .env}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     volumes:
       - ./services/agentgateway/config:/config:ro
-      - agentgateway-data:/data
+    # Upstream image runs as uid 65532; its local state is a cache, not data.
+    tmpfs:
+      - /data:uid=65532,gid=65532,mode=0700
     networks: [internal]
     depends_on:
       - workflow-mcp
     <<: *logging
 
-  # An MCP target behind agentgateway, never called directly. Holds the
-  # deterministic workflow authoring tools that make promotion possible.
+  # An MCP target behind agentgateway, never called directly by an agent. Holds
+  # the deterministic authoring tools that make promotion possible.
   workflow-mcp:
-    build: ./services/workflow-mcp
-    image: agentic-flow/workflow-mcp:dev
+    build:
+      context: .
+      dockerfile: services/workflow-mcp/Dockerfile
+    image: nautionette/workflow-mcp:dev
     restart: unless-stopped
     environment:
-      MCP_PORT: 8000
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       WORKFLOWS_DIR: /workflows
       BACKEND_URL: http://backend:8080
     volumes:
@@ -106,33 +142,35 @@ services:
   # ----------------------------------------------------------------- execution
 
   worker:
-    build: ./services/worker
-    image: agentic-flow/worker:dev
+    build:
+      context: .
+      dockerfile: services/worker/Dockerfile
+    image: nautionette/worker:dev
     restart: unless-stopped
     # Never scales to zero: something must always be able to pick work up.
     deploy:
       replicas: ${WORKER_REPLICAS:-1}
     environment:
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
-      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-agentic-flow}
-      AGENTGATEWAY_URL: http://agentgateway:4000
-      LLM_BASE_URL: http://agentgateway:4000/v1
-      MCP_URL: http://agentgateway:4000/mcp
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-nautionette}
       BACKEND_URL: http://backend:8080
       WORKFLOWS_DIR: /workflows
+      ARTIFACTS_DIR: /artifacts
+      WORKER_GRACE_SECONDS: ${WORKER_GRACE_SECONDS:-50}
     volumes:
       - workflows:/workflows
+      - artifacts:/artifacts
     networks: [internal]
     depends_on:
       - temporal
-      - agentgateway
     # Let in-flight activities drain instead of being killed on restart.
     stop_grace_period: 60s
     <<: *logging
 
   temporal:
-    image: temporalio/auto-setup:${TEMPORAL_VERSION:-1.25.2}
+    image: temporalio/auto-setup:${TEMPORAL_VERSION:-1.29.0}
     restart: unless-stopped
     environment:
       DB: postgres12
@@ -150,7 +188,7 @@ services:
     <<: *logging
 
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-temporal}
@@ -168,49 +206,29 @@ services:
 
   # ------------------------------------------------------------------ frontend
 
-  # One Quasar (Vue 3) codebase; this is its web target. Not published, the
+  # One Quasar (Vue 3) codebase; this is its web target. Not published: the
   # backend reverse-proxies it, so there is still one door.
   frontend-web:
-    build: ./services/frontend
-    image: agentic-flow/frontend:dev
+    build:
+      context: ./services/frontend
+    image: nautionette/frontend:dev
     restart: unless-stopped
     networks: [internal]
-    <<: *logging
-
-  # ------------------------------------------------------------------- storage
-
-  # https://github.com/coollabsio/maxio - S3-compatible, single binary.
-  maxio:
-    image: ghcr.io/coollabsio/maxio:${MAXIO_VERSION:-v0.4.2}
-    restart: unless-stopped
-    environment:
-      MAXIO_ACCESS_KEY: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
-      MAXIO_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
-      MAXIO_DEFAULT_BUCKETS: ${S3_BUCKET:-agentic-flow}
-      MAXIO_DATA_DIR: /data
-    volumes:
-      - maxio-data:/data
-    networks: [internal]
-    healthcheck:
-      test: ["CMD", "maxio", "healthcheck"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
     <<: *logging
 
   # ------------------------------------- agent images: built here, never run here
-  # The broker starts these on demand and stops them when idle.
+  # The broker builds these at startup and runs one container per agent call.
   #   docker compose --profile images build
 
   pi-base:
     build: ./images/pi-base
-    image: agentic-flow/pi-base:dev
+    image: nautionette/pi-base:dev
     profiles: [images]
     entrypoint: ["true"]
 
   pi-agent-default:
     build: ./images/agent-sets/default
-    image: agentic-flow/pi-agent-default:dev
+    image: nautionette/pi-agent-default:dev
     profiles: [images]
     entrypoint: ["true"]
     depends_on: [pi-base]
@@ -219,7 +237,7 @@ services:
   # docker compose --profile debug up -d
 
   temporal-ui:
-    image: temporalio/ui:${TEMPORAL_UI_VERSION:-2.31.2}
+    image: temporalio/ui:${TEMPORAL_UI_VERSION:-2.34.0}
     profiles: [debug]
     restart: unless-stopped
     environment:
@@ -230,27 +248,26 @@ services:
     networks: [internal]
 
 networks:
-  # Published traffic only. Nothing but the backend joins this.
+  # Published traffic only. Nothing but the backend and the site join this.
   edge:
-    name: agentic-flow-edge
+    name: nautionette-edge
   # Service-to-service. Not internal:true - the gateway needs outbound to the
   # model provider. Isolation here comes from publishing no ports.
   internal:
-    name: agentic-flow-internal
+    name: nautionette-internal
   # Backend to broker only, no outbound.
   control:
-    name: agentic-flow-control
+    name: nautionette-control
     internal: true
   # Temporal to Postgres only, no outbound.
   data:
-    name: agentic-flow-data
+    name: nautionette-data
     internal: true
 
 volumes:
-  # Fixed name: the broker attaches this volume to the Pi containers it spawns.
+  # Fixed name: the broker attaches this volume to the Pi containers it runs.
   workflows:
-    name: agentic-flow-workflows
+    name: nautionette-workflows
+  artifacts:
   backend-data:
-  agentgateway-data:
   postgres-data:
-  maxio-data:

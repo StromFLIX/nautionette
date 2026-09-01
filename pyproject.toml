@@ -1,0 +1,19 @@
+[tool.uv.workspace]
+members = [
+    "libs/nautionette",
+    "services/backend",
+    "services/docker-broker",
+    "services/workflow-mcp",
+    "services/worker",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.9"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S"]
+ignore = ["S101", "B008"]

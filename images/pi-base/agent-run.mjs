@@ -1,0 +1,225 @@
+#!/usr/bin/env node
+/**
+ * The whole contract of a Pi container.
+ *
+ * In:  AGENT_JOB, a base64 JSON job (prompt, history, optional output schema).
+ * Out: NDJSON events on stdout, one JSON object per line, ending in `result`.
+ *
+ * Nothing is remembered between runs: the container starts, works and exits.
+ */
+import { spawn } from "node:child_process";
+import { mkdirSync, writeFileSync } from "node:fs";
+
+const OUT = process.stdout;
+
+function emit(event) {
+  OUT.write(JSON.stringify(event) + "\n");
+}
+
+function log(...args) {
+  // stdout is the protocol; anything human goes to stderr.
+  console.error("[agent-run]", ...args);
+}
+
+function readJob() {
+  const raw = process.env.AGENT_JOB;
+  if (!raw) throw new Error("AGENT_JOB is not set");
+  return JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
+}
+
+function renderPrompt(job) {
+  const parts = [];
+  if (job.history?.length) {
+    parts.push("Conversation so far:");
+    for (const message of job.history) {
+      const who = message.role === "assistant" ? "Assistant" : "User";
+      parts.push(`${who}: ${message.content}`);
+    }
+    parts.push("---");
+  }
+  parts.push(job.prompt ?? "");
+  if (job.output_schema) {
+    parts.push(
+      "",
+      "Reply with a single JSON object and nothing else. No prose, no code fence.",
+      "It must satisfy this JSON Schema:",
+      JSON.stringify(job.output_schema, null, 2),
+    );
+  }
+  return parts.join("\n");
+}
+
+function extractJson(text) {
+  if (!text) return null;
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidates = [fenced?.[1], text];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const trimmed = candidate.trim();
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start === -1 || end <= start) continue;
+    try {
+      return JSON.parse(trimmed.slice(start, end + 1));
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return null;
+}
+
+function checkSchema(value, schema) {
+  const problems = [];
+  if (schema?.type === "object" && (typeof value !== "object" || value === null || Array.isArray(value))) {
+    problems.push("expected a JSON object");
+    return problems;
+  }
+  for (const key of schema?.required ?? []) {
+    if (!(key in value)) problems.push(`missing required key '${key}'`);
+  }
+  return problems;
+}
+
+async function main() {
+  const job = readJob();
+  const mode = job.mode ?? "interactive";
+  const model = job.model || process.env.AGENT_MODEL || "openai/gpt-4o-mini";
+  const workspace = "/workspace";
+
+  mkdirSync(workspace, { recursive: true });
+  writeFileSync(`${workspace}/JOB.json`, JSON.stringify({ ...job, history: undefined }, null, 2));
+
+  const prompt = renderPrompt(job);
+  const args = ["--mode", "json", "--no-session", "--no-context-files", "--provider", "nautionette",
+                "--model", model, "--approve", "--", prompt];
+
+  const child = spawn("pi", args, {
+    cwd: workspace,
+    env: { ...process.env, AGENT_MODEL: model, NAUTIONETTE_MODE: mode },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  let finalText = "";
+  let streamed = "";
+  let stderr = "";
+  let buffer = "";
+  let runError = "";
+
+  child.stdout.setEncoding("utf8");
+  child.stdout.on("data", (chunk) => {
+    buffer += chunk;
+    let index;
+    while ((index = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, index).trim();
+      buffer = buffer.slice(index + 1);
+      if (!line) continue;
+      let event;
+      try {
+        event = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      translate(event);
+    }
+  });
+
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+    if (stderr.length > 8000) stderr = stderr.slice(-8000);
+  });
+
+  function translate(event) {
+    switch (event.type) {
+      case "session":
+        emit({ type: "session", id: event.id });
+        break;
+      case "message_update": {
+        const inner = event.assistantMessageEvent;
+        if (inner?.type === "text_delta" && inner.delta) {
+          streamed += inner.delta;
+          emit({ type: "delta", text: inner.delta });
+        } else if (inner?.type === "thinking_delta" && inner.delta) {
+          emit({ type: "thinking", text: inner.delta });
+        }
+        break;
+      }
+      case "tool_execution_start":
+        emit({ type: "tool", name: event.toolName, args: event.args });
+        break;
+      case "tool_execution_end":
+        emit({ type: "tool_done", name: event.toolName, error: Boolean(event.isError) });
+        break;
+      case "message_end": {
+        const message = event.message;
+        if (message?.role === "assistant") {
+          if (message.stopReason === "error" && message.errorMessage) {
+            runError = message.errorMessage;
+            emit({ type: "error", message: runError });
+          }
+          const text = (message.content ?? [])
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join("");
+          if (text.trim()) finalText = text;
+        }
+        break;
+      }
+      case "agent_end":
+        emit({ type: "agent_end" });
+        break;
+      default:
+        break;
+    }
+  }
+
+  const code = await new Promise((resolve) => {
+    child.on("error", (error) => {
+      log("failed to start pi:", error.message);
+      stderr += `\n${error.message}`;
+      resolve(127);
+    });
+    child.on("close", resolve);
+  });
+
+  const text = (finalText || streamed).trim();
+
+  if (!text && (runError || code !== 0)) {
+    emit({
+      type: "result",
+      ok: false,
+      text: "",
+      output: null,
+      error: runError || `pi exited with ${code}: ${stderr.trim().slice(-1200) || "no output"}`,
+    });
+    return;
+  }
+
+  if (job.output_schema) {
+    const parsed = extractJson(text);
+    if (!parsed) {
+      emit({
+        type: "result",
+        ok: false,
+        text,
+        output: null,
+        error: "the model returned text where a structured object was declared",
+      });
+      return;
+    }
+    const problems = checkSchema(parsed, job.output_schema);
+    if (problems.length) {
+      emit({ type: "result", ok: false, text, output: parsed, error: problems.join("; ") });
+      return;
+    }
+    emit({ type: "result", ok: true, text, output: parsed });
+    return;
+  }
+
+  emit({ type: "result", ok: true, text, output: null });
+}
+
+main().catch((error) => {
+  emit({ type: "result", ok: false, text: "", output: null, error: String(error?.message ?? error) });
+  process.exitCode = 1;
+});

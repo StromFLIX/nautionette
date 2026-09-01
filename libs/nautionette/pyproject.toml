@@ -1,0 +1,10 @@
+[project]
+name = "nautionette"
+version = "0.1.0"
+description = "Shared workflow manifest schema and source helpers"
+requires-python = ">=3.13"
+dependencies = ["jsonschema>=4.23"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

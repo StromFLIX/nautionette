@@ -2,7 +2,7 @@
 #
 # Declarative config, mounted read-only: UI edits will not persist by design.
 # One gateway on 4000 serves LLM, MCP and the UI. Nothing is published to the
-# host - the backend reverse-proxies what should be reachable.
+# host - the backend is the only door.
 
 config:
   database:
@@ -15,7 +15,8 @@ gateways:
 ui:
   gateways: default
 
-# LLM traffic: OpenAI-compatible on /v1, fronted by OpenRouter.
+# LLM traffic: OpenAI-compatible on /v1, fronted by OpenRouter. Point this
+# somewhere else and every agent follows, without touching an image.
 llm:
   models:
     - name: "*"
@@ -31,4 +32,5 @@ mcp:
     - name: workflows
       mcp:
         host: http://workflow-mcp:8000/mcp
-    # Add further MCP servers here, one target per server.
+    # Add further MCP servers here, one target per server. An agent set picks up
+    # new tools on its next run; nothing needs rebuilding.
