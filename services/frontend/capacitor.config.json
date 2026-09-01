@@ -1,0 +1,11 @@
+{
+  "appId": "dev.nautionette.app",
+  "appName": "Nautionette",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#0e1014"
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

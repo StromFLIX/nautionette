@@ -18,18 +18,26 @@
 
     <SettingsDialog />
 
-    <q-dialog v-model="tokenPrompt" persistent>
+    <q-dialog v-model="gate" persistent>
       <q-card class="token-card">
-        <div class="token-card__title">Access token</div>
+        <div class="token-card__title">Connect</div>
         <p class="caption muted">
-          This instance is protected. Paste the token from your deployment settings.
+          {{ isNative
+            ? 'Point the app at your instance, then paste its access token.'
+            : 'This instance is protected. Paste the token from your deployment settings.' }}
         </p>
         <input
-          v-model="token" class="field" type="password" placeholder="token"
-          autofocus @keydown.enter="saveToken"
+          v-if="isNative" v-model="serverUrl" class="field" style="margin-bottom: 8px"
+          type="url" inputmode="url" placeholder="https://nautionette.example.com"
+        />
+        <input
+          v-model="token" class="field" type="password" placeholder="access token"
+          autofocus @keydown.enter="connect"
         />
         <div class="row token-card__actions">
-          <button class="btn btn--primary" @click="saveToken">Unlock</button>
+          <button class="btn btn--primary" :disabled="isNative && !serverUrl.trim()" @click="connect">
+            Connect
+          </button>
         </div>
       </q-card>
     </q-dialog>
@@ -43,7 +51,7 @@ import NavRail from './components/NavRail.vue'
 import SidePanel from './components/SidePanel.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import { actions, store } from './store'
-import { auth } from './api'
+import { auth, isNative, server } from './api'
 
 const WIDTH_KEY = 'nautionette.sideWidth'
 const DEFAULT_WIDTH = 336
@@ -51,8 +59,9 @@ const DEFAULT_WIDTH = 336
 const route = useRoute()
 const sideWidth = ref(Number(localStorage.getItem(WIDTH_KEY)) || DEFAULT_WIDTH)
 const dragging = ref(false)
-const tokenPrompt = ref(false)
+const gate = ref(store.needsServer)
 const token = ref(auth.token)
+const serverUrl = ref(server.url)
 
 const hasSelection = computed(() => Boolean(route.params.id || route.params.name))
 
@@ -78,12 +87,13 @@ function resetWidth () {
   localStorage.setItem(WIDTH_KEY, String(DEFAULT_WIDTH))
 }
 
-function saveToken () {
+function connect () {
+  if (isNative) actions.setServer(serverUrl.value)
   actions.setToken(token.value.trim())
-  tokenPrompt.value = false
+  gate.value = false
 }
 
-watch(() => store.needsToken, (needed) => { if (needed) tokenPrompt.value = true })
+watch(() => store.needsToken || store.needsServer, (needed) => { if (needed) gate.value = true })
 
 onMounted(() => {
   actions.connect()

@@ -21,6 +21,22 @@
           <h2 class="settings__title">General</h2>
 
           <div class="setting">
+            <div class="setting__label">Server</div>
+            <p class="caption dim">
+              {{ isNative
+                ? 'The instance this app talks to.'
+                : 'Blank means this page\u2019s own origin. Set it to reach another instance.' }}
+            </p>
+            <div class="row" style="margin-top: 8px">
+              <input
+                v-model="serverUrl" class="field" type="url" inputmode="url"
+                placeholder="https://nautionette.example.com"
+              />
+              <button class="btn btn--primary" @click="saveServer">Save</button>
+            </div>
+          </div>
+
+          <div class="setting">
             <div class="setting__label">Access token</div>
             <p class="caption dim">
               Stored in this browser only. {{ store.system.auth_enabled ? 'This instance requires one.' : 'This instance is open — no token needed.' }}
@@ -185,7 +201,7 @@
 import { computed, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { actions, store } from '../store'
-import { auth } from '../api'
+import { auth, isNative, server } from '../api'
 
 const $q = useQuasar()
 
@@ -199,6 +215,7 @@ const tabs = [
 
 const tab = ref(store.settingsTab)
 const token = ref(auth.token)
+const serverUrl = ref(server.url)
 const refreshing = ref(false)
 
 const snippet = `mcp:
@@ -252,6 +269,11 @@ function summary (event) {
 function saveToken () {
   actions.setToken(token.value.trim())
   $q.notify({ type: 'positive', message: 'Token saved' })
+}
+
+function saveServer () {
+  actions.setServer(serverUrl.value)
+  $q.notify({ type: 'positive', message: serverUrl.value.trim() ? 'Server saved' : 'Using this origin' })
 }
 
 async function refreshCatalog () {

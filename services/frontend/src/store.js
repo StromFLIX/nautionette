@@ -3,11 +3,13 @@
  * event stream is what keeps them fresh, so nothing polls.
  */
 import { computed, reactive } from 'vue'
-import { api, auth, liveEvents } from './api'
+import { api, auth, isNative, liveEvents, server } from './api'
 
 const state = reactive({
   ready: false,
   needsToken: false,
+  // The app ships without a backend, so it cannot start until it is told where one is.
+  needsServer: isNative && !server.url,
   system: { components: [], agent_sets: [] },
   catalog: { agent_sets: [], models: [], tools: [], default_model: '', default_agent_set: 'default', context_window: 24000 },
   chats: [],
@@ -36,6 +38,7 @@ async function guard (loader) {
     return await loader()
   } catch (error) {
     if (error.status === 401) state.needsToken = true
+    else if (!error.status) state.needsServer = true  // never reached the instance
     else throw error
     return null
   }
@@ -77,6 +80,7 @@ export const actions = {
   },
 
   async refreshAll () {
+    if (state.needsServer) return
     await Promise.all([
       actions.loadSystem(),
       actions.loadCatalog(),
@@ -96,6 +100,13 @@ export const actions = {
     state.settingsOpen = false
   },
 
+  setServer (value) {
+    server.url = value
+    state.needsServer = isNative && !server.url
+    actions.connect()
+    return actions.refreshAll()
+  },
+
   setToken (value) {
     auth.token = value
     state.needsToken = false
@@ -104,6 +115,7 @@ export const actions = {
   },
 
   connect () {
+    if (state.needsServer) return
     source?.close()
     source = liveEvents((event) => {
       state.events.unshift(event)

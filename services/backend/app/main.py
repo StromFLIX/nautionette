@@ -19,6 +19,7 @@ from typing import Any
 
 import httpx
 from fastapi import Body, Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, Response, StreamingResponse
 from nautionette import input_problems
 
@@ -65,6 +66,16 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
+)
+
+# The packaged app runs on its own webview origin, so it is cross-origin to this
+# API. Credentials stay off: every call carries a bearer token, never a cookie.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 db = Database(os.path.join(settings.data_dir, "nautionette.db"))
 

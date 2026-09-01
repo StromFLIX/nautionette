@@ -40,6 +40,14 @@ class Settings:
         self.public_demo = _flag("PUBLIC_DEMO", False)
         self.version = os.environ.get("APP_VERSION", "dev")
 
+        # Origins the packaged app is served from. Add your own with CORS_ORIGINS.
+        self.cors_origins = [
+            "capacitor://localhost",
+            "http://localhost",
+            "https://localhost",
+            *[origin.strip() for origin in os.environ.get("CORS_ORIGINS", "").split(",") if origin.strip()],
+        ]
+
     @property
     def auth_enabled(self) -> bool:
         return bool(self.app_token)

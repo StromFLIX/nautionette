@@ -1,4 +1,24 @@
 const TOKEN_KEY = 'nautionette.token'
+const SERVER_KEY = 'nautionette.server'
+
+/** The packaged app is served from its own webview origin and has no backend. */
+export const isNative = Boolean(globalThis.Capacitor?.isNativePlatform?.())
+
+export const server = {
+  get url () {
+    return localStorage.getItem(SERVER_KEY) || ''
+  },
+  set url (value) {
+    const trimmed = (value || '').trim().replace(/\/+$/, '')
+    if (trimmed) localStorage.setItem(SERVER_KEY, trimmed)
+    else localStorage.removeItem(SERVER_KEY)
+  }
+}
+
+/** Same-origin on the web, an absolute instance URL in the app. */
+export function endpoint (path) {
+  return `${server.url}${path}`
+}
 
 export const auth = {
   get token () {
@@ -24,7 +44,7 @@ export class ApiError extends Error {
 }
 
 async function request (path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(endpoint(path), {
     ...options,
     headers: headers(options.body ? { 'Content-Type': 'application/json', ...options.headers } : options.headers)
   })
@@ -74,7 +94,7 @@ export const api = {
 
 /** POST that streams server-sent events back, so a chat answer arrives as it is written. */
 export async function streamMessage (chatId, text, onEvent) {
-  const response = await fetch(`/api/chats/${chatId}/messages`, {
+  const response = await fetch(endpoint(`/api/chats/${chatId}/messages`), {
     method: 'POST',
     headers: headers({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ text })
@@ -105,7 +125,7 @@ export async function streamMessage (chatId, text, onEvent) {
 
 /** Live system events. EventSource cannot set headers, so the token rides along. */
 export function liveEvents (onEvent) {
-  const url = auth.token ? `/api/events?token=${encodeURIComponent(auth.token)}` : '/api/events'
+  const url = endpoint(auth.token ? `/api/events?token=${encodeURIComponent(auth.token)}` : '/api/events')
   const source = new EventSource(url)
   source.onmessage = (message) => {
     try {
