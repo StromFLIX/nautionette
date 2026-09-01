@@ -63,6 +63,7 @@
   --rail-width: 68px;
   --side-width: 336px;
   --header-height: 56px;
+  --mobile-nav-height: 58px;
 
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --transition: 140ms var(--ease);

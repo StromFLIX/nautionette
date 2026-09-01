@@ -122,6 +122,7 @@ watch(() => store.catalog, (catalog) => {
   margin: 0 0 8px;
   font-size: 26px;
   font-weight: 650;
+  line-height: 1.25;
   letter-spacing: -0.02em;
   text-align: center;
 }
@@ -213,5 +214,33 @@ watch(() => store.catalog, (catalog) => {
 
 .welcome__warn .material-icons {
   font-size: 17px;
+}
+
+@media (max-width: 900px) {
+  .welcome {
+    padding: clamp(24px, 5vh, 48px) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+}
+
+@media (max-width: 480px) {
+  .welcome__mark {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 12px;
+  }
+
+  .welcome__title {
+    font-size: 22px;
+  }
+
+  .welcome__facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 22px;
+  }
+
+  .fact {
+    padding: 10px;
+  }
 }
 </style>

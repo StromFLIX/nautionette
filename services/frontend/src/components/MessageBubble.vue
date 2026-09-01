@@ -200,4 +200,34 @@ const time = computed(() => shortTime(props.createdAt))
   border: 1px solid var(--border);
   text-align: left;
 }
+
+@media (max-width: 480px) {
+  .msg {
+    position: relative;
+    display: block;
+    margin-bottom: 28px;
+  }
+
+  .msg--user {
+    text-align: right;
+  }
+
+  .bubble {
+    display: inline-block;
+    max-width: 86%;
+    text-align: left;
+  }
+
+  .msg__time {
+    position: absolute;
+    top: calc(100% + 3px);
+    right: 0;
+    padding: 0;
+  }
+
+  .msg--assistant .msg__time {
+    right: auto;
+    left: 0;
+  }
+}
 </style>

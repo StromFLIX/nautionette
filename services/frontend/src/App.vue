@@ -107,6 +107,8 @@ onUnmounted(() => actions.disconnect())
   display: grid;
   grid-template-columns: var(--rail-width) auto 1fr;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   background: var(--surface-app);
 }
 
@@ -174,7 +176,7 @@ onUnmounted(() => actions.disconnect())
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: minmax(0, 1fr) auto;
   }
 
   .shell__side {
@@ -202,6 +204,12 @@ onUnmounted(() => actions.disconnect())
 
   .shell__rail {
     grid-row: 2;
+  }
+
+  .token-card {
+    width: min(380px, 100%);
+    max-width: 100%;
+    padding: 18px;
   }
 }
 </style>

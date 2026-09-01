@@ -146,7 +146,19 @@ onUnmounted(() => off())
   }
 
   .pane-body {
-    padding: 16px 14px 32px;
+    padding: 16px max(14px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+}
+
+@media (max-width: 420px) {
+  .pane-head .chip {
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pane-head .btn--danger {
+    padding: 0 8px;
   }
 }
 </style>

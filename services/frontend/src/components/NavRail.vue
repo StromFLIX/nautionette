@@ -148,11 +148,13 @@ const healthLabel = computed(() => (health.value === 'ok' ? 'Healthy' : health.v
 @media (max-width: 900px) {
   .rail {
     flex-direction: row;
-    justify-content: space-around;
-    padding: 4px 8px;
+    align-items: stretch;
+    gap: 0;
+    min-width: 0;
+    height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+    padding: 4px max(4px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
     border-right: none;
     border-top: 1px solid var(--border);
-    padding-bottom: max(4px, env(safe-area-inset-bottom));
   }
 
   .rail__brand {
@@ -162,8 +164,41 @@ const healthLabel = computed(() => (health.value === 'ok' ? 'Healthy' : health.v
   .rail__nav,
   .rail__foot {
     flex-direction: row;
+    align-items: stretch;
+    gap: 0;
     width: auto;
     margin: 0;
+  }
+
+  .rail__nav,
+  .rail__foot {
+    display: flex;
+    min-width: 0;
+  }
+
+  .rail__nav {
+    flex: 3 1 0;
+  }
+
+  .rail__foot {
+    flex: 2 1 0;
+  }
+
+  .rail__item,
+  .rail__item--plain {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    height: 50px;
+    border-radius: var(--radius-sm);
+  }
+
+  .rail__badge {
+    right: max(8px, calc(50% - 24px));
+  }
+
+  .rail :deep(.q-tooltip) {
+    display: none;
   }
 }
 </style>

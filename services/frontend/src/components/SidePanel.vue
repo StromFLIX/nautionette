@@ -175,6 +175,7 @@ function refresh () {
   margin: 0 0 8px;
   font-size: 17px;
   font-weight: 650;
+  line-height: 1.3;
   letter-spacing: -0.01em;
 }
 
@@ -297,5 +298,22 @@ function refresh () {
 
 .avatar .material-icons {
   font-size: 20px;
+}
+
+@media (max-width: 900px) {
+  .side__head {
+    padding-top: calc(10px + env(safe-area-inset-top));
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-left: max(12px, env(safe-area-inset-left));
+  }
+
+  .side__list {
+    padding-right: max(6px, env(safe-area-inset-right));
+    padding-left: max(6px, env(safe-area-inset-left));
+  }
+
+  .row-item {
+    min-height: 58px;
+  }
 }
 </style>

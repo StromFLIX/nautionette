@@ -351,7 +351,7 @@ watch(() => store.settingsOpen, (value) => {
   width: 880px;
   max-width: 94vw;
   height: 620px;
-  max-height: 88vh;
+  max-height: 88dvh;
   overflow: hidden;
 }
 
@@ -416,6 +416,7 @@ watch(() => store.settingsOpen, (value) => {
   margin: 0 0 4px;
   font-size: 17px;
   font-weight: 650;
+  line-height: 1.35;
   letter-spacing: -0.01em;
 }
 
@@ -498,11 +499,15 @@ select.field {
   .settings {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
-    height: 92vh;
+    width: 100%;
+    max-width: 100%;
+    height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom)));
+    max-height: 100%;
   }
 
   .settings__nav {
     flex-direction: row;
+    padding-right: 44px;
     overflow-x: auto;
     border-right: none;
     border-bottom: 1px solid var(--border);
@@ -510,6 +515,35 @@ select.field {
 
   .settings__brand,
   .settings__version {
+    display: none;
+  }
+
+  .settings__body {
+    padding: 18px 16px max(24px, env(safe-area-inset-bottom));
+  }
+
+  .settings__close {
+    top: 8px;
+    right: 8px;
+  }
+
+  .setting > .row,
+  .settings__save {
+    flex-wrap: wrap;
+  }
+
+  .settings__save .grow {
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .settings__tab {
+    flex: none;
+    padding: 8px;
+  }
+
+  .settings__tab .material-icons {
     display: none;
   }
 }

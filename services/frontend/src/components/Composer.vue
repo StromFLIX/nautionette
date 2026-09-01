@@ -79,7 +79,7 @@ const props = defineProps({
   busy: { type: Boolean, default: false },
   contextUsed: { type: Number, default: 0 },
   variant: { type: String, default: 'docked' },
-  placeholder: { type: String, default: 'Ask anything. Say “every morning at 8” to make it recur.' }
+  placeholder: { type: String, default: 'Message…' }
 })
 
 const emit = defineEmits(['update:modelValue', 'update:agentSet', 'update:model', 'update:tools', 'send'])
@@ -118,6 +118,7 @@ defineExpose({ focus: () => input.value?.focus() })
 
 <style scoped>
 .composer {
+  min-width: 0;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   background: var(--surface-input);
@@ -146,7 +147,7 @@ defineExpose({ focus: () => input.value?.focus() })
   line-height: 1.55;
   resize: none;
   outline: none;
-  overflow-y: auto;
+  overflow-y: hidden;
 }
 
 .composer__input::placeholder {
@@ -157,6 +158,7 @@ defineExpose({ focus: () => input.value?.focus() })
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   padding: 6px 8px 8px 10px;
 }
 
@@ -164,6 +166,7 @@ defineExpose({ focus: () => input.value?.focus() })
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
   max-width: 190px;
   height: 26px;
   padding: 0 7px;
@@ -248,6 +251,50 @@ defineExpose({ focus: () => input.value?.focus() })
 
 @media (max-width: 640px) {
   .composer__context {
+    display: none;
+  }
+
+  .composer__bar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 32px;
+    gap: 4px;
+    padding-right: 7px;
+    padding-left: 7px;
+  }
+
+  .pick {
+    width: 100%;
+    max-width: none;
+  }
+
+  .pick > .truncate,
+  .pick > span:not(.material-icons) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 380px) {
+  .composer__input {
+    padding-right: 11px;
+    padding-left: 11px;
+  }
+
+  .composer__bar {
+    gap: 2px;
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+
+  .pick {
+    justify-content: center;
+    gap: 3px;
+    padding: 0 4px;
+  }
+
+  .pick__caret {
     display: none;
   }
 }

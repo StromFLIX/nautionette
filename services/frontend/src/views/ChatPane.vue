@@ -198,6 +198,7 @@ onUnmounted(() => off())
 
 <style scoped>
 .thread {
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -252,10 +253,46 @@ onUnmounted(() => off())
     display: grid;
   }
 
-  .thread__inner,
+  .thread__body {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .thread__inner {
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-left: max(12px, env(safe-area-inset-left));
+  }
+
   .thread__foot {
-    padding-left: 12px;
-    padding-right: 12px;
+    padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
+  }
+}
+
+@media (max-width: 420px) {
+  .avatar-sm {
+    width: 32px;
+    height: 32px;
+  }
+
+  .pane-head > .btn--outline {
+    width: 36px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .pane-head > .btn--outline .material-icons {
+    font-size: 17px !important;
+  }
+
+  .thread__inner {
+    padding-right: max(10px, env(safe-area-inset-right));
+    padding-left: max(10px, env(safe-area-inset-left));
+  }
+
+  .thread__foot {
+    padding-right: max(8px, env(safe-area-inset-right));
+    padding-left: max(8px, env(safe-area-inset-left));
   }
 }
 </style>

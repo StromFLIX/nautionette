@@ -3,7 +3,8 @@
   "appName": "Nautionette",
   "webDir": "dist",
   "android": {
-    "backgroundColor": "#0e1014"
+    "backgroundColor": "#0e1014",
+    "adjustMarginsForEdgeToEdge": "auto"
   },
   "server": {
     "androidScheme": "https"

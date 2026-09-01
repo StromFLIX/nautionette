@@ -400,7 +400,47 @@ onMounted(load)
   }
 
   .pane-body {
-    padding: 16px 14px 32px;
+    padding: 16px max(14px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+
+  .pane-body .row {
+    flex-wrap: wrap;
+  }
+
+  .pane-body .field {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .pane-head .chip {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pane-head .btn--danger {
+    padding: 0 8px;
+  }
+
+  .pane-head .btn--primary {
+    width: 36px;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .pane-head .btn--primary::after {
+    content: '✓';
+    font-size: 16px;
+  }
+
+  .run-row {
+    flex-wrap: wrap;
+  }
+
+  .run-row .mono {
+    flex-basis: calc(100% - 90px);
   }
 }
 </style>
