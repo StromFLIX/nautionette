@@ -70,13 +70,9 @@ async def notify_backend_restart(reason: str) -> dict[str, Any]:
 
 if server is not None:
 
-    @server.tool(
-        description="List every workflow with its manifest, plus the drafts waiting for approval."
-    )
+    @server.tool(description="List every workflow with its manifest, plus the drafts waiting for approval.")
     def list_workflows() -> str:
-        return json.dumps(
-            {"workflows": store.list_workflows(), "drafts": store.list_drafts()}, default=str
-        )
+        return json.dumps({"workflows": store.list_workflows(), "drafts": store.list_drafts()}, default=str)
 
     @server.tool(description="Read one workflow file and its manifest.")
     def read_workflow(name: str) -> str:

@@ -446,9 +446,7 @@ async def cancel_run(workflow_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/triggers/{name}")
-async def trigger(
-    name: str, request: Request, token: str | None = Query(default=None)
-) -> dict[str, Any]:
+async def trigger(name: str, request: Request, token: str | None = Query(default=None)) -> dict[str, Any]:
     """Triggers come in here and nowhere else."""
     if settings.auth_enabled:
         header = request.headers.get("authorization", "")
@@ -536,16 +534,10 @@ async def frontend(path: str, request: Request) -> Response:
     target = f"{settings.frontend_web_url.rstrip('/')}/{path}"
     try:
         async with httpx.AsyncClient(timeout=15) as client:
-            upstream = await client.request(
-                request.method, target, params=dict(request.query_params)
-            )
+            upstream = await client.request(request.method, target, params=dict(request.query_params))
     except httpx.HTTPError as exc:
         return PlainTextResponse(f"frontend unavailable: {exc}", status_code=502)
-    headers = {
-        key: value
-        for key, value in upstream.headers.items()
-        if key.lower() not in _EXCLUDED_HEADERS
-    }
+    headers = {key: value for key, value in upstream.headers.items() if key.lower() not in _EXCLUDED_HEADERS}
     return Response(
         content=upstream.content,
         status_code=upstream.status_code,

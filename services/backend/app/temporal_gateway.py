@@ -83,12 +83,8 @@ class TemporalGateway:
                     "run_id": execution.run_id,
                     "workflow_type": execution.workflow_type,
                     "status": execution.status.name if execution.status else "UNKNOWN",
-                    "start_time": execution.start_time.isoformat()
-                    if execution.start_time
-                    else None,
-                    "close_time": execution.close_time.isoformat()
-                    if execution.close_time
-                    else None,
+                    "start_time": execution.start_time.isoformat() if execution.start_time else None,
+                    "close_time": execution.close_time.isoformat() if execution.close_time else None,
                 }
             )
             if len(out) >= limit:
@@ -135,22 +131,71 @@ class TemporalGateway:
         client = await self.client()
         out: list[dict[str, Any]] = []
         async for item in await client.list_schedules():
-            spec = getattr(item.info, "spec", None) if hasattr(item, "info") else None
-            cron = None
-            if spec is not None and getattr(spec, "cron_expressions", None):
-                cron = spec.cron_expressions[0]
+            listed = getattr(item, "schedule", None)
+            spec = getattr(listed, "spec", None)
+            state = getattr(listed, "state", None)
             out.append(
                 {
                     "id": item.id,
                     "workflow": item.id.removeprefix("schedule-"),
-                    "cron": cron,
-                    "paused": bool(
-                        getattr(getattr(item, "schedule", None), "state", None)
-                        and item.schedule.state.paused
-                    ),
+                    "cron": _cron_of(spec),
+                    "paused": bool(state is not None and getattr(state, "paused", False)),
                 }
             )
         return out
+
+
+_CRON_FIELD_SPANS = {
+    "minute": (0, 59),
+    "hour": (0, 23),
+    "day_of_month": (1, 31),
+    "month": (1, 12),
+    "day_of_week": (0, 6),
+}
+
+
+def _cron_field(ranges: Any, field: str) -> str:
+    """Render one calendar field back as a cron field.
+
+    Temporal rewrites a cron expression into structured calendars, so reading a
+    schedule back never returns the string that created it.
+    """
+    low, high = _CRON_FIELD_SPANS[field]
+    if not ranges:
+        return "*"
+    parts: list[str] = []
+    for entry in ranges:
+        start = getattr(entry, "start", 0)
+        end = getattr(entry, "end", start)
+        step = getattr(entry, "step", 1) or 1
+        covers_field = start <= low and end >= high
+        if covers_field and step == 1:
+            return "*"
+        if covers_field:
+            parts.append(f"*/{step}")
+        elif step != 1:
+            parts.append(f"{start}-{end}/{step}")
+        elif end != start:
+            parts.append(f"{start}-{end}")
+        else:
+            parts.append(str(start))
+    return ",".join(parts) or "*"
+
+
+def _cron_of(spec: Any) -> str | None:
+    if spec is None:
+        return None
+    expressions = getattr(spec, "cron_expressions", None)
+    if expressions:
+        return expressions[0]
+    calendars = getattr(spec, "calendars", None)
+    if not calendars:
+        return None
+    calendar = calendars[0]
+    return " ".join(
+        _cron_field(getattr(calendar, field, None), field)
+        for field in ("minute", "hour", "day_of_month", "month", "day_of_week")
+    )
 
 
 temporal = TemporalGateway()

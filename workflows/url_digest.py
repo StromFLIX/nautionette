@@ -54,10 +54,7 @@ class UrlDigest:
         digest = await workflow.execute_activity(
             "agent_call",
             {
-                "prompt": (
-                    f"Summarise this page. Focus on {focus}.\n\n"
-                    f"URL: {url}\n\n{page['body'][:20000]}"
-                ),
+                "prompt": (f"Summarise this page. Focus on {focus}.\n\nURL: {url}\n\n{page['body'][:20000]}"),
                 "output_schema": {
                     "type": "object",
                     "properties": {

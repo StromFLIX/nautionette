@@ -284,9 +284,7 @@ def extract_code(text: str) -> str | None:
 
 async def promote_chat(chat: dict[str, Any], messages: list[dict[str, Any]]) -> dict[str, Any]:
     """Read a transcript, write a workflow draft, hand back a diff to approve."""
-    transcript = "\n\n".join(
-        f"{m['role'].upper()}: {m['content']}" for m in messages if m.get("content")
-    )
+    transcript = "\n\n".join(f"{m['role'].upper()}: {m['content']}" for m in messages if m.get("content"))
     title = chat.get("title") or "Promoted chat"
     name = slugify(title)
 
@@ -344,9 +342,7 @@ async def promote_chat(chat: dict[str, Any], messages: list[dict[str, Any]]) -> 
                 timeout_seconds=600,
             )
         )
-        repaired = (repair.get("output") or {}).get("code") or extract_code(
-            repair.get("text") or ""
-        )
+        repaired = (repair.get("output") or {}).get("code") or extract_code(repair.get("text") or "")
         if repaired:
             code = repaired
             report = await authoring.validate(name, code)

@@ -35,9 +35,7 @@ class BrokerClient:
             response.raise_for_status()
             return response.json().get("agent_sets", [])
 
-    async def run_agent(
-        self, job: dict[str, Any], timeout: float = 900
-    ) -> AsyncIterator[dict[str, Any]]:
+    async def run_agent(self, job: dict[str, Any], timeout: float = 900) -> AsyncIterator[dict[str, Any]]:
         """One container per call. Yields NDJSON events until the container exits."""
         async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=10)) as client:
             async with client.stream(
@@ -74,14 +72,10 @@ class AuthoringClient:
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.request(
-                method, f"{self.base_url}{path}", headers=_headers(), **kwargs
-            )
+            response = await client.request(method, f"{self.base_url}{path}", headers=_headers(), **kwargs)
             if response.status_code >= 400:
                 detail = response.text[:500]
-                raise RuntimeError(
-                    f"workflow-mcp {method} {path} failed ({response.status_code}): {detail}"
-                )
+                raise RuntimeError(f"workflow-mcp {method} {path} failed ({response.status_code}): {detail}")
             return response.json()
 
     async def health(self) -> dict[str, Any]:

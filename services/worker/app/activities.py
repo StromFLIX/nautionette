@@ -42,9 +42,7 @@ async def agent_call(params: dict[str, Any]) -> dict[str, Any]:
     }
     timeout = payload["timeout_seconds"] + 60
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=10)) as client:
-        response = await client.post(
-            f"{BACKEND_URL}/internal/agent/call", json=payload, headers=_headers()
-        )
+        response = await client.post(f"{BACKEND_URL}/internal/agent/call", json=payload, headers=_headers())
         response.raise_for_status()
         result = response.json()
 
