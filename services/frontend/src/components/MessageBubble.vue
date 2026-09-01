@@ -1,6 +1,11 @@
 <template>
   <div class="msg" :class="`msg--${role}`">
-    <div class="bubble">
+    <div class="bubble" :class="{ 'bubble--run': run }">
+      <RouterLink v-if="run" class="bubble__run" :to="`/runs/${run.workflow_id}`">
+        <span class="material-icons">bolt</span>
+        <span class="grow truncate">{{ run.workflow }}</span>
+        <span class="chip" :class="`chip--${RUN_TONE[run.status] || ''}`">{{ run.status }}</span>
+      </RouterLink>
       <div class="bubble__body" v-html="html" />
       <div v-if="tools.length" class="bubble__tools">
         <span v-for="tool in tools" :key="tool" class="chip">
@@ -16,7 +21,7 @@
 <script setup>
 import { computed } from 'vue'
 import { renderMarkdown } from '../markdown'
-import { shortTime } from '../format'
+import { RUN_TONE, shortTime } from '../format'
 
 const props = defineProps({
   role: { type: String, default: 'assistant' },
@@ -27,6 +32,7 @@ const props = defineProps({
 
 const html = computed(() => renderMarkdown(props.content))
 const tools = computed(() => props.meta?.tools || [])
+const run = computed(() => props.meta?.run || null)
 // The backend folds a failure into the body too, so only add it when it is new.
 const error = computed(() => {
   const detail = props.meta?.error || ''
@@ -64,6 +70,32 @@ const time = computed(() => shortTime(props.createdAt))
   background: var(--bubble-in);
   border: 1px solid var(--border);
   border-bottom-left-radius: var(--radius-xs);
+}
+
+.bubble--run {
+  max-width: min(760px, 92%);
+}
+
+.bubble__run {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: -3px -5px 8px;
+  padding: 5px 7px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-active);
+  color: var(--text-muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.bubble__run:hover {
+  color: var(--text);
+}
+
+.bubble__run .material-icons {
+  font-size: 14px;
+  color: var(--accent-hover);
 }
 
 .msg__time {

@@ -66,6 +66,8 @@ export const api = {
   system: () => request('/api/system'),
   catalog: (refresh = false) => request(`/api/catalog${refresh ? '?refresh=true' : ''}`),
   events: () => request('/api/events/recent'),
+  settings: () => request('/api/settings'),
+  saveSettings: (payload) => request('/api/settings', { method: 'PUT', ...json(payload) }),
 
   chats: () => request('/api/chats'),
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
@@ -75,6 +77,8 @@ export const api = {
 
   workflows: () => request('/api/workflows'),
   workflow: (name) => request(`/api/workflows/${name}`),
+  workflowSettings: (name, payload) =>
+    request(`/api/workflows/${name}/settings`, { method: 'PATCH', ...json(payload) }),
   deleteWorkflow: (name) => request(`/api/workflows/${name}`, { method: 'DELETE' }),
   runWorkflow: (name, input) => request(`/api/workflows/${name}/run`, { method: 'POST', ...json({ input }) }),
   schedule: (name, cron, input) => request(`/api/workflows/${name}/schedule`, { method: 'POST', ...json({ cron, input }) }),

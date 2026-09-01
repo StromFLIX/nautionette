@@ -33,9 +33,6 @@
 
     <div ref="scroller" class="thread__body scroll-y grow">
       <div class="thread__inner">
-        <p v-if="!messages.length && !streaming" class="thread__hint caption dim">
-          This chat is empty. Ask for something.
-        </p>
         <MessageBubble
           v-for="message in messages" :key="message.id"
           :role="message.role" :content="message.content"
@@ -62,22 +59,19 @@
         @update:tools="patch({ tools: $event })"
         @send="send"
       />
-      <p class="thread__note caption dim">
-        Ask the agent to “make this a workflow” when you want it to run on its own.
-      </p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useRoute, useRouter } from 'vue-router'
 import ChatWelcome from '../components/ChatWelcome.vue'
 import Composer from '../components/Composer.vue'
 import MessageBubble from '../components/MessageBubble.vue'
 import { avatarStyle, initials } from '../format'
-import { actions, store } from '../store'
+import { actions, onLiveEvent, store } from '../store'
 import { api, streamMessage } from '../api'
 
 const $q = useQuasar()
@@ -189,7 +183,17 @@ watch(chatId, (id) => {
   }
 })
 
-onMounted(() => { if (chatId.value) load(chatId.value) })
+let off = () => {}
+onMounted(() => {
+  if (chatId.value) load(chatId.value)
+  // A workflow run can post into the chat that is open right now.
+  off = onLiveEvent((event) => {
+    if (event.kind === 'chat.answered' && event.chat_id === chatId.value && !streaming.value) {
+      load(chatId.value)
+    }
+  })
+})
+onUnmounted(() => off())
 </script>
 
 <style scoped>
@@ -225,12 +229,6 @@ onMounted(() => { if (chatId.value) load(chatId.value) })
 .thread__foot > :deep(.composer) {
   max-width: 900px;
   margin: 0 auto;
-}
-
-.thread__note {
-  max-width: 900px;
-  margin: 7px auto 0;
-  text-align: center;
 }
 
 .avatar-sm {

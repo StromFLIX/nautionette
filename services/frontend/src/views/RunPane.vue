@@ -2,9 +2,6 @@
   <div v-if="!id" class="empty">
     <span class="material-icons" style="font-size: 40px">history</span>
     <div class="pane-head__title">Runs</div>
-    <p class="caption" style="max-width: 360px">
-      Every workflow execution lands here with its input, its output and what Temporal made of it.
-    </p>
   </div>
 
   <div v-else-if="detail" class="stack grow">

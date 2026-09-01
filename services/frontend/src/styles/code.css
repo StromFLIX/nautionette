@@ -1,0 +1,50 @@
+/* Syntax colours, tuned to the same palette as the rest of the app. */
+
+.hljs-comment,
+.hljs-quote {
+  color: #5c6478;
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-type {
+  color: #c792ea;
+}
+
+.hljs-string,
+.hljs-attr,
+.hljs-attribute,
+.hljs-addition {
+  color: #7ee2a8;
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: #f7a35c;
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-section,
+.hljs-name {
+  color: #6fb6ff;
+}
+
+.hljs-params,
+.hljs-variable,
+.hljs-template-variable {
+  color: #d7dbe4;
+}
+
+.hljs-built_in,
+.hljs-class .hljs-title {
+  color: #ffcb6b;
+}
+
+.hljs-meta,
+.hljs-deletion {
+  color: #f0919a;
+}

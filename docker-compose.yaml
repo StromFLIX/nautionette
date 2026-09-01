@@ -160,6 +160,7 @@ services:
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-nautionette}
       BACKEND_URL: http://backend:8080
+      MCP_URL: http://agentgateway:4000/mcp
       WORKFLOWS_DIR: /workflows
       ARTIFACTS_DIR: /artifacts
       WORKER_GRACE_SECONDS: ${WORKER_GRACE_SECONDS:-50}

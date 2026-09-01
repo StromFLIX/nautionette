@@ -83,6 +83,7 @@ def run_checks(name: str, code: str) -> dict[str, Any]:
 
     if "agent_call" not in code and "execute_activity" not in code:
         warnings.append("workflow calls no activities; it will do nothing on its own")
+    warnings.extend(_determinism_notes(code))
 
     return {
         "valid": not errors,
@@ -92,6 +93,28 @@ def run_checks(name: str, code: str) -> dict[str, Any]:
         "classes": classes,
         "steps": steps,
     }
+
+
+def _determinism_notes(code: str) -> list[str]:
+    """A workflow is worth more the less of it depends on a model."""
+    notes: list[str] = []
+    agent_calls = code.count('"agent_call"') + code.count("'agent_call'")
+    if not agent_calls:
+        return notes
+    deterministic = any(
+        name in code
+        for name in ('"http_fetch"', "'http_fetch'", '"mcp_call"', "'mcp_call'", '"read_artifact"')
+    )
+    if not deterministic:
+        notes.append(
+            "every step is an agent_call: check whether http_fetch, mcp_call or plain "
+            "Python could do the same thing the same way every time"
+        )
+    if agent_calls > 2:
+        notes.append(f"{agent_calls} agent calls in one workflow; each one is a chance to drift")
+    if '"output_schema"' not in code and "'output_schema'" not in code:
+        notes.append("agent_call without output_schema returns prose you then have to parse")
+    return notes
 
 
 def _import_check(name: str, code: str) -> dict[str, Any]:

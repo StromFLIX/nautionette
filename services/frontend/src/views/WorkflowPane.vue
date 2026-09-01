@@ -2,10 +2,6 @@
   <div v-if="!name" class="empty">
     <span class="material-icons" style="font-size: 40px">account_tree</span>
     <div class="pane-head__title">Workflows</div>
-    <p class="caption" style="max-width: 380px">
-      A workflow is a chat that earned the right to run on its own: durable, retried by Temporal,
-      schedulable. Ask the agent in a chat to make one.
-    </p>
   </div>
 
   <!-- a draft waiting for a human -->
@@ -16,7 +12,7 @@
       </button>
       <div class="grow">
         <div class="pane-head__title truncate">{{ draft.name }}</div>
-        <div class="caption dim truncate">{{ draft.meta?.message || 'Draft, not deployed yet' }}</div>
+        <div class="caption dim truncate">{{ draft.meta?.message || 'Draft' }}</div>
       </div>
       <span class="chip" :class="validation?.valid ? 'chip--success' : 'chip--danger'">
         {{ validation?.valid ? 'validates' : 'has errors' }}
@@ -32,8 +28,7 @@
 
     <div class="pane-body scroll-y grow">
       <section v-if="validation?.steps?.length" class="block">
-        <div class="section-label">Checks</div>
-        <div class="row" style="flex-wrap: wrap; margin-top: 8px">
+        <div class="row" style="flex-wrap: wrap">
           <span
             v-for="step in validation.steps" :key="step.step"
             class="chip" :class="step.ok ? 'chip--success' : 'chip--danger'"
@@ -41,6 +36,9 @@
         </div>
         <p v-for="error in validation.errors || []" :key="error" class="caption" style="color: var(--danger)">
           {{ error }}
+        </p>
+        <p v-for="note in validation.warnings || []" :key="note" class="caption" style="color: var(--warning)">
+          {{ note }}
         </p>
       </section>
 
@@ -67,14 +65,19 @@
         <div class="pane-head__title truncate">{{ workflow.title || workflow.name }}</div>
         <div class="caption dim truncate">{{ workflow.description || workflow.name }}</div>
       </div>
-      <span v-if="workflow.schedule" class="chip chip--accent">
+      <span v-if="disabled" class="chip chip--warning">disabled</span>
+      <span v-else-if="workflow.schedule" class="chip chip--accent">
         <span class="material-icons" style="font-size: 13px">schedule</span>{{ workflow.schedule.cron }}
       </span>
       <button class="btn btn--icon">
         <span class="material-icons">more_vert</span>
         <q-menu anchor="bottom right" self="top right" class="pick-menu">
+          <button class="pick-menu__item" @click="toggleDisabled">
+            <span class="material-icons pick__icon">{{ disabled ? 'play_circle' : 'pause_circle' }}</span>
+            {{ disabled ? 'Enable' : 'Disable' }}
+          </button>
           <button class="pick-menu__item" @click="remove">
-            <span class="material-icons pick__icon" style="color: var(--danger)">delete</span>Delete workflow
+            <span class="material-icons pick__icon" style="color: var(--danger)">delete</span>Delete
           </button>
         </q-menu>
       </button>
@@ -89,11 +92,13 @@
 
     <div class="pane-body scroll-y grow">
       <template v-if="tab === 'Run'">
+        <section v-if="disabled" class="notice">
+          <span class="material-icons">pause_circle</span>
+          <span class="grow">Disabled — triggers and schedules are refused.</span>
+          <button class="btn btn--sm btn--outline" @click="toggleDisabled">Enable</button>
+        </section>
+
         <section class="block">
-          <div class="section-label">Inputs</div>
-          <p v-if="!Object.keys(inputProperties).length" class="caption dim" style="margin: 8px 0 0">
-            This workflow takes no inputs.
-          </p>
           <div v-for="(schema, key) in inputProperties" :key="key" class="field-row">
             <label class="field-row__label">
               {{ key }}
@@ -102,34 +107,37 @@
             <input v-model="inputs[key]" class="field" :placeholder="schema.description || schema.type || ''" />
           </div>
           <div class="row" style="margin-top: 14px">
-            <button class="btn btn--primary" :disabled="running" @click="run">
+            <button class="btn btn--primary" :disabled="running || disabled" @click="run">
               <span class="material-icons" style="font-size: 17px">play_arrow</span>
               {{ running ? 'Starting…' : 'Run now' }}
             </button>
+            <input v-model="cron" class="field" style="width: 150px" placeholder="0 8 * * *" />
+            <button class="btn btn--outline" :disabled="disabled" @click="schedule">
+              {{ workflow.schedule ? 'Update schedule' : 'Schedule' }}
+            </button>
+            <button v-if="workflow.schedule" class="btn btn--danger" @click="unschedule">Unschedule</button>
           </div>
         </section>
 
         <section class="block">
-          <div class="section-label">Schedule</div>
-          <div class="row" style="margin-top: 8px">
-            <input v-model="cron" class="field" style="width: 160px" placeholder="0 8 * * *" />
-            <button class="btn btn--outline" @click="schedule">
-              {{ workflow.schedule ? 'Update' : 'Schedule' }}
-            </button>
-            <button v-if="workflow.schedule" class="btn btn--danger" @click="unschedule">Unschedule</button>
+          <div class="section-label">Results go to</div>
+          <div class="row segmented" style="margin-top: 8px">
+            <button
+              v-for="option in chatModes" :key="option.value" class="segment"
+              :class="{ 'segment--active': chatMode === option.value }"
+              @click="setChatMode(option.value)"
+            >{{ option.label }}</button>
           </div>
-          <p class="caption dim" style="margin: 10px 0 0">
-            Or trigger it from anywhere: <code class="mono">POST /api/triggers/{{ workflow.name }}</code>
-          </p>
+        </section>
+
+        <section class="block">
+          <div class="section-label">Trigger</div>
+          <TriggerSnippet class="block__panel" :workflow="workflow.name" :inputs="inputs" />
         </section>
       </template>
 
-      <section v-else-if="tab === 'Code'" class="block">
-        <pre class="code">{{ workflow.code }}</pre>
-      </section>
-
-      <section v-else-if="tab === 'Manifest'" class="block">
-        <pre class="code">{{ JSON.stringify(workflow.manifest, null, 2) }}</pre>
+      <section v-else-if="tab === 'Code'" class="block block--wide">
+        <CodeViewer :files="files" />
       </section>
 
       <section v-else class="block">
@@ -147,13 +155,15 @@
     </div>
   </div>
 
-  <div v-else class="empty">Loading…</div>
+  <div v-else class="empty" />
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useRoute, useRouter } from 'vue-router'
+import CodeViewer from '../components/CodeViewer.vue'
+import TriggerSnippet from '../components/TriggerSnippet.vue'
 import { RUN_TONE, avatarStyle, diffLines, fullTime } from '../format'
 import { actions, store } from '../store'
 import { api } from '../api'
@@ -162,7 +172,11 @@ const $q = useQuasar()
 const route = useRoute()
 const router = useRouter()
 
-const tabs = ['Run', 'Code', 'Manifest', 'History']
+const tabs = ['Run', 'Code', 'History']
+const chatModes = [
+  { value: 'same', label: 'One chat' },
+  { value: 'new', label: 'A chat per run' }
+]
 const tab = ref('Run')
 const workflow = ref(null)
 const draft = ref(null)
@@ -174,6 +188,18 @@ const approving = ref(false)
 
 const name = computed(() => route.params.name || '')
 const inputProperties = computed(() => workflow.value?.manifest?.inputs?.properties || {})
+const disabled = computed(() => Boolean(workflow.value?.settings?.disabled))
+const chatMode = computed(() => workflow.value?.settings?.chat_mode || 'same')
+
+const files = computed(() => [
+  { name: `${workflow.value.name}.py`, code: workflow.value.code, language: 'python', icon: 'description' },
+  {
+    name: 'manifest.json',
+    code: JSON.stringify(workflow.value.manifest, null, 2),
+    language: 'json',
+    icon: 'data_object'
+  }
+])
 
 async function load () {
   workflow.value = null
@@ -199,7 +225,6 @@ async function run () {
   running.value = true
   try {
     const started = await api.runWorkflow(workflow.value.name, payload())
-    $q.notify({ type: 'positive', message: `Started ${started.workflow_id}` })
     router.push(`/runs/${started.workflow_id}`)
   } catch (error) {
     $q.notify({ type: 'negative', message: error.message })
@@ -211,7 +236,6 @@ async function run () {
 async function schedule () {
   try {
     await api.schedule(workflow.value.name, cron.value, payload())
-    $q.notify({ type: 'positive', message: `Scheduled ${cron.value}` })
     await actions.loadWorkflows()
     load()
   } catch (error) {
@@ -223,6 +247,15 @@ async function unschedule () {
   await api.unschedule(workflow.value.name)
   await actions.loadWorkflows()
   load()
+}
+
+async function toggleDisabled () {
+  workflow.value.settings = await api.workflowSettings(workflow.value.name, { disabled: !disabled.value })
+  actions.loadWorkflows()
+}
+
+async function setChatMode (mode) {
+  workflow.value.settings = await api.workflowSettings(workflow.value.name, { chat_mode: mode })
 }
 
 function remove () {
@@ -238,7 +271,6 @@ async function approve () {
   approving.value = true
   try {
     await api.approveDraft(draft.value.name)
-    $q.notify({ type: 'positive', message: 'Deployed. The worker is reloading.' })
     await actions.loadWorkflows()
     load()
   } catch (error) {
@@ -266,6 +298,56 @@ onMounted(load)
 .block {
   max-width: 760px;
   margin-bottom: 26px;
+}
+
+.block--wide {
+  max-width: 1100px;
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 760px;
+  margin-bottom: 20px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 13px;
+}
+
+.notice .material-icons {
+  font-size: 18px;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-panel);
+}
+
+.segment {
+  padding: 5px 12px;
+  border: none;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.segment:hover {
+  color: var(--text);
+}
+
+.segment--active {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
 }
 
 .field-row {

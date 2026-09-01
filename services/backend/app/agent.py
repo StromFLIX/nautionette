@@ -15,8 +15,11 @@ from typing import Any
 from .clients import authoring, broker
 from .config import settings
 
-MAX_HISTORY_MESSAGES = 30
-MAX_HISTORY_CHARS = 24000
+MAX_HISTORY_MESSAGES = 200
+# Characters of transcript handed to a cold container. Overridable in settings;
+# ~200k chars is roughly 50k tokens, which every current model has room for.
+DEFAULT_HISTORY_CHARS = 200_000
+MAX_MESSAGE_CHARS = 16_000
 
 CHAT_SYSTEM_PROMPT = """\
 You are the agent inside Nautionette, a chat app where a conversation can become a
@@ -37,27 +40,47 @@ How to behave:
 WORKFLOW_AUTHOR_PROMPT = """\
 You turn a conversation into a Temporal workflow file for Nautionette.
 
+Prefer code over the model. A workflow earns its keep by being deterministic: the same
+input gives the same output, it is cheap, and it does not drift when a model changes.
+Reach for a model only when the task genuinely needs language: summarising prose,
+classifying free text, drafting something a human will read. Everything else -- parsing,
+reshaping, arithmetic, dates, filtering, string work -- is plain Python in the workflow
+body, and every call to a known service is `http_fetch` or `mcp_call`.
+
 Rules for the file you produce:
-- Plain Python, one module, no imports beyond `datetime`, `typing` and `temporalio`.
+- Plain Python, one module. You may import from the standard library as long as it is
+  deterministic and does no I/O: `json`, `re`, `math`, `statistics`, `datetime`, `typing`,
+  `urllib.parse`, `html`, `textwrap`, `base64`, `hashlib`, `collections`, `itertools`,
+  `functools`, `dataclasses`. Never import anything that talks to the network, the clock
+  or the filesystem -- that is what activities are for.
 - A module level `MANIFEST` dict literal: schema=1, name (snake_case), title, description,
   inputs and outputs as JSON Schema objects with "type": "object", agent_set.
 - Exactly one class decorated with `@workflow.defn(name=<same name as MANIFEST>)` and one
   method decorated with `@workflow.run` taking `(self, params: dict) -> dict`.
 - Call activities by string name only. Available activities:
+  * "http_fetch" -> {"url": str, "method": str?, "headers": dict?, "json": dict?, "params": dict?}
+    returns {"status": int, "body": str, "json": any}
+  * "mcp_call" -> {"tool": str, "arguments": dict}
+    returns {"ok": bool, "text": str, "json": any}
+    Calls an MCP tool directly, with no model in the loop. This is the deterministic way
+    to use a tool: if a tool can do the job, call it here rather than asking an agent to.
+  * "save_artifact" -> {"name": str, "content": str} returns {"path": str}
+  * "read_artifact" -> {"name": str} returns {"content": str}
+  * "emit_event" -> {"kind": str, "payload": dict} returns {"ok": true}
   * "agent_call" -> {"prompt": str, "system_prompt": str?, "output_schema": dict?, "agent_set": str?}
     returns {"text": str, "output": dict|None}
-  * "http_fetch" -> {"url": str, "method": str?, "headers": dict?, "json": dict?}
-    returns {"status": int, "body": str, "json": any}
-  * "emit_event" -> {"kind": str, "payload": dict} returns {"ok": true}
-  * "save_artifact" -> {"name": str, "content": str} returns {"path": str}
+    The expensive one. Use it for language, not for logic, and always declare an
+    `output_schema` so the answer is a shaped object rather than prose you must re-parse.
 - Always pass `start_to_close_timeout=timedelta(minutes=...)` to execute_activity.
 - Anything the chat fixed (a date, a repo, a customer) becomes a key in MANIFEST["inputs"]
   and is read from `params`.
 - Return a dict that matches MANIFEST["outputs"].
 
 This is the shape. Follow it exactly; only the names, the schemas and the body change.
+Note that the parsing here is code, and the model is asked for the one thing code cannot do.
 
 ```python
+import json
 from datetime import timedelta
 
 from temporalio import workflow
@@ -72,7 +95,10 @@ MANIFEST = {
         "properties": {"url": {"type": "string"}},
         "required": ["url"],
     },
-    "outputs": {"type": "object", "properties": {"summary": {"type": "string"}}},
+    "outputs": {
+        "type": "object",
+        "properties": {"summary": {"type": "string"}, "version": {"type": "string"}},
+    },
     "agent_set": "default",
     "source": "chat",
 }
@@ -87,10 +113,14 @@ class ReleaseDigest:
             {"url": params["url"]},
             start_to_close_timeout=timedelta(minutes=5),
         )
+        # Code, not a model: pulling a field out of a payload needs no language.
+        release = json.loads(page["body"])
+        notes = release["body"][:4000]
+
         answer = await workflow.execute_activity(
             "agent_call",
             {
-                "prompt": f"Summarise these release notes:\\n\\n{page['body'][:4000]}",
+                "prompt": f"Summarise these release notes:\\n\\n{notes}",
                 "output_schema": {
                     "type": "object",
                     "properties": {"summary": {"type": "string"}},
@@ -99,7 +129,7 @@ class ReleaseDigest:
             },
             start_to_close_timeout=timedelta(minutes=10),
         )
-        return answer.get("output") or {"summary": answer.get("text", "")}
+        return {"summary": answer["output"]["summary"], "version": release["tag_name"]}
 ```
 
 Do not write a plain script. Do not use `requests`, `schedule`, `time.sleep` or `__main__`:
@@ -107,16 +137,18 @@ scheduling and retries belong to Temporal, not to the file.
 """
 
 
-def build_history(messages: list[dict[str, Any]]) -> list[dict[str, str]]:
+def build_history(
+    messages: list[dict[str, Any]], max_chars: int = DEFAULT_HISTORY_CHARS
+) -> list[dict[str, str]]:
     """Trim a transcript to something a cold container can be handed."""
     trimmed = [m for m in messages if m.get("role") in {"user", "assistant"}]
     trimmed = trimmed[-MAX_HISTORY_MESSAGES:]
     total = 0
     out: list[dict[str, str]] = []
     for message in reversed(trimmed):
-        content = (message.get("content") or "")[:4000]
+        content = (message.get("content") or "")[:MAX_MESSAGE_CHARS]
         total += len(content)
-        if total > MAX_HISTORY_CHARS:
+        if total > max_chars:
             break
         out.append({"role": message["role"], "content": content})
     return list(reversed(out))

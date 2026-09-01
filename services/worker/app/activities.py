@@ -1,11 +1,13 @@
 """The activities every workflow can call by name.
 
 A workflow file imports nothing from the runtime: it calls "agent_call",
-"http_fetch", "emit_event", "save_artifact" or "read_artifact" as strings.
+"http_fetch", "mcp_call", "emit_event", "save_artifact" or "read_artifact" as
+strings. All of them are deterministic except "agent_call".
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -18,6 +20,7 @@ log = logging.getLogger("worker.activities")
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://backend:8080").rstrip("/")
 INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "").strip()
+MCP_URL = os.environ.get("MCP_URL", "http://agentgateway:4000/mcp")
 ARTIFACTS_DIR = Path(os.environ.get("ARTIFACTS_DIR", "/artifacts"))
 AGENT_TIMEOUT_SECONDS = int(os.environ.get("AGENT_TIMEOUT_SECONDS", "900"))
 HTTP_MAX_BYTES = 512_000
@@ -116,4 +119,75 @@ async def read_artifact(params: dict[str, Any]) -> dict[str, Any]:
     return {"name": path.name, "content": path.read_text(encoding="utf-8", errors="replace")}
 
 
-ALL = [agent_call, http_fetch, emit_event, save_artifact, read_artifact]
+def _mcp_frame(response: httpx.Response) -> dict[str, Any]:
+    """Streamable HTTP answers either as JSON or as a one-frame SSE body."""
+    if response.headers.get("content-type", "").startswith("text/event-stream"):
+        for line in response.text.splitlines():
+            if line.startswith("data:"):
+                return json.loads(line[5:].strip())
+        return {}
+    return response.json()
+
+
+@activity.defn(name="mcp_call")
+async def mcp_call(params: dict[str, Any]) -> dict[str, Any]:
+    """Call one MCP tool with no model in the loop: same input, same output."""
+    tool = params.get("tool")
+    if not tool:
+        raise ValueError("mcp_call needs a tool name")
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+
+    def rpc(request_id: int | None, method: str, arguments: dict[str, Any] | None = None):
+        body: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "params": arguments or {}}
+        if request_id is not None:
+            body["id"] = request_id
+        return body
+
+    async with httpx.AsyncClient(timeout=120) as client:
+        handshake = await client.post(
+            MCP_URL,
+            headers=headers,
+            json=rpc(
+                1,
+                "initialize",
+                {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "nautionette-workflow", "version": "1"},
+                },
+            ),
+        )
+        handshake.raise_for_status()
+        session = handshake.headers.get("mcp-session-id")
+        if session:
+            headers["Mcp-Session-Id"] = session
+        await client.post(MCP_URL, headers=headers, json=rpc(None, "notifications/initialized"))
+        called = await client.post(
+            MCP_URL,
+            headers=headers,
+            json=rpc(2, "tools/call", {"name": tool, "arguments": params.get("arguments") or {}}),
+        )
+        called.raise_for_status()
+        frame = _mcp_frame(called)
+
+    if frame.get("error"):
+        raise RuntimeError(f"mcp tool {tool} failed: {frame['error'].get('message', 'unknown')}")
+    result = frame.get("result") or {}
+    text = "\n".join(
+        part.get("text", "")
+        for part in result.get("content", [])
+        if isinstance(part, dict) and part.get("type") == "text"
+    )
+    if result.get("isError"):
+        raise RuntimeError(f"mcp tool {tool} failed: {text[:400]}")
+    try:
+        parsed = json.loads(text) if text else None
+    except ValueError:
+        parsed = None
+    return {"ok": True, "text": text, "json": parsed}
+
+
+ALL = [agent_call, http_fetch, mcp_call, emit_event, save_artifact, read_artifact]

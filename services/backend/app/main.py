@@ -7,6 +7,7 @@ here. It never touches the Docker socket; the broker does that.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hmac
 import json
 import os
@@ -24,7 +25,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, Response, Streami
 from nautionette import input_problems
 
 from .agent import (
-    MAX_HISTORY_CHARS,
+    DEFAULT_HISTORY_CHARS,
     agent_job,
     build_history,
     call_agent,
@@ -117,6 +118,44 @@ def _remember_agent_result(ok: bool) -> None:
     global _agent_has_answered
     if ok:
         _agent_has_answered = True
+
+
+# ------------------------------------------------------------------- settings
+
+
+# The environment sets the floor; anything saved in the app wins over it.
+def _defaults() -> dict[str, Any]:
+    return {
+        "default_model": settings.agent_model,
+        "default_agent_set": settings.default_agent_set,
+        "history_chars": DEFAULT_HISTORY_CHARS,
+    }
+
+
+def runtime(key: str) -> Any:
+    return db.get_setting(key, _defaults()[key])
+
+
+@app.get("/api/settings", dependencies=[Depends(require_user)])
+async def get_settings() -> dict[str, Any]:
+    return {"settings": {key: runtime(key) for key in _defaults()}, "defaults": _defaults()}
+
+
+@app.put("/api/settings", dependencies=[Depends(require_user)])
+async def put_settings(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    for key in _defaults():
+        if key not in payload:
+            continue
+        value = payload[key]
+        if value in (None, ""):
+            db.execute("DELETE FROM settings WHERE key = ?", (key,))
+        elif key == "history_chars":
+            db.set_setting(key, max(2_000, min(2_000_000, int(value))))
+        else:
+            db.set_setting(key, str(value))
+    _catalog_cache.update(at=0.0, value=None)
+    bus.publish("settings.changed", {})
+    return {"settings": {key: runtime(key) for key in _defaults()}, "defaults": _defaults()}
 
 
 # --------------------------------------------------------------------- health
@@ -290,13 +329,13 @@ async def catalog(refresh: bool = False) -> dict[str, Any]:
     )
     value = {
         "agent_sets": agent_sets or [{"name": settings.default_agent_set, "ready": True}],
-        "default_agent_set": settings.default_agent_set,
+        "default_agent_set": runtime("default_agent_set"),
         "models": models,
-        "default_model": settings.agent_model,
+        "default_model": runtime("default_model"),
         "gateways": config.get("providers") or [],
         "tools": tools,
         "tool_servers": servers,
-        "context_window": MAX_HISTORY_CHARS,
+        "context_window": runtime("history_chars"),
     }
     _catalog_cache.update(at=time.time(), value=value)
     return value
@@ -314,8 +353,8 @@ async def list_chats() -> dict[str, Any]:
 async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     chat = db.create_chat(
         title=(payload.get("title") or "New chat").strip()[:120],
-        agent_set=payload.get("agent_set") or settings.default_agent_set,
-        model=payload.get("model") or None,
+        agent_set=payload.get("agent_set") or runtime("default_agent_set"),
+        model=payload.get("model") or runtime("default_model"),
         tools=payload.get("tools"),
     )
     bus.publish("chat.created", {"chat_id": chat["id"], "title": chat["title"]})
@@ -330,7 +369,7 @@ async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) 
     if "title" in payload:
         fields["title"] = (payload.get("title") or "Untitled").strip()[:120]
     if "agent_set" in payload:
-        fields["agent_set"] = payload.get("agent_set") or settings.default_agent_set
+        fields["agent_set"] = payload.get("agent_set") or runtime("default_agent_set")
     if "model" in payload:
         fields["model"] = payload.get("model") or None
     if "tools" in payload:
@@ -363,7 +402,7 @@ async def send_message(chat_id: str, payload: dict[str, Any] = Body(...)) -> Str
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
 
-    history = build_history(db.list_messages(chat_id))
+    history = build_history(db.list_messages(chat_id), max_chars=runtime("history_chars"))
     user_message = db.add_message(chat_id, "user", text)
     if chat["title"] in {"New chat", ""} and not history:
         db.execute("UPDATE chats SET title = ? WHERE id = ?", (summarise_for_title(text), chat_id))
@@ -446,6 +485,7 @@ async def list_workflows() -> dict[str, Any]:
     by_workflow = {item["workflow"]: item for item in schedules}
     for workflow in workflows:
         workflow["schedule"] = by_workflow.get(workflow["name"])
+        workflow["settings"] = db.workflow_settings(workflow["name"])
     return {"workflows": workflows}
 
 
@@ -453,12 +493,35 @@ async def list_workflows() -> dict[str, Any]:
 async def get_workflow(name: str) -> dict[str, Any]:
     workflow = await authoring.get_workflow(name)
     workflow["runs"] = db.list_runs(name, limit=25)
+    workflow["settings"] = db.workflow_settings(name)
+    try:
+        workflow["schedule"] = next(
+            (item for item in await temporal.schedules() if item["workflow"] == name), None
+        )
+    except Exception:  # noqa: BLE001 - schedules are extra, not essential
+        workflow["schedule"] = None
     return workflow
+
+
+@app.patch("/api/workflows/{name}/settings", dependencies=[Depends(require_user)])
+async def patch_workflow_settings(name: str, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    if "disabled" in payload:
+        fields["disabled"] = bool(payload["disabled"])
+    if "chat_mode" in payload:
+        mode = payload["chat_mode"]
+        if mode not in {"same", "new"}:
+            raise HTTPException(status_code=400, detail="chat_mode must be 'same' or 'new'")
+        fields["chat_mode"] = mode
+    updated = db.set_workflow_settings(name, fields)
+    bus.publish("workflow.settings", {"workflow": name, **fields})
+    return updated
 
 
 @app.delete("/api/workflows/{name}", dependencies=[Depends(require_user)])
 async def delete_workflow(name: str) -> dict[str, Any]:
     result = await authoring.delete_workflow(name)
+    db.forget_workflow(name)
     bus.publish("workflow.deleted", {"workflow": name})
     asyncio.create_task(_restart_worker())
     return result
@@ -524,6 +587,8 @@ async def discard_draft(name: str) -> dict[str, Any]:
 
 
 async def _start_run(name: str, payload: dict[str, Any], trigger: str) -> dict[str, Any]:
+    if db.workflow_settings(name)["disabled"]:
+        raise HTTPException(status_code=409, detail=f"{name} is disabled")
     workflow = await authoring.get_workflow(name)
     manifest = workflow.get("manifest") or {}
     problems = input_problems(manifest.get("inputs"), payload)
@@ -537,6 +602,53 @@ async def _start_run(name: str, payload: dict[str, Any], trigger: str) -> dict[s
     bus.publish("run.started", {"workflow": name, "workflow_id": workflow_id, "trigger": trigger})
     asyncio.create_task(_watch_run(name, workflow_id))
     return {"workflow": name, **started, "trigger": trigger}
+
+
+def _render_result(result: Any) -> str:
+    """Prose stays prose; anything shaped arrives as JSON you can read and quote."""
+    if result is None:
+        return ""
+    if isinstance(result, str):
+        return result
+    if isinstance(result, dict) and len(result) == 1:
+        only = next(iter(result.values()))
+        if isinstance(only, str):
+            return only
+    return f"```json\n{json.dumps(result, indent=2, ensure_ascii=False)}\n```"
+
+
+async def _deliver_to_chat(name: str, workflow_id: str, status: str, result: Any) -> None:
+    """A finished run lands in a chat, so its output can be talked to."""
+    config = db.workflow_settings(name)
+    workflow_title = name
+    # A deleted workflow still deserves to deliver its last result.
+    with contextlib.suppress(Exception):
+        workflow_title = (await authoring.get_workflow(name)).get("title") or name
+
+    chat_id = config["chat_id"] if config["chat_mode"] == "same" else None
+    if chat_id and not db.get_chat(chat_id):
+        chat_id = None
+    if not chat_id:
+        suffix = time.strftime("%d %b %H:%M") if config["chat_mode"] == "new" else ""
+        chat = db.create_chat(
+            title=f"{workflow_title} {suffix}".strip()[:120],
+            agent_set=runtime("default_agent_set"),
+            model=runtime("default_model"),
+        )
+        chat_id = chat["id"]
+        if config["chat_mode"] == "same":
+            db.set_workflow_settings(name, {"chat_id": chat_id})
+
+    body = _render_result(result)
+    if not body:
+        body = f"`{status}`"
+    db.add_message(
+        chat_id,
+        "assistant",
+        body,
+        {"run": {"workflow": name, "workflow_id": workflow_id, "status": status}},
+    )
+    bus.publish("chat.answered", {"chat_id": chat_id, "ok": status == "completed"})
 
 
 async def _watch_run(name: str, workflow_id: str) -> None:
@@ -555,7 +667,10 @@ async def _watch_run(name: str, workflow_id: str) -> None:
                 result = await temporal.result(workflow_id, timeout=10)
             except Exception:  # noqa: BLE001
                 result = None
-        db.update_run(workflow_id, info["status"].lower(), result)
+        status = info["status"].lower()
+        db.update_run(workflow_id, status, result)
+        with contextlib.suppress(Exception):
+            await _deliver_to_chat(name, workflow_id, status, result)
         bus.publish(
             "run.finished",
             {"workflow": name, "workflow_id": workflow_id, "status": info["status"]},

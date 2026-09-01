@@ -45,7 +45,7 @@
           </div>
         </RouterLink>
         <p v-if="!filteredChats.length" class="side__empty caption">
-          {{ query ? 'Nothing matches that.' : 'No chats yet. Start one and describe what you want.' }}
+          {{ query ? 'Nothing matches that.' : 'No chats yet.' }}
         </p>
       </template>
 
@@ -79,13 +79,14 @@
           <div class="grow">
             <div class="row">
               <span class="row-item__title grow truncate">{{ workflow.title || workflow.name }}</span>
-              <span v-if="workflow.schedule" class="material-icons row-item__pin">schedule</span>
+              <span v-if="workflow.settings?.disabled" class="material-icons row-item__pin dim">pause_circle</span>
+              <span v-else-if="workflow.schedule" class="material-icons row-item__pin">schedule</span>
             </div>
             <div class="row-item__sub truncate">{{ workflow.description || workflow.name }}</div>
           </div>
         </RouterLink>
         <p v-if="!filteredWorkflows.length && !filteredDrafts.length" class="side__empty caption">
-          No workflows yet. Ask the agent in a chat to turn what you just did into a workflow.
+          {{ query ? 'Nothing matches that.' : 'No workflows yet.' }}
         </p>
       </template>
 
@@ -110,7 +111,7 @@
           </div>
         </RouterLink>
         <p v-if="!filteredRuns.length" class="side__empty caption">
-          No runs yet. Run a workflow or wait for a schedule to fire.
+          {{ query ? 'Nothing matches that.' : 'No runs yet.' }}
         </p>
       </template>
     </div>

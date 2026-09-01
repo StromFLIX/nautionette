@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS workflow_settings (
+    name TEXT PRIMARY KEY,
+    disabled INTEGER NOT NULL DEFAULT 0,
+    chat_mode TEXT NOT NULL DEFAULT 'same',
+    chat_id TEXT
+);
 """
 
 # Applied on every start; each one fails harmlessly once it is already in place.
@@ -68,6 +74,9 @@ _MIGRATIONS = (
 )
 
 _EDITABLE_CHAT_COLUMNS = ("title", "agent_set", "model", "tools")
+_EDITABLE_WORKFLOW_COLUMNS = ("disabled", "chat_mode", "chat_id")
+
+WORKFLOW_DEFAULTS = {"disabled": False, "chat_mode": "same", "chat_id": None}
 
 
 def _dump_tools(tools: list[str] | None) -> str | None:
@@ -229,6 +238,33 @@ class Database:
             "UPDATE runs SET status = ?, result = ?, updated_at = ? WHERE workflow_id = ?",
             (status, json.dumps(result) if result is not None else None, time.time(), workflow_id),
         )
+
+    # ---------------------------------------------------------------- settings
+
+    def workflow_settings(self, name: str) -> dict[str, Any]:
+        row = self.one("SELECT * FROM workflow_settings WHERE name = ?", (name,))
+        if not row:
+            return {"name": name, **WORKFLOW_DEFAULTS}
+        return {**row, "disabled": bool(row["disabled"])}
+
+    def set_workflow_settings(self, name: str, fields: dict[str, Any]) -> dict[str, Any]:
+        allowed = {k: v for k, v in fields.items() if k in _EDITABLE_WORKFLOW_COLUMNS}
+        if "disabled" in allowed:
+            allowed["disabled"] = int(bool(allowed["disabled"]))
+        if allowed:
+            # Column names come from the tuple above, never from the caller.
+            assignments = ", ".join(f"{key} = excluded.{key}" for key in allowed)
+            columns = ", ".join(allowed)
+            placeholders = ", ".join("?" for _ in allowed)
+            self.execute(
+                f"INSERT INTO workflow_settings (name, {columns}) VALUES (?, {placeholders})"  # noqa: S608
+                f" ON CONFLICT(name) DO UPDATE SET {assignments}",
+                (name, *allowed.values()),
+            )
+        return self.workflow_settings(name)
+
+    def forget_workflow(self, name: str) -> None:
+        self.execute("DELETE FROM workflow_settings WHERE name = ?", (name,))
 
     def list_runs(self, workflow: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         if workflow:

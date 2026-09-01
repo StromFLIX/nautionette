@@ -3,10 +3,6 @@
     <div class="welcome__inner">
       <img src="/favicon.svg" width="48" height="48" alt="" class="welcome__mark" />
       <h1 class="welcome__title">What should happen?</h1>
-      <p class="welcome__lead">
-        Describe it once. Nautionette answers now, and when it is worth repeating you can ask
-        the agent to turn the conversation into a durable, scheduled workflow.
-      </p>
 
       <Composer
         ref="composer"
@@ -30,28 +26,28 @@
           <span class="material-icons">smart_toy</span>
           <div>
             <div class="fact__title">{{ agentSet || 'default' }}</div>
-            <div class="caption dim">agent set · fresh container per call</div>
+            <div class="caption dim">agent set</div>
           </div>
         </div>
         <div class="fact">
           <span class="material-icons">memory</span>
           <div>
             <div class="fact__title truncate">{{ model || store.catalog.default_model || 'no model' }}</div>
-            <div class="caption dim">model via the gateway</div>
+            <div class="caption dim">model</div>
           </div>
         </div>
         <div class="fact">
           <span class="material-icons">handyman</span>
           <div>
             <div class="fact__title">{{ toolSummary }}</div>
-            <button class="caption fact__link" @click="actions.openSettings('mcp')">manage servers</button>
+            <button class="caption fact__link" @click="actions.openSettings('mcp')">manage</button>
           </div>
         </div>
         <div class="fact">
           <span class="material-icons">history</span>
           <div>
             <div class="fact__title">{{ Math.round((store.catalog.context_window || 0) / 1000) }}k chars</div>
-            <div class="caption dim">context handed to each call</div>
+            <button class="caption fact__link" @click="actions.openSettings('general')">context</button>
           </div>
         </div>
       </div>

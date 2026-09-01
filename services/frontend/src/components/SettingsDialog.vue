@@ -22,15 +22,10 @@
 
           <div class="setting">
             <div class="setting__label">Server</div>
-            <p class="caption dim">
-              {{ isNative
-                ? 'The instance this app talks to.'
-                : 'Blank means this page\u2019s own origin. Set it to reach another instance.' }}
-            </p>
-            <div class="row" style="margin-top: 8px">
+            <div class="row">
               <input
                 v-model="serverUrl" class="field" type="url" inputmode="url"
-                placeholder="https://nautionette.example.com"
+                :placeholder="isNative ? 'https://nautionette.example.com' : origin"
               />
               <button class="btn btn--primary" @click="saveServer">Save</button>
             </div>
@@ -38,10 +33,7 @@
 
           <div class="setting">
             <div class="setting__label">Access token</div>
-            <p class="caption dim">
-              Stored in this browser only. {{ store.system.auth_enabled ? 'This instance requires one.' : 'This instance is open — no token needed.' }}
-            </p>
-            <div class="row" style="margin-top: 8px">
+            <div class="row">
               <input v-model="token" class="field" type="password" placeholder="token" />
               <button class="btn btn--primary" @click="saveToken">Save</button>
             </div>
@@ -49,34 +41,49 @@
 
           <div class="setting">
             <div class="setting__label">Default model</div>
-            <p class="caption dim">
-              Set by <code class="mono">AGENT_MODEL</code> on the backend. New chats start here; each
-              chat can override it from its composer.
-            </p>
-            <div class="row" style="margin-top: 8px">
-              <span class="chip chip--accent">{{ store.catalog.default_model || '—' }}</span>
-              <span class="chip" :class="store.system.model_key_present ? 'chip--success' : 'chip--warning'">
-                {{ store.system.model_key_present ? 'key configured' : 'no provider key' }}
-              </span>
+            <div class="row">
+              <button class="field field--button">
+                <span class="grow truncate">{{ form.default_model || '—' }}</span>
+                <span class="material-icons" style="font-size: 17px">expand_more</span>
+                <ModelPicker
+                  :model-value="form.default_model"
+                  @update:model-value="form.default_model = $event"
+                />
+              </button>
             </div>
           </div>
 
           <div class="setting">
-            <div class="setting__label">Data</div>
-            <p class="caption dim">
-              Chats, runs and workflow files live in the stack's volumes. Nothing is stored in this browser
-              beyond your token and the sidebar width.
-            </p>
+            <div class="setting__label">Default agent set</div>
+            <div class="row">
+              <select v-model="form.default_agent_set" class="field">
+                <option v-for="set in store.catalog.agent_sets || []" :key="set.name" :value="set.name">
+                  {{ set.name }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="setting">
+            <div class="setting__label">History sent to each call</div>
+            <div class="row">
+              <input v-model.number="form.history_chars" class="field" type="number" min="2000" step="10000" />
+              <span class="caption dim">characters · about {{ Math.round(form.history_chars / 4000) }}k tokens</span>
+            </div>
+          </div>
+
+          <div class="row settings__save">
+            <span class="caption dim grow">Defaults: {{ defaults.default_model }} · {{ defaults.history_chars.toLocaleString() }} chars</span>
+            <button class="btn" @click="resetSettings">Reset</button>
+            <button class="btn btn--primary" :disabled="saving" @click="saveSettings">
+              {{ saving ? 'Saving…' : 'Save' }}
+            </button>
           </div>
         </template>
 
         <!-- agents -->
         <template v-else-if="tab === 'agents'">
           <h2 class="settings__title">Agents and models</h2>
-          <p class="caption dim">
-            An agent set is a container image. Every agent call starts one, runs, and disappears —
-            so a set picks up new tools on its next run without a rebuild.
-          </p>
 
           <div class="setting">
             <div class="setting__label">Agent sets</div>
@@ -91,9 +98,6 @@
 
           <div class="setting">
             <div class="setting__label">Models reachable through the gateway</div>
-            <p v-if="!(store.catalog.models || []).length" class="caption dim">
-              The gateway returned no models. Check that a provider key is set.
-            </p>
             <template v-for="gateway in modelGroups" :key="gateway.name">
               <p class="caption dim" style="margin-top: 10px">
                 via <code class="mono">{{ gateway.name }}</code> · {{ gateway.total }} models
@@ -110,10 +114,6 @@
         <!-- mcp -->
         <template v-else-if="tab === 'mcp'">
           <h2 class="settings__title">MCP servers</h2>
-          <p class="caption dim">
-            Tools reach the agents through one federated endpoint on the gateway. These are the tools
-            it is serving right now.
-          </p>
 
           <div class="setting">
             <div class="row">
@@ -122,9 +122,7 @@
                 {{ refreshing ? 'Checking…' : 'Refresh' }}
               </button>
             </div>
-            <p v-if="!toolGroups.length" class="caption dim">
-              No MCP server answered. Check the gateway under System.
-            </p>
+            <p v-if="!toolGroups.length" class="caption dim">No MCP server answered.</p>
             <template v-for="group in toolGroups" :key="group.name">
               <div class="line">
                 <span class="grow truncate">{{ group.name }}</span>
@@ -139,15 +137,11 @@
           </div>
 
           <div class="setting">
-            <div class="setting__label">Add a server</div>
-            <p class="caption dim">
-              The gateway config is declarative and baked into its image, so edits survive restarts and
-              never drift. Add a target, then rebuild and restart the gateway.
-            </p>
-            <div class="row" style="margin-top: 8px">
-              <code class="mono grow truncate">services/agentgateway/config/config.yaml</code>
-              <button class="btn btn--sm btn--outline" @click="copy(snippet)">Copy snippet</button>
+            <div class="row">
+              <div class="setting__label grow">Add a server</div>
+              <button class="btn btn--sm btn--outline" @click="copy(snippet)">Copy</button>
             </div>
+            <code class="mono dim">services/agentgateway/config/config.yaml</code>
             <pre class="code" style="margin-top: 8px">{{ snippet }}</pre>
           </div>
         </template>
@@ -176,7 +170,6 @@
         <!-- activity -->
         <template v-else>
           <h2 class="settings__title">Activity</h2>
-          <p class="caption dim">Live event stream from the backend.</p>
           <div class="setting">
             <div v-for="(event, index) in store.events" :key="index" class="line line--stacked">
               <div class="row">
@@ -198,10 +191,11 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
+import ModelPicker from './ModelPicker.vue'
 import { actions, store } from '../store'
-import { auth, isNative, server } from '../api'
+import { api, auth, isNative, server } from '../api'
 
 const $q = useQuasar()
 
@@ -217,6 +211,10 @@ const tab = ref(store.settingsTab)
 const token = ref(auth.token)
 const serverUrl = ref(server.url)
 const refreshing = ref(false)
+const saving = ref(false)
+const form = reactive({ default_model: '', default_agent_set: '', history_chars: 0 })
+const defaults = reactive({ default_model: '', default_agent_set: '', history_chars: 0 })
+const origin = window.location.origin
 
 const snippet = `mcp:
   targets:
@@ -287,9 +285,36 @@ async function copy (text) {
   $q.notify({ message: 'Copied' })
 }
 
+async function loadSettings () {
+  const data = await api.settings()
+  Object.assign(form, data.settings)
+  Object.assign(defaults, data.defaults)
+}
+
+async function saveSettings () {
+  saving.value = true
+  try {
+    const data = await api.saveSettings({ ...form })
+    Object.assign(form, data.settings)
+    await actions.loadCatalog(true)
+    $q.notify({ type: 'positive', message: 'Saved' })
+  } catch (error) {
+    $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    saving.value = false
+  }
+}
+
+async function resetSettings () {
+  const data = await api.saveSettings({ default_model: null, default_agent_set: null, history_chars: null })
+  Object.assign(form, data.settings)
+  await actions.loadCatalog(true)
+}
+
 watch(() => store.settingsTab, (value) => { tab.value = value })
 watch(() => store.settingsOpen, (value) => {
   if (!value) return
+  loadSettings()
   if (tab.value === 'activity') actions.loadEvents()
 })
 </script>
@@ -391,6 +416,27 @@ watch(() => store.settingsOpen, (value) => {
   margin-bottom: 4px;
   font-size: 13px;
   font-weight: 600;
+}
+
+.settings__save {
+  position: sticky;
+  bottom: -32px;
+  margin-top: 24px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface-overlay);
+}
+
+.field--button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+
+select.field {
+  appearance: none;
 }
 
 .setting p {
