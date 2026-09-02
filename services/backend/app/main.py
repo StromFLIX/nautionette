@@ -17,6 +17,7 @@ import shutil
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -1774,6 +1775,55 @@ async def terminate_run(workflow_id: str, payload: dict[str, Any] = Body(default
     db.update_run(workflow_id, "terminated")
     bus.publish("run.terminated", {"workflow_id": workflow_id})
     return {"ok": True}
+
+
+# ------------------------------------------------------- run history for agents
+
+
+def _isotime(value: Any) -> str | None:
+    return datetime.fromtimestamp(value, tz=UTC).isoformat(timespec="seconds") if value else None
+
+
+def _run_digest(row: dict[str, Any] | None, info: dict[str, Any] | None = None) -> dict[str, Any]:
+    """One run shaped for a prompt: names and times, not database columns."""
+    row, info = row or {}, info or {}
+    return {
+        "workflow": row.get("workflow"),
+        "workflow_id": row.get("workflow_id") or info.get("workflow_id"),
+        "status": (info.get("status") or row.get("status") or "").lower(),
+        "trigger": row.get("trigger"),
+        "started": info.get("start_time") or _isotime(row.get("created_at")),
+        "closed": info.get("close_time"),
+    }
+
+
+@app.get("/internal/runs", dependencies=[Depends(require_internal)])
+async def internal_runs(workflow: str | None = None, limit: int = 20) -> dict[str, Any]:
+    """The run history an authoring agent reads before it changes anything."""
+    live = {item["workflow_id"]: item for item in await _attempt(temporal.recent(50), [])}
+    rows = db.list_runs(workflow, limit=max(1, min(limit, 100)))
+    return {"runs": [_run_digest(row, live.get(row["workflow_id"])) for row in rows]}
+
+
+@app.get("/internal/runs/{workflow_id}", dependencies=[Depends(require_internal)])
+async def internal_run(workflow_id: str, limit: int = 200) -> dict[str, Any]:
+    row = db.one("SELECT * FROM runs WHERE workflow_id = ?", (workflow_id,))
+    info = await _attempt(temporal.describe(workflow_id), None)
+    if not row and not info:
+        raise HTTPException(status_code=404, detail=f"no run with id {workflow_id}")
+    if row:
+        row["input"] = json.loads(row["input"] or "{}")
+        row["result"] = json.loads(row["result"]) if row["result"] else None
+    detail = {
+        **_run_digest(row, info),
+        "input": (row or {}).get("input") or {},
+        "result": (row or {}).get("result"),
+        "events": await _attempt(temporal.history(workflow_id, limit), []),
+    }
+    if not detail["events"]:
+        # An empty timeline is not the same as a run that did nothing.
+        detail["note"] = "Temporal has no history for this run; only what the app recorded is left."
+    return detail
 
 
 # -------------------------------------------------------------------- trigger

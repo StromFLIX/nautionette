@@ -39,8 +39,9 @@ try:  # MCP is how agents reach these tools; the REST side works without it.
         name="nautionette-workflows",
         instructions=(
             "Author Nautionette workflows. Read before you write, validate before you write. "
-            "Every write lands as a draft with a diff that a human approves; you never deploy "
-            "anything yourself."
+            "When a workflow misbehaves, read its runs first: list_runs finds it, read_run shows "
+            "every step it took. Every write lands as a draft with a diff that a human approves; "
+            "you never deploy anything yourself."
         ),
     )
 except Exception as exc:  # noqa: BLE001 - never let the REST API die with the MCP layer
@@ -51,13 +52,30 @@ def _error(detail: str, status: int = 400) -> HTTPException:
     return HTTPException(status_code=status, detail=detail)
 
 
+def _internal_headers() -> dict[str, str]:
+    return {"X-Internal-Token": INTERNAL_TOKEN} if INTERNAL_TOKEN else {}
+
+
+async def backend_get(path: str, **params: Any) -> dict[str, Any]:
+    """Run history lives with the backend, which is the only service that holds Temporal."""
+    async with httpx.AsyncClient(timeout=60) as client:
+        response = await client.get(
+            f"{BACKEND_URL}{path}",
+            headers=_internal_headers(),
+            params={key: value for key, value in params.items() if value not in (None, "")},
+        )
+        response.raise_for_status()
+        return response.json()
+
+
 async def notify_backend_restart(reason: str) -> dict[str, Any]:
     """A published workflow is useless until a worker has it loaded."""
-    headers = {"X-Internal-Token": INTERNAL_TOKEN} if INTERNAL_TOKEN else {}
     try:
         async with httpx.AsyncClient(timeout=120) as client:
             response = await client.post(
-                f"{BACKEND_URL}/internal/worker/restart", headers=headers, json={"reason": reason}
+                f"{BACKEND_URL}/internal/worker/restart",
+                headers=_internal_headers(),
+                json={"reason": reason},
             )
             response.raise_for_status()
             return response.json()
@@ -120,6 +138,34 @@ if server is not None:
             return json.dumps(store.delete_workflow(name))
         except store.StoreError as exc:
             return json.dumps({"error": str(exc)})
+
+    @server.tool(
+        description=(
+            "List recent workflow runs, newest first, with how each one ended. Pass a workflow "
+            "name to see only its runs. Use it to find the workflow_id that read_run needs."
+        )
+    )
+    async def list_runs(workflow: str = "", limit: int = 20) -> str:
+        try:
+            return json.dumps(await backend_get("/internal/runs", workflow=workflow, limit=limit))
+        except httpx.HTTPError as exc:
+            return json.dumps({"error": f"could not read run history: {exc}"})
+
+    @server.tool(
+        description=(
+            "Read one run in full: the input it was given, every activity step with its result "
+            "or failure, and how the run ended. Read this before changing a workflow that failed."
+        )
+    )
+    async def read_run(workflow_id: str, limit: int = 200) -> str:
+        try:
+            return json.dumps(await backend_get(f"/internal/runs/{workflow_id}", limit=limit))
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                return json.dumps({"error": f"no run with id {workflow_id}"})
+            return json.dumps({"error": f"could not read run {workflow_id}: {exc}"})
+        except httpx.HTTPError as exc:
+            return json.dumps({"error": f"could not read run {workflow_id}: {exc}"})
 
     # Stateless JSON over HTTP: agentgateway fronts this, so no sessions, and no
     # host pinning on an internal network.

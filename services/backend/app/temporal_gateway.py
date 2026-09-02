@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import timedelta
 from typing import Any
 
@@ -15,6 +16,46 @@ from temporalio.client import (
 )
 
 from .config import settings
+
+# The events that explain a run. The rest is Temporal's own bookkeeping.
+_HISTORY_EVENTS = {
+    "workflow_execution_started_event_attributes": "workflow.started",
+    "workflow_execution_completed_event_attributes": "workflow.completed",
+    "workflow_execution_failed_event_attributes": "workflow.failed",
+    "workflow_execution_timed_out_event_attributes": "workflow.timed_out",
+    "workflow_execution_terminated_event_attributes": "workflow.terminated",
+    "workflow_execution_canceled_event_attributes": "workflow.canceled",
+    "workflow_task_failed_event_attributes": "workflow.task_failed",
+    "activity_task_scheduled_event_attributes": "activity.scheduled",
+    "activity_task_completed_event_attributes": "activity.completed",
+    "activity_task_failed_event_attributes": "activity.failed",
+    "activity_task_timed_out_event_attributes": "activity.timed_out",
+    "timer_started_event_attributes": "timer.started",
+    "timer_fired_event_attributes": "timer.fired",
+}
+
+# Whoever reads a history pays for every character of it.
+_MAX_VALUE_CHARS = 2_000
+
+
+def _clip(value: Any) -> Any:
+    text = value if isinstance(value, str) else json.dumps(value, default=str)
+    if len(text) <= _MAX_VALUE_CHARS:
+        return value
+    return f"{text[:_MAX_VALUE_CHARS]}… (truncated from {len(text)} characters)"
+
+
+def _failure(failure: Any) -> dict[str, Any]:
+    """Temporal nests the real cause; flatten enough of it to act on."""
+    out: dict[str, Any] = {"message": failure.message}
+    if failure.WhichOneof("failure_info") == "application_failure_info":
+        if kind := failure.application_failure_info.type:
+            out["type"] = kind
+    if failure.stack_trace:
+        out["stack"] = failure.stack_trace[-1_200:]
+    if failure.HasField("cause"):
+        out["cause"] = _failure(failure.cause)
+    return out
 
 
 class TemporalGateway:
@@ -87,6 +128,50 @@ class TemporalGateway:
                     "close_time": execution.close_time.isoformat() if execution.close_time else None,
                 }
             )
+            if len(out) >= limit:
+                break
+        return out
+
+    async def history(self, workflow_id: str, limit: int = 200) -> list[dict[str, Any]]:
+        """One run's timeline: what each step was given, and what came back."""
+        client = await self.client()
+        handle = client.get_workflow_handle(workflow_id)
+
+        async def decode(payloads: Any) -> Any:
+            if payloads is None or not getattr(payloads, "payloads", None):
+                return None
+            try:
+                values = await client.data_converter.decode(list(payloads.payloads))
+            except Exception:  # noqa: BLE001 - one opaque payload must not hide the rest
+                return "<undecodable>"
+            return _clip(values[0] if len(values) == 1 else values)
+
+        activities: dict[int, str] = {}
+        out: list[dict[str, Any]] = []
+        async for event in handle.fetch_history_events():
+            field = event.WhichOneof("attributes") or ""
+            label = _HISTORY_EVENTS.get(field)
+            if not label:
+                continue
+            body = getattr(event, field)
+            if field == "activity_task_scheduled_event_attributes":
+                activities[event.event_id] = body.activity_type.name
+            entry: dict[str, Any] = {
+                "id": event.event_id,
+                "at": event.event_time.ToDatetime().isoformat(timespec="seconds") + "Z",
+                "event": label,
+            }
+            # Every later activity event points back at the one that scheduled it.
+            if activity := activities.get(getattr(body, "scheduled_event_id", 0) or event.event_id):
+                entry["activity"] = activity
+            for key in ("input", "result", "details"):
+                if (value := await decode(getattr(body, key, None))) is not None:
+                    entry[key] = value
+            if reason := getattr(body, "reason", ""):
+                entry["reason"] = reason
+            if "failure" in body.DESCRIPTOR.fields_by_name and body.HasField("failure"):
+                entry["error"] = _failure(body.failure)
+            out.append(entry)
             if len(out) >= limit:
                 break
         return out
