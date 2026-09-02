@@ -9,9 +9,7 @@ The only check in the repo that needs no running stack: it runs the same chain
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "services" / "workflow-mcp"))
-
-from app.validate import run_checks  # noqa: E402
+from nautionette_workflow_mcp.validate import run_checks
 
 WORKFLOWS = Path(__file__).resolve().parent.parent / "workflows"
 

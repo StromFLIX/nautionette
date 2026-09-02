@@ -191,7 +191,33 @@ images/
   pi-base/                    Node + the Pi CLI + the agent-run contract
   agent-sets/default/         the one agent set: gateway provider + MCP tool bridge
 infra/temporal/               Temporal server config
+tests/                        one pytest suite over every Python service
 workflows/                    Python workflow files, seeded into the volume
+```
+
+Every Python service ships one distinctly named package — `nautionette_backend`,
+`nautionette_worker`, `nautionette_workflow_mcp`, `nautionette_docker_broker` — so all
+four can be installed into the one workspace venv without shadowing each other.
+
+The backend is the largest of them, and is laid out by what each file is about:
+
+```
+services/backend/nautionette_backend/
+  main.py            assembles the app and nothing else
+  config.py          the environment, read once
+  security.py        the bearer token and the internal token
+  db.py              SQLite storage, and the one connection
+  events.py          the in-process fan-out behind /api/events
+  runtime.py         saved settings, the history budget, the catalog cache
+  fields.py          declared form fields, and checking a payload against them
+  gateway_config.py  writing to agentgateway's own config store
+  catalog.py         which models and tools exist, and who serves each one
+  mcp_servers.py     MCP targets: probe, write, remove
+  runs.py            starting a run, following it, delivering its result
+  clients/           one module per service this one talks to
+  agent/             prompts, one agent call, and chat promotion
+  integrations/      the provider registry, and what it becomes in the gateway
+  routers/           the HTTP surface, one router per thing
 ```
 
 Networks: `edge` (published), `internal` (services, outbound allowed so the gateway reaches the model provider), `control` (backend to broker only), `data` (Temporal to Postgres only).
@@ -229,9 +255,26 @@ Working on the Python services:
 
 ```
 uv sync                                 # one workspace, one lock file
+uv run pytest                           # every service, no Docker and no network
 uv run ruff check . && uv run ruff format .
-uv run --package nautionette-backend uvicorn app.main:app --reload
+uv run --package nautionette-backend uvicorn nautionette_backend.main:app --reload
 ```
+
+The suite in `tests/` covers all four services. Everything outside a process is faked:
+agentgateway keeps its config resources in a dict, the broker replays a canned agent
+stream, Temporal is a dictionary of executions, and outgoing HTTP is answered from a
+routing table. So `uv run pytest` needs nothing running and finishes in seconds.
+
+```
+tests/backend/        the API surface, plus the modules behind it
+tests/broker/         image tagging, the fixed verbs, the restart scoping
+tests/worker/         the activities a workflow may name, and loading workflow files
+tests/workflow_mcp/   the store, the check chain, the REST face
+tests/lib/            the manifest schema and the source reader
+```
+
+The one test that needs a subprocess is the workflow import check; it is marked `slow`
+and runs by default, since the committed workflows are validated with the real chain.
 
 ## Open points
 

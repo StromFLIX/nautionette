@@ -22,4 +22,4 @@ USER app
 
 # Workflow definitions come from the shared volume at /workflows.
 STOPSIGNAL SIGTERM
-CMD ["python", "-m", "app.main"]
+CMD ["python", "-m", "nautionette_worker.main"]

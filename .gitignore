@@ -13,5 +13,10 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
+.ruff_cache/
+
+# Written by the Playwright MCP browser tools.
+.playwright-mcp/
 
 .DS_Store
