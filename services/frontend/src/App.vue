@@ -1,22 +1,22 @@
 <template>
-  <div class="shell" :class="{ 'shell--detail': hasSelection }">
-    <NavRail class="shell__rail" />
+  <div class="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage }">
+    <template v-if="!fullPage">
+      <NavRail class="shell__rail" />
 
-    <aside class="shell__side" :style="{ width: `${sideWidth}px` }">
-      <SidePanel />
-      <div
-        class="shell__grip"
-        :class="{ 'shell__grip--active': dragging }"
-        @pointerdown="startDrag"
-        @dblclick="resetWidth"
-      />
-    </aside>
+      <aside class="shell__side" :style="{ width: `${sideWidth}px` }">
+        <SidePanel />
+        <div
+          class="shell__grip"
+          :class="{ 'shell__grip--active': dragging }"
+          @pointerdown="startDrag"
+          @dblclick="resetWidth"
+        />
+      </aside>
+    </template>
 
     <main class="shell__main">
       <RouterView />
     </main>
-
-    <SettingsDialog />
 
     <q-dialog v-model="gate" persistent>
       <q-card class="token-card">
@@ -49,7 +49,6 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import NavRail from './components/NavRail.vue'
 import SidePanel from './components/SidePanel.vue'
-import SettingsDialog from './components/SettingsDialog.vue'
 import { actions, store } from './store'
 import { auth, isNative, server } from './api'
 
@@ -64,6 +63,8 @@ const token = ref(auth.token)
 const serverUrl = ref(server.url)
 
 const hasSelection = computed(() => Boolean(route.params.id || route.params.name))
+// Settings is a page of its own, not a layer over the lists.
+const fullPage = computed(() => route.name === 'settings')
 
 function startDrag (event) {
   dragging.value = true
@@ -110,6 +111,10 @@ onUnmounted(() => actions.disconnect())
   min-width: 0;
   min-height: 0;
   background: var(--surface-app);
+}
+
+.shell--full {
+  grid-template-columns: 1fr;
 }
 
 .shell__side {
@@ -179,6 +184,10 @@ onUnmounted(() => actions.disconnect())
     grid-template-rows: minmax(0, 1fr) auto;
   }
 
+  .shell--full {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
   .shell__side {
     grid-row: 1;
     width: 100% !important;
@@ -197,9 +206,15 @@ onUnmounted(() => actions.disconnect())
     display: none;
   }
 
-  .shell--detail .shell__main {
+  .shell--detail .shell__main,
+  .shell--full .shell__main {
     display: flex;
     grid-row: 1;
+  }
+
+  /* A detail view is the whole screen: its own back button is the way out. */
+  .shell--detail .shell__rail {
+    display: none;
   }
 
   .shell__rail {

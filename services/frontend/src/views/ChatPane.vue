@@ -3,8 +3,9 @@
 
   <div v-else class="thread stack grow">
     <header class="pane-head">
-      <button class="btn btn--icon pane-head__back" @click="$router.push('/chats')">
+      <button class="btn btn--icon pane-head__back" @click="backTo('/chats')">
         <span class="material-icons">arrow_back</span>
+        <span v-if="draftCount" class="pane-head__badge">{{ draftCount }}</span>
       </button>
       <div class="avatar-sm" :style="avatarStyle(chatId)">{{ initials(chat?.title || '?') }}</div>
       <div class="grow">
@@ -73,7 +74,8 @@ import Composer from '../components/Composer.vue'
 import MessageBubble from '../components/MessageBubble.vue'
 import { avatarStyle, initials } from '../format'
 import { foldEvent } from '../timeline'
-import { actions, onLiveEvent, store } from '../store'
+import { backTo } from '../router'
+import { actions, draftCount, onLiveEvent, store } from '../store'
 import { api, streamMessage } from '../api'
 
 const $q = useQuasar()
@@ -250,6 +252,24 @@ onUnmounted(() => off())
 
 .pane-head__back {
   display: none;
+  position: relative;
+}
+
+/* Something is waiting back on the lists, without a nav bar to say so. */
+.pane-head__badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--warning);
+  color: #16181d;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
 }
 
 @media (max-width: 900px) {

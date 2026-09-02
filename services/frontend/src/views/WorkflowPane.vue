@@ -7,7 +7,7 @@
   <!-- a draft waiting for a human -->
   <div v-else-if="draft" class="stack grow">
     <header class="pane-head">
-      <button class="btn btn--icon pane-head__back" @click="$router.push('/workflows')">
+      <button class="btn btn--icon pane-head__back" @click="backTo('/workflows')">
         <span class="material-icons">arrow_back</span>
       </button>
       <div class="grow">
@@ -55,7 +55,7 @@
   <!-- a published workflow -->
   <div v-else-if="workflow" class="stack grow">
     <header class="pane-head">
-      <button class="btn btn--icon pane-head__back" @click="$router.push('/workflows')">
+      <button class="btn btn--icon pane-head__back" @click="backTo('/workflows')">
         <span class="material-icons">arrow_back</span>
       </button>
       <div class="avatar-sq" :style="avatarStyle(workflow.name)">
@@ -165,6 +165,7 @@ import { useRoute, useRouter } from 'vue-router'
 import CodeViewer from '../components/CodeViewer.vue'
 import TriggerSnippet from '../components/TriggerSnippet.vue'
 import { RUN_TONE, avatarStyle, diffLines, fullTime } from '../format'
+import { backTo } from '../router'
 import { actions, store } from '../store'
 import { api } from '../api'
 

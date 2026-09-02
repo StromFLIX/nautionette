@@ -15,6 +15,13 @@
         >
           <span class="material-icons">refresh</span>
         </button>
+        <RouterLink
+          class="btn btn--icon side__cog" :to="`/settings/${health === 'degraded' ? 'system' : 'general'}`"
+          :title="health === 'degraded' ? 'Settings — something needs attention' : 'Settings'"
+        >
+          <span class="material-icons">settings</span>
+          <span v-if="health !== 'ok'" class="dot side__cog-dot" :class="{ 'dot--bad': health === 'degraded' }" />
+        </RouterLink>
       </div>
       <div class="side__search">
         <span class="material-icons">search</span>
@@ -122,7 +129,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RUN_TONE, avatarStyle, initials, shortTime } from '../format'
-import { actions, store } from '../store'
+import { actions, health, store } from '../store'
 import { api } from '../api'
 
 const route = useRoute()
@@ -177,6 +184,18 @@ function refresh () {
   font-weight: 650;
   line-height: 1.3;
   letter-spacing: -0.01em;
+}
+
+.side__cog {
+  position: relative;
+  color: var(--text-muted);
+}
+
+.side__cog-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: 2px solid var(--surface-panel);
 }
 
 .side__search {

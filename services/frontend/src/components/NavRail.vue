@@ -14,25 +14,13 @@
         <span v-if="item.badge" class="rail__badge">{{ item.badge }}</span>
       </RouterLink>
     </div>
-
-    <div class="rail__foot">
-      <button class="rail__item rail__item--plain" @click="actions.openSettings('system')">
-        <span class="dot" :class="healthClass" />
-        <span class="rail__label">{{ healthLabel }}</span>
-        <q-tooltip anchor="center right" self="center left">System status</q-tooltip>
-      </button>
-      <button class="rail__item" @click="actions.openSettings('general')">
-        <span class="material-icons">settings</span>
-        <span class="rail__label">Settings</span>
-      </button>
-    </div>
   </nav>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { actions, draftCount, health } from '../store'
+import { draftCount } from '../store'
 
 const route = useRoute()
 const active = computed(() => route.name)
@@ -42,14 +30,6 @@ const items = computed(() => [
   { name: 'workflows', label: 'Flows', icon: 'account_tree', to: '/workflows', badge: draftCount.value || 0 },
   { name: 'runs', label: 'Runs', icon: 'history', to: '/runs' }
 ])
-
-const healthClass = computed(() => ({
-  ok: 'dot--ok',
-  degraded: 'dot--bad',
-  unknown: ''
-}[health.value]))
-
-const healthLabel = computed(() => (health.value === 'ok' ? 'Healthy' : health.value === 'degraded' ? 'Issues' : 'Status'))
 </script>
 
 <style scoped>
@@ -74,15 +54,6 @@ const healthLabel = computed(() => (health.value === 'ok' ? 'Healthy' : health.v
 }
 
 .rail__nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  align-items: center;
-}
-
-.rail__foot {
-  margin-top: auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -117,10 +88,6 @@ const healthLabel = computed(() => (health.value === 'ok' ? 'Healthy' : health.v
 .rail__item--active {
   background: var(--accent-soft);
   color: var(--accent-hover);
-}
-
-.rail__item--plain {
-  height: 40px;
 }
 
 .rail__label {
@@ -161,31 +128,18 @@ const healthLabel = computed(() => (health.value === 'ok' ? 'Healthy' : health.v
     display: none;
   }
 
-  .rail__nav,
-  .rail__foot {
+  .rail__nav {
+    display: flex;
+    flex: 1 1 auto;
     flex-direction: row;
     align-items: stretch;
     gap: 0;
+    min-width: 0;
     width: auto;
     margin: 0;
   }
 
-  .rail__nav,
-  .rail__foot {
-    display: flex;
-    min-width: 0;
-  }
-
-  .rail__nav {
-    flex: 3 1 0;
-  }
-
-  .rail__foot {
-    flex: 2 1 0;
-  }
-
-  .rail__item,
-  .rail__item--plain {
+  .rail__item {
     flex: 1 1 0;
     width: auto;
     min-width: 0;
@@ -195,10 +149,6 @@ const healthLabel = computed(() => (health.value === 'ok' ? 'Healthy' : health.v
 
   .rail__badge {
     right: max(8px, calc(50% - 24px));
-  }
-
-  .rail :deep(.q-tooltip) {
-    display: none;
   }
 }
 </style>

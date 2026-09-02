@@ -4,6 +4,7 @@
  */
 import { computed, reactive } from 'vue'
 import { api, auth, isNative, liveEvents, server } from './api'
+import router from './router'
 
 const state = reactive({
   ready: false,
@@ -16,9 +17,7 @@ const state = reactive({
   workflows: [],
   drafts: [],
   runs: [],
-  events: [],
-  settingsOpen: false,
-  settingsTab: 'general'
+  events: []
 })
 
 const listeners = new Set()
@@ -92,12 +91,7 @@ export const actions = {
   },
 
   openSettings (tab = 'general') {
-    state.settingsTab = tab
-    state.settingsOpen = true
-  },
-
-  closeSettings () {
-    state.settingsOpen = false
+    return router.push(`/settings/${tab}`)
   },
 
   setServer (value) {

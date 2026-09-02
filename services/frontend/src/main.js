@@ -5,7 +5,7 @@ import 'quasar/dist/quasar.css'
 import './styles/base.css'
 
 import App from './App.vue'
-import router from './router'
+import router, { seedHistory } from './router'
 import { watchKeyboard } from './keyboard'
 
 const app = createApp(App)
@@ -20,4 +20,4 @@ app.use(Quasar, {
 app.use(router)
 Dark.set(true)
 watchKeyboard()
-app.mount('#app')
+seedHistory().then(() => app.mount('#app'))

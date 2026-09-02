@@ -6,7 +6,7 @@
 
   <div v-else-if="detail" class="stack grow">
     <header class="pane-head">
-      <button class="btn btn--icon pane-head__back" @click="$router.push('/runs')">
+      <button class="btn btn--icon pane-head__back" @click="backTo('/runs')">
         <span class="material-icons">arrow_back</span>
       </button>
       <div class="grow">
@@ -63,6 +63,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useRoute } from 'vue-router'
 import { RUN_TONE, fullTime } from '../format'
+import { backTo } from '../router'
 import { actions, onLiveEvent } from '../store'
 import { api } from '../api'
 
