@@ -405,7 +405,9 @@ const integrationDraftValid = computed(() =>
 
 function credentialLabel (credential) {
   if (credential.mode === 'environment') return `key from $${credential.variable}`
-  return credential.mode === 'stored' ? 'key stored in agentgateway' : 'no key'
+  if (credential.mode === 'stored') return 'key stored in agentgateway'
+  if (credential.mode === 'gateway') return 'key held by agentgateway'
+  return 'no key'
 }
 
 /** A stored key is never sent back here, so an empty field means "keep it". */
@@ -414,6 +416,7 @@ function secretPlaceholder (field) {
   const credential = selectedIntegration.value?.credential
   if (credential?.mode === 'stored') return 'stored — type a new key to replace'
   if (credential?.mode === 'environment') return `$${credential.variable}`
+  if (credential?.mode === 'gateway') return credential.variable ? `$${credential.variable}` : ''
   return field.placeholder || ''
 }
 

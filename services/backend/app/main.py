@@ -287,8 +287,18 @@ _INTEGRATION_TYPES: dict[str, dict[str, Any]] = {
         "description": "Models the GitHub account behind this Copilot token may use.",
         "provider": "copilot",
         "prefix": "copilot",
-        "auth": {"kind": "copilot", "env": "GH_COPILOT_TOKEN"},
-        "headers": {"Copilot-Integration-Id": "{integration_id}"},
+        "auth": {
+            "kind": "key",
+            "env": "GH_COPILOT_TOKEN",
+            "builtin": "copilot",
+            "label": "GitHub token",
+            "placeholder": "gho_…",
+        },
+        # agentgateway sends these itself only when it supplies the token; a typed one needs them here.
+        "headers": {
+            "Copilot-Integration-Id": "{integration_id}",
+            "editor-version": "agentgateway/0.0.0",
+        },
         "discovery": {
             "host": "api.githubcopilot.com:443",
             "path": "/models",
@@ -429,11 +439,11 @@ def _integration_fields(spec: dict[str, Any]) -> list[dict[str, Any]]:
         *fields,
         {
             "key": "api_key",
-            "label": "API key",
+            "label": str(spec["auth"].get("label", "API key")),
             "kind": "secret",
             "optional": True,
             "pattern": rf"(?:\${_ENV_NAME}|\S(?:.*\S)?)",
-            "placeholder": "sk-…",
+            "placeholder": str(spec["auth"].get("placeholder", "sk-…")),
             "help": (
                 f"Paste the key and agentgateway keeps it; it is never shown again. {fallback}"
             ),
@@ -495,25 +505,35 @@ def _integration_context(spec: dict[str, Any], config: dict[str, str]) -> dict[s
 
 def _credential(spec: dict[str, Any], supplied: str, existing: str) -> str:
     """A typed key wins, then whatever the gateway already holds, then the declared variable."""
-    if spec.get("auth", {}).get("kind") != "key":
+    auth = spec.get("auth", {})
+    if auth.get("kind") != "key":
         return ""
     if supplied:
         return supplied
     if existing:
         return existing
-    variable = spec["auth"].get("env", "")
+    if auth.get("builtin"):
+        return ""  # sending nothing lets agentgateway fall back to its own credential
+    variable = auth.get("env", "")
     return f"${variable}" if variable else ""
 
 
-def _credential_state(credential: str) -> dict[str, str]:
+def _credential_state(spec: dict[str, Any], credential: str) -> dict[str, str]:
     if credential.startswith("$"):
         return {"mode": "environment", "variable": credential[1:]}
-    return {"mode": "stored" if credential else "none", "variable": ""}
+    if credential:
+        return {"mode": "stored", "variable": ""}
+    auth = spec.get("auth", {})
+    if auth.get("builtin"):
+        return {"mode": "gateway", "variable": str(auth.get("env", ""))}
+    return {"mode": "none", "variable": ""}
 
 
-def _credential_hint(credential: str) -> str:
-    state = _credential_state(credential)
-    return state["variable"] if state["mode"] == "environment" else "the stored API key"
+def _credential_hint(spec: dict[str, Any], credential: str) -> str:
+    state = _credential_state(spec, credential)
+    if state["mode"] == "stored":
+        return "the stored API key"
+    return state["variable"] or "a key"
 
 
 def _reachable_host(url: str) -> None:
@@ -585,13 +605,14 @@ def _integration_discovery_value(
     if headers:
         policies["requestHeaderModifier"] = {"set": headers}
     backend: dict[str, Any] = {"host": _render(discovery["host"], context)}
-    if spec.get("auth", {}).get("kind") == "copilot":
-        backend["policies"] = {"backendAuth": "copilot"}
-    elif credential:
+    auth = spec.get("auth", {})
+    if credential:
         key: dict[str, Any] = {"value": credential}
-        if spec.get("auth", {}).get("location"):
-            key["location"] = spec["auth"]["location"]
+        if auth.get("location"):
+            key["location"] = auth["location"]
         backend["policies"] = {"backendAuth": {"key": key}}
+    elif auth.get("builtin"):
+        backend["policies"] = {"backendAuth": auth["builtin"]}
     return {
         "name": _integration_discovery_resource_id(instance),
         "gateways": ["default"],
@@ -892,7 +913,7 @@ def _discovery_failure(spec: dict[str, Any], credential: str, exc: Exception) ->
         "ok": False,
         "status": status,
         "message": upstream_problem(
-            str(spec["name"]), _credential_hint(credential), status, body
+            str(spec["name"]), _credential_hint(spec, credential), status, body
         ),
     }
 
@@ -987,7 +1008,7 @@ async def _integration_summary(
         "multiple": bool(spec.get("multiple")),
         "model_count": len(models),
         "model_match": f"{prefix}/*" if prefix else "*",
-        "credential": _credential_state(credential),
+        "credential": _credential_state(spec, credential),
         "fields": _integration_fields(spec),
         "config": config,
         "discovery": discovery,
@@ -1175,7 +1196,7 @@ async def test_model_integration(instance: str) -> dict[str, Any]:
     )
     try:
         result = await gateway.test_model(
-            model["id"], str(spec["name"]), _credential_hint(credential)
+            model["id"], str(spec["name"]), _credential_hint(spec, credential)
         )
     except httpx.HTTPError as exc:
         raise _gateway_problem(exc) from exc
