@@ -11,8 +11,7 @@ body,
 #app {
   width: 100%;
   height: 100%;
-  height: 100dvh;
-  min-height: 100%;
+  height: var(--app-height);
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
@@ -410,6 +409,15 @@ pre.code {
   box-shadow: var(--shadow-lg);
 }
 
+/* Dialogs sit in the viewport, not in the shell, so they make their own room. */
+.q-dialog__inner--minimized {
+  padding-bottom: calc(24px + var(--keyboard-inset));
+}
+
+.q-dialog__inner--minimized > div {
+  max-height: calc(var(--app-height) - 48px);
+}
+
 .q-tooltip {
   border: 1px solid var(--border);
   border-radius: var(--radius-xs);
@@ -523,7 +531,7 @@ pre.code {
   .q-dialog__inner {
     padding-top: max(12px, env(safe-area-inset-top));
     padding-right: max(12px, env(safe-area-inset-right));
-    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    padding-bottom: calc(max(12px, env(safe-area-inset-bottom)) + var(--keyboard-inset));
     padding-left: max(12px, env(safe-area-inset-left));
   }
 
@@ -537,7 +545,7 @@ pre.code {
   }
 
   .picker__scroll {
-    max-height: min(380px, calc(100dvh - 160px));
+    max-height: min(380px, calc(var(--app-height) - 160px));
   }
 }
 

@@ -6,6 +6,7 @@ import './styles/base.css'
 
 import App from './App.vue'
 import router from './router'
+import { watchKeyboard } from './keyboard'
 
 const app = createApp(App)
 app.use(Quasar, {
@@ -18,4 +19,5 @@ app.use(Quasar, {
 })
 app.use(router)
 Dark.set(true)
+watchKeyboard()
 app.mount('#app')

@@ -65,6 +65,10 @@
   --header-height: 56px;
   --mobile-nav-height: 58px;
 
+  /* Set from JS when the on-screen keyboard covers the viewport instead of resizing it. */
+  --keyboard-inset: 0px;
+  --app-height: calc(100dvh - var(--keyboard-inset));
+
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --transition: 140ms var(--ease);
 }

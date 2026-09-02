@@ -650,7 +650,7 @@ watch(() => store.settingsOpen, (value) => {
   width: 880px;
   max-width: 94vw;
   height: 620px;
-  max-height: 88dvh;
+  max-height: min(88dvh, calc(var(--app-height) - 48px));
   overflow: hidden;
 }
 
@@ -867,7 +867,7 @@ select.field {
     grid-template-rows: auto 1fr;
     width: 100%;
     max-width: 100%;
-    height: calc(100dvh - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom)));
+    height: calc(var(--app-height) - max(24px, env(safe-area-inset-top)) - max(24px, env(safe-area-inset-bottom)));
     max-height: 100%;
   }
 

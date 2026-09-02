@@ -6,6 +6,11 @@
     "backgroundColor": "#0e1014",
     "adjustMarginsForEdgeToEdge": "auto"
   },
+  "plugins": {
+    "Keyboard": {
+      "resizeOnFullScreen": true
+    }
+  },
   "server": {
     "androidScheme": "https"
   }
