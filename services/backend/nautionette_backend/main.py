@@ -8,8 +8,6 @@ This module only assembles the app; every route lives in `routers/`.
 
 from __future__ import annotations
 
-import asyncio
-import contextlib
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,6 +15,9 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from . import runs
+from .background import drain, spawn
+from .clients.http import close_shared
 from .config import settings
 from .events import bus
 from .integrations import bootstrap
@@ -42,12 +43,12 @@ async def lifespan(_: FastAPI):
     seed_workflows()
     # agentgateway may still be starting, so this retries in the background
     # rather than holding the port closed.
-    integrations = asyncio.create_task(bootstrap())
+    spawn(bootstrap(), name="integration-bootstrap")
+    runs.resume_unfinished()
     bus.publish("system.start", {"version": settings.version})
     yield
-    integrations.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await integrations
+    await drain()
+    await close_shared()
 
 
 app = FastAPI(

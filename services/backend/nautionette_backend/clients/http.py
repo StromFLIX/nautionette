@@ -2,7 +2,34 @@
 
 from __future__ import annotations
 
+import asyncio
+
+import httpx
+
 from ..config import settings
+
+_pool: tuple[asyncio.AbstractEventLoop, httpx.AsyncClient] | None = None
+
+
+def shared() -> httpx.AsyncClient:
+    """One pooled client for every outbound call, so a connection is reused.
+
+    A client belongs to the loop that opened it. Anything running on a second
+    loop -- which only happens under test -- gets its own rather than a pool it
+    cannot use.
+    """
+    global _pool
+    loop = asyncio.get_running_loop()
+    if _pool is None or _pool[0] is not loop or _pool[1].is_closed:
+        _pool = (loop, httpx.AsyncClient())
+    return _pool[1]
+
+
+async def close_shared() -> None:
+    global _pool
+    if _pool is not None:
+        await _pool[1].aclose()
+        _pool = None
 
 
 def internal_headers() -> dict[str, str]:

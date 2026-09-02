@@ -14,6 +14,23 @@ def test_a_chat_summary_carries_its_last_message(db):
     assert listed["last_message"] == {"role": "assistant", "preview": "the plan is to keep going"}
 
 
+def test_every_chat_gets_its_own_summary(db):
+    for index in range(3):
+        chat = db.create_chat(f"Chat {index}", "default")
+        for message in range(index + 1):
+            db.add_message(chat["id"], "user", f"chat {index} message {message}")
+    listed = {row["title"]: row for row in db.list_chats()}
+    assert [listed[f"Chat {i}"]["message_count"] for i in range(3)] == [1, 2, 3]
+    assert listed["Chat 2"]["last_message"]["preview"] == "chat 2 message 2"
+
+
+def test_a_run_still_in_flight_can_be_found_again(db):
+    db.record_run("wf", "wf-1", "run-1", "manual", {})
+    db.record_run("wf", "wf-2", "run-2", "manual", {})
+    db.update_run("wf-2", "completed", "done")
+    assert db.unfinished_runs() == [{"workflow": "wf", "workflow_id": "wf-1"}]
+
+
 def test_a_chat_with_nothing_in_it_has_no_last_message(db):
     db.create_chat("Empty", "default")
     assert db.list_chats()[0]["last_message"] is None

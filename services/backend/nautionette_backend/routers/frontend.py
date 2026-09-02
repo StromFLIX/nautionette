@@ -13,6 +13,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
+from ..clients.http import shared
 from ..config import settings
 from ..security import require_user
 
@@ -37,10 +38,9 @@ async def frontend(path: str, request: Request) -> Response:
         return JSONResponse({"detail": "not found"}, status_code=404)
     target = f"{settings.frontend_web_url.rstrip('/')}/{path}"
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            upstream = await client.request(
-                request.method, target, params=dict(request.query_params)
-            )
+        upstream = await shared().request(
+            request.method, target, params=dict(request.query_params), timeout=15
+        )
     except httpx.HTTPError as exc:
         return PlainTextResponse(f"frontend unavailable: {exc}", status_code=502)
     headers = {

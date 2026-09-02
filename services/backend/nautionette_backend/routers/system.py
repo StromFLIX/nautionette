@@ -70,4 +70,4 @@ async def events_stream() -> StreamingResponse:
 
 @router.get("/api/events/recent", dependencies=[Depends(require_user)])
 async def events_recent() -> dict[str, Any]:
-    return {"events": bus.history()[-100:]}
+    return {"events": bus.recent(100)}

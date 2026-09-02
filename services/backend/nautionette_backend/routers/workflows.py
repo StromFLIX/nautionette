@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
+from ..background import spawn
 from ..clients import authoring, temporal
 from ..db import db
 from ..events import bus
@@ -65,7 +65,7 @@ async def delete_workflow(name: str) -> dict[str, Any]:
     result = await authoring.delete_workflow(name)
     db.forget_workflow(name)
     bus.publish("workflow.deleted", {"workflow": name})
-    asyncio.create_task(restart_worker())
+    spawn(restart_worker(), name=f"restart-worker-after-{name}")
     return result
 
 

@@ -17,10 +17,17 @@ from typing import Any
 from fastapi import HTTPException
 from nautionette import input_problems
 
+from .background import spawn
 from .clients import authoring, broker, temporal
 from .db import db
 from .events import bus
 from .runtime import runtime
+
+# Temporal ends a run at its own execution timeout, so watching only has to
+# outlast the longest a manifest may ask for (24 hours) before giving up.
+WATCH_CEILING_SECONDS = 25 * 60 * 60
+POLL_FLOOR_SECONDS = 5.0
+POLL_CEILING_SECONDS = 60.0
 
 
 async def restart_worker() -> dict[str, Any]:
@@ -47,7 +54,7 @@ async def start(name: str, payload: dict[str, Any], trigger: str) -> dict[str, A
     )
     db.record_run(name, started["workflow_id"], started.get("run_id"), trigger, payload)
     bus.publish("run.started", {"workflow": name, "workflow_id": workflow_id, "trigger": trigger})
-    asyncio.create_task(watch(name, workflow_id))
+    spawn(watch(name, workflow_id), name=f"watch-{workflow_id}")
     return {"workflow": name, **started, "trigger": trigger}
 
 
@@ -97,8 +104,11 @@ async def deliver_to_chat(name: str, workflow_id: str, status: str, result: Any)
 
 async def watch(name: str, workflow_id: str) -> None:
     """Follow a run so the UI sees an end state without polling Temporal."""
-    for _ in range(240):  # up to ~20 minutes at 5s
-        await asyncio.sleep(5)
+    deadline = time.monotonic() + WATCH_CEILING_SECONDS
+    delay = POLL_FLOOR_SECONDS
+    while time.monotonic() < deadline:
+        await asyncio.sleep(delay)
+        delay = min(delay * 1.5, POLL_CEILING_SECONDS)
         try:
             info = await temporal.describe(workflow_id)
         except Exception:  # noqa: BLE001, S112 - a describe that fails is just a slow answer
@@ -120,6 +130,12 @@ async def watch(name: str, workflow_id: str) -> None:
             {"workflow": name, "workflow_id": workflow_id, "status": info["status"]},
         )
         return
+
+
+def resume_unfinished() -> None:
+    """Pick up runs a restart interrupted, so a result is never simply lost."""
+    for row in db.unfinished_runs():
+        spawn(watch(row["workflow"], row["workflow_id"]), name=f"watch-{row['workflow_id']}")
 
 
 def stored_run(workflow_id: str) -> dict[str, Any] | None:

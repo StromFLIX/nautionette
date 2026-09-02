@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from nautionette_backend import clients, main, runtime
+from nautionette_backend import background, clients, main, runtime
 from nautionette_backend.db import db as database
 from nautionette_backend.integrations.registry import INITIALIZED_SETTING
 
@@ -38,6 +38,8 @@ def db(monkeypatch: pytest.MonkeyPatch):
         database.execute(f"DELETE FROM {table}")  # noqa: S608 - names come from the tuple above
     runtime.forget_catalog()
     runtime.model_windows.clear()
+    # A request's own watcher is left behind on a loop that has already closed.
+    background._running.clear()
     monkeypatch.setattr(runtime, "_agent_answered", False)
     return database
 

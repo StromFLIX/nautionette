@@ -60,3 +60,15 @@ def test_recent_events_are_replayed_to_a_new_client(client):
     events = client.get("/api/events/recent").json()["events"]
     assert events[-1]["kind"] == "test.event"
     assert events[-1]["detail"] == "noted"
+
+
+def test_history_outlives_the_process_that_published_it(client, db):
+    bus.publish("run.started", {"workflow": "url_digest"})
+    # A restart empties the in-process buffer; what happened is still on disk.
+    bus._history.clear()
+    events = client.get("/api/events/recent").json()["events"]
+    assert events[-1] == {
+        "kind": "run.started",
+        "at": events[-1]["at"],
+        "workflow": "url_digest",
+    }

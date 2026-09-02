@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
-
 from ..config import settings
-from .http import internal_headers
+from .http import internal_headers, shared
 
 
 class AuthoringClient:
@@ -15,16 +13,15 @@ class AuthoringClient:
         self.base_url = (base_url or settings.workflow_mcp_url).rstrip("/")
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
-        async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.request(
-                method, f"{self.base_url}{path}", headers=internal_headers(), **kwargs
+        response = await shared().request(
+            method, f"{self.base_url}{path}", headers=internal_headers(), timeout=60, **kwargs
+        )
+        if response.status_code >= 400:
+            detail = response.text[:500]
+            raise RuntimeError(
+                f"workflow-mcp {method} {path} failed ({response.status_code}): {detail}"
             )
-            if response.status_code >= 400:
-                detail = response.text[:500]
-                raise RuntimeError(
-                    f"workflow-mcp {method} {path} failed ({response.status_code}): {detail}"
-                )
-            return response.json()
+        return response.json()
 
     async def health(self) -> dict[str, Any]:
         return await self._request("GET", "/healthz")

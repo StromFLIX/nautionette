@@ -39,10 +39,11 @@ async def internal_agent_call(payload: dict[str, Any] = Body(...)) -> dict[str, 
 
 @router.post("/internal/events")
 async def internal_event(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
-    kind = payload.get("kind", "worker.event")
-    body = payload.get("payload") or {}
-    db.add_event(payload.get("scope", "worker"), kind, body)
-    bus.publish(kind, body)
+    bus.publish(
+        payload.get("kind", "worker.event"),
+        payload.get("payload") or {},
+        scope=payload.get("scope", "worker"),
+    )
     return {"ok": True}
 
 

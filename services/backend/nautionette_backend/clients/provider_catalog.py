@@ -4,15 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
+from .http import shared
 
 
 class ModelCatalogClient:
     async def payload(self, url: str) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=25) as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            return response.json()
+        response = await shared().get(url, timeout=25)
+        response.raise_for_status()
+        return response.json()
 
 
 model_catalog = ModelCatalogClient()

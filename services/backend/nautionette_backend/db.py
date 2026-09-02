@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS runs (
     updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS runs_workflow ON runs(workflow, created_at);
+CREATE INDEX IF NOT EXISTS runs_workflow_id ON runs(workflow_id);
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     scope TEXT NOT NULL,
@@ -158,17 +159,28 @@ class Database:
             row["tools"] = json.loads(row["tools"]) if row.get("tools") else None
         return row
 
-    def list_chats(self) -> list[dict[str, Any]]:
-        rows = self.query("SELECT * FROM chats ORDER BY updated_at DESC LIMIT 200")
+    def list_chats(self, limit: int = 200) -> list[dict[str, Any]]:
+        rows = self.query("SELECT * FROM chats ORDER BY updated_at DESC LIMIT ?", (limit,))
+        if not rows:
+            return rows
+        placeholders = ", ".join("?" for _ in rows)
+        # SQLite takes the bare columns from the row max() matched, so one pass
+        # gives both the count and the newest message for every chat.
+        summary_sql = (
+            "SELECT chat_id, COUNT(*) AS n, MAX(created_at), role, content"  # noqa: S608
+            f" FROM messages WHERE chat_id IN ({placeholders}) GROUP BY chat_id"
+        )
+        summaries = {
+            summary["chat_id"]: summary
+            for summary in self.query(summary_sql, [row["id"] for row in rows])
+        }
         for row in rows:
-            counts = self.one("SELECT COUNT(*) AS n FROM messages WHERE chat_id = ?", (row["id"],))
-            row["message_count"] = counts["n"] if counts else 0
-            last = self.one(
-                "SELECT role, content FROM messages WHERE chat_id = ? ORDER BY created_at DESC LIMIT 1",
-                (row["id"],),
-            )
+            summary = summaries.get(row["id"])
+            row["message_count"] = summary["n"] if summary else 0
             row["last_message"] = (
-                {"role": last["role"], "preview": " ".join(last["content"].split())[:120]} if last else None
+                {"role": summary["role"], "preview": " ".join(summary["content"].split())[:120]}
+                if summary
+                else None
             )
         return rows
 
@@ -241,6 +253,10 @@ class Database:
             "UPDATE runs SET status = ?, result = ?, updated_at = ? WHERE workflow_id = ?",
             (status, json.dumps(result) if result is not None else None, time.time(), workflow_id),
         )
+
+    def unfinished_runs(self) -> list[dict[str, Any]]:
+        """Runs this process was following when it stopped."""
+        return self.query("SELECT workflow, workflow_id FROM runs WHERE status = 'running'")
 
     # ---------------------------------------------------------------- settings
 
