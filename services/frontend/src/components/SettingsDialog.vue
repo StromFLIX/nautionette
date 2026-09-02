@@ -153,12 +153,18 @@
                   <span class="caption">{{ field.label }}{{ field.optional ? ' (optional)' : '' }}</span>
                   <input
                     v-model="integrationDraft[field.key]" class="field mono"
+                    :class="{ 'field--bad': fieldError(field, integrationDraft) }"
                     :type="field.kind === 'secret' ? 'password' : 'text'"
                     :autocomplete="field.kind === 'secret' ? 'new-password' : 'off'"
                     :placeholder="secretPlaceholder(field) || field.placeholder || ''"
                     :disabled="selectedIntegration.configured && field.key === 'slug'"
                   />
-                  <span class="caption dim">{{ field.help }}</span>
+                  <span
+                    class="caption"
+                    :class="fieldError(field, integrationDraft) ? 'field-hint--bad' : 'dim'"
+                  >
+                    {{ fieldError(field, integrationDraft) || field.help }}
+                  </span>
                 </label>
                 <p class="caption dim">
                   Credentials stay on agentgateway and are never returned to this page.
@@ -284,12 +290,15 @@
                 <span class="caption">{{ field.label }}{{ field.optional ? ' (optional)' : '' }}</span>
                 <input
                   v-model="mcpDraft[field.key]" class="field mono"
+                  :class="{ 'field--bad': fieldError(field, mcpDraft) }"
                   :type="field.kind === 'secret' ? 'password' : 'text'"
                   :autocomplete="field.kind === 'secret' ? 'new-password' : 'off'"
                   :placeholder="mcpPlaceholder(field)"
                   :disabled="Boolean(mcpEditing) && field.key === 'name'"
                 />
-                <span class="caption dim">{{ field.help }}</span>
+                <span class="caption" :class="fieldError(field, mcpDraft) ? 'field-hint--bad' : 'dim'">
+                  {{ fieldError(field, mcpDraft) || field.help }}
+                </span>
               </label>
               <p class="caption dim">
                 The server is contacted before it is saved, because one target that cannot
@@ -489,6 +498,13 @@ const mcpDraftValid = computed(() =>
     if (!value) return Boolean(field.optional)
     return new RegExp(`^(?:${field.pattern})$`).test(value)
   }))
+
+/** An empty field explains itself; a filled one that is still refused does not. */
+function fieldError (field, draft) {
+  const value = (draft[field.key] || '').trim()
+  if (!value || new RegExp(`^(?:${field.pattern})$`).test(value)) return ''
+  return field.hint || 'This value is not accepted.'
+}
 
 function credentialLabel (credential) {
   if (credential.mode === 'environment') return `key from $${credential.variable}`
@@ -982,6 +998,14 @@ watch(() => store.settingsOpen, (value) => {
 .integration-warning {
   margin-top: 6px !important;
   color: var(--warning);
+}
+
+.field--bad {
+  border-color: var(--danger);
+}
+
+.field-hint--bad {
+  color: var(--danger);
 }
 
 .integration-empty {

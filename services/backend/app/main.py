@@ -1216,7 +1216,7 @@ async def test_model_integration(instance: str) -> dict[str, Any]:
 
 # ------------------------------------------------------------------ mcp servers
 
-_MCP_URL = r"https?://[A-Za-z0-9.-]+(?::\d{1,5})?(?:/[A-Za-z0-9._~%/-]*)?"
+_MCP_URL = r"https?://[A-Za-z0-9.-]+(?::\d{1,5})?(?:/[^\s?#]*)?(?:\?[^\s#]*)?"
 
 # A target's name is also the prefix agentgateway puts on every tool it federates.
 _MCP_SERVER_FIELDS: list[dict[str, Any]] = [
@@ -1226,6 +1226,7 @@ _MCP_SERVER_FIELDS: list[dict[str, Any]] = [
         "pattern": _SLUG,
         "placeholder": "linear",
         "help": "Also the tool prefix, so its tools arrive as linear_<tool>.",
+        "hint": "Lower-case letters, digits and dashes, up to 24 characters.",
     },
     {
         "key": "url",
@@ -1234,6 +1235,7 @@ _MCP_SERVER_FIELDS: list[dict[str, Any]] = [
         "pattern": _MCP_URL,
         "placeholder": "https://mcp.example.com/mcp",
         "help": "The streamable HTTP endpoint, exactly as an MCP client would be given it.",
+        "hint": "An http:// or https:// URL. A query string is fine; spaces are not.",
     },
     {
         "key": "token",
@@ -1246,6 +1248,7 @@ _MCP_SERVER_FIELDS: list[dict[str, Any]] = [
             "agentgateway keeps it and it is never shown again. Leave it empty for an open "
             "server, or name a variable set on agentgateway as $MY_TOKEN."
         ),
+        "hint": "The token itself, or $MY_TOKEN in capitals to name a variable.",
     },
 ]
 
