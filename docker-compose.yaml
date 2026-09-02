@@ -117,8 +117,8 @@ services:
     restart: unless-stopped
     command: ["-f", "/config/config.yaml"]
     environment:
-      # Provider credentials, read only by agentgateway. Each one enables the matching
-      # integration in Settings > Agents; a custom integration needs its variable added here.
+      # Optional: a key entered in Settings > Agents is stored by agentgateway itself.
+      # These let an integration reference $VARIABLE instead of holding the key.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       GH_COPILOT_TOKEN: ${GH_COPILOT_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}

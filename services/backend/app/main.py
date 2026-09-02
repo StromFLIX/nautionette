@@ -387,7 +387,7 @@ _INTEGRATION_TYPES: dict[str, dict[str, Any]] = {
         "instance": "custom-{slug}",
         "multiple": True,
         "params": {"baseUrl": "{base_url}"},
-        "auth": {"kind": "key", "env": "{credential_env}", "optional": True},
+        "auth": {"kind": "key"},
         "discovery": {
             "host": "{base_url_host}",
             "path": "{base_url_path}/models",
@@ -409,18 +409,36 @@ _INTEGRATION_TYPES: dict[str, dict[str, Any]] = {
                 "placeholder": "https://api.example.com/v1",
                 "help": "The OpenAI-compatible base, without the /chat/completions suffix.",
             },
-            {
-                "key": "credential_env",
-                "label": "Credential variable",
-                "kind": "env",
-                "optional": True,
-                "pattern": _ENV_NAME,
-                "placeholder": "MY_PROVIDER_API_KEY",
-                "help": "Name of the variable holding the key on agentgateway. Leave empty if it needs none.",
-            },
         ],
     },
 }
+
+
+def _integration_fields(spec: dict[str, Any]) -> list[dict[str, Any]]:
+    """Declared fields, plus the API key every key-authenticated provider needs."""
+    fields = list(spec.get("fields", []))
+    if spec.get("auth", {}).get("kind") != "key":
+        return fields
+    variable = spec["auth"].get("env", "")
+    fallback = (
+        f"Leave it empty to fall back to ${variable} on the agentgateway service."
+        if variable
+        else "Leave it empty if the endpoint needs no key."
+    )
+    return [
+        *fields,
+        {
+            "key": "api_key",
+            "label": "API key",
+            "kind": "secret",
+            "optional": True,
+            "pattern": rf"(?:\${_ENV_NAME}|\S(?:.*\S)?)",
+            "placeholder": "sk-…",
+            "help": (
+                f"Paste the key and agentgateway keeps it; it is never shown again. {fallback}"
+            ),
+        },
+    ]
 
 
 def _integration_resource_id(instance: str) -> str:
@@ -475,6 +493,29 @@ def _integration_context(spec: dict[str, Any], config: dict[str, str]) -> dict[s
     return context
 
 
+def _credential(spec: dict[str, Any], supplied: str, existing: str) -> str:
+    """A typed key wins, then whatever the gateway already holds, then the declared variable."""
+    if spec.get("auth", {}).get("kind") != "key":
+        return ""
+    if supplied:
+        return supplied
+    if existing:
+        return existing
+    variable = spec["auth"].get("env", "")
+    return f"${variable}" if variable else ""
+
+
+def _credential_state(credential: str) -> dict[str, str]:
+    if credential.startswith("$"):
+        return {"mode": "environment", "variable": credential[1:]}
+    return {"mode": "stored" if credential else "none", "variable": ""}
+
+
+def _credential_hint(credential: str) -> str:
+    state = _credential_state(credential)
+    return state["variable"] if state["mode"] == "environment" else "the stored API key"
+
+
 def _reachable_host(url: str) -> None:
     """A user-supplied endpoint must be public: the gateway can also see this network."""
     host = urlsplit(url).hostname or ""
@@ -488,7 +529,7 @@ def _reachable_host(url: str) -> None:
 
 def _normalise_integration_config(spec: dict[str, Any], payload: dict[str, Any]) -> dict[str, str]:
     config: dict[str, str] = {}
-    for field in spec.get("fields", []):
+    for field in _integration_fields(spec):
         value = str(payload.get(field["key"]) or field.get("default", "")).strip()
         if not value and field.get("optional"):
             config[field["key"]] = ""
@@ -506,7 +547,7 @@ def _integration_prefix(spec: dict[str, Any], context: dict[str, str]) -> str:
 
 
 def _integration_model_value(
-    spec: dict[str, Any], instance: str, config: dict[str, str]
+    spec: dict[str, Any], instance: str, config: dict[str, str], credential: str = ""
 ) -> dict[str, Any]:
     context = _integration_context(spec, config)
     prefix = _integration_prefix(spec, context)
@@ -516,10 +557,8 @@ def _integration_model_value(
         "provider": _render(spec["provider"], context),
     }
     params = dict(_render(spec.get("params", {}), context))
-    auth = spec.get("auth", {})
-    environment = str(_render(auth.get("env", ""), context))
-    if auth.get("kind") == "key" and environment:
-        params["apiKey"] = f"${environment}"
+    if credential:
+        params["apiKey"] = credential
     if params:
         value["params"] = params
     if prefix:
@@ -531,7 +570,7 @@ def _integration_model_value(
 
 
 def _integration_discovery_value(
-    spec: dict[str, Any], instance: str, config: dict[str, str]
+    spec: dict[str, Any], instance: str, config: dict[str, str], credential: str = ""
 ) -> dict[str, Any] | None:
     """The route that lets the backend read a provider's own model list, credential included."""
     discovery = spec.get("discovery", {})
@@ -546,14 +585,12 @@ def _integration_discovery_value(
     if headers:
         policies["requestHeaderModifier"] = {"set": headers}
     backend: dict[str, Any] = {"host": _render(discovery["host"], context)}
-    auth = spec.get("auth", {})
-    environment = str(_render(auth.get("env", ""), context))
-    if auth.get("kind") == "copilot":
+    if spec.get("auth", {}).get("kind") == "copilot":
         backend["policies"] = {"backendAuth": "copilot"}
-    elif auth.get("kind") == "key" and environment:
-        key: dict[str, Any] = {"value": f"${environment}"}
-        if auth.get("location"):
-            key["location"] = auth["location"]
+    elif credential:
+        key: dict[str, Any] = {"value": credential}
+        if spec.get("auth", {}).get("location"):
+            key["location"] = spec["auth"]["location"]
         backend["policies"] = {"backendAuth": {"key": key}}
     return {
         "name": _integration_discovery_resource_id(instance),
@@ -566,9 +603,10 @@ def _integration_discovery_value(
     }
 
 
-def _integration_credential(spec: dict[str, Any], config: dict[str, str]) -> str:
-    environment = str(_render(spec.get("auth", {}).get("env", ""), _integration_context(spec, config)))
-    return environment or "none"
+def _existing_credential(instance: str, models: list[dict[str, Any]]) -> str:
+    """The key agentgateway already holds, so reconfiguring never needs it retyped."""
+    resource = _resource_map(models).get(_integration_resource_id(instance), {})
+    return str((resource.get("value", {}).get("params") or {}).get("apiKey") or "")
 
 
 def _stored_config(instance: str) -> dict[str, str]:
@@ -828,13 +866,13 @@ def _gateway_problem(exc: httpx.HTTPError, credential: str = "") -> HTTPExceptio
         body = exc.response.text
         missing = re.search(r"key '([A-Z0-9_]+)' up: environment variable not found", body)
         # agentgateway refuses a credential it cannot read, and refuses an empty one outright.
-        if missing or (credential and "BackendAuthCompat" in body):
-            variable = missing.group(1) if missing else credential
+        if missing or (credential.startswith("$") and "BackendAuthCompat" in body):
+            variable = missing.group(1) if missing else credential[1:]
             return HTTPException(
                 status_code=400,
                 detail=(
-                    f"agentgateway has no value for {variable}. Set it on the agentgateway "
-                    "service, recreate it, then add this integration."
+                    f"agentgateway has no value for {variable}. Enter the API key here "
+                    "instead, or set that variable on the agentgateway service."
                 ),
             )
         if status == 409:
@@ -847,14 +885,14 @@ def _gateway_problem(exc: httpx.HTTPError, credential: str = "") -> HTTPExceptio
     return HTTPException(status_code=response_status, detail=detail)
 
 
-def _discovery_failure(spec: dict[str, Any], config: dict[str, str], exc: Exception) -> dict[str, Any]:
+def _discovery_failure(spec: dict[str, Any], credential: str, exc: Exception) -> dict[str, Any]:
     status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
     body = exc.response.text if isinstance(exc, httpx.HTTPStatusError) else ""
     return {
         "ok": False,
         "status": status,
         "message": upstream_problem(
-            str(spec["name"]), _integration_credential(spec, config), status, body
+            str(spec["name"]), _credential_hint(credential), status, body
         ),
     }
 
@@ -920,7 +958,9 @@ async def _bootstrap_default_integrations() -> None:
         await asyncio.sleep(min(0.25 * 2**attempt, 5.0))
 
 
-async def _integration_summary(instance: str, configured: bool) -> dict[str, Any]:
+async def _integration_summary(
+    instance: str, configured: bool, credential: str = ""
+) -> dict[str, Any]:
     type_id = _integration_type(instance) or instance
     spec = _INTEGRATION_TYPES[type_id]
     config = _stored_config(instance) if configured else {}
@@ -935,7 +975,7 @@ async def _integration_summary(instance: str, configured: bool) -> dict[str, Any
             models = await _discover_integration_models(instance)
             discovery = {"ok": True, "status": 200, "message": f"Discovered {len(models)} models."}
         except (httpx.HTTPError, ValueError, KeyError) as exc:
-            discovery = _discovery_failure(spec, config, exc)
+            discovery = _discovery_failure(spec, credential, exc)
     context = _integration_context(spec, config)
     prefix = _integration_prefix(spec, context)
     return {
@@ -947,8 +987,8 @@ async def _integration_summary(instance: str, configured: bool) -> dict[str, Any
         "multiple": bool(spec.get("multiple")),
         "model_count": len(models),
         "model_match": f"{prefix}/*" if prefix else "*",
-        "credential": _integration_credential(spec, config),
-        "fields": spec.get("fields", []),
+        "credential": _credential_state(credential),
+        "fields": _integration_fields(spec),
         "config": config,
         "discovery": discovery,
     }
@@ -963,7 +1003,10 @@ async def _model_integrations_payload() -> dict[str, Any]:
     ]
     instances = sorted(instance for instance in instances if _integration_type(instance))
     configured = await asyncio.gather(
-        *(_integration_summary(instance, True) for instance in instances)
+        *(
+            _integration_summary(instance, True, _existing_credential(instance, models))
+            for instance in instances
+        )
     )
     taken = {summary["type"] for summary in configured}
     available = await asyncio.gather(
@@ -1000,12 +1043,14 @@ async def _write_integration(
     routes: list[dict[str, Any]],
 ) -> None:
     spec = _INTEGRATION_TYPES[type_id]
+    credential = _credential(spec, config.pop("api_key", ""), _existing_credential(instance, models))
     await _upsert_resource_if_changed(
-        "llm.model", _integration_model_value(spec, instance, config), models
+        "llm.model", _integration_model_value(spec, instance, config, credential), models
     )
-    discovery = _integration_discovery_value(spec, instance, config)
+    discovery = _integration_discovery_value(spec, instance, config, credential)
     if discovery:
         await _upsert_resource_if_changed("traffic.route", discovery, routes)
+    # The key stays with agentgateway; only the visible fields are kept here.
     db.set_setting(f"{_INTEGRATION_SETTING}{instance}", config)
 
 
@@ -1064,7 +1109,10 @@ async def put_model_integration(
                 await gateway.delete_config_resource(
                     "llm.model", _integration_resource_id(instance)
                 )
-        raise _gateway_problem(exc, _integration_credential(spec, config)) from exc
+        credential = _credential(
+            spec, str(payload.get("api_key") or ""), _existing_credential(instance, models)
+        )
+        raise _gateway_problem(exc, credential) from exc
 
     db.set_setting(_INTEGRATIONS_INITIALIZED, True)
     _catalog_cache.update(at=0.0, value=None)
@@ -1109,14 +1157,14 @@ async def test_model_integration(instance: str) -> dict[str, Any]:
     if not type_id:
         raise HTTPException(status_code=404, detail="unknown model integration")
     spec = _INTEGRATION_TYPES[type_id]
-    config = _stored_config(instance)
     _, models, _ = await _gateway_integration_resources()
     if _integration_resource_id(instance) not in _resource_map(models):
         raise HTTPException(status_code=409, detail=f"add {spec['name']} first")
+    credential = _existing_credential(instance, models)
     try:
         discovered = await _discover_integration_models(instance)
     except (httpx.HTTPError, ValueError, KeyError) as exc:
-        return _discovery_failure(spec, config, exc)
+        return _discovery_failure(spec, credential, exc)
     if not discovered:
         return {"ok": False, "status": None, "message": "No chat models were discovered."}
 
@@ -1127,7 +1175,7 @@ async def test_model_integration(instance: str) -> dict[str, Any]:
     )
     try:
         result = await gateway.test_model(
-            model["id"], str(spec["name"]), _integration_credential(spec, config)
+            model["id"], str(spec["name"]), _credential_hint(credential)
         )
     except httpx.HTTPError as exc:
         raise _gateway_problem(exc) from exc

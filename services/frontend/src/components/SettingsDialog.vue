@@ -153,7 +153,10 @@
                   <span class="caption">{{ field.label }}{{ field.optional ? ' (optional)' : '' }}</span>
                   <input
                     v-model="integrationDraft[field.key]" class="field mono"
-                    :placeholder="field.placeholder || ''" :disabled="selectedIntegration.configured && field.key === 'slug'"
+                    :type="field.kind === 'secret' ? 'password' : 'text'"
+                    :autocomplete="field.kind === 'secret' ? 'new-password' : 'off'"
+                    :placeholder="secretPlaceholder(field) || field.placeholder || ''"
+                    :disabled="selectedIntegration.configured && field.key === 'slug'"
                   />
                   <span class="caption dim">{{ field.help }}</span>
                 </label>
@@ -195,7 +198,7 @@
               <p class="caption dim">{{ integration.description }}</p>
               <div class="integration-meta caption dim">
                 <span>route <code class="mono">{{ integration.model_match }}</code></span>
-                <span>credential <code class="mono">{{ integration.credential }}</code></span>
+                <span>{{ credentialLabel(integration.credential) }}</span>
               </div>
               <p v-if="!integration.discovery.ok" class="caption integration-warning">
                 {{ integration.discovery.message }}
@@ -400,6 +403,20 @@ const integrationDraftValid = computed(() =>
     return new RegExp(`^(?:${field.pattern})$`).test(value)
   }))
 
+function credentialLabel (credential) {
+  if (credential.mode === 'environment') return `key from $${credential.variable}`
+  return credential.mode === 'stored' ? 'key stored in agentgateway' : 'no key'
+}
+
+/** A stored key is never sent back here, so an empty field means "keep it". */
+function secretPlaceholder (field) {
+  if (field.kind !== 'secret') return ''
+  const credential = selectedIntegration.value?.credential
+  if (credential?.mode === 'stored') return 'stored — type a new key to replace'
+  if (credential?.mode === 'environment') return `$${credential.variable}`
+  return field.placeholder || ''
+}
+
 const modelGroups = computed(() => {
   const byGateway = new Map()
   for (const model of store.catalog.models || []) {
@@ -480,7 +497,8 @@ function chooseIntegration (integration) {
   integrationChoice.value = integration.instance || integration.type
   for (const key of Object.keys(integrationDraft)) delete integrationDraft[key]
   for (const field of integration.fields || []) {
-    integrationDraft[field.key] = integration.config?.[field.key] || field.default || ''
+    if (field.kind === 'secret') integrationDraft[field.key] = ''
+    else integrationDraft[field.key] = integration.config?.[field.key] || field.default || ''
   }
 }
 

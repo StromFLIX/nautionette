@@ -218,10 +218,12 @@ endpoints through their own catalog, Copilot through the authenticated account â
 entry in the pickers by both integration and model vendor. A prefixed integration wins over the
 OpenRouter wildcard for its own namespace, so `openai/*` goes direct once OpenAI is configured.
 
-Credentials live only on agentgateway. Put a provider's key in `.env`, recreate the gateway with
-`docker compose up -d --force-recreate agentgateway`, then add the integration; the key is never
-sent to the backend API or the frontend. A custom integration that needs a key also needs its
-variable added to the `agentgateway` service in [docker-compose.yaml](docker-compose.yaml).
+Credentials never touch this codebase. Paste a provider's API key into the integration form and
+agentgateway keeps it in the `agentgateway-data` volume; the backend writes it once and never reads
+it back to a client, so a phone is enough to add a provider. To hold keys in the environment
+instead, put them in `.env`, recreate the gateway with
+`docker compose up -d --force-recreate agentgateway`, and type `$OPENAI_API_KEY` (or whichever
+variable) into the same field. Either way the secret stops at agentgateway.
 
 Working on the Python services:
 

@@ -294,12 +294,12 @@ def upstream_problem(name: str, credential: str, status: int | None, body: str) 
     """One actionable sentence, whichever provider refused the call."""
     text = body.lower()
     if "token not found" in text:
-        return f"agentgateway found no {name} credential. Set {credential} and recreate it."
+        return f"agentgateway found no {name} credential. Add {credential} and try again."
     if "copilot-integration-id" in text:
         return f"{name} rejected the configured integration ID."
     # xAI answers a rejected key with 400, so the body decides alongside the status.
     if status in {401, 403} or "api key" in text or "unauthorized" in text:
-        return f"{name} rejected the credential in {credential}."
+        return f"{name} rejected {credential}."
     suffix = f" (HTTP {status})" if status else ""
     return f"agentgateway could not reach {name}{suffix}."
 

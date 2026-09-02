@@ -54,8 +54,8 @@
 
       <p v-if="!store.system.model_key_present" class="welcome__warn caption">
         <span class="material-icons">warning</span>
-        No model key is configured, so agent calls will fail. Set
-        <code>OPENROUTER_API_KEY</code> and restart the gateway.
+        No model key is configured, so agent calls will fail.
+        <button class="caption fact__link" @click="actions.openSettings('agents')">Add a provider key</button>
       </p>
     </div>
   </div>
