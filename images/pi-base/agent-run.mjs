@@ -80,6 +80,23 @@ function checkSchema(value, schema) {
   return problems;
 }
 
+// A tool result is a Pi ToolResult ({ content: [{type:'text'}], details }); the UI
+// only ever shows it, so flatten it to text here and cap what crosses the wire.
+const MAX_TOOL_RESULT_CHARS = 4000;
+
+function toolResultText(result) {
+  if (result == null) return "";
+  const text = typeof result === "string"
+    ? result
+    : (Array.isArray(result.content) ? result.content : [])
+        .filter((part) => part?.type === "text" && typeof part.text === "string")
+        .map((part) => part.text)
+        .join("\n") || JSON.stringify(result);
+  return text.length > MAX_TOOL_RESULT_CHARS
+    ? `${text.slice(0, MAX_TOOL_RESULT_CHARS)}\n… ${text.length - MAX_TOOL_RESULT_CHARS} more characters`
+    : text;
+}
+
 function explain(error) {
   // The one failure everybody hits first deserves a sentence, not a status code.
   if (/401/.test(error) && /auth/i.test(error)) {
@@ -169,10 +186,16 @@ async function main() {
         break;
       }
       case "tool_execution_start":
-        emit({ type: "tool", name: event.toolName, args: event.args });
+        emit({ type: "tool", id: event.toolCallId, name: event.toolName, args: event.args });
         break;
       case "tool_execution_end":
-        emit({ type: "tool_done", name: event.toolName, error: Boolean(event.isError) });
+        emit({
+          type: "tool_done",
+          id: event.toolCallId,
+          name: event.toolName,
+          error: Boolean(event.isError),
+          result: toolResultText(event.result),
+        });
         break;
       case "message_end": {
         const message = event.message;

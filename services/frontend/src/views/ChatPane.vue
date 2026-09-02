@@ -39,8 +39,8 @@
           :meta="message.meta" :created-at="message.created_at"
         />
         <MessageBubble
-          v-if="streaming" role="assistant"
-          :content="streamed || '…'" :meta="{ tools: activeTools }"
+          v-if="streaming" role="assistant" live
+          :content="liveSteps.length ? '' : '…'" :meta="{ steps: liveSteps }"
         />
       </div>
     </div>
@@ -71,6 +71,7 @@ import ChatWelcome from '../components/ChatWelcome.vue'
 import Composer from '../components/Composer.vue'
 import MessageBubble from '../components/MessageBubble.vue'
 import { avatarStyle, initials } from '../format'
+import { foldEvent } from '../timeline'
 import { actions, onLiveEvent, store } from '../store'
 import { api, streamMessage } from '../api'
 
@@ -82,8 +83,7 @@ const chat = ref(null)
 const messages = ref([])
 const draft = ref('')
 const streaming = ref(false)
-const streamed = ref('')
-const activeTools = ref([])
+const liveSteps = ref([])
 const starting = ref(false)
 const scroller = ref(null)
 const composer = ref(null)
@@ -128,25 +128,20 @@ async function send () {
   if (!text || streaming.value) return
   draft.value = ''
   streaming.value = true
-  streamed.value = ''
-  activeTools.value = []
+  liveSteps.value = []
   try {
     await streamMessage(chatId.value, text, (event) => {
       if (event.type === 'user_message') messages.value.push(event.message)
-      else if (event.type === 'delta') streamed.value += event.text
-      else if (event.type === 'tool') activeTools.value.push(event.name)
       else if (event.type === 'error') $q.notify({ type: 'negative', message: event.message })
-      else if (event.type === 'done') {
-        messages.value.push(event.message)
-        streamed.value = ''
-      }
+      else if (event.type === 'done') messages.value.push(event.message)
+      else foldEvent(liveSteps.value, event)
       scrollDown()
     })
   } catch (error) {
     $q.notify({ type: 'negative', message: error.message })
   } finally {
     streaming.value = false
-    activeTools.value = []
+    liveSteps.value = []
     actions.loadChats()
     actions.loadWorkflows()
     nextTick(() => composer.value?.focus())

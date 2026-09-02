@@ -7,7 +7,14 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from ..agent import agent_job, build_history, promote_chat, stream_agent, summarise_for_title
+from ..agent import (
+    Timeline,
+    agent_job,
+    build_history,
+    promote_chat,
+    stream_agent,
+    summarise_for_title,
+)
 from ..db import db
 from ..events import bus, sse
 from ..runtime import history_budget, remember_agent_result, runtime
@@ -93,32 +100,36 @@ async def send_message(chat_id: str, payload: dict[str, Any] = Body(...)) -> Str
 
     async def generator():
         yield sse({"type": "user_message", "message": user_message})
-        collected: list[str] = []
+        timeline = Timeline()
         failure: str | None = None
-        tools: list[str] = []
         try:
             async for event in stream_agent(job):
                 kind = event.get("type")
                 if kind == "delta":
-                    collected.append(event.get("text", ""))
+                    timeline.add_text(event.get("text", ""))
                 elif kind == "tool":
-                    tools.append(event.get("name", "?"))
+                    timeline.start_tool(event)
+                elif kind == "tool_done":
+                    timeline.finish_tool(event)
                 elif kind == "error":
                     failure = event.get("message")
                 elif kind == "result":
                     remember_agent_result(bool(event.get("ok")))
-                    if not collected and event.get("text"):
-                        collected.append(event["text"])
+                    if not timeline.text and event.get("text"):
+                        timeline.add_text(event["text"])
                 yield sse(event)
         except Exception as exc:  # noqa: BLE001 - always close the stream cleanly
             failure = str(exc)
             yield sse({"type": "error", "message": failure})
 
-        content = "".join(collected).strip()
+        content = timeline.text
         if not content and failure:
             content = f"The agent could not answer: {failure}"
         assistant = db.add_message(
-            chat_id, "assistant", content or "(no answer)", {"tools": tools, "error": failure}
+            chat_id,
+            "assistant",
+            content or "(no answer)",
+            {"tools": timeline.tools, "steps": timeline.steps, "error": failure},
         )
         bus.publish("chat.answered", {"chat_id": chat_id, "ok": failure is None})
         yield sse({"type": "done", "message": assistant})

@@ -18,6 +18,58 @@ MAX_HISTORY_MESSAGES = 200
 # ~200k chars is roughly 50k tokens, which every current model has room for.
 DEFAULT_HISTORY_CHARS = 200_000
 MAX_MESSAGE_CHARS = 16_000
+TOOL_RESULT_CHARS = 4_000
+
+
+class Timeline:
+    """The ordered story of one answer: the prose, and the tool calls between it.
+
+    Kept so a reloaded chat shows the same interleaving the live stream did.
+    """
+
+    def __init__(self) -> None:
+        self.steps: list[dict[str, Any]] = []
+
+    def add_text(self, text: str) -> None:
+        if not text:
+            return
+        if self.steps and self.steps[-1]["kind"] == "text":
+            self.steps[-1]["text"] += text
+        else:
+            self.steps.append({"kind": "text", "text": text})
+
+    def start_tool(self, event: dict[str, Any]) -> dict[str, Any]:
+        step = {
+            "kind": "tool",
+            "id": event.get("id") or f"call-{len(self.steps)}",
+            "name": event.get("name") or "?",
+            "args": event.get("args"),
+            "ok": None,
+            "result": "",
+        }
+        self.steps.append(step)
+        return step
+
+    def finish_tool(self, event: dict[str, Any]) -> None:
+        step = self._pending(event.get("id")) or self.start_tool(event)
+        step["ok"] = not event.get("error")
+        step["result"] = (event.get("result") or "")[:TOOL_RESULT_CHARS]
+
+    def _pending(self, call_id: str | None) -> dict[str, Any] | None:
+        for step in reversed(self.steps):
+            if step["kind"] != "tool" or step["ok"] is not None:
+                continue
+            if call_id is None or step["id"] == call_id:
+                return step
+        return None
+
+    @property
+    def text(self) -> str:
+        return "".join(s["text"] for s in self.steps if s["kind"] == "text").strip()
+
+    @property
+    def tools(self) -> list[str]:
+        return [s["name"] for s in self.steps if s["kind"] == "tool"]
 
 
 def build_history(

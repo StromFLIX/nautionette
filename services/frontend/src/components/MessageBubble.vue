@@ -1,17 +1,15 @@
 <template>
   <div class="msg" :class="`msg--${role}`">
-    <div class="bubble" :class="{ 'bubble--run': run }">
+    <div class="bubble" :class="{ 'bubble--wide': run || hasTools }">
       <RouterLink v-if="run" class="bubble__run" :to="`/runs/${run.workflow_id}`">
         <span class="material-icons">bolt</span>
         <span class="grow truncate">{{ run.workflow }}</span>
         <span class="chip" :class="`chip--${RUN_TONE[run.status] || ''}`">{{ run.status }}</span>
       </RouterLink>
-      <div class="bubble__body" v-html="html" />
-      <div v-if="tools.length" class="bubble__tools">
-        <span v-for="tool in tools" :key="tool" class="chip">
-          <span class="material-icons" style="font-size: 13px">handyman</span>{{ tool }}
-        </span>
-      </div>
+      <template v-for="(part, index) in parts" :key="part.id || index">
+        <ToolCall v-if="part.kind === 'tool'" :step="part" :live="live" />
+        <div v-else-if="part.text.trim()" class="bubble__body" v-html="renderMarkdown(part.text)" />
+      </template>
       <div v-if="error" class="bubble__error caption">{{ error }}</div>
     </div>
     <span v-if="time" class="msg__time caption">{{ time }}</span>
@@ -20,6 +18,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import ToolCall from './ToolCall.vue'
 import { renderMarkdown } from '../markdown'
 import { RUN_TONE, shortTime } from '../format'
 
@@ -27,11 +26,23 @@ const props = defineProps({
   role: { type: String, default: 'assistant' },
   content: { type: String, default: '' },
   meta: { type: Object, default: () => ({}) },
-  createdAt: { type: Number, default: 0 }
+  createdAt: { type: Number, default: 0 },
+  live: { type: Boolean, default: false }
 })
 
-const html = computed(() => renderMarkdown(props.content))
-const tools = computed(() => props.meta?.tools || [])
+// Messages written before answers kept a timeline only remember the tool names.
+const steps = computed(() => {
+  const stored = props.meta?.steps
+  if (Array.isArray(stored) && stored.length) return stored
+  return (props.meta?.tools || []).map((name) => ({ kind: 'tool', name, args: null, ok: null, result: '' }))
+})
+
+const parts = computed(() => {
+  if (!steps.value.length) return [{ kind: 'text', text: props.content }]
+  const spoken = steps.value.some((step) => step.kind === 'text' && step.text.trim())
+  return spoken ? steps.value : [...steps.value, { kind: 'text', text: props.content }]
+})
+const hasTools = computed(() => steps.value.some((step) => step.kind === 'tool'))
 const run = computed(() => props.meta?.run || null)
 // The backend folds a failure into the body too, so only add it when it is new.
 const error = computed(() => {
@@ -72,7 +83,7 @@ const time = computed(() => shortTime(props.createdAt))
   border-bottom-left-radius: var(--radius-xs);
 }
 
-.bubble--run {
+.bubble--wide {
   max-width: min(760px, 92%);
 }
 
@@ -103,13 +114,6 @@ const time = computed(() => shortTime(props.createdAt))
   padding-bottom: 3px;
   color: var(--text-dim);
   font-size: 11px;
-}
-
-.bubble__tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 8px;
 }
 
 .bubble__error {

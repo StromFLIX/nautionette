@@ -133,6 +133,40 @@ def test_the_tools_an_answer_used_are_recorded(client, broker):
     assert events[-1]["message"]["content"] == "found it"
 
 
+def test_an_answer_keeps_the_order_of_what_it_said_and_did(client, broker):
+    broker.events = [
+        {"type": "delta", "text": "Looking"},
+        {"type": "delta", "text": " it up."},
+        {"type": "tool", "id": "c1", "name": "linear_search", "args": {"query": "moon"}},
+        {"type": "tool_done", "id": "c1", "name": "linear_search", "result": "one hit"},
+        {"type": "delta", "text": "\n\nFound one."},
+        {"type": "result", "ok": True, "text": ""},
+    ]
+    chat = client.post("/api/chats", json={}).json()
+    steps = sse_events(send(client, chat["id"], "hello"))[-1]["message"]["meta"]["steps"]
+    assert [step["kind"] for step in steps] == ["text", "tool", "text"]
+    assert steps[0]["text"] == "Looking it up."
+    assert steps[1] == {
+        "kind": "tool",
+        "id": "c1",
+        "name": "linear_search",
+        "args": {"query": "moon"},
+        "ok": True,
+        "result": "one hit",
+    }
+
+
+def test_a_tool_that_failed_says_so(client, broker):
+    broker.events = [
+        {"type": "tool", "id": "c1", "name": "linear_search"},
+        {"type": "tool_done", "id": "c1", "name": "linear_search", "error": True, "result": "boom"},
+        {"type": "result", "ok": True, "text": "sorry"},
+    ]
+    chat = client.post("/api/chats", json={}).json()
+    steps = sse_events(send(client, chat["id"], "hello"))[-1]["message"]["meta"]["steps"]
+    assert (steps[0]["ok"], steps[0]["result"]) == (False, "boom")
+
+
 # --------------------------------------------------------------------- promote
 
 
