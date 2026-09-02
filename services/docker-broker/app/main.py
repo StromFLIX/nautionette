@@ -56,6 +56,7 @@ client: docker.DockerClient | None = None
 
 image_state: dict[str, Any] = {"status": "pending", "images": {}, "log": [], "error": None}
 _state_lock = threading.Lock()
+_build_thread: threading.Thread | None = None
 
 
 def _note(message: str) -> None:
@@ -133,7 +134,7 @@ def _build(path: str, tag: str) -> None:
 
 
 def ensure_images(force: bool = False) -> None:
-    """Images are built once, at startup. A call never waits on a build."""
+    """Built at startup, and again whenever a call finds one missing. A call never waits."""
     with _state_lock:
         image_state["status"] = "building"
         image_state["error"] = None
@@ -166,9 +167,22 @@ def ensure_images(force: bool = False) -> None:
             image_state["error"] = str(exc)[:500]
 
 
+def start_build(force: bool = False) -> bool:
+    """Single-flight: False when a build is already running."""
+    global _build_thread
+    with _state_lock:
+        if _build_thread is not None and _build_thread.is_alive():
+            return False
+        _build_thread = threading.Thread(
+            target=ensure_images, kwargs={"force": force}, name="image-build", daemon=True
+        )
+        _build_thread.start()
+    return True
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    threading.Thread(target=ensure_images, name="image-build", daemon=True).start()
+    start_build()
     yield
 
 
@@ -199,21 +213,18 @@ def healthz() -> dict[str, Any]:
 @app.get("/agent-sets")
 def agent_sets(x_internal_token: str | None = Header(default=None)) -> dict[str, Any]:
     _check_internal(x_internal_token)
-    with _state_lock:
-        built = dict(image_state["images"])
-    return {
-        "agent_sets": [
-            {"name": name, "image": image_tag(name), "ready": image_tag(name) in built.values()}
-            for name in discovered_agent_sets()
-        ]
-    }
+    out = []
+    for name in discovered_agent_sets():
+        tag = image_tag(name)
+        # Ask the daemon: an image built earlier can be pruned while the broker runs.
+        out.append({"name": name, "image": tag, "ready": _has_image(tag)})
+    return {"agent_sets": out}
 
 
 @app.post("/images/rebuild")
 def rebuild(x_internal_token: str | None = Header(default=None)) -> dict[str, Any]:
     _check_internal(x_internal_token)
-    threading.Thread(target=ensure_images, kwargs={"force": True}, daemon=True).start()
-    return {"ok": True, "status": "building"}
+    return {"ok": True, "status": "building" if start_build(force=True) else "already building"}
 
 
 # ----------------------------------------------------------------- agent run
@@ -230,14 +241,16 @@ def _run_container(job: dict[str, Any]) -> Iterator[str]:
         return
     tag = image_tag(agent_set)
     if not _has_image(tag):
+        # The image can vanish under us: an idle host prunes it between calls.
+        started = start_build()
         with _state_lock:
-            status = image_state["status"]
             error = image_state["error"]
         yield _ndjson(
             {
                 "type": "error",
-                "message": f"agent image {tag} is not ready (build status: {status})"
-                + (f": {error}" if error else ""),
+                "message": f"agent image {tag} is missing, so it is being built now. "
+                "Try again in a minute."
+                + (f" The last build failed: {error}" if error and not started else ""),
             }
         )
         return
