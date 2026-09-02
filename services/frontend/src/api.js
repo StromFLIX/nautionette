@@ -76,6 +76,14 @@ export const api = {
   testModelIntegration: (id) =>
     request(`/api/model-integrations/${encodeURIComponent(id)}/test`, { method: 'POST' }),
 
+  mcpServers: () => request('/api/mcp-servers'),
+  saveMcpServer: (name, config = {}) =>
+    request(`/api/mcp-servers/${encodeURIComponent(name)}`, { method: 'PUT', ...json(config) }),
+  removeMcpServer: (name) =>
+    request(`/api/mcp-servers/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  testMcpServer: (name) =>
+    request(`/api/mcp-servers/${encodeURIComponent(name)}/test`, { method: 'POST' }),
+
   chats: () => request('/api/chats'),
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
   chat: (id) => request(`/api/chats/${id}`),

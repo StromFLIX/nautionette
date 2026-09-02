@@ -32,5 +32,6 @@ mcp:
     - name: workflows
       mcp:
         host: http://workflow-mcp:8000/mcp
-    # Add further MCP servers here, one target per server. An agent set picks up
-    # new tools on its next run; nothing needs rebuilding.
+    # Further servers are added in the app, under Settings > MCP servers, and
+    # persist as mcp.target resources beside them. Targets listed here are the
+    # baseline the app cannot remove.

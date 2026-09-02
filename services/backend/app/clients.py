@@ -242,12 +242,15 @@ class GatewayClient:
             if item.get("id") and "*" not in item["id"]
         ]
 
-    async def mcp_tools(self, url: str | None = None) -> list[dict[str, Any]]:
+    async def mcp_tools(
+        self, url: str | None = None, extra: dict[str, str] | None = None
+    ) -> list[dict[str, Any]]:
         """One handshake against an MCP endpoint, for the tool picker."""
         url = url or settings.mcp_url
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
+            **(extra or {}),
         }
         async with httpx.AsyncClient(timeout=15) as client:
             handshake = await client.post(
@@ -264,6 +267,8 @@ class GatewayClient:
                 ),
             )
             handshake.raise_for_status()
+            if not _rpc_result(handshake).get("protocolVersion"):
+                raise ValueError("the endpoint did not answer as an MCP server")
             session = handshake.headers.get("mcp-session-id")
             if session:
                 headers["Mcp-Session-Id"] = session

@@ -258,12 +258,100 @@
           <h2 class="settings__title">MCP servers</h2>
 
           <div class="setting">
-            <div class="row">
-              <div class="setting__label grow">Connected servers</div>
-              <button class="btn btn--sm btn--outline" :disabled="refreshing" @click="refreshCatalog">
-                {{ refreshing ? 'Checking…' : 'Refresh' }}
+            <div class="row integration-head">
+              <div class="setting__label grow">Servers</div>
+              <button
+                class="btn btn--sm btn--outline" :disabled="mcpLoading || refreshing"
+                @click="refreshMcp"
+              >
+                {{ mcpLoading || refreshing ? 'Checking…' : 'Refresh' }}
+              </button>
+              <button
+                class="btn btn--sm btn--primary" :disabled="!mcp.writable || mcpAdding"
+                @click="startMcpAdd"
+              >
+                Add server
               </button>
             </div>
+            <p class="caption dim">
+              Every server is federated onto one endpoint in agentgateway. Its tools arrive
+              prefixed with the server name and show up in the tool picker straight away.
+            </p>
+
+            <div v-if="mcpAdding" class="integration-add">
+              <strong>{{ mcpEditing ? `Configure ${mcpEditing}` : 'Add a server' }}</strong>
+              <label v-for="field in mcp.fields" :key="field.key" class="integration-field">
+                <span class="caption">{{ field.label }}{{ field.optional ? ' (optional)' : '' }}</span>
+                <input
+                  v-model="mcpDraft[field.key]" class="field mono"
+                  :type="field.kind === 'secret' ? 'password' : 'text'"
+                  :autocomplete="field.kind === 'secret' ? 'new-password' : 'off'"
+                  :placeholder="mcpPlaceholder(field)"
+                  :disabled="Boolean(mcpEditing) && field.key === 'name'"
+                />
+                <span class="caption dim">{{ field.help }}</span>
+              </label>
+              <p class="caption dim">
+                The server is contacted before it is saved, because one target that cannot
+                answer takes the whole endpoint down with it.
+              </p>
+              <div class="row integration-actions">
+                <button class="btn btn--sm" @click="cancelMcpAdd">Cancel</button>
+                <button
+                  class="btn btn--sm btn--primary"
+                  :disabled="Boolean(mcpBusy) || !mcpDraftValid" @click="saveMcpServer"
+                >
+                  {{ mcpBusy ? 'Checking…' : mcpEditing ? 'Save server' : 'Add server' }}
+                </button>
+              </div>
+            </div>
+
+            <p v-if="!mcp.servers.length && !mcpLoading" class="caption dim integration-empty">
+              No MCP server is configured.
+            </p>
+            <div v-for="server in mcp.servers" :key="server.name" class="integration-card">
+              <div class="row">
+                <span class="material-icons integration-card__icon">handyman</span>
+                <strong class="grow">{{ server.name }}</strong>
+                <span class="chip" :class="server.tool_count ? 'chip--success' : 'chip--warning'">
+                  {{ server.tool_count }} tools
+                </span>
+              </div>
+              <div class="integration-meta caption dim">
+                <span class="mono truncate">{{ server.url }}</span>
+                <span>{{ credentialLabel(server.credential) }}</span>
+                <span v-if="!server.managed">from the gateway config file</span>
+              </div>
+              <div v-if="mcpTests[server.name]" class="line">
+                <span class="dot" :class="mcpTests[server.name].ok ? 'dot--ok' : 'dot--bad'" />
+                <span class="caption grow">{{ mcpTests[server.name].message }}</span>
+                <span v-if="mcpTests[server.name].status" class="caption dim">
+                  HTTP {{ mcpTests[server.name].status }}
+                </span>
+              </div>
+              <div v-if="server.managed" class="row integration-actions">
+                <button class="btn btn--sm" :disabled="Boolean(mcpBusy)" @click="editMcpServer(server)">
+                  Configure
+                </button>
+                <button
+                  class="btn btn--sm btn--outline" :disabled="Boolean(mcpBusy)"
+                  @click="testMcpServer(server)"
+                >
+                  {{ mcpBusy === server.name ? 'Testing…' : 'Test' }}
+                </button>
+                <span class="grow" />
+                <button
+                  class="btn btn--sm btn--danger" :disabled="Boolean(mcpBusy)"
+                  @click="removeMcpServer(server)"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="setting">
+            <div class="setting__label">Tools on offer</div>
             <p v-if="!toolGroups.length" class="caption dim">No MCP server answered.</p>
             <template v-for="group in toolGroups" :key="group.name">
               <div class="line">
@@ -276,15 +364,6 @@
                 <span v-if="tool.description" class="caption dim">{{ tool.description }}</span>
               </div>
             </template>
-          </div>
-
-          <div class="setting">
-            <div class="row">
-              <div class="setting__label grow">Add a server</div>
-              <button class="btn btn--sm btn--outline" @click="copy(snippet)">Copy</button>
-            </div>
-            <code class="mono dim">services/agentgateway/config/config.yaml</code>
-            <pre class="code" style="margin-top: 8px">{{ snippet }}</pre>
           </div>
         </template>
 
@@ -365,6 +444,13 @@ const integrationDraft = reactive({})
 const integrationBusy = ref('')
 const integrationAction = ref('')
 const integrationTests = reactive({})
+const mcp = reactive({ servers: [], fields: [], storage_mode: 'unknown', writable: false })
+const mcpLoading = ref(false)
+const mcpAdding = ref(false)
+const mcpEditing = ref('')
+const mcpDraft = reactive({})
+const mcpBusy = ref('')
+const mcpTests = reactive({})
 const origin = window.location.origin
 const historyMode = ref('auto')
 
@@ -376,12 +462,6 @@ const contextHint = computed(() => {
   if (!model?.context_length) return 'this model publishes no window; the fallback is used'
   return `${compactChars(model.context_length)} token window \u2192 ${compactChars(historyBudget(form.default_model))} chars`
 })
-
-const snippet = `mcp:
-  targets:
-    - name: my-server
-      mcp:
-        host: http://my-server:8000/mcp`
 
 const open = computed({
   get: () => store.settingsOpen,
@@ -403,6 +483,13 @@ const integrationDraftValid = computed(() =>
     return new RegExp(`^(?:${field.pattern})$`).test(value)
   }))
 
+const mcpDraftValid = computed(() =>
+  mcp.fields.every((field) => {
+    const value = (mcpDraft[field.key] || '').trim()
+    if (!value) return Boolean(field.optional)
+    return new RegExp(`^(?:${field.pattern})$`).test(value)
+  }))
+
 function credentialLabel (credential) {
   if (credential.mode === 'environment') return `key from $${credential.variable}`
   if (credential.mode === 'stored') return 'key stored in agentgateway'
@@ -417,6 +504,14 @@ function secretPlaceholder (field) {
   if (credential?.mode === 'stored') return 'stored — type a new key to replace'
   if (credential?.mode === 'environment') return `$${credential.variable}`
   if (credential?.mode === 'gateway') return credential.variable ? `$${credential.variable}` : ''
+  return field.placeholder || ''
+}
+
+function mcpPlaceholder (field) {
+  if (field.kind !== 'secret') return field.placeholder || ''
+  const credential = mcp.servers.find((item) => item.name === mcpEditing.value)?.credential
+  if (credential?.mode === 'stored') return 'stored — type a new token to replace'
+  if (credential?.mode === 'environment') return `$${credential.variable}`
   return field.placeholder || ''
 }
 
@@ -465,12 +560,6 @@ function saveToken () {
 function saveServer () {
   actions.setServer(serverUrl.value)
   $q.notify({ type: 'positive', message: serverUrl.value.trim() ? 'Server saved' : 'Using this origin' })
-}
-
-async function refreshCatalog () {
-  refreshing.value = true
-  await actions.loadCatalog(true)
-  refreshing.value = false
 }
 
 function applyIntegrations (data) {
@@ -591,9 +680,85 @@ async function testIntegration (integration) {
   }
 }
 
-async function copy (text) {
-  await navigator.clipboard.writeText(text)
-  $q.notify({ message: 'Copied' })
+async function loadMcp () {
+  mcpLoading.value = true
+  try {
+    Object.assign(mcp, await api.mcpServers())
+  } catch (error) {
+    $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    mcpLoading.value = false
+  }
+}
+
+async function refreshMcp () {
+  refreshing.value = true
+  await Promise.all([loadMcp(), actions.loadCatalog(true)])
+  refreshing.value = false
+}
+
+function openMcpForm (server) {
+  mcpAdding.value = true
+  mcpEditing.value = server?.name || ''
+  for (const key of Object.keys(mcpDraft)) delete mcpDraft[key]
+  for (const field of mcp.fields) {
+    mcpDraft[field.key] = field.kind === 'secret' ? '' : server?.[field.key] || ''
+  }
+}
+
+const startMcpAdd = () => openMcpForm(null)
+const editMcpServer = (server) => openMcpForm(server)
+
+function cancelMcpAdd () {
+  mcpAdding.value = false
+  mcpEditing.value = ''
+}
+
+async function saveMcpServer () {
+  const name = mcpDraft.name
+  mcpBusy.value = name
+  try {
+    Object.assign(mcp, await api.saveMcpServer(name, { ...mcpDraft }))
+    cancelMcpAdd()
+    await actions.loadCatalog(true)
+    $q.notify({ type: 'positive', message: `${name} ${mcpEditing.value ? 'updated' : 'added'}` })
+  } catch (error) {
+    $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    mcpBusy.value = ''
+  }
+}
+
+function removeMcpServer (server) {
+  $q.dialog({
+    title: `Remove ${server.name}`,
+    message: 'Its tools disappear from the pickers. Chats pinned to them keep the rest.',
+    cancel: true
+  }).onOk(async () => {
+    mcpBusy.value = server.name
+    try {
+      Object.assign(mcp, await api.removeMcpServer(server.name))
+      delete mcpTests[server.name]
+      await actions.loadCatalog(true)
+      $q.notify({ type: 'positive', message: `${server.name} removed` })
+    } catch (error) {
+      $q.notify({ type: 'negative', message: error.message })
+    } finally {
+      mcpBusy.value = ''
+    }
+  })
+}
+
+async function testMcpServer (server) {
+  mcpBusy.value = server.name
+  delete mcpTests[server.name]
+  try {
+    mcpTests[server.name] = await api.testMcpServer(server.name)
+  } catch (error) {
+    mcpTests[server.name] = { ok: false, message: error.message }
+  } finally {
+    mcpBusy.value = ''
+  }
 }
 
 async function loadSettings () {
@@ -630,6 +795,7 @@ async function resetSettings () {
 
 function loadTab (value) {
   if (value === 'agents') loadIntegrations()
+  if (value === 'mcp') loadMcp()
   if (value === 'activity') actions.loadEvents()
 }
 

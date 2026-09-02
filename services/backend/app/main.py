@@ -415,6 +415,7 @@ _INTEGRATION_TYPES: dict[str, dict[str, Any]] = {
                 "key": "base_url",
                 "label": "Base URL",
                 "kind": "url",
+                "public": True,
                 "pattern": _HTTPS_URL,
                 "placeholder": "https://api.example.com/v1",
                 "help": "The OpenAI-compatible base, without the /chat/completions suffix.",
@@ -556,7 +557,7 @@ def _normalise_integration_config(spec: dict[str, Any], payload: dict[str, Any])
             continue
         if not re.fullmatch(field["pattern"], value):
             raise HTTPException(status_code=400, detail=f"invalid value for {field['label']}")
-        if field.get("kind") == "url":
+        if field.get("public"):
             _reachable_host(value)
         config[field["key"]] = value
     return config
@@ -792,23 +793,31 @@ async def _tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], l
     """Federated tools, each attributed to the MCP server it came from."""
     targets = config.get("targets") or []
     federated = await _attempt(gateway.mcp_tools(), [])
-    per_target = await asyncio.gather(
-        *(_attempt(gateway.mcp_tools(target["host"]), []) for target in targets)
-    )
+
+    def prefixed(name: str) -> str:
+        """agentgateway names a federated tool after the target it came from."""
+        return next(
+            (
+                target["name"]
+                for target in targets
+                if any(name.startswith(f"{target['name']}{sep}") for sep in ("_", "-", ":"))
+            ),
+            "",
+        )
+
     owner_of: dict[str, str] = {}
-    for target, tools in zip(targets, per_target, strict=True):
-        for tool in tools:
-            owner_of[tool["name"]] = target["name"]
+    # Asking every server directly is the fallback for a gateway that does not
+    # prefix, and a remote server is slow, so only pay for it when a name needs it.
+    if any(not prefixed(tool["name"]) for tool in federated):
+        per_target = await asyncio.gather(
+            *(_attempt(gateway.mcp_tools(target["host"]), []) for target in targets)
+        )
+        for target, tools in zip(targets, per_target, strict=True):
+            for tool in tools:
+                owner_of[tool["name"]] = target["name"]
 
     def server_for(name: str) -> str:
-        if name in owner_of:
-            return owner_of[name]
-        # A federating gateway may prefix a name with the target it came from.
-        for target in targets:
-            prefix = target["name"]
-            if any(name.startswith(f"{prefix}{sep}") for sep in ("_", "-", ":")):
-                return prefix
-        return "other"
+        return owner_of.get(name) or prefixed(name) or "other"
 
     tools = [{**tool, "server": server_for(tool["name"])} for tool in federated]
     servers = [
@@ -892,7 +901,7 @@ def _gateway_problem(exc: httpx.HTTPError, credential: str = "") -> HTTPExceptio
             return HTTPException(
                 status_code=400,
                 detail=(
-                    f"agentgateway has no value for {variable}. Enter the API key here "
+                    f"agentgateway has no value for {variable}. Enter the key here "
                     "instead, or set that variable on the agentgateway service."
                 ),
             )
@@ -931,6 +940,14 @@ async def _gateway_integration_resources() -> tuple[
         raise _gateway_problem(exc) from exc
     mode = (runtime_state.get("ui") or {}).get("configStoreMode", "unknown")
     return mode, models, routes
+
+
+def _writable_gateway(mode: str) -> None:
+    if mode != "hybrid":
+        raise HTTPException(
+            status_code=409,
+            detail=f"agentgateway configuration storage is {mode!r}; hybrid mode is required",
+        )
 
 
 async def _ensure_default_integrations() -> None:
@@ -1116,11 +1133,7 @@ async def put_model_integration(
 
     await _ensure_default_integrations()
     mode, models, routes = await _gateway_integration_resources()
-    if mode != "hybrid":
-        raise HTTPException(
-            status_code=409,
-            detail=f"agentgateway configuration storage is {mode!r}; hybrid mode is required",
-        )
+    _writable_gateway(mode)
     try:
         await _write_integration(type_id, instance, config, models, routes)
     except httpx.HTTPError as exc:
@@ -1146,11 +1159,7 @@ async def delete_model_integration(instance: str) -> dict[str, Any]:
     if not _integration_type(instance):
         raise HTTPException(status_code=404, detail="unknown model integration")
     mode, models, routes = await _gateway_integration_resources()
-    if mode != "hybrid":
-        raise HTTPException(
-            status_code=409,
-            detail=f"agentgateway configuration storage is {mode!r}; hybrid mode is required",
-        )
+    _writable_gateway(mode)
     try:
         if _integration_resource_id(instance) in _resource_map(models):
             await gateway.delete_config_resource("llm.model", _integration_resource_id(instance))
@@ -1202,6 +1211,181 @@ async def test_model_integration(instance: str) -> dict[str, Any]:
         raise _gateway_problem(exc) from exc
     _remember_agent_result(bool(result["ok"]))
     bus.publish("model.integration.test", {"integration": instance, "ok": result["ok"]})
+    return result
+
+
+# ------------------------------------------------------------------ mcp servers
+
+_MCP_URL = r"https?://[A-Za-z0-9.-]+(?::\d{1,5})?(?:/[A-Za-z0-9._~%/-]*)?"
+
+# A target's name is also the prefix agentgateway puts on every tool it federates.
+_MCP_SERVER_FIELDS: list[dict[str, Any]] = [
+    {
+        "key": "name",
+        "label": "Name",
+        "pattern": _SLUG,
+        "placeholder": "linear",
+        "help": "Also the tool prefix, so its tools arrive as linear_<tool>.",
+    },
+    {
+        "key": "url",
+        "label": "Endpoint URL",
+        "kind": "url",
+        "pattern": _MCP_URL,
+        "placeholder": "https://mcp.example.com/mcp",
+        "help": "The streamable HTTP endpoint, exactly as an MCP client would be given it.",
+    },
+    {
+        "key": "token",
+        "label": "Access token",
+        "kind": "secret",
+        "optional": True,
+        "pattern": rf"(?:\${_ENV_NAME}|\S(?:.*\S)?)",
+        "placeholder": "sent as Authorization: Bearer",
+        "help": (
+            "agentgateway keeps it and it is never shown again. Leave it empty for an open "
+            "server, or name a variable set on agentgateway as $MY_TOKEN."
+        ),
+    },
+]
+
+
+def _mcp_endpoint(url: str) -> None:
+    """The gateway shares this network, so a target must not point back at its own door."""
+    host = (urlsplit(url).hostname or "").lower()
+    with contextlib.suppress(ValueError):
+        address = ipaddress.ip_address(host)
+        if address.is_loopback or address.is_link_local or address.is_unspecified:
+            raise HTTPException(status_code=400, detail="that address is not a reachable server")
+    if host in {"localhost", (urlsplit(settings.gateway_url).hostname or "").lower()}:
+        raise HTTPException(status_code=400, detail="that address is agentgateway itself")
+
+
+def _mcp_target_value(name: str, url: str, credential: str) -> dict[str, Any]:
+    value: dict[str, Any] = {"name": name, "mcp": {"host": url}}
+    if credential:
+        value["policies"] = {"backendAuth": {"key": {"value": credential}}}
+    return value
+
+
+def _mcp_credential(name: str, targets: list[dict[str, Any]]) -> str:
+    """The token agentgateway already holds, so changing a URL never needs it retyped."""
+    policies = (_resource_map(targets).get(name, {}).get("value", {}).get("policies")) or {}
+    key = (policies.get("backendAuth") or {}).get("key")
+    return str((key.get("value") if isinstance(key, dict) else key) or "")
+
+
+async def _mcp_resources() -> tuple[str, list[dict[str, Any]]]:
+    try:
+        runtime_state, targets = await asyncio.gather(
+            gateway.runtime(), gateway.config_resources("mcp.target")
+        )
+    except httpx.HTTPError as exc:
+        raise _gateway_problem(exc) from exc
+    return (runtime_state.get("ui") or {}).get("configStoreMode", "unknown"), targets
+
+
+async def _mcp_probe(url: str, credential: str) -> dict[str, Any]:
+    """A handshake before anything is written: one bad target takes /mcp down with it."""
+    held_by_gateway = credential.startswith("$")
+    extra = {"Authorization": f"Bearer {credential}"} if credential and not held_by_gateway else {}
+    try:
+        tools = await gateway.mcp_tools(url, extra)
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        if status in {401, 403} and held_by_gateway:
+            # Only agentgateway can read a key it holds, so a refusal here is no verdict.
+            return {"ok": True, "status": status, "message": "The server asked for its token."}
+        return {"ok": False, "status": status, "message": f"The server answered HTTP {status}."}
+    except httpx.HTTPError:
+        return {"ok": False, "status": None, "message": "The server could not be reached."}
+    except ValueError:
+        return {"ok": False, "status": None, "message": "That endpoint does not speak MCP."}
+    return {"ok": True, "status": 200, "message": f"Answered with {len(tools)} tools."}
+
+
+async def _mcp_servers_payload() -> dict[str, Any]:
+    mode, targets = await _mcp_resources()
+    config = await _attempt(gateway.config(), {"targets": []})
+    _, servers = await _tool_catalog(config)
+    counts = {server["name"]: server["count"] for server in servers}
+    managed = _resource_map(targets)
+    return {
+        "servers": [
+            {
+                "name": target["name"],
+                "url": target["host"],
+                # A file-owned target is the checked-in baseline; the app cannot touch it.
+                "managed": target["name"] in managed,
+                "credential": _credential_state({}, _mcp_credential(target["name"], targets)),
+                "tool_count": counts.get(target["name"], 0),
+            }
+            for target in config.get("targets") or []
+        ],
+        "fields": _MCP_SERVER_FIELDS,
+        "storage_mode": mode,
+        "writable": mode == "hybrid",
+    }
+
+
+@app.get("/api/mcp-servers", dependencies=[Depends(require_user)])
+async def get_mcp_servers() -> dict[str, Any]:
+    return await _mcp_servers_payload()
+
+
+@app.put("/api/mcp-servers/{name}", dependencies=[Depends(require_user)])
+async def put_mcp_server(name: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    """The path names the server; a name is never renamed, because tools are named after it."""
+    config = _normalise_integration_config({"fields": _MCP_SERVER_FIELDS}, {**payload, "name": name})
+    url = config["url"]
+    _mcp_endpoint(url)
+
+    mode, targets = await _mcp_resources()
+    _writable_gateway(mode)
+    managed = _resource_map(targets)
+    if name not in managed:
+        baseline = await _attempt(gateway.config(), {"targets": []})
+        if any(target["name"] == name for target in baseline.get("targets") or []):
+            raise HTTPException(status_code=409, detail=f"{name} is defined in the gateway config")
+
+    credential = config["token"] or _mcp_credential(name, targets)
+    probe = await _mcp_probe(url, credential)
+    if not probe["ok"]:
+        raise HTTPException(status_code=400, detail=probe["message"])
+    try:
+        await gateway.put_config_resources("mcp.target", [_mcp_target_value(name, url, credential)])
+    except httpx.HTTPError as exc:
+        raise _gateway_problem(exc, credential) from exc
+
+    _catalog_cache.update(at=0.0, value=None)
+    bus.publish("mcp.server.changed", {"server": name, "configured": True})
+    return await _mcp_servers_payload()
+
+
+@app.delete("/api/mcp-servers/{name}", dependencies=[Depends(require_user)])
+async def delete_mcp_server(name: str) -> dict[str, Any]:
+    mode, targets = await _mcp_resources()
+    _writable_gateway(mode)
+    if name not in _resource_map(targets):
+        raise HTTPException(status_code=404, detail="unknown MCP server")
+    try:
+        await gateway.delete_config_resource("mcp.target", name)
+    except httpx.HTTPError as exc:
+        raise _gateway_problem(exc) from exc
+
+    _catalog_cache.update(at=0.0, value=None)
+    bus.publish("mcp.server.changed", {"server": name, "configured": False})
+    return await _mcp_servers_payload()
+
+
+@app.post("/api/mcp-servers/{name}/test", dependencies=[Depends(require_user)])
+async def test_mcp_server(name: str) -> dict[str, Any]:
+    _, targets = await _mcp_resources()
+    target = _resource_map(targets).get(name, {}).get("value")
+    if not target:
+        raise HTTPException(status_code=404, detail="unknown MCP server")
+    result = await _mcp_probe(target["mcp"]["host"], _mcp_credential(name, targets))
+    bus.publish("mcp.server.test", {"server": name, "ok": result["ok"]})
     return result
 
 
