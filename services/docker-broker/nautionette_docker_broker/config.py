@@ -13,6 +13,8 @@ WORKER_LABEL = os.environ.get("WORKER_SERVICE_LABEL", "com.docker.compose.servic
 # Set only if this broker cannot read its own compose project label.
 PROJECT_OVERRIDE = os.environ.get("COMPOSE_PROJECT", "").strip()
 RUN_TIMEOUT = int(os.environ.get("AGENT_RUN_TIMEOUT_SECONDS", "900"))
+# How long a call will wait for an image that has to be built before it can run.
+IMAGE_BUILD_TIMEOUT = int(os.environ.get("AGENT_IMAGE_BUILD_TIMEOUT_SECONDS", "900"))
 AGENT_MEMORY = os.environ.get("AGENT_MEMORY_LIMIT", "1g")
 INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "").strip()
 STOP_GRACE = int(os.environ.get("WORKER_STOP_GRACE_SECONDS", "60"))

@@ -10,6 +10,9 @@
         <ToolCall v-if="part.kind === 'tool'" :step="part" :live="live" />
         <div v-else-if="part.text.trim()" class="bubble__body" v-html="renderMarkdown(part.text)" />
       </template>
+      <div v-if="status" class="bubble__status caption">
+        <span class="material-icons bubble__spinner">autorenew</span>{{ status }}
+      </div>
       <div v-if="error" class="bubble__error caption">{{ error }}</div>
     </div>
     <span v-if="time" class="msg__time caption">{{ time }}</span>
@@ -27,7 +30,8 @@ const props = defineProps({
   content: { type: String, default: '' },
   meta: { type: Object, default: () => ({}) },
   createdAt: { type: Number, default: 0 },
-  live: { type: Boolean, default: false }
+  live: { type: Boolean, default: false },
+  status: { type: String, default: '' }
 })
 
 // Messages written before answers kept a timeline only remember the tool names.
@@ -119,6 +123,24 @@ const time = computed(() => shortTime(props.createdAt))
 .bubble__error {
   margin-top: 6px;
   color: var(--danger);
+}
+
+.bubble__status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.bubble__spinner {
+  font-size: 14px;
+  animation: bubble-spin 1.4s linear infinite;
+}
+
+@keyframes bubble-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
 

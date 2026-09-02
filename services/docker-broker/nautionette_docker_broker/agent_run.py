@@ -12,15 +12,55 @@ from . import daemon, images
 from .config import (
     AGENT_ENVIRONMENT,
     AGENT_MEMORY,
+    IMAGE_BUILD_TIMEOUT,
     INTERNAL_TOKEN,
     RUN_TIMEOUT,
     TARGET_NETWORK,
     WORKFLOWS_VOLUME,
 )
 
+# What the caller is told while it waits for an image to be built, in order.
+BUILD_STAGES = (
+    "Setting things up",
+    "Building the agent image",
+    "Installing the agent's tools",
+    "Almost ready",
+)
+STAGE_SECONDS = 20
+BUILD_POLL_SECONDS = 3
+
 
 def _ndjson(payload: dict[str, Any]) -> str:
     return json.dumps(payload, default=str) + "\n"
+
+
+def _await_image(tag: str) -> Iterator[str]:
+    """Narrate a missing image being built. Yields an error only if it never arrives."""
+    images.start_build()
+    started = time.monotonic()
+    while True:
+        if images.has_image(tag):
+            return
+        state = images.snapshot()
+        elapsed = time.monotonic() - started
+        if state["status"] in {"ready", "failed"}:
+            reason = state["error"] or f"{tag} was not produced by the build"
+            yield _ndjson({"type": "error", "message": f"the agent image failed to build: {reason}"})
+            return
+        if elapsed > IMAGE_BUILD_TIMEOUT:
+            yield _ndjson(
+                {"type": "error", "message": f"{tag} was still building after {int(elapsed)}s"}
+            )
+            return
+        yield _ndjson(
+            {
+                "type": "status",
+                "state": "building",
+                "message": BUILD_STAGES[min(int(elapsed // STAGE_SECONDS), len(BUILD_STAGES) - 1)],
+                "seconds": int(elapsed),
+            }
+        )
+        time.sleep(BUILD_POLL_SECONDS)
 
 
 def _environment(job: dict[str, Any]) -> dict[str, str]:
@@ -41,17 +81,9 @@ def run(job: dict[str, Any]) -> Iterator[str]:
     tag = images.image_tag(agent_set)
     if not images.has_image(tag):
         # The image can vanish under us: an idle host prunes it between calls.
-        started = images.start_build()
-        error = images.snapshot()["error"]
-        yield _ndjson(
-            {
-                "type": "error",
-                "message": f"agent image {tag} is missing, so it is being built now. "
-                "Try again in a minute."
-                + (f" The last build failed: {error}" if error and not started else ""),
-            }
-        )
-        return
+        yield from _await_image(tag)
+        if not images.has_image(tag):
+            return  # _await_image already said why
 
     timeout = min(int(job.get("timeout_seconds") or RUN_TIMEOUT), RUN_TIMEOUT)
     container = None

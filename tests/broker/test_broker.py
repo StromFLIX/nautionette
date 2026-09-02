@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from nautionette_docker_broker import config, daemon, images, main, workers
+from nautionette_docker_broker import agent_run, config, daemon, images, main, workers
 
 from ..conftest import INTERNAL_TOKEN
 
@@ -201,12 +201,29 @@ def test_an_agent_set_nobody_declared_is_refused(client, agent_images):
     assert frames(response) == [{"type": "error", "message": "unknown agent set 'made-up'"}]
 
 
-def test_an_image_that_vanished_is_rebuilt_rather_than_waited_for(
+def test_an_image_that_vanished_is_built_while_the_caller_is_told_what_is_happening(
     client, agent_images, docker, monkeypatch
 ):
-    monkeypatch.setattr(images, "start_build", lambda force=False: True)
+    monkeypatch.setattr(agent_run, "BUILD_POLL_SECONDS", 0.01)
     response = client.post("/agent/run", headers=HEADERS, json={"agent_set": "default"})
-    assert "is missing, so it is being built now" in frames(response)[0]["message"]
+    statuses = [frame for frame in frames(response) if frame["type"] == "status"]
+    assert statuses and statuses[0]["state"] == "building"
+    assert statuses[0]["message"] == agent_run.BUILD_STAGES[0]
+    # The call waited for the build rather than handing back a "try again".
+    assert images.image_tag("default") in [tag for _path, tag in docker.built]
+
+
+def test_a_build_that_will_never_finish_says_so_instead_of_hanging(
+    client, agent_images, docker, monkeypatch
+):
+    monkeypatch.setattr(agent_run, "BUILD_POLL_SECONDS", 0.01)
+    monkeypatch.setattr(images, "start_build", lambda force=False: False)
+    images.image_state["status"] = "failed"
+    images.image_state["error"] = "no space left on device"
+    response = client.post("/agent/run", headers=HEADERS, json={"agent_set": "default"})
+    assert frames(response) == [
+        {"type": "error", "message": "the agent image failed to build: no space left on device"}
+    ]
 
 
 # -------------------------------------------------------------- worker restart

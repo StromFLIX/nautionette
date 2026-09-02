@@ -128,6 +128,10 @@ def start_build(force: bool = False) -> bool:
     with state_lock:
         if _build_thread is not None and _build_thread.is_alive():
             return False
+        # Marked here, not in the thread, so a caller waiting on us never reads
+        # the outcome of the previous build as if it were this one's.
+        image_state["status"] = "building"
+        image_state["error"] = None
         _build_thread = threading.Thread(
             target=ensure_images, kwargs={"force": force}, name="image-build", daemon=True
         )

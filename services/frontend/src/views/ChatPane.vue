@@ -40,7 +40,8 @@
         />
         <MessageBubble
           v-if="streaming" role="assistant" live
-          :content="liveSteps.length ? '' : '…'" :meta="{ steps: liveSteps }"
+          :content="liveSteps.length || liveStatus ? '' : '…'" :meta="{ steps: liveSteps }"
+          :status="liveStatus"
         />
       </div>
     </div>
@@ -84,6 +85,7 @@ const messages = ref([])
 const draft = ref('')
 const streaming = ref(false)
 const liveSteps = ref([])
+const liveStatus = ref('')
 const starting = ref(false)
 const scroller = ref(null)
 const composer = ref(null)
@@ -129,12 +131,18 @@ async function send () {
   draft.value = ''
   streaming.value = true
   liveSteps.value = []
+  liveStatus.value = ''
   try {
     await streamMessage(chatId.value, text, (event) => {
       if (event.type === 'user_message') messages.value.push(event.message)
+      // The broker narrates a cold start (building the agent image) before it runs.
+      else if (event.type === 'status') liveStatus.value = event.message || ''
       else if (event.type === 'error') $q.notify({ type: 'negative', message: event.message })
       else if (event.type === 'done') messages.value.push(event.message)
-      else foldEvent(liveSteps.value, event)
+      else {
+        liveStatus.value = ''
+        foldEvent(liveSteps.value, event)
+      }
       scrollDown()
     })
   } catch (error) {
@@ -142,6 +150,7 @@ async function send () {
   } finally {
     streaming.value = false
     liveSteps.value = []
+    liveStatus.value = ''
     actions.loadChats()
     actions.loadWorkflows()
     nextTick(() => composer.value?.focus())
