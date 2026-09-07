@@ -107,3 +107,34 @@ def test_a_notification_carries_no_id():
 )
 def test_a_refused_call_becomes_one_actionable_sentence(status, body, expected):
     assert upstream_problem("OpenAI", "$OPENAI_API_KEY", status, body) == expected
+
+
+@pytest.mark.parametrize(
+    ("model", "endpoint", "prompt_fields"),
+    [
+        (
+            "copilot/gpt-4o",
+            "responses",
+            {"input": "Reply with OK.", "max_output_tokens": 32},
+        ),
+        (
+            "openai/gpt-4o-mini",
+            "chat/completions",
+            {"messages": [{"role": "user", "content": "Reply with OK."}], "max_tokens": 32},
+        ),
+    ],
+)
+@pytest.mark.parametrize("status", [200, 401])
+async def test_model_probe_uses_the_provider_api(http, model, endpoint, prompt_fields, status):
+    def respond(request):
+        assert request.method == "POST"
+        assert json.loads(request.content) == {"model": model, "stream": False, **prompt_fields}
+        return httpx.Response(status, json={"model": model})
+
+    http[f"http://gateway.test/v1/{endpoint}"] = respond
+    result = await agentgateway.GatewayClient("http://gateway.test").test_model(
+        model, "Provider", "$PROVIDER_KEY"
+    )
+    assert result["ok"] is (status == 200)
+    assert result["status"] == status
+    assert result["model"] == model

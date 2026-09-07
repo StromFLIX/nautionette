@@ -69,7 +69,7 @@ export default async function (pi: ExtensionAPI) {
     baseUrl: `${GATEWAY}/v1`,
     // agentgateway holds the real provider key; this value only has to exist.
     apiKey: "gateway",
-    api: "openai-completions",
+    api: MODEL.startsWith("copilot/") ? "openai-responses" : "openai-completions",
     authHeader: true,
     models: [
       {

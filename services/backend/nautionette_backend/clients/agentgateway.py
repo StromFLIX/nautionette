@@ -137,14 +137,23 @@ class GatewayClient:
 
     async def test_model(self, model: str, name: str, credential: str) -> dict[str, Any]:
         """Make one small generation to prove an integration's auth and routing."""
+        use_responses = model.startswith("copilot/")
+        endpoint = "responses" if use_responses else "chat/completions"
+        request = {
+            "model": model,
+            "stream": False,
+            **(
+                {"input": "Reply with OK.", "max_output_tokens": 32}
+                if use_responses
+                else {
+                    "messages": [{"role": "user", "content": "Reply with OK."}],
+                    "max_tokens": 32,
+                }
+            ),
+        }
         response = await shared().post(
-            f"{self.base_url}/v1/chat/completions",
-            json={
-                "model": model,
-                "messages": [{"role": "user", "content": "Reply with OK."}],
-                "max_tokens": 32,
-                "stream": False,
-            },
+            f"{self.base_url}/v1/{endpoint}",
+            json=request,
             timeout=90,
         )
         if response.status_code < 400:
