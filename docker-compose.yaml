@@ -281,6 +281,12 @@ services:
     ports:
       - "127.0.0.1:8233:8080"
     networks: [internal]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "4", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
 networks:
   # Published traffic only. Nothing but the backend and the site join this.

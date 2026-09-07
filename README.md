@@ -454,6 +454,38 @@ Deploy these checks with `docker compose up -d --build worker docker-broker back
 workers before the broker and stops the broker first on stack shutdown. Stop the broker before
 intentionally stopping or removing individual workers for maintenance, or it will restore them.
 
+### Container health checks (Coolify)
+
+Every long-running service declares a Docker health check. Checks for our built images live in
+their Dockerfiles; PostgreSQL and the optional debug Temporal UI declare theirs in
+`docker-compose.yaml`. Coolify's Docker Compose build pack uses these declarations, so no duplicate
+health check needs to be configured in its UI.
+
+| Service | Check |
+| --- | --- |
+| Backend, workflow MCP | Local HTTP `/healthz` endpoint |
+| Docker broker | Local `/healthz` response must report `status: ok`, including execution readiness |
+| Worker | Fresh heartbeat, loaded workflows, and matching source files |
+| Frontend web, website | Local Nginx root page returns HTTP success |
+| agentgateway | Native readiness endpoint at `http://127.0.0.1:15021/healthz/ready` |
+| Temporal | `temporal operator cluster health` against `127.0.0.1:7233` |
+| PostgreSQL | `pg_isready` |
+| Temporal UI (`debug` profile) | Local HTTP root page on port 8080 |
+
+The gateway image includes a static BusyBox executable for its probe because the upstream image
+has no shell. Gateway readiness does not make a model call or require provider credentials.
+Probe ports stay private; they do not need to be published for Coolify. Build-only Pi images and
+short-lived agent runs intentionally have no service health check.
+
+Rebuild and redeploy the stack in Coolify to apply changed checks. Locally, use
+`docker compose up -d --build` and inspect the results with `docker compose ps`. Restarting an
+existing container alone does not apply new image health-check metadata. Allow for the configured
+startup grace periods, especially Temporal database setup and worker dependency installation.
+
+Health checks report container status; they do not themselves restart an unhealthy process.
+The broker recovers unhealthy workers as described above. For other services, `restart: unless-stopped`
+restarts exited containers, not containers whose only failure is an unhealthy status.
+
 ## Layout
 
 ```
