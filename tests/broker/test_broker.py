@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
+from docker.models.containers import ContainerCollection
 from fastapi.testclient import TestClient
 from nautionette_docker_broker import agent_run, config, daemon, images, main, monitor, workers
 
@@ -247,6 +249,44 @@ def frames(response) -> list[dict]:
 def test_an_agent_set_nobody_declared_is_refused(client, agent_images):
     response = client.post("/agent/run", headers=HEADERS, json={"agent_set": "made-up"})
     assert frames(response) == [{"type": "error", "message": "unknown agent set 'made-up'"}]
+
+
+@pytest.mark.parametrize("exit_code", [0, 1])
+def test_agent_creation_uses_valid_sdk_arguments_and_streams_logs(
+    client, agent_images, docker, monkeypatch, exit_code
+):
+    images.ensure_images()
+    container = Mock()
+    container.logs.side_effect = [iter([b'{"type":"text","text":"hello"}\n'])]
+    if exit_code:
+        container.logs.side_effect = [
+            iter([b'{"type":"text","text":"hello"}\n']), b"agent failed",
+        ]
+    container.wait.return_value = {"StatusCode": exit_code}
+    api = SimpleNamespace(
+        _version="1.45", create_container=Mock(return_value={"Id": "test-agent"})
+    )
+    containers = ContainerCollection(client=SimpleNamespace(api=api))
+    monkeypatch.setattr(containers, "get", Mock(return_value=container))
+    monkeypatch.setattr(docker, "containers", containers)
+
+    response = client.post("/agent/run", headers=HEADERS, json={"agent_set": "default"})
+    events = frames(response)
+
+    assert events[0]["type"] == "started"
+    assert events[1] == {"type": "text", "text": "hello"}
+    if exit_code:
+        assert events[2] == {
+            "type": "error", "message": "agent container exited 1: agent failed",
+        }
+        container.logs.assert_any_call(stdout=False, stderr=True)
+    else:
+        assert len(events) == 3
+    assert events[-1] == {"type": "closed"}
+    api.create_container.assert_called_once()
+    container.start.assert_called_once_with()
+    container.logs.assert_any_call(stream=True, follow=True, stdout=True, stderr=False)
+    container.remove.assert_called_once_with(force=True)
 
 
 def test_an_image_that_vanished_is_built_while_the_caller_is_told_what_is_happening(

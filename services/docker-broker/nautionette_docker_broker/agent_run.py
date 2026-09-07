@@ -144,8 +144,6 @@ def run(job: dict[str, Any]) -> Iterator[str]:
             cap_drop=["ALL"],
                 labels={"nautionette.chat": job.get("chat_id", ""),
                     "nautionette.turn": job.get("turn_id", "")},
-            stdout=True,
-            stderr=True,
             tty=False,
         )
         if job.get("chat_id") and job.get("internet_allowed") is True:
