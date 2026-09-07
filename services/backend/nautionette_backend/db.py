@@ -451,7 +451,10 @@ class Database:
             )
             return dict(turn)
 
-    def consume_chat_input(self, turn_id: str, message_id: str) -> bool:
+    def consume_chat_input(
+        self, turn_id: str, message_id: str, content: str = "", meta: dict[str, Any] | None = None
+    ) -> bool:
+        """Commit the preceding answer and its consumed input as one transcript boundary."""
         with self._lock, self._conn:
             changed = self._conn.execute(
                 "UPDATE chat_turns SET state = 'steered' WHERE id = ? AND state = 'queued' "
@@ -459,10 +462,17 @@ class Database:
                 (message_id, turn_id),
             ).rowcount
             if changed:
+                turn = self._conn.execute("SELECT * FROM chat_turns WHERE id = ?", (turn_id,)).fetchone()
+                if content or (meta or {}).get("steps"):
+                    self._append_chat_answer(turn, content, meta or {})
+                # Inputs are inserted when queued, not when consumed. Move this one
+                # after the preceding answer, leaving unconsumed inputs in the queue.
                 self._conn.execute(
-                    "UPDATE messages SET meta = json_remove(meta, '$.queued') WHERE id = ?",
+                    "UPDATE messages SET meta = json_remove(meta, '$.queued'), "
+                    "rowid = (SELECT COALESCE(MAX(rowid), 0) + 1 FROM messages) WHERE id = ?",
                     (message_id,),
                 )
+                self._conn.execute("UPDATE chat_turns SET steps = '[]', status = '' WHERE id = ?", (turn_id,))
                 self._conn.execute("DELETE FROM project_leases WHERE turn_id = ?", (message_id,))
             return bool(changed)
 
@@ -499,28 +509,33 @@ class Database:
             ).fetchone()
             if not turn:
                 return
-            now = time.time()
-            # Keep the latest provider measurement through reloads and interrupted-turn recovery.
-            meta = {**meta, "context": json.loads(turn["context"]) if turn["context"] else None}
-            message = {
-                "id": uuid.uuid4().hex[:12],
-                "chat_id": turn["chat_id"],
-                "role": "assistant",
-                "content": content,
-                "meta": meta,
-                "created_at": now,
-            }
-            self._conn.execute(
-                "INSERT INTO messages (id, chat_id, role, content, meta, created_at) VALUES (?,?,?,?,?,?)",
-                (message["id"], turn["chat_id"], "assistant", content, json.dumps(meta), now),
-            )
-            self._conn.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (now, turn["chat_id"]))
+            message = self._append_chat_answer(turn, content, meta)
             self._conn.execute("UPDATE chat_turns SET state = 'completed' WHERE id = ?", (turn_id,))
             self._conn.execute("DELETE FROM project_leases WHERE turn_id = ?", (turn_id,))
             self._conn.execute(
                 "INSERT INTO chat_turn_events (turn_id, payload) VALUES (?,?)",
                 (turn_id, json.dumps({"type": "done", "message": message})),
             )
+
+    def _append_chat_answer(self, turn: Any, content: str, meta: dict[str, Any]) -> dict[str, Any]:
+        """Append an answer segment inside the caller's locked transaction."""
+        now = time.time()
+        # Keep the latest provider measurement through reloads and interrupted-turn recovery.
+        meta = {**meta, "context": json.loads(turn["context"]) if turn["context"] else None}
+        message = {
+            "id": uuid.uuid4().hex[:12],
+            "chat_id": turn["chat_id"],
+            "role": "assistant",
+            "content": content,
+            "meta": meta,
+            "created_at": now,
+        }
+        self._conn.execute(
+            "INSERT INTO messages (id, chat_id, role, content, meta, created_at) VALUES (?,?,?,?,?,?)",
+            (message["id"], turn["chat_id"], "assistant", content, json.dumps(meta), now),
+        )
+        self._conn.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (now, turn["chat_id"]))
+        return message
 
     def record_run(
         self,

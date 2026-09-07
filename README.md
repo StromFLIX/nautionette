@@ -115,6 +115,9 @@ persisted in the backend and shown under **Queued**, including after reconnectin
 on another device. Pi receives compatible messages in order after its current
 assistant turn's tool calls finish, before the next model request. Messages with
 different model, tools, agent set, or project selections wait for a fresh container.
+When a queued message is consumed, the preceding assistant text and tool steps are
+saved before it as a separate reply. Live snapshots, reloads, and later turns keep
+the conversation in that order rather than merging replies across queued inputs.
 Unconsumed messages automatically start subsequent turns with updated history.
 Only one container processes a chat at a time. Legacy clients omitting `queue`
 still receive a retryable `409` for a busy chat. Queue requests return JSON `202`.
