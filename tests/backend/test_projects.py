@@ -110,6 +110,14 @@ def test_chat_job_contains_only_selected_projects_and_retry_is_stable(client, db
     endpoint = f"/api/chats/{created['id']}/messages"
     response = client.post(endpoint, json={"text": "edit", "message_id": "turn"})
     assert response.status_code == 200
+    job = broker.jobs[-1]
+    assert job["project_ids"] == [project_id]
+    assert job["internet_allowed"] is False
+    assert "not automatically for gh, curl, or MCP GitHub tools" in job["system_prompt"]
+    assert (
+        "A GitHub API or MCP 403 does not establish that Git push lacks write access" in job["system_prompt"]
+    )
+    assert "request_internet_access and wait; after approval retry" in job["system_prompt"]
     message = db.list_messages(created["id"])[0]
     assert message["meta"]["project_ids"] == [project_id]
     assert client.patch(f"/api/chats/{created['id']}", json={"project_ids": []}).status_code == 200

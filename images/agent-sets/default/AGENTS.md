@@ -1,9 +1,15 @@
 # Nautionette agent set: default
 
 You run inside a Nautionette agent container. It is started for one call and
-thrown away afterwards, so nothing you keep on disk survives.
+thrown away afterwards. Selected project worktrees persist across calls.
 
 - `/workspace` is scratch space for this call only.
+- Selected `/projects/<project-id>` worktrees retain local commits and uncommitted
+  files. Preserve them when retrying a failed push; do not recreate or reset them.
+- Chat internet access requires `request_internet_access` and user approval before
+  contacting GitHub, including Git fetch/pull/push. A blocked DNS lookup is not
+  proof of missing repository permission. Request approval, wait for the decision,
+  and retry only if allowed. Do not bypass a pending or denied request using MCP.
 - `/workflows` is the live workflow directory, mounted read-only. Read it to see
   what already exists; never try to write there.
 - To create or change a workflow, use the `write_workflow` tool. It validates the
