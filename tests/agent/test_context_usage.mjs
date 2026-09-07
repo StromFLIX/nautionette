@@ -64,6 +64,32 @@ test('tool-loop usage is streamed and the final result keeps only the latest req
   assert.deepEqual(events.at(-1).usage, smaller)
 })
 
+test('structured output uses the final object, never an earlier fenced placeholder', async () => {
+  const final = { summary: '# Real digest\nCommit details with {braces} and "quotes".', nested: { count: 2 } }
+  for (const text of [
+    JSON.stringify(final),
+    '```json\n' + JSON.stringify(final) + '\n```',
+    'Enough data.\n```json\n{"summary":"placeholder"}\n```\nCompiling now.' + JSON.stringify(final),
+    '```json\n{"summary":"placeholder"}\n```\n```json\n' + JSON.stringify(final) + '\n```'
+  ]) {
+    const events = await runAgent([
+      { type: 'message_end', message: { ...message(usage), content: [{ type: 'text', text }] } }
+    ], { output_schema: { type: 'object', required: ['summary'] } })
+    assert.equal(events.at(-1).ok, true)
+    assert.deepEqual(events.at(-1).output, final)
+  }
+})
+
+test('malformed final output cannot fall back to an earlier valid draft', async () => {
+  for (const ending of ['{"summary":"unfinished', 'Actual answer is not JSON.', '{"other":"wrong schema"}']) {
+    const text = '```json\n{"summary":"placeholder"}\n```\n' + ending
+    const events = await runAgent([
+      { type: 'message_end', message: { ...message(usage), content: [{ type: 'text', text }] } }
+    ], { output_schema: { type: 'object', required: ['summary'] } })
+    assert.equal(events.at(-1).ok, false)
+  }
+})
+
 test('usage survives structured-output failure and missing upstream usage clears old counts', async () => {
   const failed = await runAgent([{ type: 'message_end', message: message(usage) }], { output_schema: { type: 'object' } })
   assert.equal(failed.at(-1).ok, false)
