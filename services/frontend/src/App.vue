@@ -107,6 +107,7 @@ onUnmounted(() => actions.disconnect())
 .shell {
   display: grid;
   grid-template-columns: var(--rail-width) auto 1fr;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-width: 0;
   min-height: 0;

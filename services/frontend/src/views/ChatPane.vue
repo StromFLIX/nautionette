@@ -68,7 +68,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
-import { useRoute, useRouter } from 'vue-router'
+import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from 'vue-router'
 import ChatWelcome from '../components/ChatWelcome.vue'
 import Composer from '../components/Composer.vue'
 import MessageBubble from '../components/MessageBubble.vue'
@@ -100,7 +100,7 @@ async function load (id) {
   const data = await api.chat(id)
   chat.value = data.chat
   messages.value = data.messages
-  scrollDown('auto')
+  scrollDown('instant')
 }
 
 function scrollDown (behavior = 'smooth') {
@@ -188,6 +188,14 @@ watch(chatId, (id) => {
     messages.value = []
   }
 })
+
+const stopNavigation = router.afterEach((to, from, failure) => {
+  if (to.name === 'chats' && to.params.id === chatId.value &&
+      isNavigationFailure(failure, NavigationFailureType.duplicated)) {
+    scrollDown('instant')
+  }
+})
+onUnmounted(stopNavigation)
 
 let off = () => {}
 onMounted(() => {
