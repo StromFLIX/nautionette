@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import timedelta
 from typing import Any
 
@@ -161,6 +163,38 @@ class TemporalGateway:
                 break
         return out
 
+    async def scheduled_executions(self) -> AsyncIterator[dict[str, Any]]:
+        """Scan retained scheduled runs, not just the latest UI page.
+
+        Visibility is eventually consistent. Rescanning also recovers runs after
+        backend downtime and runs whose schedules have since been deleted.
+        """
+        client = await self.client()
+        queue = settings.temporal_task_queue.replace("'", "''")
+        query = f"TaskQueue = '{queue}' AND TemporalScheduledById IS NOT NULL"
+        async for execution in client.list_workflows(query=query, page_size=100):
+            yield {
+                "workflow_id": execution.id,
+                "run_id": execution.run_id,
+                "workflow_type": execution.workflow_type,
+                "start_time": execution.start_time.timestamp(),
+            }
+
+    async def execution_input(self, workflow_id: str, run_id: str) -> dict[str, Any]:
+        """Decode the original input without the prompt history's clipping."""
+        client = await self.client()
+        handle = client.get_workflow_handle(workflow_id, run_id=run_id)
+        async for event in handle.fetch_history_events():
+            if event.HasField("workflow_execution_started_event_attributes"):
+                body = event.workflow_execution_started_event_attributes
+                values = await client.data_converter.decode(list(body.input.payloads))
+                if not values:
+                    return {}
+                if len(values) != 1 or not isinstance(values[0], dict):
+                    raise ValueError("Expected one workflow input object")
+                return values[0]
+        raise ValueError("Workflow start event is unavailable")
+
     async def history(
         self, workflow_id: str, limit: int = 200, run_id: str | None = None
     ) -> list[dict[str, Any]]:
@@ -242,7 +276,8 @@ class TemporalGateway:
         return f"schedule-{workflow}"
 
     async def set_schedule(
-        self, workflow: str, spec: ScheduleSpec, payload: dict[str, Any], paused: bool = False
+        self, workflow: str, spec: ScheduleSpec, payload: dict[str, Any], paused: bool = False,
+        timeout_minutes: int = 30,
     ) -> dict[str, Any]:
         client = await self.client()
         schedule = Schedule(
@@ -251,6 +286,7 @@ class TemporalGateway:
                 payload,
                 id=f"{workflow}-scheduled",
                 task_queue=settings.temporal_task_queue,
+                execution_timeout=timedelta(minutes=timeout_minutes),
             ),
             spec=spec,
             state=ScheduleState(paused=paused),
@@ -271,6 +307,22 @@ class TemporalGateway:
                 next_action_times=description.info.next_action_times,
             ),
         }
+
+    async def ensure_schedule_timeout(self, workflow: str, timeout_minutes: int) -> None:
+        """Migrate existing actions without resetting recurrence, inputs or pause state."""
+        client = await self.client()
+        timeout = timedelta(minutes=timeout_minutes)
+
+        def update(current):
+            schedule = current.description.schedule
+            action = schedule.action
+            if not isinstance(action, ScheduleActionStartWorkflow) or action.execution_timeout == timeout:
+                return None
+            return ScheduleUpdate(
+                schedule=replace(schedule, action=replace(action, execution_timeout=timeout))
+            )
+
+        await client.get_schedule_handle(self._schedule_id(workflow)).update(update)
 
     async def schedule(self, workflow: str) -> dict[str, Any]:
         client = await self.client()

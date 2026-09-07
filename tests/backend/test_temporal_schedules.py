@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
 from nautionette_backend.clients.temporal_server import TemporalGateway, _cron_of
 from nautionette_backend.schedules import DailySchedule, temporal_spec
-from temporalio.client import ScheduleAlreadyRunningError
+from temporalio.client import (
+    Schedule,
+    ScheduleActionStartWorkflow,
+    ScheduleAlreadyRunningError,
+    ScheduleState,
+)
 
 
 def field(start, end=None, step=1):
@@ -63,8 +69,9 @@ class ScheduleHandle:
 
     async def update(self, updater):
         update = updater(SimpleNamespace(description=SimpleNamespace(schedule=self.schedule)))
-        self.schedule = update.schedule
-        self.updates += 1
+        if update is not None:
+            self.schedule = update.schedule
+            self.updates += 1
 
     async def describe(self):
         return SimpleNamespace(
@@ -87,6 +94,31 @@ class ScheduleClient:
         return self.handle
 
 
+async def test_timeout_migration_preserves_the_current_schedule_and_is_idempotent(monkeypatch):
+    gateway = TemporalGateway()
+    schedule = Schedule(
+        action=ScheduleActionStartWorkflow("digest", {"days": 7}, id="digest-scheduled", task_queue="q"),
+        spec=temporal_spec(DailySchedule(frequency="daily", at="07:30", timezone="Europe/Berlin")),
+        state=ScheduleState(paused=True, note="keep this"),
+    )
+    client = ScheduleClient(None, schedule)
+
+    async def connect():
+        return client
+
+    monkeypatch.setattr(gateway, "client", connect)
+    await gateway.ensure_schedule_timeout("digest", 12)
+    updated = client.handle.schedule
+    assert updated.action.execution_timeout == timedelta(minutes=12)
+    assert updated.action.args == schedule.action.args
+    assert updated.action.id == schedule.action.id
+    assert updated.spec == schedule.spec
+    assert updated.state == schedule.state
+    assert updated.policy == schedule.policy
+    await gateway.ensure_schedule_timeout("digest", 12)
+    assert client.handle.updates == 1
+
+
 class DataConverter:
     def __init__(self, payload):
         self.payload = payload
@@ -106,8 +138,9 @@ async def test_an_existing_schedule_is_updated_atomically(monkeypatch):
 
     monkeypatch.setattr(gateway, "client", connect)
     schedule = DailySchedule(frequency="daily", at="07:30", timezone="Europe/Berlin")
-    result = await gateway.set_schedule("digest", temporal_spec(schedule), {})
+    result = await gateway.set_schedule("digest", temporal_spec(schedule), {}, timeout_minutes=17)
 
+    assert client.handle.schedule.action.execution_timeout == timedelta(minutes=17)
     assert client.handle.updates == 1
     assert result["description"] == "Every day at 07:30"
 

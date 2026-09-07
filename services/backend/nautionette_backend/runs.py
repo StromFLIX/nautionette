@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import time
 import uuid
 from datetime import UTC, datetime
@@ -28,6 +29,68 @@ from .runtime import runtime
 WATCH_CEILING_SECONDS = 25 * 60 * 60
 POLL_FLOOR_SECONDS = 5.0
 POLL_CEILING_SECONDS = 60.0
+RECONCILE_SECONDS = 60.0
+log = logging.getLogger(__name__)
+_watchers: dict[str, asyncio.Task] = {}
+
+
+def follow(name: str, workflow_id: str) -> None:
+    """Manual starts, discovery and restart recovery share one watcher."""
+    previous = _watchers.get(workflow_id)
+    if previous is not None and not previous.done():
+        return
+    task = spawn(watch(name, workflow_id), name=f"watch-{workflow_id}")
+    _watchers[workflow_id] = task
+
+    def finished(done):
+        if _watchers.get(workflow_id) is done:
+            _watchers.pop(workflow_id, None)
+
+    task.add_done_callback(finished)
+
+
+async def discover_scheduled_runs() -> None:
+    async for execution in temporal.scheduled_executions():
+        workflow_id = execution["workflow_id"]
+        try:
+            row = stored_run(workflow_id)
+            if row is None:
+                name = execution["workflow_type"]
+                payload = await temporal.execution_input(workflow_id, execution["run_id"])
+                # Another discovery may have inserted it while decoding history.
+                row = db.record_run(
+                    name, workflow_id, execution["run_id"], "schedule", payload,
+                    created_at=execution["start_time"],
+                )
+                bus.publish("run.started", {
+                    "workflow": name, "workflow_id": workflow_id, "trigger": "schedule",
+                })
+            if row["status"] == "running":
+                follow(row["workflow"], workflow_id)
+        except Exception:  # noqa: BLE001 - retry this run next pass; do not block the others
+            log.exception("Could not recover scheduled run %s", workflow_id)
+
+
+async def reconcile_schedule_timeouts() -> None:
+    for schedule in await temporal.schedules():
+        name = schedule["workflow"]
+        try:
+            workflow = await authoring.get_workflow(name)
+            timeout = (workflow.get("manifest") or {}).get("timeout_minutes", 30)
+            await temporal.ensure_schedule_timeout(name, timeout)
+        except Exception:  # noqa: BLE001 - deleted workflows or unavailable authoring can retry
+            log.exception("Could not reconcile schedule timeout for %s", name)
+
+
+async def reconcile_schedules() -> None:
+    """Temporal fires schedules itself, even while this backend is offline."""
+    while True:
+        for operation in (discover_scheduled_runs, reconcile_schedule_timeouts):
+            try:
+                await operation()
+            except Exception:  # noqa: BLE001 - startup/outages must not kill the recovery loop
+                log.exception("Schedule reconciliation failed: %s", operation.__name__)
+        await asyncio.sleep(RECONCILE_SECONDS)
 
 
 async def restart_worker() -> dict[str, Any]:
@@ -54,7 +117,7 @@ async def start(name: str, payload: dict[str, Any], trigger: str) -> dict[str, A
     )
     db.record_run(name, started["workflow_id"], started.get("run_id"), trigger, payload)
     bus.publish("run.started", {"workflow": name, "workflow_id": workflow_id, "trigger": trigger})
-    spawn(watch(name, workflow_id), name=f"watch-{workflow_id}")
+    follow(name, workflow_id)
     return {"workflow": name, **started, "trigger": trigger}
 
 
@@ -135,7 +198,7 @@ async def watch(name: str, workflow_id: str) -> None:
 def resume_unfinished() -> None:
     """Pick up runs a restart interrupted, so a result is never simply lost."""
     for row in db.unfinished_runs():
-        spawn(watch(row["workflow"], row["workflow_id"]), name=f"watch-{row['workflow_id']}")
+        follow(row["workflow"], row["workflow_id"])
 
 
 def stored_run(workflow_id: str) -> dict[str, Any] | None:

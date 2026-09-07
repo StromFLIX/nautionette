@@ -26,7 +26,10 @@ def digest(backend):
 def test_listing_merges_schedules_and_local_settings(client, digest):
     client.post(
         "/api/workflows/url_digest/schedule",
-        json={"frequency": "daily", "at": "08:00", "timezone": "Europe/Berlin"},
+        json={
+            "frequency": "daily", "at": "08:00", "timezone": "Europe/Berlin",
+            "input": {"url": "https://a"},
+        },
     )
     workflow = client.get("/api/workflows").json()["workflows"][0]
     assert workflow["schedule"]["description"] == "Every day at 08:00"
@@ -125,12 +128,31 @@ def test_a_schedule_can_be_set_and_taken_away(client, digest):
         "next_runs": [],
     }
     assert digest.temporal.schedule_specs["url_digest"]["input"] == {"url": "https://a"}
+    assert digest.temporal.schedule_specs["url_digest"]["timeout_minutes"] == 12
 
     workflow = client.get("/api/workflows/url_digest").json()
     assert workflow["schedule"]["input"] == {"url": "https://a"}
 
     assert client.delete("/api/workflows/url_digest/schedule").json() == {"ok": True}
     assert digest.temporal.schedule_specs == {}
+
+
+def test_scheduling_rejects_invalid_workflow_input(client, digest):
+    response = client.post(
+        "/api/workflows/url_digest/schedule",
+        json={"frequency": "daily", "at": "08:00", "timezone": "UTC"},
+    )
+    assert response.status_code == 400
+    assert digest.temporal.schedule_specs == {}
+
+
+def test_scheduling_requires_a_deployed_workflow(client, backend):
+    with pytest.raises(RuntimeError, match="does not exist"):
+        client.post(
+            "/api/workflows/missing/schedule",
+            json={"frequency": "daily", "at": "08:00", "timezone": "UTC"},
+        )
+    assert backend.temporal.schedule_specs == {}
 
 
 # ----------------------------------------------------------------------- drafts
