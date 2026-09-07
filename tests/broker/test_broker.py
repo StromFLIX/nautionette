@@ -267,6 +267,7 @@ def test_agent_creation_uses_valid_sdk_arguments_and_streams_logs(
 ):
     images.ensure_images()
     container = Mock()
+    container.attrs = {"State": {"OOMKilled": False}}
     container.logs.side_effect = [iter([b'{"type":"text","text":"hello"}\n'])]
     if exit_code:
         container.logs.side_effect = [
@@ -289,13 +290,130 @@ def test_agent_creation_uses_valid_sdk_arguments_and_streams_logs(
             "type": "error",
             "message": "agent container exited 1: agent failed",
         }
-        container.logs.assert_any_call(stdout=False, stderr=True)
+        container.logs.assert_any_call(stdout=False, stderr=True, tail=100)
     else:
         assert len(events) == 3
     assert events[-1] == {"type": "closed"}
     api.create_container.assert_called_once()
     container.start.assert_called_once_with()
     container.logs.assert_any_call(stream=True, follow=True, stdout=True, stderr=False)
+    container.remove.assert_called_once_with(force=True)
+
+
+@pytest.fixture
+def running_agent(agent_images, docker, monkeypatch):
+    images.ensure_images()
+    container = Mock()
+    container.attrs = {"State": {"OOMKilled": False}}
+    container.logs.return_value = iter([])
+    container.wait.return_value = {"StatusCode": 0}
+    monkeypatch.setattr(docker.containers, "create", Mock(return_value=container), raising=False)
+    timers = []
+
+    class Timer:
+        def __init__(self, seconds, callback):
+            self.seconds = seconds
+            self.callback = callback
+            self.cancelled = False
+            timers.append(self)
+
+        def start(self):
+            pass
+
+        def cancel(self):
+            self.cancelled = True
+
+        def join(self):
+            pass
+
+    monkeypatch.setattr(agent_run.threading, "Timer", Timer)
+    return container, timers
+
+
+@pytest.mark.parametrize("has_output", [False, True])
+def test_watchdog_reports_timeout_even_when_log_stream_closes_without_another_chunk(
+    client, running_agent, has_output
+):
+    container, timers = running_agent
+
+    def logs(**kwargs):
+        assert kwargs == {"stream": True, "follow": True, "stdout": True, "stderr": False}
+        if has_output:
+            yield b'{"type":"delta","text":"still working"}\n'
+        timers[0].callback()  # SIGKILL closes the stream; no final chunk to check a deadline on.
+
+    container.logs.side_effect = logs
+    container.wait.return_value = {"StatusCode": 137}
+    events = frames(client.post("/agent/run", headers=HEADERS, json={"timeout_seconds": 12}))
+    errors = [event for event in events if event["type"] == "error"]
+    assert errors == [agent_run._timeout_error(12)]
+    assert container.kill.call_count == 1
+    assert timers[0].cancelled
+    assert events[-1] == {"type": "closed"}
+    container.remove.assert_called_once_with(force=True)
+
+
+@pytest.mark.parametrize(("oom", "reason"), [(True, "oom_killed"), (False, "sigkill")])
+def test_exit_137_is_not_assumed_to_be_oom(client, running_agent, oom, reason):
+    container, timers = running_agent
+    container.attrs["State"]["OOMKilled"] = oom
+    container.wait.return_value = {"StatusCode": 137}
+    events = frames(client.post("/agent/run", headers=HEADERS, json={}))
+    errors = [event for event in events if event["type"] == "error"]
+    assert len(errors) == 1
+    assert errors[0]["reason"] == reason
+    assert errors[0]["exit_code"] == 137
+    if oom:
+        assert agent_run.AGENT_MEMORY in errors[0]["message"]
+    container.reload.assert_called_once_with()
+    container.kill.assert_not_called()
+    assert timers[0].cancelled
+
+
+@pytest.mark.parametrize(("requested", "expected"), [(None, 3600), (900, 900), (1800, 1800), (7200, 3600)])
+def test_broker_honours_long_calls_and_preserves_its_ceiling(
+    client, running_agent, monkeypatch, requested, expected
+):
+    _, timers = running_agent
+    monkeypatch.setattr(agent_run, "RUN_TIMEOUT", 3600)
+    job = {} if requested is None else {"timeout_seconds": requested}
+    events = frames(client.post("/agent/run", headers=HEADERS, json=job))
+    assert not any(event["type"] == "error" for event in events)
+    assert timers[0].seconds == expected
+    assert timers[0].cancelled
+
+
+def test_stop_does_not_report_a_container_failure(running_agent):
+    import threading
+
+    container, timers = running_agent
+    stopped = threading.Event()
+
+    def logs(**_kwargs):
+        stopped.set()
+        return iter([])
+
+    container.logs.side_effect = logs
+    container.wait.return_value = {"StatusCode": 137}
+    events = [json.loads(line) for line in agent_run._run({}, stopped)]
+    assert [event["type"] for event in events] == ["started", "closed"]
+    assert timers[0].cancelled
+    container.remove.assert_called_once_with(force=True)
+
+
+def test_timeout_stays_explicit_if_kill_or_log_stream_races_with_container_exit(client, running_agent):
+    container, timers = running_agent
+    container.kill.side_effect = RuntimeError("container already exited")
+
+    def logs(**_kwargs):
+        timers[0].callback()
+        raise RuntimeError("stream closed")
+
+    container.logs.side_effect = logs
+    events = frames(client.post("/agent/run", headers=HEADERS, json={"timeout_seconds": 12}))
+    assert events[-2] == agent_run._timeout_error(12)
+    assert events[-1] == {"type": "closed"}
+    assert timers[0].cancelled
     container.remove.assert_called_once_with(force=True)
 
 

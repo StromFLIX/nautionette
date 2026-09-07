@@ -6,6 +6,7 @@ import asyncio
 import json
 
 import httpx
+import pytest
 from nautionette_backend import background, conversations, main
 
 from ..conftest import APP_TOKEN
@@ -71,16 +72,22 @@ def test_a_message_is_answered_and_both_halves_are_kept(client):
     ]
 
 
-def test_the_first_message_names_an_unnamed_chat(client):
+def test_the_first_message_names_an_unnamed_chat(client, gateway):
     chat = client.post("/api/chats", json={}).json()
-    send(client, chat["id"], "Summarise the release notes\nand nothing else")
-    assert client.get(f"/api/chats/{chat['id']}").json()["chat"]["title"] == ("Summarise the release notes")
+    text = "Hello, could you help me?\nPlease summarise the release notes and nothing else."
+    send(client, chat["id"], text)
+    assert client.get(f"/api/chats/{chat['id']}").json()["chat"]["title"] == "Summarise release notes"
+    assert gateway.title_requests[0][0] == chat["model"]
+    assert gateway.title_requests[0][2] == text
+    send(client, chat["id"], "Thanks")
+    assert len(gateway.title_requests) == 1
 
 
-def test_a_named_chat_keeps_its_name(client):
+def test_a_named_chat_keeps_its_name(client, gateway):
     chat = client.post("/api/chats", json={"title": "Standing order"}).json()
     send(client, chat["id"], "hello")
     assert client.get(f"/api/chats/{chat['id']}").json()["chat"]["title"] == "Standing order"
+    assert gateway.title_requests == []
 
 
 def test_the_transcript_so_far_is_handed_to_the_agent(client, broker):
@@ -103,6 +110,16 @@ def test_the_chat_decides_the_agent_set_model_and_tools(client, broker):
     assert (job["agent_set"], job["model"], job["tools"]) == ("research", "groq/llama", ["search"])
     assert job["mode"] == "interactive"
     assert job["run_id"] == f"chat-{chat['id']}"
+
+
+@pytest.mark.parametrize("seconds", [900, 3600, 7200])
+def test_chat_requests_the_configured_broker_budget(client, broker, monkeypatch, seconds):
+    from nautionette_backend.config import settings
+
+    monkeypatch.setattr(settings, "agent_run_timeout_seconds", seconds)
+    chat = client.post("/api/chats", json={}).json()
+    send(client, chat["id"], "long-running task")
+    assert broker.jobs[0]["timeout_seconds"] == seconds
 
 
 def test_an_empty_message_is_refused(client):

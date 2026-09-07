@@ -80,6 +80,20 @@ def test_only_successful_main_push_ci_can_deploy_staging(override):
     assert release.candidate("workflow_run", event(action="completed", workflow_run=run), REPO) is None
 
 
+def test_successful_manual_main_ci_can_initialize_staging():
+    run = {
+        "event": "workflow_dispatch",
+        "conclusion": "success",
+        "head_branch": "main",
+        "head_sha": COMMIT,
+        "head_repository": {"full_name": REPO},
+    }
+    assert release.candidate("workflow_run", event(action="completed", workflow_run=run), REPO) == (
+        "staging",
+        COMMIT,
+    )
+
+
 def test_irrelevant_event_needs_no_secrets_or_network(tmp_path, monkeypatch, capsys):
     path = tmp_path / "event.json"
     path.write_text(json.dumps(event(action="ping")))
@@ -108,6 +122,7 @@ def api(monkeypatch):
             self.final_status = "finished"
             self.final_commit = COMMIT
             self.accept_pin = True
+            self.description = ""
 
         def deployed(self, app, commit):
             return app in self.already_deployed
@@ -122,6 +137,7 @@ def api(monkeypatch):
             if path.startswith("/deployments/"):
                 return {"status": self.final_status, "commit": self.final_commit}
             return {
+                "description": self.description,
                 "git_branch": "main",
                 "build_pack": "dockercompose",
                 "git_repository": REPO,
@@ -142,7 +158,7 @@ def api(monkeypatch):
 def test_untested_release_never_patches_or_deploys(api):
     with pytest.raises(RuntimeError, match="staging"):
         release.deploy("production", COMMIT)
-    assert api.calls == []
+    assert all(method == "GET" for _, method, _ in api.calls)
 
 
 def test_duplicate_deploy_is_a_noop(api):
@@ -156,7 +172,16 @@ def test_active_deployment_is_not_reconfigured(api):
     api.history_rows = [{"status": "queued"}]
     with pytest.raises(RuntimeError, match="active"):
         release.deploy("production", COMMIT)
-    assert api.calls == []
+    assert all(method == "GET" for _, method, _ in api.calls)
+
+
+@pytest.mark.parametrize("target", ["production", "staging"])
+def test_refresh_guard_prevents_deployment_writes(api, target):
+    api.already_deployed.add("stage")
+    api.description = "[nautionette-refresh:1234-1] Original description"
+    with pytest.raises(RuntimeError, match="maintenance guard"):
+        release.deploy(target, COMMIT)
+    assert all(method == "GET" for _, method, _ in api.calls)
 
 
 def test_pins_before_queueing_and_waits_for_verified_result(api):

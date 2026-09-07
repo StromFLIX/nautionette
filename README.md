@@ -139,6 +139,27 @@ and Pi agent images. Chat containers use Pi RPC mode for live steering; workflow
 agent calls retain their existing one-shot JSON mode. Validate the real runtime with
 `NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_chat_control_docker.py`.
 
+### Agent runtime limits
+
+Chat turns default to a one-hour wall-clock limit (`AGENT_RUN_TIMEOUT_SECONDS=3600`),
+including tool execution and time waiting for internet approval. The same setting
+is passed to **both backend and Docker broker**: the backend requests this budget,
+and the broker enforces it even when the agent produces no output. Recreate both
+services after changing it. Existing deployments explicitly configured with `900`
+retain their 15-minute limit until that environment value is updated; an already
+running turn keeps its original budget.
+
+Workflow agent calls still default to 900 seconds. For longer calls, set the
+activity's `timeout_seconds`, increase its Temporal `start_to_close_timeout` and
+workflow timeout as needed, and ensure the broker ceiling is at least as large.
+
+A watchdog expiry is reported as a **time limit**, Docker-confirmed OOM as **out of
+memory** (with `AGENT_MEMORY_LIMIT`, default `1g`), and other exit-137 failures as
+**SIGKILL with an unconfirmed cause**. Exit 137 alone is not evidence of OOM.
+Failed turns retain their partial transcript and persistent project worktrees;
+continue with a new message rather than automatically replaying tools that may
+already have produced external side effects.
+
 ### Session internet approval
 
 Chat Pi containers start on `nautionette-agents`, a Docker `internal: true`
