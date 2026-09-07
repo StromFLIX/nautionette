@@ -19,6 +19,7 @@ from ..agent import (
 )
 from ..background import spawn
 from ..clients import broker
+from ..config import settings
 from ..conversations import chat_snapshots, launch_next, run_turn, turn_events
 from ..db import db
 from ..events import bus
@@ -136,6 +137,7 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
         model=chat.get("model"),
         tools=chat.get("tools"),
         run_id=f"chat-{chat_id}",
+        timeout_seconds=settings.agent_run_timeout_seconds,
     )
     job.update(
         chat_id=chat_id,

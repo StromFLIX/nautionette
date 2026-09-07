@@ -180,6 +180,19 @@ def run(job: dict[str, Any]) -> Iterator[str]:
                 _stopped.pop(key, None)
 
 
+def _timeout_error(timeout: int) -> dict[str, Any]:
+    return {
+        "type": "error",
+        "reason": "timeout",
+        "timeout_seconds": timeout,
+        "message": (
+            f"agent call exceeded its {timeout}s time limit and was stopped. "
+            "Continue in a new message, or increase AGENT_RUN_TIMEOUT_SECONDS "
+            "(workflow calls must also increase their timeout_seconds)."
+        ),
+    }
+
+
 def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
     agent_set = job.get("agent_set") or "default"
     if agent_set not in images.discovered_agent_sets():
@@ -195,6 +208,7 @@ def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
     timeout = min(int(job.get("timeout_seconds") or RUN_TIMEOUT), RUN_TIMEOUT)
     container = None
     watchdog = None
+    timed_out = threading.Event()
     claimed_projects = []
     yield _ndjson({"type": "started", "agent_set": agent_set, "image": tag})
     try:
@@ -241,10 +255,25 @@ def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
             if stopped.is_set():
                 return
             container.start()
-        watchdog = threading.Timer(timeout, container.kill)
+
+        def expire() -> None:
+            # Record the reason before killing: Docker closes even a silent log
+            # stream on exit, so a deadline check inside that stream can miss it.
+            timed_out.set()
+            daemon.log.warning(
+                "agent time limit exceeded: chat=%s turn=%s timeout_seconds=%s",
+                job.get("chat_id", ""),
+                job.get("turn_id", ""),
+                timeout,
+            )
+            try:
+                container.kill()
+            except Exception:  # noqa: BLE001 - it may have exited concurrently
+                daemon.log.exception("could not kill timed-out agent container")
+
+        watchdog = threading.Timer(timeout, expire)
         watchdog.daemon = True
         watchdog.start()
-        deadline = time.time() + timeout
         buffer = b""
         for chunk in container.logs(stream=True, follow=True, stdout=True, stderr=False):
             buffer += chunk
@@ -253,24 +282,64 @@ def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
                 text = line.decode("utf-8", "replace").strip()
                 if text:
                     yield text + "\n"
-            if time.time() > deadline:
-                yield _ndjson({"type": "error", "message": f"agent call exceeded {timeout}s"})
-                container.kill()
-                break
         if buffer.strip():
             yield buffer.decode("utf-8", "replace").strip() + "\n"
 
         status = container.wait(timeout=30)
+        watchdog.cancel()
+        watchdog.join()
         code = status.get("StatusCode", 0)
-        if code != 0:
-            stderr = container.logs(stdout=False, stderr=True).decode("utf-8", "replace")
-            yield _ndjson({"type": "error", "message": f"agent container exited {code}: {stderr[-800:]}"})
+        if stopped.is_set():
+            return  # An explicit Stop is not a container failure.
+        if timed_out.is_set():
+            yield _ndjson(_timeout_error(timeout))
+        elif code != 0:
+            container.reload()
+            oom_killed = container.attrs.get("State", {}).get("OOMKilled") is True
+            if oom_killed:
+                error = {
+                    "type": "error",
+                    "reason": "oom_killed",
+                    "exit_code": code,
+                    "message": (
+                        f"agent container ran out of memory (limit {AGENT_MEMORY}, exit {code}). "
+                        "Reduce memory use or increase AGENT_MEMORY_LIMIT."
+                    ),
+                }
+            elif code == 137:
+                error = {
+                    "type": "error",
+                    "reason": "sigkill",
+                    "exit_code": code,
+                    "message": (
+                        "agent container was killed (SIGKILL, exit 137). "
+                        "The broker timeout did not fire and Docker did not report an OOM kill; "
+                        "check host memory and deployment logs."
+                    ),
+                }
+            else:
+                stderr = container.logs(stdout=False, stderr=True, tail=100).decode("utf-8", "replace")
+                error = {"type": "error", "message": f"agent container exited {code}: {stderr[-800:]}"}
+            daemon.log.warning(
+                "agent container failed: chat=%s turn=%s exit=%s oom_killed=%s",
+                job.get("chat_id", ""),
+                job.get("turn_id", ""),
+                code,
+                oom_killed,
+            )
+            yield _ndjson(error)
     except Exception as exc:  # noqa: BLE001 - always tell the caller what happened
         daemon.log.exception("agent run failed")
-        yield _ndjson({"type": "error", "message": str(exc)[:500]})
+        if not stopped.is_set():
+            yield _ndjson(
+                _timeout_error(timeout)
+                if timed_out.is_set()
+                else {"type": "error", "message": str(exc)[:500]}
+            )
     finally:
         if watchdog is not None:
             watchdog.cancel()
+            watchdog.join()
         if container is not None:
             try:
                 container.remove(force=True)

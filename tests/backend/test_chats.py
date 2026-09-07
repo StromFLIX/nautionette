@@ -6,6 +6,7 @@ import asyncio
 import json
 
 import httpx
+import pytest
 from nautionette_backend import background, conversations, main
 
 from ..conftest import APP_TOKEN
@@ -103,6 +104,16 @@ def test_the_chat_decides_the_agent_set_model_and_tools(client, broker):
     assert (job["agent_set"], job["model"], job["tools"]) == ("research", "groq/llama", ["search"])
     assert job["mode"] == "interactive"
     assert job["run_id"] == f"chat-{chat['id']}"
+
+
+@pytest.mark.parametrize("seconds", [900, 3600, 7200])
+def test_chat_requests_the_configured_broker_budget(client, broker, monkeypatch, seconds):
+    from nautionette_backend.config import settings
+
+    monkeypatch.setattr(settings, "agent_run_timeout_seconds", seconds)
+    chat = client.post("/api/chats", json={}).json()
+    send(client, chat["id"], "long-running task")
+    assert broker.jobs[0]["timeout_seconds"] == seconds
 
 
 def test_an_empty_message_is_refused(client):

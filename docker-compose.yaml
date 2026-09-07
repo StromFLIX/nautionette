@@ -42,6 +42,7 @@ services:
       PROJECTS_DIR: /projects
       GITHUB_APP_PUBLIC_URL: ${GITHUB_APP_PUBLIC_URL:-}
       DEFAULT_AGENT_SET: ${DEFAULT_AGENT_SET:-default}
+      AGENT_RUN_TIMEOUT_SECONDS: ${AGENT_RUN_TIMEOUT_SECONDS:-3600}
       AGENT_MODEL: ${AGENT_MODEL:-openai/gpt-4o-mini}
       # Set to any non-empty value when a provider key is configured; the app
       # also flips it on by itself after the first agent call that works.
@@ -109,7 +110,7 @@ services:
       WORKER_GRACE_SECONDS: ${WORKER_GRACE_SECONDS:-50}
       # One container per agent call, so the only knob is how long a single call
       # may take before it is killed.
-      AGENT_RUN_TIMEOUT_SECONDS: ${AGENT_RUN_TIMEOUT_SECONDS:-900}
+      AGENT_RUN_TIMEOUT_SECONDS: ${AGENT_RUN_TIMEOUT_SECONDS:-3600}
       AGENT_MEMORY_LIMIT: ${AGENT_MEMORY_LIMIT:-1g}
       WORKER_STOP_GRACE_SECONDS: ${WORKER_STOP_GRACE_SECONDS:-60}
       # Injected into the Pi containers this broker runs.
