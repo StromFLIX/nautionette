@@ -47,11 +47,10 @@ INSTRUCTIONS = (
 
 
 def _schema(value: Any) -> Any:
+    if isinstance(value, str):
+        return value.replace("#/components/schemas/", "#/$defs/")
     if isinstance(value, dict):
-        return {
-            key: item.replace("#/components/schemas/", "#/$defs/") if key == "$ref" else _schema(item)
-            for key, item in value.items()
-        }
+        return {key: _schema(item) for key, item in value.items()}
     if isinstance(value, list):
         return [_schema(item) for item in value]
     return value

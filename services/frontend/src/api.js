@@ -103,7 +103,7 @@ export const api = {
     request(`/api/workflows/${name}/settings`, { method: 'PATCH', ...json(payload) }),
   deleteWorkflow: (name) => request(`/api/workflows/${name}`, { method: 'DELETE' }),
   runWorkflow: (name, input) => request(`/api/workflows/${name}/run`, { method: 'POST', ...json({ input }) }),
-  schedule: (name, cron, input) => request(`/api/workflows/${name}/schedule`, { method: 'POST', ...json({ cron, input }) }),
+  schedule: (name, schedule) => request(`/api/workflows/${name}/schedule`, { method: 'POST', ...json(schedule) }),
   unschedule: (name) => request(`/api/workflows/${name}/schedule`, { method: 'DELETE' }),
   validate: (name, code) => request('/api/workflows/validate', { method: 'POST', ...json({ name, code }) }),
 

@@ -92,7 +92,14 @@
               <span v-if="workflow.settings?.disabled" class="material-icons row-item__pin dim">pause_circle</span>
               <span v-else-if="workflow.schedule" class="material-icons row-item__pin">schedule</span>
             </div>
-            <div class="row-item__sub truncate">{{ workflow.description || workflow.name }}</div>
+            <div
+              class="row-item__sub truncate"
+              :title="workflow.schedule ? `${workflow.schedule.description} · ${workflow.schedule.timezone}` : ''"
+            >
+              {{ workflow.schedule?.next_run
+                ? `Next ${scheduleTime(workflow.schedule.next_run, workflow.schedule.timezone)}`
+                : workflow.schedule?.description || workflow.description || workflow.name }}
+            </div>
           </div>
         </RouterLink>
         <p v-if="!filteredWorkflows.length && !filteredDrafts.length" class="side__empty caption">
@@ -131,7 +138,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { RUN_TONE, avatarStyle, initials, shortTime } from '../format'
+import { RUN_TONE, avatarStyle, initials, scheduleTime, shortTime } from '../format'
 import { actions, health, store } from '../store'
 import { api } from '../api'
 

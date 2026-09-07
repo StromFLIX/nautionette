@@ -78,8 +78,14 @@
         <div class="caption dim truncate">{{ workflow.description || workflow.name }}</div>
       </div>
       <span v-if="disabled" class="chip chip--warning">disabled</span>
-      <span v-else-if="workflow.schedule" class="chip chip--accent">
-        <span class="material-icons" style="font-size: 13px">schedule</span>{{ workflow.schedule.cron }}
+      <span
+        v-else-if="workflow.schedule" class="chip chip--accent"
+        :title="`${workflow.schedule.description} · ${workflow.schedule.timezone}`"
+      >
+        <span class="material-icons" style="font-size: 13px">schedule</span>
+        {{ workflow.schedule.next_run
+          ? `Next ${scheduleTime(workflow.schedule.next_run, workflow.schedule.timezone)}`
+          : workflow.schedule.description }}
       </span>
       <button class="btn btn--icon">
         <span class="material-icons">more_vert</span>
@@ -130,22 +136,106 @@
 
         <section class="block">
           <div v-for="(schema, key) in inputProperties" :key="key" class="field-row">
-            <label class="field-row__label">
+            <label class="field-row__label" :for="`workflow-input-${key}`">
               {{ key }}
               <span v-if="(workflow.manifest?.inputs?.required || []).includes(key)" class="dim">*</span>
             </label>
-            <input v-model="inputs[key]" class="field" :placeholder="schema.description || schema.type || ''" />
+            <input
+              :id="`workflow-input-${key}`" v-model="inputs[key]" class="field"
+              :placeholder="schema.description || schema.type || ''"
+            />
           </div>
           <div class="row" style="margin-top: 14px">
             <button class="btn btn--primary" :disabled="running || disabled" @click="run">
               <span class="material-icons" style="font-size: 17px">play_arrow</span>
               {{ running ? 'Starting…' : 'Run now' }}
             </button>
-            <input v-model="cron" class="field" style="width: 150px" placeholder="0 8 * * *" />
-            <button class="btn btn--outline" :disabled="disabled" @click="schedule">
-              {{ workflow.schedule ? 'Update schedule' : 'Schedule' }}
+          </div>
+        </section>
+
+        <section class="block schedule-block">
+          <div class="section-label">Schedule</div>
+
+          <div v-if="workflow.schedule" class="schedule-current">
+            <span class="material-icons schedule-current__icon">event_repeat</span>
+            <div class="schedule-current__rule">
+              <strong>{{ workflow.schedule.description }}</strong>
+              <span class="caption dim">{{ workflow.schedule.timezone }}</span>
+            </div>
+            <div class="schedule-current__next">
+              <span class="caption dim">Next run</span>
+              <strong>{{ workflow.schedule.next_run
+                ? scheduleTime(workflow.schedule.next_run, workflow.schedule.timezone)
+                : 'Calculating…' }}</strong>
+            </div>
+          </div>
+
+          <div v-if="scheduleFrequency !== 'custom'" class="schedule-grid">
+            <label class="schedule-field">
+              <span>Repeat</span>
+              <select v-model="scheduleFrequency" class="field">
+                <option value="hourly">Every hour</option>
+                <option value="daily">Every day</option>
+                <option value="weekly">Selected days</option>
+                <option value="monthly">Every month</option>
+              </select>
+            </label>
+
+            <label v-if="scheduleFrequency === 'hourly'" class="schedule-field">
+              <span>At minute</span>
+              <input v-model.number="scheduleMinute" class="field" type="number" min="0" max="59" />
+            </label>
+            <label v-else class="schedule-field">
+              <span>At</span>
+              <input v-model="scheduleAt" class="field" type="time" required />
+            </label>
+
+            <label v-if="scheduleFrequency === 'monthly'" class="schedule-field">
+              <span>Day of month</span>
+              <input v-model.number="scheduleMonthDay" class="field" type="number" min="1" max="31" />
+            </label>
+
+            <label class="schedule-field schedule-field--timezone">
+              <span>Timezone</span>
+              <input v-model.trim="scheduleTimezone" class="field" list="workflow-timezones" autocomplete="off" />
+              <datalist id="workflow-timezones">
+                <option v-for="zone in timezones" :key="zone" :value="zone" />
+              </datalist>
+            </label>
+          </div>
+
+          <div v-if="scheduleFrequency === 'weekly'" class="schedule-days">
+            <span class="schedule-days__label">Run on</span>
+            <div class="segmented" aria-label="Days of the week">
+              <button
+                v-for="day in weekDays" :key="day.value" type="button" class="segment schedule-day"
+                :class="{ 'segment--active': scheduleDays.includes(day.value) }"
+                :aria-pressed="scheduleDays.includes(day.value)"
+                @click="toggleScheduleDay(day.value)"
+              >{{ day.label }}</button>
+            </div>
+          </div>
+
+          <div class="row schedule-actions">
+            <button
+              v-if="scheduleFrequency === 'custom'" class="btn btn--primary"
+              :disabled="disabled || scheduling" @click="beginScheduleReplacement"
+            >
+              <span class="material-icons" style="font-size: 17px">edit_calendar</span>
+              Replace schedule
             </button>
-            <button v-if="workflow.schedule" class="btn btn--danger" @click="unschedule">Unschedule</button>
+            <button
+              v-else
+              class="btn btn--primary" :disabled="disabled || scheduling || !scheduleReady"
+              @click="schedule"
+            >
+              <span class="material-icons" style="font-size: 17px">event_repeat</span>
+              {{ scheduling ? 'Saving…' : workflow.schedule ? 'Update schedule' : 'Save schedule' }}
+            </button>
+            <button v-if="workflow.schedule" class="btn btn--danger" :disabled="scheduling" @click="unschedule">
+              <span class="material-icons" style="font-size: 17px">event_busy</span>
+              Remove schedule
+            </button>
           </div>
         </section>
 
@@ -200,7 +290,7 @@ import TriggerSnippet from '../components/TriggerSnippet.vue'
 import WorkflowGraph from '../components/WorkflowGraph.vue'
 import ExecutionFlow from '../components/ExecutionFlow.vue'
 import { compareGraphs } from '../flow'
-import { RUN_TONE, avatarStyle, diffLines, fullTime } from '../format'
+import { RUN_TONE, avatarStyle, diffLines, fullTime, scheduleTime } from '../format'
 import { backTo } from '../router'
 import { actions, store } from '../store'
 import { api } from '../api'
@@ -223,14 +313,47 @@ const workflow = ref(null)
 const draft = ref(null)
 const validation = ref(null)
 const inputs = ref({})
-const cron = ref('0 8 * * *')
 const running = ref(false)
+const scheduling = ref(false)
 const approving = ref(false)
+const scheduleFrequency = ref('daily')
+const scheduleAt = ref('')
+const scheduleMinute = ref(0)
+const scheduleDays = ref([])
+const scheduleMonthDay = ref(new Date().getDate())
+const scheduleTimezone = ref(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
+const weekDays = [
+  { value: 'monday', label: 'Mon' },
+  { value: 'tuesday', label: 'Tue' },
+  { value: 'wednesday', label: 'Wed' },
+  { value: 'thursday', label: 'Thu' },
+  { value: 'friday', label: 'Fri' },
+  { value: 'saturday', label: 'Sat' },
+  { value: 'sunday', label: 'Sun' }
+]
+const timezones = [...new Set([
+  scheduleTimezone.value,
+  'UTC',
+  ...(typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [])
+])]
 
 const name = computed(() => route.params.name || '')
 const inputProperties = computed(() => workflow.value?.manifest?.inputs?.properties || {})
 const disabled = computed(() => Boolean(workflow.value?.settings?.disabled))
 const chatMode = computed(() => workflow.value?.settings?.chat_mode || 'same')
+const scheduleReady = computed(() => {
+  if (!scheduleTimezone.value) return false
+  if (scheduleFrequency.value === 'custom') return false
+  if (scheduleFrequency.value === 'hourly') {
+    return scheduleMinute.value >= 0 && scheduleMinute.value <= 59
+  }
+  if (!scheduleAt.value) return false
+  if (scheduleFrequency.value === 'weekly') return scheduleDays.value.length > 0
+  if (scheduleFrequency.value === 'monthly') {
+    return scheduleMonthDay.value >= 1 && scheduleMonthDay.value <= 31
+  }
+  return true
+})
 const draftGraph = computed(() => {
   if (!draft.value) return null
   if (draftMode.value === 'proposed') return draft.value.graph
@@ -270,8 +393,8 @@ async function load () {
     const result = await api.workflow(name.value)
     if (version !== loadVersion) return
     workflow.value = result
-    inputs.value = {}
-    cron.value = result.schedule?.cron || '0 8 * * *'
+    inputs.value = { ...(result.schedule?.input || {}) }
+    loadSchedule(result.schedule)
   } catch (error) {
     if (version === loadVersion) loadError.value = error.message
   }
@@ -294,19 +417,65 @@ async function run () {
 }
 
 async function schedule () {
+  scheduling.value = true
   try {
-    await api.schedule(workflow.value.name, cron.value, payload())
+    const definition = {
+      frequency: scheduleFrequency.value,
+      timezone: scheduleTimezone.value,
+      input: payload()
+    }
+    if (scheduleFrequency.value === 'hourly') definition.minute = scheduleMinute.value
+    else definition.at = scheduleAt.value
+    if (scheduleFrequency.value === 'weekly') definition.days = scheduleDays.value
+    if (scheduleFrequency.value === 'monthly') definition.day = scheduleMonthDay.value
+    const saved = await api.schedule(workflow.value.name, definition)
+    workflow.value.schedule = saved
+    loadSchedule(saved)
     await actions.loadWorkflows()
-    load()
   } catch (error) {
     $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    scheduling.value = false
   }
 }
 
 async function unschedule () {
-  await api.unschedule(workflow.value.name)
-  await actions.loadWorkflows()
-  load()
+  scheduling.value = true
+  try {
+    await api.unschedule(workflow.value.name)
+    workflow.value.schedule = null
+    await actions.loadWorkflows()
+  } catch (error) {
+    $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    scheduling.value = false
+  }
+}
+
+function loadSchedule (definition) {
+  const supported = ['hourly', 'daily', 'weekly', 'monthly']
+  scheduleFrequency.value = definition && !supported.includes(definition.frequency)
+    ? 'custom'
+    : definition?.frequency || 'daily'
+  scheduleAt.value = definition?.at || ''
+  scheduleMinute.value = definition?.minute ?? 0
+  scheduleDays.value = [...(definition?.days || [])]
+  scheduleMonthDay.value = definition?.day || new Date().getDate()
+  scheduleTimezone.value = definition?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+}
+
+function beginScheduleReplacement () {
+  scheduleFrequency.value = 'daily'
+  scheduleAt.value = ''
+  scheduleDays.value = []
+  scheduleMonthDay.value = new Date().getDate()
+  scheduleTimezone.value = workflow.value.schedule?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+}
+
+function toggleScheduleDay (day) {
+  scheduleDays.value = scheduleDays.value.includes(day)
+    ? scheduleDays.value.filter((value) => value !== day)
+    : [...scheduleDays.value, day]
 }
 
 async function toggleDisabled () {
@@ -441,6 +610,80 @@ onMounted(load)
   color: var(--text-muted);
 }
 
+.schedule-block {
+  padding-top: 2px;
+}
+
+.schedule-current {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(180px, auto);
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 10px 0 10px 12px;
+  border-left: 3px solid var(--accent);
+}
+
+.schedule-current__icon {
+  color: var(--accent);
+  font-size: 20px;
+}
+
+.schedule-current__rule,
+.schedule-current__next {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.schedule-current__next {
+  text-align: right;
+}
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(120px, 0.6fr) minmax(180px, 1.4fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.schedule-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.schedule-field--timezone {
+  grid-column: -2 / -1;
+}
+
+.schedule-days {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.schedule-days__label {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.schedule-day {
+  width: 42px;
+  padding-inline: 0;
+}
+
+.schedule-actions {
+  margin-top: 14px;
+}
+
 .run-row {
   display: flex;
   align-items: center;
@@ -489,6 +732,14 @@ onMounted(load)
   .pane-body .field {
     min-width: 0;
   }
+
+  .schedule-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .schedule-field--timezone {
+    grid-column: auto;
+  }
 }
 
 @media (max-width: 560px) {
@@ -520,6 +771,34 @@ onMounted(load)
 
   .run-row .mono {
     flex-basis: calc(100% - 90px);
+  }
+
+  .schedule-current {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .schedule-current__next {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .schedule-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .schedule-days {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .schedule-days .segmented {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .schedule-day {
+    width: auto;
   }
 }
 </style>

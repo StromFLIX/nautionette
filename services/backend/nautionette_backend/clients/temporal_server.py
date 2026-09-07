@@ -12,11 +12,14 @@ from temporalio.client import (
     Client,
     Schedule,
     ScheduleActionStartWorkflow,
+    ScheduleAlreadyRunningError,
     ScheduleSpec,
     ScheduleState,
+    ScheduleUpdate,
 )
 
 from ..config import settings
+from ..schedules import schedule_summary
 
 # The events that explain a run. The rest is Temporal's own bookkeeping.
 _HISTORY_EVENTS = {
@@ -239,7 +242,7 @@ class TemporalGateway:
         return f"schedule-{workflow}"
 
     async def set_schedule(
-        self, workflow: str, cron: str, payload: dict[str, Any], paused: bool = False
+        self, workflow: str, spec: ScheduleSpec, payload: dict[str, Any], paused: bool = False
     ) -> dict[str, Any]:
         client = await self.client()
         schedule = Schedule(
@@ -249,17 +252,43 @@ class TemporalGateway:
                 id=f"{workflow}-scheduled",
                 task_queue=settings.temporal_task_queue,
             ),
-            spec=ScheduleSpec(cron_expressions=[cron]),
+            spec=spec,
             state=ScheduleState(paused=paused),
         )
         schedule_id = self._schedule_id(workflow)
         try:
             await client.create_schedule(schedule_id, schedule)
-        except Exception:  # already exists -> replace it
+        except ScheduleAlreadyRunningError:
             handle = client.get_schedule_handle(schedule_id)
-            await handle.delete()
-            await client.create_schedule(schedule_id, schedule)
-        return {"schedule_id": schedule_id, "cron": cron, "paused": paused}
+            await handle.update(lambda _: ScheduleUpdate(schedule=schedule))
+        description = await client.get_schedule_handle(schedule_id).describe()
+        return {
+            "schedule_id": schedule_id,
+            "input": payload,
+            **schedule_summary(
+                description.schedule.spec,
+                paused=description.schedule.state.paused,
+                next_action_times=description.info.next_action_times,
+            ),
+        }
+
+    async def schedule(self, workflow: str) -> dict[str, Any]:
+        client = await self.client()
+        schedule_id = self._schedule_id(workflow)
+        description = await client.get_schedule_handle(schedule_id).describe()
+        action = description.schedule.action
+        decoded = await description.data_converter.decode(action.args)
+        payload = decoded[0] if decoded and isinstance(decoded[0], dict) else {}
+        return {
+            "id": schedule_id,
+            "workflow": workflow,
+            "input": payload,
+            **schedule_summary(
+                description.schedule.spec,
+                paused=description.schedule.state.paused,
+                next_action_times=description.info.next_action_times,
+            ),
+        }
 
     async def delete_schedule(self, workflow: str) -> None:
         client = await self.client()
@@ -272,12 +301,16 @@ class TemporalGateway:
             listed = getattr(item, "schedule", None)
             spec = getattr(listed, "spec", None)
             state = getattr(listed, "state", None)
+            info = getattr(item, "info", None)
             out.append(
                 {
                     "id": item.id,
                     "workflow": item.id.removeprefix("schedule-"),
-                    "cron": _cron_of(spec),
-                    "paused": bool(state is not None and getattr(state, "paused", False)),
+                    **schedule_summary(
+                        spec,
+                        paused=bool(state is not None and getattr(state, "paused", False)),
+                        next_action_times=getattr(info, "next_action_times", ()),
+                    ),
                 }
             )
         return out

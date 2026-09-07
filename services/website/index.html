@@ -63,14 +63,14 @@
           I can do that now, and it is repeatable. Promoting this chat would create a workflow with
           one input (<code>status_url</code>) and two steps: fetch, then summarise.
         </div>
-        <div class="msg user">Do it. Every day at 08:00.</div>
+        <div class="msg user">Do it. Every day at 08:00 Europe/Berlin.</div>
         <div class="promote">
           <div class="promote-head"><span class="dot"></span> draft <code>morning_status</code> · waiting for your approval</div>
           <pre><span class="add">+ MANIFEST = {"schema": 1, "name": "morning_status", ...}</span>
 <span class="add">+ @workflow.defn(name="morning_status")</span>
 <span class="add">+ class MorningStatus:</span>
 <span class="add">+     async def run(self, params: dict) -> dict:</span>
-<span class="meta">  4 checks passed · schedule 0 8 * * *</span></pre>
+<span class="meta">  4 checks passed · next run tomorrow at 08:00 · Europe/Berlin</span></pre>
           <div class="promote-actions"><button class="btn btn-primary btn-sm">Approve and deploy</button><button class="btn btn-ghost btn-sm">Discard</button></div>
         </div>
       </div>

@@ -38,9 +38,41 @@ async def test_backend_tool_executes_the_real_api_and_preserves_validation_error
     assert decoded(result)["components"]
     result = await main.backend_mcp.call("deploy_workflow", {"name": "demo"})
     assert result.is_error is True
-    result = await main.backend_mcp.call("schedule_workflow", {"name": "demo", "body": {"cron": ""}})
-    assert result.is_error is True
-    assert "cron is required" in decoded(result)["detail"]
+
+
+async def test_schedule_tool_exposes_and_accepts_a_human_recurrence(backend):
+    tools = await main.backend_mcp.list_tools(None, None)
+    tool = next(item for item in tools.tools if item.name == "schedule_workflow")
+    body = tool.input_schema["properties"]["body"]
+    alternatives = {item["$ref"].rsplit("/", 1)[-1] for item in body["oneOf"]}
+    assert alternatives == {
+        "HourlySchedule",
+        "DailySchedule",
+        "WeeklySchedule",
+        "MonthlySchedule",
+    }
+    assert set(body["discriminator"]["mapping"].values()) == {
+        f"#/$defs/{name}" for name in alternatives
+    }
+    daily = tool.input_schema["$defs"]["DailySchedule"]
+    assert {"frequency", "at", "timezone"} <= set(daily["required"])
+    assert "cron" not in daily["properties"]
+
+    result = await main.backend_mcp.call(
+        "schedule_workflow",
+        {
+            "name": "demo",
+            "body": {
+                "frequency": "weekly",
+                "at": "07:15",
+                "days": ["tuesday", "thursday"],
+                "timezone": "Europe/Berlin",
+            },
+        },
+    )
+    assert result.is_error is False
+    assert decoded(result)["description"] == "Tue, Thu at 07:15"
+    assert backend.temporal.schedule_specs["demo"]["input"] == {}
 
 
 async def test_agent_can_run_and_read_results_without_an_approval(backend):

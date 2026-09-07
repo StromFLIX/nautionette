@@ -276,16 +276,39 @@ class FakeTemporal:
         self.terminated.append((workflow_id, reason))
 
     async def set_schedule(
-        self, workflow: str, cron: str, payload: dict[str, Any], paused: bool = False
+        self, workflow: str, spec: Any, payload: dict[str, Any], paused: bool = False
     ) -> dict[str, Any]:
-        self.schedule_specs[workflow] = {"cron": cron, "input": payload, "paused": paused}
-        return {"schedule_id": f"schedule-{workflow}", "cron": cron, "paused": paused}
+        from nautionette_backend.schedules import schedule_summary
+
+        self.schedule_specs[workflow] = {"spec": spec, "input": payload, "paused": paused}
+        return {
+            "schedule_id": f"schedule-{workflow}",
+            "input": payload,
+            **schedule_summary(spec, paused=paused),
+        }
 
     async def delete_schedule(self, workflow: str) -> None:
         self.schedule_specs.pop(workflow, None)
 
+    async def schedule(self, workflow: str) -> dict[str, Any]:
+        from nautionette_backend.schedules import schedule_summary
+
+        spec = self.schedule_specs[workflow]
+        return {
+            "id": f"schedule-{workflow}",
+            "workflow": workflow,
+            "input": spec["input"],
+            **schedule_summary(spec["spec"], paused=spec["paused"]),
+        }
+
     async def schedules(self) -> list[dict[str, Any]]:
+        from nautionette_backend.schedules import schedule_summary
+
         return [
-            {"id": f"schedule-{name}", "workflow": name, "cron": spec["cron"], "paused": spec["paused"]}
+            {
+                "id": f"schedule-{name}",
+                "workflow": name,
+                **schedule_summary(spec["spec"], paused=spec["paused"]),
+            }
             for name, spec in self.schedule_specs.items()
         ]

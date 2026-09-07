@@ -1,7 +1,6 @@
-"""Check that a cron expression survives the round-trip through Temporal.
+"""Check that friendly schedules survive the round-trip through Temporal.
 
-Temporal rewrites cron strings into structured calendars, so reading a schedule
-back is not guaranteed to return what was sent. Run it against a live backend:
+Run this against a live backend:
 
     BASE=http://127.0.0.1:18080 APP_TOKEN=... uv run python scripts/check_schedule_roundtrip.py
 """
@@ -13,26 +12,50 @@ import httpx
 
 BASE = os.environ.get("BASE", "http://127.0.0.1:18080").rstrip("/")
 TOKEN = os.environ.get("APP_TOKEN", "")
-CASES = [("hello_world", "0 8 * * 1"), ("url_digest", "*/15 9-17 * * *")]
+CASES = [
+    (
+        "hello_world",
+        {
+            "frequency": "weekly",
+            "at": "08:00",
+            "days": ["monday"],
+            "timezone": "Europe/Berlin",
+        },
+    ),
+    (
+        "url_digest",
+        {"frequency": "daily", "at": "17:30", "timezone": "America/New_York"},
+    ),
+]
 
 
 def main() -> int:
     headers = {"Authorization": f"Bearer {TOKEN}"} if TOKEN else {}
     ok = True
     with httpx.Client(base_url=BASE, headers=headers, timeout=40) as client:
-        for name, cron in CASES:
-            response = client.post(f"/api/workflows/{name}/schedule", json={"cron": cron, "input": {}})
+        for name, definition in CASES:
+            response = client.post(
+                f"/api/workflows/{name}/schedule", json={**definition, "input": {}}
+            )
             response.raise_for_status()
-            print("sent    ", name, "->", response.json().get("cron"))
+            print("sent    ", name, "->", response.json().get("description"))
 
         listing = client.get("/api/workflows").json()
         schedules = {w["name"]: w.get("schedule") for w in listing.get("workflows", [])}
 
-        for name, cron in CASES:
-            got = (schedules.get(name) or {}).get("cron")
-            match = got == cron
+        for name, expected in CASES:
+            got = schedules.get(name) or {}
+            match = all(got.get(key) == value for key, value in expected.items())
             ok = ok and match
-            print("readback", name, "->", got, "expected", cron, "MATCH" if match else "MISMATCH")
+            print(
+                "readback",
+                name,
+                "->",
+                got.get("description"),
+                "expected",
+                expected,
+                "MATCH" if match else "MISMATCH",
+            )
 
         for name, _ in CASES:
             client.delete(f"/api/workflows/{name}/schedule")

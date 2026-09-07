@@ -12,6 +12,7 @@ from ..db import db
 from ..deployment import WorkflowSource, deploy
 from ..events import bus
 from ..runs import restart_worker
+from ..schedules import ScheduleRequest, temporal_spec
 from ..security import require_user
 from ..workflow_graph import definition_graph
 
@@ -25,6 +26,13 @@ async def _schedules() -> list[dict[str, Any]]:
         return await temporal.schedules()
     except Exception:  # noqa: BLE001 - schedules are extra, not essential
         return []
+
+
+async def _schedule(workflow: str) -> dict[str, Any] | None:
+    try:
+        return await temporal.schedule(workflow)
+    except Exception:  # noqa: BLE001 - a schedule is optional workflow metadata
+        return None
 
 
 @router.get("/api/workflows")
@@ -43,9 +51,7 @@ async def get_workflow(name: str) -> dict[str, Any]:
     workflow["graph"] = definition_graph(workflow.get("code", ""), name)
     workflow["runs"] = db.list_runs(name, limit=25)
     workflow["settings"] = db.workflow_settings(name)
-    workflow["schedule"] = next(
-        (item for item in await _schedules() if item["workflow"] == name), None
-    )
+    workflow["schedule"] = await _schedule(name)
     return workflow
 
 
@@ -84,12 +90,13 @@ async def validate_workflow(payload: dict[str, Any] = Body(...)) -> dict[str, An
 
 
 @router.post("/api/workflows/{name}/schedule")
-async def schedule_workflow(name: str, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
-    cron = (payload.get("cron") or "").strip()
-    if not cron:
-        raise HTTPException(status_code=400, detail="cron is required, e.g. '0 8 * * *'")
-    result = await temporal.set_schedule(name, cron, payload.get("input") or {})
-    bus.publish("workflow.scheduled", {"workflow": name, "cron": cron})
+async def schedule_workflow(name: str, payload: ScheduleRequest) -> dict[str, Any]:
+    """Schedule a workflow with a human recurrence and an explicit IANA timezone."""
+    result = await temporal.set_schedule(name, temporal_spec(payload), payload.input)
+    bus.publish(
+        "workflow.scheduled",
+        {"workflow": name, "frequency": payload.frequency, "timezone": payload.timezone},
+    )
     return result
 
 

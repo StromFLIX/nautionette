@@ -24,9 +24,13 @@ def digest(backend):
 
 
 def test_listing_merges_schedules_and_local_settings(client, digest):
-    digest.temporal.schedule_specs["url_digest"] = {"cron": "0 8 * * *", "input": {}, "paused": False}
+    client.post(
+        "/api/workflows/url_digest/schedule",
+        json={"frequency": "daily", "at": "08:00", "timezone": "Europe/Berlin"},
+    )
     workflow = client.get("/api/workflows").json()["workflows"][0]
-    assert workflow["schedule"]["cron"] == "0 8 * * *"
+    assert workflow["schedule"]["description"] == "Every day at 08:00"
+    assert workflow["schedule"]["timezone"] == "Europe/Berlin"
     assert workflow["settings"] == {
         "name": "url_digest",
         "disabled": False,
@@ -36,8 +40,6 @@ def test_listing_merges_schedules_and_local_settings(client, digest):
 
 
 def test_a_temporal_that_is_down_does_not_take_the_list_with_it(client, digest, live, monkeypatch):
-    digest.temporal.schedule_specs["url_digest"] = {"cron": "0 8 * * *", "input": {}, "paused": False}
-
     async def refuse():
         raise RuntimeError("temporal is unreachable")
 
@@ -84,18 +86,48 @@ def test_validation_is_handed_straight_to_the_authoring_service(client, digest):
 # -------------------------------------------------------------------- schedules
 
 
-def test_scheduling_needs_a_cron_expression(client, digest):
-    response = client.post("/api/workflows/url_digest/schedule", json={"cron": "  "})
-    assert response.status_code == 400
-    assert "cron is required" in response.json()["detail"]
+def test_scheduling_needs_a_time_and_valid_timezone(client, digest):
+    missing_time = client.post(
+        "/api/workflows/url_digest/schedule",
+        json={"frequency": "daily", "timezone": "Europe/Berlin"},
+    )
+    unknown_zone = client.post(
+        "/api/workflows/url_digest/schedule",
+        json={"frequency": "daily", "at": "08:00", "timezone": "local"},
+    )
+
+    assert missing_time.status_code == 422
+    assert unknown_zone.status_code == 422
+    assert "valid IANA timezone" in str(unknown_zone.json()["detail"])
 
 
 def test_a_schedule_can_be_set_and_taken_away(client, digest):
     result = client.post(
-        "/api/workflows/url_digest/schedule", json={"cron": "0 8 * * *", "input": {"url": "https://a"}}
+        "/api/workflows/url_digest/schedule",
+        json={
+            "frequency": "weekly",
+            "at": "08:00",
+            "days": ["monday", "friday"],
+            "timezone": "Europe/Berlin",
+            "input": {"url": "https://a"},
+        },
     ).json()
-    assert result == {"schedule_id": "schedule-url_digest", "cron": "0 8 * * *", "paused": False}
+    assert result == {
+        "schedule_id": "schedule-url_digest",
+        "frequency": "weekly",
+        "at": "08:00",
+        "days": ["monday", "friday"],
+        "timezone": "Europe/Berlin",
+        "description": "Mon, Fri at 08:00",
+        "input": {"url": "https://a"},
+        "paused": False,
+        "next_run": None,
+        "next_runs": [],
+    }
     assert digest.temporal.schedule_specs["url_digest"]["input"] == {"url": "https://a"}
+
+    workflow = client.get("/api/workflows/url_digest").json()
+    assert workflow["schedule"]["input"] == {"url": "https://a"}
 
     assert client.delete("/api/workflows/url_digest/schedule").json() == {"ok": True}
     assert digest.temporal.schedule_specs == {}

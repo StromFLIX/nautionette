@@ -31,6 +31,23 @@ export function fullTime (seconds) {
   return seconds ? new Date(seconds * 1000).toLocaleString() : ''
 }
 
+export function scheduleTime (value, timezone) {
+  if (!value) return ''
+  try {
+    return new Intl.DateTimeFormat([], {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: timezone,
+      timeZoneName: 'short'
+    }).format(new Date(value))
+  } catch {
+    return new Date(value).toLocaleString()
+  }
+}
+
 export function compactChars (chars) {
   if (!chars) return '0'
   if (chars >= 1_000_000) return `${+(chars / 1_000_000).toFixed(1)}M`

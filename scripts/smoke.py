@@ -119,10 +119,24 @@ def main() -> int:
             break
     check("the workflow completes", status == "COMPLETED", f"{status} {json.dumps(result)[:120]}")
 
-    client.post(f"/api/workflows/{name}/schedule", json={"cron": "0 8 * * 1", "input": {}})
+    client.post(
+        f"/api/workflows/{name}/schedule",
+        json={
+            "frequency": "weekly",
+            "at": "08:00",
+            "days": ["monday"],
+            "timezone": "Europe/Berlin",
+            "input": {},
+        },
+    )
     listing = client.get("/api/workflows").json()["workflows"]
     schedule = next((w.get("schedule") for w in listing if w["name"] == name), None)
-    check("the schedule reads back", (schedule or {}).get("cron") == "0 8 * * 1", str(schedule))
+    check(
+        "the schedule reads back",
+        (schedule or {}).get("description") == "Every Monday at 08:00"
+        and (schedule or {}).get("timezone") == "Europe/Berlin",
+        str(schedule),
+    )
 
     client.request("DELETE", f"/api/workflows/{name}/schedule")
     client.request("DELETE", f"/api/workflows/{name}")
