@@ -7,6 +7,10 @@ ENV UV_COMPILE_BYTECODE=1 \
     PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 # Workspace root: every member's manifest is needed to resolve the lock.
 COPY pyproject.toml uv.lock ./
 COPY services/docker-broker/pyproject.toml services/docker-broker/
@@ -22,8 +26,8 @@ COPY workflows/ /seed/
 # Backend, workflow-mcp and worker share one uid: the shared volume has to be
 # writable by all three, and a fresh named volume inherits these permissions.
 RUN useradd --create-home --uid 10001 app \
-    && mkdir -p /data /artifacts /workflows \
-    && chown -R app:app /app /data /artifacts /workflows
+    && mkdir -p /data /artifacts /workflows /projects \
+    && chown -R app:app /app /data /artifacts /workflows /projects
 USER app
 
 EXPOSE 8080

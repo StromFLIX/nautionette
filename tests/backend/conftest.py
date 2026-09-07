@@ -20,7 +20,7 @@ from nautionette_backend.integrations.registry import INITIALIZED_SETTING
 from ..conftest import APP_TOKEN, INTERNAL_TOKEN
 from .fakes import FakeAuthoring, FakeBroker, FakeGateway, FakeModelCatalog, FakeTemporal
 
-_TABLES = ("messages", "chats", "runs", "events", "settings", "workflow_settings")
+_TABLES = ("messages", "chats", "project_leases", "projects", "github_app_setups", "github_webhook_deliveries", "runs", "events", "settings", "workflow_settings")
 
 
 def _install(monkeypatch: pytest.MonkeyPatch, target: Any, fake: Any) -> Any:

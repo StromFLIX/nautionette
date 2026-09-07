@@ -26,7 +26,7 @@ export const delivery = {
     const current = createOutbox({
       storage: localStorage,
       prefix: `nautionette.outbox.${encodeURIComponent(server.url || location.origin)}.`,
-      send: (item) => api.sendMessage(item.chatId, item.text, item.id),
+      send: (item) => api.sendMessage(item.chatId, item.text, item.id, item.projectIds),
       changed: (items) => { if (outbox === current) pendingMessages.value = items },
       accepted: (message) => { if (outbox === current) listeners.forEach((listener) => listener(message)) }
     })
@@ -48,9 +48,9 @@ export const delivery = {
     pendingMessages.value = []
   },
 
-  enqueue (chatId, text) {
+  enqueue (chatId, text, projectIds) {
     if (!outbox) throw new Error('Connect to an instance before sending.')
-    outbox.enqueue(chatId, text)
+    outbox.enqueue(chatId, text, projectIds)
     flush()
   },
 

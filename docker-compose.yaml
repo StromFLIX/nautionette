@@ -38,6 +38,8 @@ services:
       WORKFLOWS_SEED_DIR: /seed
       DATA_DIR: /data
       ARTIFACTS_DIR: /artifacts
+      PROJECTS_DIR: /projects
+      GITHUB_APP_PUBLIC_URL: ${GITHUB_APP_PUBLIC_URL:-}
       DEFAULT_AGENT_SET: ${DEFAULT_AGENT_SET:-default}
       AGENT_MODEL: ${AGENT_MODEL:-openai/gpt-4o-mini}
       # Set to any non-empty value when a provider key is configured; the app
@@ -47,6 +49,7 @@ services:
       - workflows:/workflows
       - artifacts:/artifacts
       - backend-data:/data
+      - projects:/projects
     networks: [edge, internal, control]
     depends_on:
       temporal:
@@ -84,12 +87,14 @@ services:
     # verbs (run_agent / restart_worker) and never a generic run call.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - projects:/projects:ro
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       TARGET_NETWORK: nautionette-internal
       AGENT_NETWORK: nautionette-agents
       AGENT_EGRESS_NETWORK: nautionette-agent-egress
       WORKFLOWS_VOLUME: nautionette-workflows
+      PROJECTS_VOLUME: nautionette-projects
       IMAGE_PREFIX: nautionette/pi-
       BASE_IMAGE: nautionette/pi-base:dev
       WORKER_SERVICE_LABEL: com.docker.compose.service=worker
@@ -303,6 +308,8 @@ volumes:
   # Fixed name: the broker attaches this volume to the Pi containers it runs.
   workflows:
     name: nautionette-workflows
+  projects:
+    name: nautionette-projects
   artifacts:
   backend-data:
   agentgateway-data:

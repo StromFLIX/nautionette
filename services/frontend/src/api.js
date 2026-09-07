@@ -84,12 +84,19 @@ export const api = {
   testMcpServer: (name) =>
     request(`/api/mcp-servers/${encodeURIComponent(name)}/test`, { method: 'POST' }),
 
+  projects: () => request('/api/projects'),
+  projectApp: () => request('/api/projects/github-app'),
+  connectProjectApp: (payload) => request('/api/projects/github-app/connect', { method: 'POST', ...json(payload) }),
+  projectRepositories: (page = 1) => request(`/api/projects/repositories?page=${page}`),
+  addProject: (fullName) => request('/api/projects', { method: 'POST', ...json({ full_name: fullName }) }),
+  removeProject: (id) => request(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
   chats: () => request('/api/chats'),
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
   chat: (id) => request(`/api/chats/${id}`),
-  sendMessage: (id, text, messageId) => request(`/api/chats/${id}/messages`, {
+  sendMessage: (id, text, messageId, projectIds) => request(`/api/chats/${id}/messages`, {
     method: 'POST', headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(20000), ...json({ text, message_id: messageId })
+    signal: AbortSignal.timeout(20000), ...json({ text, message_id: messageId, project_ids: projectIds })
   }),
   updateChat: (id, payload) => request(`/api/chats/${id}`, { method: 'PATCH', ...json(payload) }),
   decideInternet: (id, turnId, allowed) => request(`/api/chats/${id}/internet`, {

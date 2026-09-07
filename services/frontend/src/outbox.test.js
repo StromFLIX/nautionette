@@ -95,3 +95,19 @@ test('messages queued in the same millisecond retain their order after reload', 
   await reloaded.flush()
   assert.deepEqual(sent, ['first', 'second'])
 })
+
+test('project selections are frozen with each message across offline retries', async () => {
+  const attempts = []
+  const state = setup(async (item) => {
+    attempts.push(item.projectIds)
+    if (attempts.length === 1) throw new TypeError('offline')
+    return { message: { id: item.id } }
+  })
+  const selected = ['project-a', 'project-b']
+  state.outbox.enqueue('chat-a', 'edit', selected)
+  selected.splice(0, 2, 'other-project')
+  await state.outbox.flush()
+  state.advance()
+  await createOutbox(state.options).flush()
+  assert.deepEqual(attempts, [['project-a', 'project-b'], ['project-a', 'project-b']])
+})

@@ -251,6 +251,15 @@ def test_an_agent_set_nobody_declared_is_refused(client, agent_images):
     assert frames(response) == [{"type": "error", "message": "unknown agent set 'made-up'"}]
 
 
+def test_projects_require_an_api_that_enforces_volume_subpaths(client, agent_images, docker, monkeypatch):
+    images.ensure_images()
+    monkeypatch.setattr(docker, "api", SimpleNamespace(_version="1.44"), raising=False)
+    response = client.post("/agent/run", headers=HEADERS,
+                           json={"agent_set": "default", "chat_id": "c" * 12, "project_ids": ["a" * 32]})
+    assert any(event.get("message") == "Project isolation requires Docker Engine 26+ with API 1.45+"
+               for event in frames(response))
+
+
 @pytest.mark.parametrize("exit_code", [0, 1])
 def test_agent_creation_uses_valid_sdk_arguments_and_streams_logs(
     client, agent_images, docker, monkeypatch, exit_code

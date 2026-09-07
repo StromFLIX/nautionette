@@ -6,6 +6,7 @@ import asyncio
 import json
 from typing import Any
 
+from . import projects
 from .agent import Timeline, stream_agent
 from .db import db
 from .events import bus, sse
@@ -17,6 +18,8 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     failure = None
     status = ""
     try:
+        job.update(projects.prepare_worktrees(chat_id, job.get("project_ids", [])))
+        job["project_credentials"] = await projects.agent_credentials(job.get("project_ids", []))
         async for event in stream_agent(job):
             if not db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
                 return
@@ -63,9 +66,11 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
             turn_id, content, {"tools": timeline.tools, "steps": timeline.steps, "error": failure}
         )
         bus.publish("chat.answered", {"chat_id": chat_id, "ok": failure is None})
+        await projects.revoke_credentials(job.pop("project_credentials", []))
 
 
 def recover_interrupted() -> None:
+    db.execute("UPDATE projects SET status = 'failed', error = 'Download interrupted; retry' WHERE status = 'cloning'")
     db.execute(
         "UPDATE chats SET internet_status = 'blocked', internet_reason = '', internet_turn_id = '' "
         "WHERE internet_status IN ('pending', 'deciding')"

@@ -564,6 +564,7 @@ dependencies = [
     { name = "jsonschema" },
     { name = "mcp" },
     { name = "nautionette" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "temporalio" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -575,6 +576,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "mcp", specifier = ">=2.1" },
     { name = "nautionette", editable = "libs/nautionette" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10" },
     { name = "temporalio", specifier = ">=1.9" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
 ]

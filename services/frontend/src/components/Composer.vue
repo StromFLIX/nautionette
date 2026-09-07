@@ -48,6 +48,14 @@
         <q-tooltip>MCP tools this chat may call</q-tooltip>
       </button>
 
+      <button class="pick" aria-label="Select projects" :class="{ 'pick--quiet': !projectIds.length }">
+        <span class="material-icons pick__icon">folder_open</span>
+        <span>{{ projectIds.length ? `${projectIds.length} project${projectIds.length === 1 ? '' : 's'}` : 'Projects' }}</span>
+        <span class="material-icons pick__caret">expand_more</span>
+        <ProjectPicker :model-value="projectIds" @update:model-value="$emit('update:projectIds', $event)" />
+        <q-tooltip>Writable projects for the next message</q-tooltip>
+      </button>
+
       <div class="composer__context">
         <div class="meter" :title="`${contextUsed.toLocaleString()} of ${contextWindow.toLocaleString()} characters of history`">
           <div class="meter__fill" :style="{ width: `${contextPercent}%` }" :class="{ 'meter__fill--hot': contextPercent > 80 }" />
@@ -69,6 +77,7 @@
 import { computed, ref } from 'vue'
 import ModelPicker from './ModelPicker.vue'
 import ToolPicker from './ToolPicker.vue'
+import ProjectPicker from './ProjectPicker.vue'
 import { historyBudget, store } from '../store'
 
 const props = defineProps({
@@ -76,13 +85,14 @@ const props = defineProps({
   agentSet: { type: String, default: '' },
   model: { type: String, default: '' },
   tools: { type: Array, default: null },
+  projectIds: { type: Array, default: () => [] },
   busy: { type: Boolean, default: false },
   contextUsed: { type: Number, default: 0 },
   variant: { type: String, default: 'docked' },
   placeholder: { type: String, default: 'Message…' }
 })
 
-const emit = defineEmits(['update:modelValue', 'update:agentSet', 'update:model', 'update:tools', 'send'])
+const emit = defineEmits(['update:modelValue', 'update:agentSet', 'update:model', 'update:tools', 'update:projectIds', 'send'])
 
 const input = ref(null)
 const focused = ref(false)
@@ -256,7 +266,7 @@ defineExpose({ focus: () => input.value?.focus() })
 
   .composer__bar {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) 32px;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 32px;
     gap: 4px;
     padding-right: 7px;
     padding-left: 7px;
@@ -266,6 +276,9 @@ defineExpose({ focus: () => input.value?.focus() })
     width: 100%;
     max-width: none;
   }
+
+  .pick:nth-of-type(3) { grid-column: 1; }
+  .composer__send { grid-column: 3; grid-row: 1 / 3; align-self: end; }
 
   .pick > .truncate,
   .pick > span:not(.material-icons) {

@@ -9,7 +9,7 @@ import time
 from collections.abc import Iterator
 from typing import Any
 
-from . import daemon, images
+from . import daemon, images, projects
 from .config import (
     AGENT_EGRESS_NETWORK,
     AGENT_ENVIRONMENT,
@@ -71,6 +71,9 @@ def _environment(job: dict[str, Any]) -> dict[str, str]:
     environment["AGENT_JOB"] = base64.b64encode(
         json.dumps(job, default=str).encode("utf-8")
     ).decode("ascii")
+    if job.get("project_ids"):
+        environment["HOME"] = "/workspace"
+        environment["PI_CODING_AGENT_DIR"] = "/workspace/.pi-agent"
     if job.get("chat_id"):
         environment.pop("BACKEND_URL", None)
     elif INTERNAL_TOKEN:
@@ -127,8 +130,15 @@ def run(job: dict[str, Any]) -> Iterator[str]:
     timeout = min(int(job.get("timeout_seconds") or RUN_TIMEOUT), RUN_TIMEOUT)
     container = None
     watchdog = None
+    claimed_projects = []
     yield _ndjson({"type": "started", "agent_set": agent_set, "image": tag})
     try:
+        project_ids = job.get("project_ids", [])
+        if project_ids and tuple(map(int, daemon.client().api._version.split("."))) < (1, 45):
+            raise RuntimeError("Project isolation requires Docker Engine 26+ with API 1.45+")
+        project_mounts = projects.mounts(project_ids, job.get("chat_id", ""))
+        projects.claim(project_ids, job.get("chat_id", ""))
+        claimed_projects = project_ids
         if job.get("chat_id") and not daemon.client().networks.get(AGENT_NETWORK).attrs.get("Internal"):
             raise RuntimeError("Chat agents require an internal Docker network with egress disabled")
         container = daemon.client().containers.create(
@@ -137,13 +147,20 @@ def run(job: dict[str, Any]) -> Iterator[str]:
             environment=_environment(job),
             network=AGENT_NETWORK if job.get("chat_id") else TARGET_NETWORK,
             volumes={WORKFLOWS_VOLUME: {"bind": "/workflows", "mode": "ro"}},
-            tmpfs={"/workspace": "size=256m,exec"},
+            mounts=project_mounts,
+                tmpfs=({"/workspace": "size=256m,exec,uid=10001,gid=10001",
+                    "/projects": "size=1m,uid=10001,gid=10001"} if project_ids
+                   else {"/workspace": "size=256m,exec"}),
+            user="10001:10001" if project_ids else None,
             mem_limit=AGENT_MEMORY,
             pids_limit=512,
             security_opt=["no-new-privileges:true"],
             cap_drop=["ALL"],
-                labels={"nautionette.chat": job.get("chat_id", ""),
-                    "nautionette.turn": job.get("turn_id", "")},
+            labels={
+                "nautionette.chat": job.get("chat_id", ""),
+                "nautionette.turn": job.get("turn_id", ""),
+                **projects.labels(project_ids, job.get("chat_id", "")),
+            },
             tty=False,
         )
         if job.get("chat_id") and job.get("internet_allowed") is True:
@@ -186,4 +203,5 @@ def run(job: dict[str, Any]) -> Iterator[str]:
                 container.remove(force=True)
             except Exception:  # noqa: BLE001, S110 - already gone is the outcome we wanted
                 pass
+            projects.release(claimed_projects, job.get("chat_id", ""))
         yield _ndjson({"type": "closed"})

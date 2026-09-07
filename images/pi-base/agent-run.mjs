@@ -9,6 +9,7 @@
  */
 import { spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { prepareProjects, projectEnvironment } from "./project-git.mjs";
 
 const OUT = process.stdout;
 
@@ -115,12 +116,19 @@ async function main() {
   const workspace = "/workspace";
 
   mkdirSync(workspace, { recursive: true });
+  if (job.project_ids?.length && existsSync("/root/.pi/agent")) {
+    cpSync("/root/.pi/agent", `${workspace}/.pi-agent`, { recursive: true });
+  }
   // Whatever the agent set ships (AGENTS.md and friends) becomes the context for
   // this call. The container is new every time, so this is the only way in.
   if (existsSync("/workspace-defaults")) {
     cpSync("/workspace-defaults", workspace, { recursive: true });
   }
-  writeFileSync(`${workspace}/JOB.json`, JSON.stringify({ ...job, history: undefined }, null, 2));
+  writeFileSync(`${workspace}/JOB.json`, JSON.stringify({ ...job, history: undefined, project_credentials: undefined }, null, 2));
+  if (job.project_ids?.length) {
+    emit({ type: "status", state: "projects", message: "Preparing this chat's project worktrees" });
+    prepareProjects(job);
+  }
 
   const prompt = renderPrompt(job);
   const args = ["--mode", "json", "--no-session", "--provider", "nautionette",
@@ -132,6 +140,7 @@ async function main() {
     cwd: workspace,
     env: {
       ...process.env,
+      ...projectEnvironment(job),
       AGENT_MODEL: model,
       NAUTIONETTE_MODE: mode,
       NAUTIONETTE_INTERNET_STATUS: job.chat_id ? (job.internet_status || "blocked") : "",

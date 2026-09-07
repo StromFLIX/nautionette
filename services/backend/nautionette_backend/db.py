@@ -84,6 +84,32 @@ CREATE TABLE IF NOT EXISTS workflow_settings (
     chat_mode TEXT NOT NULL DEFAULT 'same',
     chat_id TEXT
 );
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    repository_id INTEGER NOT NULL UNIQUE,
+    full_name TEXT NOT NULL,
+    default_branch TEXT NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS project_leases (
+    project_id TEXT NOT NULL REFERENCES projects(id),
+    turn_id TEXT NOT NULL REFERENCES chat_turns(id) ON DELETE CASCADE,
+    PRIMARY KEY (project_id, turn_id)
+);
+CREATE TABLE IF NOT EXISTS github_app_setups (
+    state_hash TEXT PRIMARY KEY,
+    browser_hash TEXT NOT NULL DEFAULT '',
+    phase TEXT NOT NULL,
+    expires_at REAL NOT NULL,
+    public_url TEXT NOT NULL,
+    organization TEXT NOT NULL,
+    config TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
+    id TEXT PRIMARY KEY,
+    received_at REAL NOT NULL
+);
 """
 
 # Applied on every start; each one fails harmlessly once it is already in place.
@@ -93,9 +119,10 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN internet_status TEXT NOT NULL DEFAULT 'blocked'",
     "ALTER TABLE chats ADD COLUMN internet_reason TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE chats ADD COLUMN internet_turn_id TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE chats ADD COLUMN project_ids TEXT NOT NULL DEFAULT '[]'",
 )
 
-_EDITABLE_CHAT_COLUMNS = ("title", "agent_set", "model", "tools")
+_EDITABLE_CHAT_COLUMNS = ("title", "agent_set", "model", "tools", "project_ids")
 _EDITABLE_WORKFLOW_COLUMNS = ("disabled", "chat_mode", "chat_id")
 
 WORKFLOW_DEFAULTS = {"disabled": False, "chat_mode": "same", "chat_id": None}
@@ -121,6 +148,16 @@ class Database:
                     self._conn.execute(statement)
                 except sqlite3.OperationalError:
                     pass  # already applied
+            lease_columns = self._conn.execute("PRAGMA table_info(project_leases)").fetchall()
+            if [column["name"] for column in lease_columns if column["pk"]] == ["project_id"]:
+                self._conn.execute("ALTER TABLE project_leases RENAME TO project_leases_legacy")
+                self._conn.execute(
+                    "CREATE TABLE project_leases (project_id TEXT NOT NULL REFERENCES projects(id), "
+                    "turn_id TEXT NOT NULL REFERENCES chat_turns(id) ON DELETE CASCADE, "
+                    "PRIMARY KEY (project_id, turn_id))"
+                )
+                self._conn.execute("INSERT INTO project_leases SELECT * FROM project_leases_legacy")
+                self._conn.execute("DROP TABLE project_leases_legacy")
             self._conn.commit()
 
     # ------------------------------------------------------------------ basics
@@ -162,6 +199,8 @@ class Database:
         allowed = {k: v for k, v in fields.items() if k in _EDITABLE_CHAT_COLUMNS}
         if "tools" in allowed:
             allowed["tools"] = _dump_tools(allowed["tools"])
+        if "project_ids" in allowed:
+            allowed["project_ids"] = json.dumps(allowed["project_ids"])
         if allowed:
             # Column names come from the tuple above, never from the caller.
             assignments = ", ".join(f"{key} = ?" for key in allowed)
@@ -175,6 +214,7 @@ class Database:
         row = self.one("SELECT * FROM chats WHERE id = ?", (chat_id,))
         if row:
             row["tools"] = json.loads(row["tools"]) if row.get("tools") else None
+            row["project_ids"] = json.loads(row["project_ids"])
         return row
 
     def list_chats(self, limit: int = 200) -> list[dict[str, Any]]:
@@ -244,7 +284,9 @@ class Database:
 
     # -------------------------------------------------------------------- runs
 
-    def accept_chat_message(self, chat_id: str, text: str, message_id: str) -> tuple[dict[str, Any], bool]:
+    def accept_chat_message(
+        self, chat_id: str, text: str, message_id: str, project_ids: list[str] | None = None,
+    ) -> tuple[dict[str, Any], bool]:
         with self._lock, self._conn:
             existing = self._conn.execute(
                 "SELECT m.* FROM chat_turns t JOIN messages m ON m.id = t.user_id WHERE t.id = ?",
@@ -253,19 +295,31 @@ class Database:
             if existing:
                 if existing["chat_id"] != chat_id or existing["content"] != text:
                     raise ValueError("message_id was already used for a different message")
+                if project_ids is not None and json.loads(existing["meta"]).get("project_ids", []) != project_ids:
+                    raise ValueError("message_id was already used with a different project selection")
                 return {**dict(existing), "meta": json.loads(existing["meta"])}, False
             now = time.time()
+            meta = {"project_ids": project_ids} if project_ids else {}
             self._conn.execute(
                 "INSERT INTO messages (id, chat_id, role, content, meta, created_at) VALUES (?,?,?,?,?,?)",
-                (message_id, chat_id, "user", text, "{}", now),
+                (message_id, chat_id, "user", text, json.dumps(meta), now),
             )
             self._conn.execute(
                 "INSERT INTO chat_turns (id, chat_id, user_id) VALUES (?,?,?)",
                 (message_id, chat_id, message_id),
             )
+            for project_id in project_ids or []:
+                ready = self._conn.execute(
+                    "SELECT id FROM projects WHERE id = ? AND status = 'ready'", (project_id,),
+                ).fetchone()
+                if not ready:
+                    raise ValueError("Selected project is not ready")
+                self._conn.execute("INSERT INTO project_leases VALUES (?,?)", (project_id, message_id))
+            if project_ids is not None:
+                self._conn.execute("UPDATE chats SET project_ids = ? WHERE id = ?", (json.dumps(project_ids), chat_id))
             self._conn.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (now, chat_id))
             message = {"id": message_id, "chat_id": chat_id, "role": "user", "content": text,
-                       "meta": {}, "created_at": now}
+                       "meta": meta, "created_at": now}
             self._conn.execute(
                 "INSERT INTO chat_turn_events (turn_id, payload) VALUES (?,?)",
                 (message_id, json.dumps({"type": "user_message", "message": message})),
@@ -305,6 +359,7 @@ class Database:
             )
             self._conn.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (now, turn["chat_id"]))
             self._conn.execute("UPDATE chat_turns SET state = 'completed' WHERE id = ?", (turn_id,))
+            self._conn.execute("DELETE FROM project_leases WHERE turn_id = ?", (turn_id,))
             self._conn.execute(
                 "INSERT INTO chat_turn_events (turn_id, payload) VALUES (?,?)",
                 (turn_id, json.dumps({"type": "done", "message": message})),

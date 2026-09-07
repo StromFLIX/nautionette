@@ -74,11 +74,13 @@
         :agent-set="chat?.agent_set || ''"
         :model="chat?.model || store.catalog.default_model"
         :tools="chat?.tools ?? null"
+        :project-ids="projectIds || []"
         :busy="streaming"
         :context-used="contextUsed"
         @update:agent-set="patch({ agent_set: $event })"
         @update:model="patch({ model: $event })"
         @update:tools="patch({ tools: $event })"
+        @update:project-ids="projectIds = $event"
         @send="send"
       />
     </div>
@@ -105,6 +107,7 @@ const router = useRouter()
 const chat = ref(null)
 const savedMessages = ref([])
 const draft = ref('')
+const projectIds = ref(null)
 const activeTurn = ref(null)
 const reconnecting = ref(false)
 const streaming = computed(() => Boolean(activeTurn.value))
@@ -137,6 +140,7 @@ function applySnapshot (data) {
   const el = scroller.value
   const atBottom = !savedMessages.value.length || !el || el.scrollHeight - el.scrollTop - el.clientHeight < 100
   chat.value = data.chat
+  if (projectIds.value === null) projectIds.value = data.chat?.project_ids || []
   savedMessages.value = data.messages
   activeTurn.value = data.active_turn || null
   delivery.reconcile(data.messages)
@@ -178,13 +182,14 @@ function scrollDown (behavior = 'smooth') {
   })
 }
 
-async function start ({ text, agentSet, model, tools }) {
+async function start ({ text, agentSet, model, tools, projectIds: selectedProjects = [] }) {
   if (!text.trim()) return
   starting.value = true
   try {
-    const created = await api.createChat({ agent_set: agentSet, model, tools })
+    const created = await api.createChat({ agent_set: agentSet, model, tools, project_ids: selectedProjects })
     await actions.loadChats()
     await router.push(`/chats/${created.id}`)
+    projectIds.value = selectedProjects
     draft.value = text
     await send()
   } catch (error) {
@@ -198,7 +203,7 @@ function send () {
   const text = draft.value.trim()
   if (!text || streaming.value) return
   try {
-    delivery.enqueue(chatId.value, text)
+    delivery.enqueue(chatId.value, text, projectIds.value || [])
     draft.value = ''
     scrollDown()
   } catch (error) {
@@ -248,6 +253,7 @@ function remove () {
 watch(chatId, (id) => {
   approvalError.value = ''
   chat.value = null
+  projectIds.value = null
   savedMessages.value = []
   activeTurn.value = null
   draft.value = ''

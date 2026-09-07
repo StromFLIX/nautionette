@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from .. import projects
 from ..agent import (
     agent_job,
     build_history,
@@ -41,12 +43,15 @@ async def list_chats() -> dict[str, Any]:
 
 @router.post("/api/chats")
 async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    project_ids = projects.selection(payload.get("project_ids", []))
     chat = db.create_chat(
         title=(payload.get("title") or "New chat").strip()[:120],
         agent_set=payload.get("agent_set") or runtime("default_agent_set"),
         model=payload.get("model") or runtime("default_model"),
         tools=payload.get("tools"),
     )
+    if project_ids:
+        chat = db.update_chat(chat["id"], {"project_ids": project_ids}) or chat
     bus.publish("chat.created", {"chat_id": chat["id"], "title": chat["title"]})
     return chat
 
@@ -64,6 +69,8 @@ async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) 
     if "tools" in payload:
         selected = payload.get("tools")
         fields["tools"] = [str(name) for name in selected] if isinstance(selected, list) else None
+    if "project_ids" in payload:
+        fields["project_ids"] = projects.selection(payload["project_ids"])
     chat = db.update_chat(chat_id, fields)
     bus.publish("chat.updated", {"chat_id": chat_id})
     return chat  # type: ignore[return-value]
@@ -99,8 +106,13 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     message_id = payload.get("message_id") or uuid.uuid4().hex
     if not isinstance(message_id, str) or len(message_id) > 128:
         raise HTTPException(status_code=400, detail="message_id must be a string of at most 128 characters")
+    existing = db.one("SELECT meta FROM messages WHERE id = ?", (message_id,))
+    default_selection = json.loads(existing["meta"]).get("project_ids", []) if existing else chat["project_ids"]
+    project_ids = payload.get("project_ids", default_selection)
+    if not existing:
+        project_ids = projects.selection(project_ids)
     try:
-        user_message, created = db.accept_chat_message(chat_id, text, message_id)
+        user_message, created = db.accept_chat_message(chat_id, text, message_id, project_ids)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:
@@ -122,7 +134,26 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
         turn_id=message_id,
         internet_allowed=chat["internet_status"] == "allowed",
         internet_status=chat["internet_status"],
+        project_ids=project_ids,
     )
+    if created and project_ids:
+        selected_projects = [db.one("SELECT * FROM projects WHERE id = ?", (project_id,)) for project_id in project_ids]
+        job["system_prompt"] += (
+            "\nSelected writable per-chat Git worktrees (all other projects are unavailable):\n"
+            + "\n".join(f"- {project['full_name']}: /projects/{project['id']}" for project in selected_projects if project)
+            + "\nThese persistent worktrees belong to this chat and start with detached HEAD, without creating branches. "
+            "Other chats have separate working files and HEADs. Preserve uncommitted work and local commits; "
+            "never reset or overwrite them by default. Stay detached unless the user asks for a branch. "
+            "Worktrees start from the local clone. Request internet access before contacting GitHub, "
+            "including fetch/pull/push. After approval, use Git directly with the configured HTTPS origin. "
+            "The credential helper supplies repository-scoped GitHub App tokens for this turn; "
+            "they expire within one hour and refresh on the next message. "
+            "Commit and push when the user's task calls for it. From detached HEAD use "
+            "git push origin HEAD:refs/heads/<target-branch>, choosing the target from the user's request. "
+            "Ask if the target is unclear. Never force-push to resolve concurrent changes; "
+            "fetch and reconcile them. Respect branch protection and report push failures. "
+            "Do not print or persist credentials."
+        )
     job["system_prompt"] += (
         "\nDirect internet access is " + chat["internet_status"] + " for this chat. "
         "Before first accessing the internet, call request_internet_access with a reason and wait "

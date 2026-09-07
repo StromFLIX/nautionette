@@ -10,10 +10,11 @@
         v-model:agent-set="agentSet"
         v-model:model="model"
         v-model:tools="tools"
+        v-model:project-ids="projectIds"
         variant="welcome"
         :busy="busy"
         placeholder="e.g. Summarise the changelog at this URL every morning at 8."
-        @send="$emit('start', { text, agentSet, model, tools })"
+        @send="$emit('start', { text, agentSet, model, tools, projectIds })"
       />
       <div class="welcome__chips">
         <button v-for="prompt in prompts" :key="prompt" class="starter" @click="use(prompt)">
@@ -81,6 +82,7 @@ const text = ref('')
 const agentSet = ref(store.catalog.default_agent_set || 'default')
 const model = ref(store.catalog.default_model || '')
 const tools = ref(null)
+const projectIds = ref([])
 const composer = ref(null)
 
 function use (prompt) {

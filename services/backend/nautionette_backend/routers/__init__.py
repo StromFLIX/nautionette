@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from . import chats, frontend, gateway, internal, runs, settings, system, workflows
+from . import chats, frontend, gateway, github_setup, internal, projects, runs, settings, system, workflows
 
 ROUTERS = (
     system.router,
@@ -15,6 +15,8 @@ ROUTERS = (
     workflows.router,
     runs.router,
     internal.router,
+    projects.router,
+    github_setup.router,
     frontend.router,
 )
 

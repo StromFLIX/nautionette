@@ -14,6 +14,7 @@ COPY services/workflow-mcp/pyproject.toml services/workflow-mcp/
 COPY services/worker/pyproject.toml services/worker/
 COPY services/docker-broker/ services/docker-broker/
 RUN uv sync --locked --no-dev --package nautionette-docker-broker
+RUN mkdir -p /projects && chown 10001:10001 /projects
 
 # The broker carries the build contexts so pruned Pi images can be rebuilt.
 COPY images/ /agent-images/

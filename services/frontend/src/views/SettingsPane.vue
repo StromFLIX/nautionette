@@ -34,6 +34,7 @@ import ActivityPane from '../components/settings/ActivityPane.vue'
 import AgentsPane from '../components/settings/AgentsPane.vue'
 import GeneralPane from '../components/settings/GeneralPane.vue'
 import McpPane from '../components/settings/McpPane.vue'
+import ProjectsPane from '../components/settings/ProjectsPane.vue'
 import SystemPane from '../components/settings/SystemPane.vue'
 import { backTo } from '../router'
 import { health, store } from '../store'
@@ -42,6 +43,7 @@ const TABS = [
   { key: 'general', label: 'General', icon: 'tune', pane: GeneralPane },
   { key: 'agents', label: 'Agents', icon: 'smart_toy', pane: AgentsPane },
   { key: 'mcp', label: 'MCP servers', icon: 'handyman', pane: McpPane },
+  { key: 'projects', label: 'Projects', icon: 'folder_open', pane: ProjectsPane },
   { key: 'system', label: 'System', icon: 'monitor_heart', pane: SystemPane },
   { key: 'activity', label: 'Activity', icon: 'bolt', pane: ActivityPane }
 ]

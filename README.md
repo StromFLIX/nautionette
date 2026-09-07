@@ -97,7 +97,7 @@ rejections remain visible with retry and discard controls. An unsent message can
 appear on another device until a client successfully delivers it. Clearing app or
 browser storage removes unsent messages. Creating a new chat requires connectivity.
 
-`POST /api/chats/{id}/messages` accepts `{text, message_id}`. With
+`POST /api/chats/{id}/messages` accepts `{text, message_id, project_ids?}`. With
 `Accept: application/json`, it returns `202` after durable acceptance; otherwise it
 replays the turn's SSE events for compatibility. `GET /api/chats/{id}` and
 `GET /api/chats/{id}/stream` expose the same recoverable snapshot, including
@@ -151,6 +151,106 @@ Focused checks: `uv run pytest tests/backend/test_internet.py tests/broker/test_
 The opt-in isolation check uses a local `node:24-bookworm-slim` image and temporary
 containers/networks, cleaned up afterward:
 `NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_internet_docker.py`.
+
+## GitHub Projects
+
+Settings > Projects connects a GitHub App installation and downloads selected
+repositories into the persistent `nautionette-projects` Docker volume. The folder
+picker beside the model and tool selectors chooses which projects a message exposes.
+Selections are captured in the durable outbox and saved with the accepted message;
+retries cannot silently change that selection.
+
+### App Setup
+
+1. Open Settings > Projects and choose **Connect GitHub**. The public HTTPS instance
+  URL is prefilled when possible. Select a personal account or enter an organization.
+2. Confirm the App registration on GitHub, then select the repositories it can access.
+3. GitHub returns to Projects automatically. Add repositories from the installation list.
+
+The App manifest registers the webhook and callback URLs, Contents/Workflows write
+permissions, and Metadata read access. GitHub generates the private key and webhook
+secret; Nautionette exchanges the registration code server-side. No IDs or PEM uploads
+are needed. An unfinished registration can resume with **Complete installation**;
+organization approval may be required. **Repository access** reopens GitHub's chooser.
+
+GitHub must reach the instance over HTTPS. For local development, use a public HTTPS
+tunnel to the web frontend (including its `/api` proxy); localhost alone cannot receive
+webhooks. Set `GITHUB_APP_PUBLIC_URL=https://nautionette.example.com` in Compose to
+preconfigure the URL, or enter it in Projects. Use the same stable public origin for
+the frontend and backend callbacks. Behind an extra authentication proxy, allow the
+`/api/projects/github-app/start`, `/callback`, `/installed`, and `/webhook` paths:
+callbacks validate single-use setup state and a Secure HttpOnly browser cookie;
+webhooks validate GitHub's HMAC-SHA256 signature. The `/connect` endpoint remains
+user-authenticated. Setup links expire after one hour. Returning on another device or
+browser requires starting setup again; existing registration credentials are retained.
+
+Signed lifecycle webhooks invalidate cached installation access after repository or
+installation changes. Repository rename/default-branch events update metadata; push
+events never reset, pull, or overwrite chat worktrees. Duplicate deliveries are ignored
+for seven days and request bodies are limited to 2 MiB. The connection status shows the
+last accepted webhook. Existing manually configured Apps remain usable; they can be
+upgraded by connecting an automatically registered App.
+
+The private key is stored in the backend's SQLite settings, never returned by the API
+or placed in an agent. The webhook secret is also backend-only. Protect the
+backend-data volume and its backups, configure `APP_TOKEN` and `INTERNAL_TOKEN`, and
+use HTTPS outside local development. The App belongs to your GitHub account or
+organization; this is App registration, not a third-party OAuth service.
+
+### Per-Chat Worktrees
+
+The initial checkout is a repository cache. Every chat gets its own persistent Git
+worktree, exposed to its agent at `/projects/<project-id>`. Its working files live in
+`.sessions/<project-id>/<chat-id>` in the projects volume. Only selected repositories'
+Git metadata and that chat's working files are mounted. Two chats can edit and commit
+on the same repository concurrently without sharing an index or HEAD.
+
+Worktrees start at the locally cached default-branch commit with **detached HEAD**; no chat
+branch is created. Empty repositories get a local empty initial commit. Later turns
+reuse the existing HEAD, staged changes, and uncommitted files without resetting or
+pulling. Removing a project or deleting a chat does not delete its worktree or commits.
+Worktrees are locked against Git's automatic pruning. These are collaboration
+workspaces, not a security boundary between mutually untrusted agents: Git objects,
+refs and repository configuration are shared, and committed content may be visible
+to other chats that select the same project.
+
+To publish a detached commit, choose the target explicitly, for example
+`git push origin HEAD:refs/heads/main`. The agent asks when the target is unclear.
+Concurrent pushes to the same target can be rejected as non-fast-forward; fetch and
+reconcile those changes, never force-push to bypass them. GitHub branch protection
+and App permissions still apply. Git LFS, submodule authentication, and GitHub
+Enterprise hosts are not part of this integration.
+
+There is no Git proxy or extra Git service. Worktree setup is offline. Agents request
+the existing chat internet approval before contacting GitHub, then use normal Git
+fetch/pull/push directly against the HTTPS origin. The backend supplies fresh,
+repository-scoped installation tokens for each turn through a Git credential helper.
+Tokens are not saved in Git config or job files; they expire within one hour and are
+revoked when the turn ends (best effort, including failure cleanup). A new message
+obtains fresh tokens. Agents receive these short-lived tokens, never the App private
+key, and must not print or persist credentials. Internet denial leaves local editing
+available but prevents fetching or pushing. The initial repository download from
+Settings runs on the backend, not inside an agent.
+Project management is user-only and is not exposed through backend MCP.
+
+### Deployment
+
+Docker Engine 26+ (API 1.45+) is required for volume-subpath mounts. Rebuild/recreate
+the changed services with:
+
+```sh
+docker compose up -d --build backend docker-broker frontend-web
+```
+
+The broker rebuilds the changed Pi images automatically. Project agents run as UID
+10001, matching the backend, with capabilities dropped. Custom agent sets must keep
+their image-provided Pi configuration readable so it can be copied into `/workspace`.
+
+Checks: `uv run pytest tests/backend/test_projects.py tests/backend/test_github_setup.py
+tests/broker/test_projects.py`, `node --test tests/agent/test_project_git.mjs`, and
+`npm --prefix services/frontend run test:e2e -- projects.spec.js`. The opt-in Docker
+check is `NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_projects_docker.py`;
+it uses a local `nautionette/pi-base:dev` image and removes its temporary resources.
 
 ## Chats become workflows
 
