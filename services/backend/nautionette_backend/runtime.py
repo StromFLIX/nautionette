@@ -14,6 +14,7 @@ from typing import Any
 from .agent import DEFAULT_HISTORY_CHARS
 from .config import settings
 from .db import db
+from .git_authorship import DEFAULTS as GIT_AUTHORSHIP_DEFAULTS
 
 # Rough but stable: a token is about four characters of English.
 CHARS_PER_TOKEN = 4
@@ -39,6 +40,7 @@ def defaults() -> dict[str, Any]:
         "default_agent_set": settings.default_agent_set,
         # 0 means "work it out from the model", which is what you want by default.
         "history_chars": 0,
+        **GIT_AUTHORSHIP_DEFAULTS,
     }
 
 

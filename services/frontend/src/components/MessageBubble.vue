@@ -8,12 +8,18 @@
       </RouterLink>
       <template v-for="(part, index) in parts" :key="part.id || index">
         <ToolCall v-if="part.kind === 'tool'" :step="part" :live="live" />
-        <div v-else-if="part.text.trim()" class="bubble__body" v-html="renderMarkdown(part.text)" />
+        <div v-else-if="part.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(part.text)" />
       </template>
       <div v-if="status" class="bubble__status caption">
         <span class="material-icons bubble__spinner">autorenew</span>{{ status }}
       </div>
       <div v-if="error" class="bubble__error caption">{{ error }}</div>
+      <div v-if="role === 'assistant' && responseText.trim()" class="bubble__actions">
+        <button type="button" class="btn btn--sm" @click="copy(responseText, 'Response')">
+          <span class="material-icons" aria-hidden="true">content_copy</span>Copy response
+        </button>
+      </div>
+      <div class="bubble__copy-status caption" aria-live="polite" aria-atomic="true">{{ copyStatus }}</div>
     </div>
     <span v-if="time || deliveryState" class="msg__time caption">
       {{ time }}
@@ -38,6 +44,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import ToolCall from './ToolCall.vue'
 import { renderMarkdown } from '../markdown'
+import { copyText } from '../clipboard'
 import { RUN_TONE, shortTime } from '../format'
 
 const props = defineProps({
@@ -73,6 +80,35 @@ const parts = computed(() => {
   const spoken = steps.value.some((step) => step.kind === 'text' && step.text.trim())
   return spoken ? steps.value : [...steps.value, { kind: 'text', text: props.content }]
 })
+// Copy the whole visible answer, including narration around tools, as Markdown.
+// Tool arguments/results and UI status labels are not part of the answer.
+const responseText = computed(() => [
+  ...parts.value.filter((part) => part.kind === 'text').map((part) => part.text),
+  error.value
+].filter((text) => text.trim()).join('\n\n'))
+const copyStatus = ref('')
+let copyTimer
+onUnmounted(() => clearTimeout(copyTimer))
+
+async function copy (text, label) {
+  clearTimeout(copyTimer)
+  copyStatus.value = ''
+  try {
+    await copyText(text)
+    copyStatus.value = `${label} copied`
+  } catch {
+    copyStatus.value = 'Could not copy. Select the text and copy it manually.'
+  }
+  copyTimer = setTimeout(() => { copyStatus.value = '' }, 3000)
+}
+
+function copyCode (event) {
+  const button = event.target.closest('button.code-block__copy')
+  if (!button || !event.currentTarget.contains(button)) return
+  const code = button.closest('.code-block')?.querySelector('pre code')
+  if (code) copy(code.textContent, 'Code')
+}
+
 const hasTools = computed(() => steps.value.some((step) => step.kind === 'tool'))
 const run = computed(() => props.meta?.run || null)
 // The backend folds a failure into the body too, so only add it when it is new.
@@ -176,6 +212,20 @@ const time = computed(() => shortTime(props.createdAt))
   padding: 0;
 }
 
+.bubble__actions {
+  display: flex;
+  margin-top: 8px;
+}
+
+.bubble__actions .material-icons {
+  font-size: 15px;
+}
+
+.bubble__copy-status:not(:empty) {
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
 .bubble__error {
   margin-top: 6px;
   color: var(--danger);
@@ -249,6 +299,31 @@ const time = computed(() => shortTime(props.createdAt))
 
 .bubble__body pre code {
   padding: 0;
+  background: none;
+}
+
+.bubble__body {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.bubble__body .code-block {
+  margin: 8px 0;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+
+.bubble__body .code-block__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bubble__body .code-block pre {
+  margin: 0;
+  border-radius: 0;
   background: none;
 }
 
