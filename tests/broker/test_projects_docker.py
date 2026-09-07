@@ -41,14 +41,19 @@ def test_chat_worktree_mounts_are_isolated_and_persistent(monkeypatch, tmp_path,
                 f"'/project-repositories/{selected}']);"
                 "cp.execFileSync('chown',['-R','10001:10001','/projects']);",
             ],
-            volumes={volume.name: {"bind": "/projects", "mode": "rw"}},
+            mounts=[
+                docker.types.Mount(target="/projects", source=volume.name, type="volume"),
+                docker.types.Mount(target=str(tmp_path), source=volume.name, type="volume", read_only=True),
+            ],
             network="none",
         )
         cleanup.callback(initializer.remove, force=True)
         initializer.start()
         assert initializer.wait()["StatusCode"] == 0, initializer.logs().decode()
         monkeypatch.setattr(projects, "PROJECTS_DIR", tmp_path)
-        monkeypatch.setattr(projects, "PROJECTS_VOLUME", volume.name)
+        monkeypatch.setattr(projects.daemon, "client", lambda: client)
+        monkeypatch.setattr(projects.socket, "gethostname", lambda: initializer.id)
+        monkeypatch.setenv("PROJECTS_VOLUME", "wrong-volume-that-must-not-be-used")
         (tmp_path / selected / ".git").mkdir(parents=True)
         for chat_id in (first_chat, second_chat):
             (tmp_path / ".sessions" / selected / chat_id).mkdir(parents=True)
@@ -60,6 +65,8 @@ def test_chat_worktree_mounts_are_isolated_and_persistent(monkeypatch, tmp_path,
                 "project_baselines": {selected: "main"},
                 "project_remotes": {selected: "owner/repository"},
             }
+            project_mounts = projects.mounts([selected], chat_id)
+            assert {mount["Source"] for mount in project_mounts} == {volume.name}
             container = client.containers.create(
                 image,
                 entrypoint="node",
@@ -73,7 +80,7 @@ def test_chat_worktree_mounts_are_isolated_and_persistent(monkeypatch, tmp_path,
                     "const git=(...args)=>execFileSync('git',args,{encoding:'utf8',"
                     "env:{...process.env,...projectEnvironment(job)}}).trim();" + script,
                 ],
-                mounts=projects.mounts([selected], chat_id),
+                mounts=project_mounts,
                 network="none",
                 cap_drop=["ALL"],
                 user="10001:10001",

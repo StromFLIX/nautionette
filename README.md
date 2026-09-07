@@ -242,6 +242,13 @@ the changed services with:
 docker compose up -d --build backend docker-broker frontend-web
 ```
 
+The backend and broker must mount the same named projects volume at `/projects`
+(read-only in the broker). The broker discovers the actual volume name from its
+own Docker mount metadata, including deployment-platform prefixes; `PROJECTS_VOLUME`
+is no longer used. Keep Docker's default container hostname so the broker can inspect
+itself. No checkout migration or re-download is needed when a platform prefixes the
+volume name.
+
 The broker rebuilds the changed Pi images automatically. Project agents run as UID
 10001, matching the backend, with capabilities dropped. Custom agent sets must keep
 their image-provided Pi configuration readable so it can be copied into `/workspace`.

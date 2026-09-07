@@ -94,7 +94,6 @@ services:
       AGENT_NETWORK: nautionette-agents
       AGENT_EGRESS_NETWORK: nautionette-agent-egress
       WORKFLOWS_VOLUME: nautionette-workflows
-      PROJECTS_VOLUME: nautionette-projects
       IMAGE_PREFIX: nautionette/pi-
       BASE_IMAGE: nautionette/pi-base:dev
       WORKER_SERVICE_LABEL: com.docker.compose.service=worker
