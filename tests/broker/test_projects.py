@@ -118,8 +118,10 @@ def test_claim_preserves_potentially_active_containers(monkeypatch, status):
 def test_claim_preserves_exited_container_while_claimed_or_on_other_volume(monkeypatch, other_volume):
     claim = ("c" * 12, "a" * 32)
     container = SimpleNamespace(
-        attrs={"Mounts": [{"Name": "stage-projects" if other_volume else "prod-projects"}],
-               "State": {"Status": "exited"}},
+        attrs={
+            "Mounts": [{"Name": "stage-projects" if other_volume else "prod-projects"}],
+            "State": {"Status": "exited"},
+        },
         remove=Mock(),
     )
     containers = SimpleNamespace(list=Mock(return_value=[container]))
