@@ -63,14 +63,16 @@
             <span class="side__group-count">{{ group.visible.length + (showOlder ? group.older.length : 0) }}</span>
           </div>
 
-          <div v-for="chat in group.visible" :key="chat.id" class="chat-list-item">
-            <ChatRow :chat="chat" :active-route-id="route.params.id" :read-busy="readBusy" @toggle-unread="setUnread" />
-          </div>
+          <ChatRow
+            v-for="chat in group.visible" :key="chat.id"
+            :chat="chat" :active-route-id="route.params.id" :read-busy="readBusy" @toggle-unread="setUnread"
+          />
 
           <template v-if="showOlder">
-            <div v-for="chat in group.older" :key="chat.id" class="chat-list-item">
-              <ChatRow :chat="chat" :active-route-id="route.params.id" :read-busy="readBusy" @toggle-unread="setUnread" />
-            </div>
+            <ChatRow
+              v-for="chat in group.older" :key="chat.id"
+              :chat="chat" :active-route-id="route.params.id" :read-busy="readBusy" @toggle-unread="setUnread"
+            />
           </template>
         </div>
 
@@ -525,6 +527,17 @@ function refresh () {
 
 .side__list {
   padding: 6px;
+  /* Rows follow the panel width; long titles truncate instead of stretching. */
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.side__list > * {
+  max-width: 100%;
+}
+
+.side__chat-group {
+  min-width: 0;
 }
 
 .side__group {
@@ -548,22 +561,6 @@ function refresh () {
   padding: 24px 14px;
   color: var(--text-dim);
   text-align: center;
-}
-
-.chat-list-item {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.chat-list-item > .row-item {
-  flex: 1;
-  min-width: 0;
-}
-
-.chat-list-item__menu {
-  flex: none;
-  color: var(--text-muted);
 }
 
 .side__error {

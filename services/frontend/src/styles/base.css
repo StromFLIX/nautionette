@@ -568,6 +568,10 @@ pre.code {
   display: flex;
   align-items: center;
   gap: 10px;
+  /* Width comes from the container, never from the row's own text. */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 8px 10px;
   border-radius: var(--radius-md);
   color: inherit;
