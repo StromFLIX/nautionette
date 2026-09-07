@@ -10,6 +10,7 @@
 import { spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { prepareProjects, projectEnvironment } from "./project-git.mjs";
+import { contextUsage } from "./context-usage.mjs";
 
 const OUT = process.stdout;
 
@@ -155,6 +156,9 @@ async function main() {
   let stderr = "";
   let buffer = "";
   let runError = "";
+  let context = null;
+  let usage = null;
+  const result = (event) => emit({ type: "result", ...event, context, usage });
 
   child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => {
@@ -210,6 +214,9 @@ async function main() {
       case "message_end": {
         const message = event.message;
         if (message?.role === "assistant") {
+          context = contextUsage(message, model);
+          usage = context ? message.usage : null;
+          emit({ type: "usage", context });
           if (message.stopReason === "error" && message.errorMessage) {
             runError = explain(message.errorMessage);
             emit({ type: "error", message: runError });
@@ -242,8 +249,7 @@ async function main() {
   const text = (finalText || streamed).trim();
 
   if (!text && (runError || code !== 0)) {
-    emit({
-      type: "result",
+    result({
       ok: false,
       text: "",
       output: null,
@@ -255,8 +261,7 @@ async function main() {
   if (job.output_schema) {
     const parsed = extractJson(text);
     if (!parsed) {
-      emit({
-        type: "result",
+      result({
         ok: false,
         text,
         output: null,
@@ -266,14 +271,14 @@ async function main() {
     }
     const problems = checkSchema(parsed, job.output_schema);
     if (problems.length) {
-      emit({ type: "result", ok: false, text, output: parsed, error: problems.join("; ") });
+      result({ ok: false, text, output: parsed, error: problems.join("; ") });
       return;
     }
-    emit({ type: "result", ok: true, text, output: parsed });
+    result({ ok: true, text, output: parsed });
     return;
   }
 
-  emit({ type: "result", ok: true, text, output: null });
+  result({ ok: true, text, output: null });
 }
 
 main().catch((error) => {

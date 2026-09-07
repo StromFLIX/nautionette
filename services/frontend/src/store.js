@@ -13,7 +13,7 @@ const state = reactive({
   // The app ships without a backend, so it cannot start until it is told where one is.
   needsServer: isNative && !server.url,
   system: { components: [], agent_sets: [] },
-  catalog: { agent_sets: [], models: [], tools: [], default_model: '', default_agent_set: 'default', context_window: 24000 },
+  catalog: { agent_sets: [], models: [], tools: [], default_model: '', default_agent_set: 'default' },
   chats: [],
   workflows: [],
   drafts: [],

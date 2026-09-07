@@ -46,7 +46,7 @@
   </div>
 
   <div class="setting">
-    <div class="setting__label">History sent to each call</div>
+    <div class="setting__label">History sent to each call (character limit)</div>
     <div class="row">
       <select v-model="historyMode" class="field" style="max-width: 190px">
         <option value="auto">From the model</option>
@@ -54,10 +54,11 @@
       </select>
       <input
         v-if="historyMode === 'fixed'" v-model.number="form.history_chars"
-        class="field" type="number" min="2000" step="10000"
+        class="field" type="number" min="2000" step="10000" aria-label="History character limit"
       />
       <span class="caption dim">{{ contextHint }}</span>
     </div>
+    <p class="caption dim">Transcript trimming only. The chat context meter uses provider-reported tokens, including instructions and tools.</p>
   </div>
 
   <div class="row settings__save">
@@ -89,7 +90,7 @@ const defaults = reactive({ default_model: '', default_agent_set: '', history_ch
 
 const contextHint = computed(() => {
   if (historyMode.value === 'fixed') {
-    return `${Math.round((form.history_chars || 0) / 4000)}k tokens`
+    return `${compactChars(form.history_chars || 0)} characters of history`
   }
   const model = (store.catalog.models || []).find((item) => item.id === form.default_model)
   if (!model?.context_length) return 'this model publishes no window; the fallback is used'

@@ -56,11 +56,12 @@
         <q-tooltip>Writable projects for the next message</q-tooltip>
       </button>
 
-      <div class="composer__context">
-        <div class="meter" :title="`${contextUsed.toLocaleString()} of ${contextWindow.toLocaleString()} characters of history`">
-          <div class="meter__fill" :style="{ width: `${contextPercent}%` }" :class="{ 'meter__fill--hot': contextPercent > 80 }" />
+      <div class="composer__context" :title="meter.title" :aria-label="meter.title">
+        <div class="meter">
+          <div class="meter__fill" :style="{ width: `${meter.width}%` }" :class="{ 'meter__fill--hot': meter.percent > 80 }" />
         </div>
-        <span class="caption dim">{{ contextPercent }}% context</span>
+        <span class="caption dim">{{ meter.label }}</span>
+        <q-tooltip>{{ meter.title }}</q-tooltip>
       </div>
 
       <button
@@ -78,7 +79,8 @@ import { computed, ref } from 'vue'
 import ModelPicker from './ModelPicker.vue'
 import ToolPicker from './ToolPicker.vue'
 import ProjectPicker from './ProjectPicker.vue'
-import { historyBudget, store } from '../store'
+import { store } from '../store'
+import { contextMeter, modelContextWindow } from '../context'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -87,7 +89,7 @@ const props = defineProps({
   tools: { type: Array, default: null },
   projectIds: { type: Array, default: () => [] },
   busy: { type: Boolean, default: false },
-  contextUsed: { type: Number, default: 0 },
+  context: { type: Object, default: null },
   variant: { type: String, default: 'docked' },
   placeholder: { type: String, default: 'Message…' }
 })
@@ -102,9 +104,7 @@ const allTools = computed(() => store.catalog.tools || [])
 const toolCount = computed(() => (props.tools === null ? allTools.value.length : props.tools.length))
 const toolLabel = computed(() =>
   props.tools === null ? `${allTools.value.length} tools` : `${props.tools.length}/${allTools.value.length} tools`)
-const contextWindow = computed(() => historyBudget(props.model))
-const contextPercent = computed(() =>
-  Math.min(100, Math.round((props.contextUsed / contextWindow.value) * 100)))
+const meter = computed(() => contextMeter(props.context, modelContextWindow(store.catalog, props.model)))
 const shortModel = computed(() => {
   const id = props.model || store.catalog.default_model || 'model'
   return id.includes('/') ? id.split('/').pop() : id
