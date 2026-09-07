@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import base64
 import json
+import threading
 import time
 from collections.abc import Iterator
 from typing import Any
 
 from . import daemon, images
 from .config import (
+    AGENT_EGRESS_NETWORK,
     AGENT_ENVIRONMENT,
     AGENT_MEMORY,
+    AGENT_NETWORK,
     IMAGE_BUILD_TIMEOUT,
     INTERNAL_TOKEN,
     RUN_TIMEOUT,
@@ -68,9 +71,45 @@ def _environment(job: dict[str, Any]) -> dict[str, str]:
     environment["AGENT_JOB"] = base64.b64encode(
         json.dumps(job, default=str).encode("utf-8")
     ).decode("ascii")
-    if INTERNAL_TOKEN:
+    if job.get("chat_id"):
+        environment.pop("BACKEND_URL", None)
+    elif INTERNAL_TOKEN:
         environment["INTERNAL_TOKEN"] = INTERNAL_TOKEN
     return environment
+
+
+def decide_internet(chat_id: str, turn_id: str, allowed: bool) -> bool:
+    containers = daemon.client().containers.list(filters={"label": [
+        f"nautionette.chat={chat_id}", f"nautionette.turn={turn_id}",
+    ]})
+    if not containers:
+        return False
+    for container in containers:
+        container.reload()
+        networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
+        network = daemon.client().networks.get(AGENT_EGRESS_NETWORK)
+        newly_connected = allowed and AGENT_EGRESS_NETWORK not in networks
+        if newly_connected:
+            network.connect(container)
+        elif not allowed and AGENT_EGRESS_NETWORK in networks:
+            network.disconnect(container)
+        decision = "allowed" if allowed else "denied"
+        try:
+            result = container.exec_run([
+                "node", "-e",
+                'require("node:fs").writeFileSync("/tmp/nautionette-internet-decision", '
+                + json.dumps(decision) + ')',
+            ])
+            if result.exit_code != 0:
+                raise RuntimeError("Could not deliver the internet approval decision")
+        except Exception:
+            if newly_connected:
+                try:
+                    network.disconnect(container)
+                except Exception:
+                    container.kill()
+            raise
+    return True
 
 
 def run(job: dict[str, Any]) -> Iterator[str]:
@@ -87,22 +126,34 @@ def run(job: dict[str, Any]) -> Iterator[str]:
 
     timeout = min(int(job.get("timeout_seconds") or RUN_TIMEOUT), RUN_TIMEOUT)
     container = None
+    watchdog = None
     yield _ndjson({"type": "started", "agent_set": agent_set, "image": tag})
     try:
-        container = daemon.client().containers.run(
+        if job.get("chat_id") and not daemon.client().networks.get(AGENT_NETWORK).attrs.get("Internal"):
+            raise RuntimeError("Chat agents require an internal Docker network with egress disabled")
+        container = daemon.client().containers.create(
             tag,
             detach=True,
             environment=_environment(job),
-            network=TARGET_NETWORK,
+            network=AGENT_NETWORK if job.get("chat_id") else TARGET_NETWORK,
             volumes={WORKFLOWS_VOLUME: {"bind": "/workflows", "mode": "ro"}},
             tmpfs={"/workspace": "size=256m,exec"},
             mem_limit=AGENT_MEMORY,
             pids_limit=512,
             security_opt=["no-new-privileges:true"],
+            cap_drop=["ALL"],
+                labels={"nautionette.chat": job.get("chat_id", ""),
+                    "nautionette.turn": job.get("turn_id", "")},
             stdout=True,
             stderr=True,
             tty=False,
         )
+        if job.get("chat_id") and job.get("internet_allowed") is True:
+            daemon.client().networks.get(AGENT_EGRESS_NETWORK).connect(container)
+        container.start()
+        watchdog = threading.Timer(timeout, container.kill)
+        watchdog.daemon = True
+        watchdog.start()
         deadline = time.time() + timeout
         buffer = b""
         for chunk in container.logs(stream=True, follow=True, stdout=True, stderr=False):
@@ -130,6 +181,8 @@ def run(job: dict[str, Any]) -> Iterator[str]:
         daemon.log.exception("agent run failed")
         yield _ndjson({"type": "error", "message": str(exc)[:500]})
     finally:
+        if watchdog is not None:
+            watchdog.cancel()
         if container is not None:
             try:
                 container.remove(force=True)

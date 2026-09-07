@@ -110,6 +110,48 @@ become explicitly interrupted answers; tools are not automatically rerun because
 their external side effects may already have happened. Run one backend process per
 SQLite database; startup recovery assumes ownership of its unfinished turns.
 
+### Session internet approval
+
+Chat Pi containers start on `nautionette-agents`, a Docker `internal: true`
+network with access to the model/tool gateway but no direct internet route or
+connection to the backend and broker networks. Before fetching websites, cloning
+remote repositories, or downloading packages, Pi calls `request_internet_access`
+with its reason. The chat displays **Allow for this chat** and **Deny**, and the
+tool waits while the current turn remains active. Pending requests survive client
+reloads and reconnects, up to the configured agent-run timeout.
+
+The user decision endpoint is `POST /api/chats/{id}/internet` with
+`{turn_id, allowed}`. It is not an MCP tool. Only an authenticated user decision
+for a pending, running turn lets the broker attach its container to the separate
+`nautionette-agent-egress` network. The broker then delivers the decision to the
+waiting tool. Chat containers have no service credential or network-admin
+capabilities; the tool's local decision file is a notification, not authority to
+change networking.
+
+Approval is persisted on the chat in SQLite and applied before starting every
+subsequent turn's container. It is not shared with other chats or workflows.
+Denial remains in effect for that chat; a new chat starts blocked. Unanswered
+requests are cleared when a turn ends or the backend restarts. Here, a session
+means the lifetime of the chat, not the browser tab or an individual Pi process.
+
+This controls **direct Pi egress**, not server-side internet use by configured
+MCP tools, model providers, or workflow activities. Those remain trusted system
+capabilities and are not sandboxed by this gate. Configure distinct `APP_TOKEN`
+and `INTERNAL_TOKEN` values for shared deployments.
+
+After updating, rebuild/recreate backend, docker-broker, frontend-web, and
+agentgateway with `docker compose up -d --build backend docker-broker frontend-web agentgateway`.
+The broker rebuilds the changed Pi base and agent images automatically. The new
+networks and images must be in place before using the gate; already running agent
+containers are not retroactively restricted.
+
+Focused checks: `uv run pytest tests/backend/test_internet.py tests/broker/test_internet.py`,
+`npx --yes tsx --test tests/agent/*.ts`, and
+`npm --prefix services/frontend run test:e2e -- chat.spec.js --grep internet`.
+The opt-in isolation check uses a local `node:24-bookworm-slim` image and temporary
+containers/networks, cleaned up afterward:
+`NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_internet_docker.py`.
+
 ## Chats become workflows
 
 A chat is the draft: interactive, streaming, temporary. A workflow is the saved version: durable, scheduled, repeatable. Turning one into the other is a normal user action.

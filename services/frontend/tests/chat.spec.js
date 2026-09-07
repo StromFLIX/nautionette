@@ -14,10 +14,17 @@ async function mockChats (context, state) {
     if (path === '/api/workflows') return route.fulfill({ json: { workflows: [] } })
     if (path === '/api/drafts') return route.fulfill({ json: { drafts: [] } })
     if (path === '/api/runs') return route.fulfill({ json: { runs: [] } })
-    const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|messages))?$/)
+    const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|messages|internet))?$/)
     if (match) {
       const [, chatId, action] = match
       const data = state.chats[chatId]
+      if (action === 'internet' && method === 'POST') {
+        const payload = route.request().postDataJSON()
+        state.decisions.push({ chatId, ...payload })
+        if (state.approvalFailure) return route.fulfill({ status: 502, json: { detail: 'Could not deliver the decision; retry shortly' } })
+        data.chat.internet_status = payload.allowed ? 'allowed' : 'denied'
+        return route.fulfill({ json: data.chat })
+      }
       if (action === 'stream') {
         return route.fulfill({ contentType: 'text/event-stream', body: `retry: 100\ndata: ${JSON.stringify({ type: 'snapshot', ...data })}\n\n` })
       }
@@ -42,7 +49,7 @@ async function mockChats (context, state) {
 
 function initial () {
   return {
-    attempts: [], offline: false, reject: false,
+    attempts: [], decisions: [], offline: false, reject: false,
     chats: Object.fromEntries(['alpha', 'beta'].map((id) => [id, {
       chat: { id, title: id, agent_set: 'default', model: 'test/model', tools: null, updated_at: Date.now() / 1000 },
       messages: [], active_turn: null
@@ -143,4 +150,51 @@ test('a transient network error does not force a connection dialog', async ({ pa
   await page.locator('textarea').fill('still connected')
   await page.locator('.composer__send').click()
   await expect(page.locator('.msg--assistant')).toContainText('Working on still connected')
+})
+
+for (const width of [1440, 320]) {
+  test(`internet approval survives reload and is scoped to the chat at ${width}px`, async ({ page, context }) => {
+    const state = initial()
+    Object.assign(state.chats.alpha.chat, {
+      internet_status: 'pending', internet_reason: 'Read the latest release notes from the project website.', internet_turn_id: 'turn-alpha'
+    })
+    state.chats.alpha.active_turn = { id: 'turn-alpha', steps: [], status: '' }
+    await page.setViewportSize({ width, height: width === 320 ? 568 : 1000 })
+    await mockChats(context, state)
+    await page.goto('/chats/alpha')
+    const request = page.getByRole('region', { name: 'Internet access request' })
+    await expect(request).toContainText('Read the latest release notes')
+    await page.reload()
+    await expect(request).toBeVisible()
+    await page.screenshot({ path: `/tmp/nautionette-internet-${width}.png` })
+    const bounds = await request.boundingBox()
+    expect(bounds.x).toBeGreaterThanOrEqual(0)
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width)
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(width === 320 ? 568 : 1000)
+    await page.getByRole('button', { name: 'Allow for this chat' }).click()
+    await expect(request).toHaveCount(0)
+    await expect(page.getByRole('img', { name: 'Internet allowed for this chat' })).toBeVisible()
+    expect(state.decisions).toEqual([{ chatId: 'alpha', turn_id: 'turn-alpha', allowed: true }])
+    await page.reload()
+    await expect(page.getByRole('button', { name: 'Allow for this chat' })).toHaveCount(0)
+    await page.goto('/chats/beta')
+    await expect(page.getByRole('img', { name: 'Internet allowed for this chat' })).toHaveCount(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  })
+}
+
+test('internet denial can be retried after delivery fails', async ({ page, context }) => {
+  const state = initial()
+  Object.assign(state.chats.alpha.chat, {
+    internet_status: 'pending', internet_reason: 'Download a package.', internet_turn_id: 'turn-alpha'
+  })
+  state.approvalFailure = true
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await page.getByRole('button', { name: 'Deny', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Could not deliver')
+  state.approvalFailure = false
+  await page.getByRole('button', { name: 'Deny', exact: true }).click()
+  await expect(page.getByRole('region', { name: 'Internet access request' })).toHaveCount(0)
+  expect(state.decisions.every((decision) => decision.allowed === false)).toBe(true)
 })

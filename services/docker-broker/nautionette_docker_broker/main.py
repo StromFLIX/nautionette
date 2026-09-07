@@ -92,3 +92,16 @@ def agent(
 def worker_restart(x_internal_token: str | None = Header(default=None)) -> dict[str, Any]:
     _check_internal(x_internal_token)
     return workers.restart()
+
+
+@app.post("/agent/internet")
+def agent_internet(
+    payload: dict[str, Any] = Body(...), x_internal_token: str | None = Header(default=None)
+) -> dict[str, Any]:
+    _check_internal(x_internal_token)
+    chat_id, turn_id = payload.get("chat_id"), payload.get("turn_id")
+    if not chat_id or not turn_id or type(payload.get("allowed")) is not bool:
+        raise HTTPException(status_code=422, detail="chat_id, turn_id and allowed are required")
+    if not agent_run.decide_internet(chat_id, turn_id, payload["allowed"]):
+        raise HTTPException(status_code=409, detail="The requesting agent is no longer running")
+    return {"ok": True}

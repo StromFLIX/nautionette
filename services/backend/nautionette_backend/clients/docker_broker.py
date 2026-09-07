@@ -62,5 +62,14 @@ class BrokerClient:
         response.raise_for_status()
         return response.json()
 
+    async def decide_internet(self, chat_id: str, turn_id: str, allowed: bool) -> None:
+        response = await shared().post(
+            f"{self.base_url}/agent/internet",
+            headers=internal_headers(),
+            json={"chat_id": chat_id, "turn_id": turn_id, "allowed": allowed},
+            timeout=15,
+        )
+        response.raise_for_status()
+
 
 broker = BrokerClient()

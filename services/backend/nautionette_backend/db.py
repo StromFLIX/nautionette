@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS workflow_settings (
 _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN model TEXT",
     "ALTER TABLE chats ADD COLUMN tools TEXT",
+    "ALTER TABLE chats ADD COLUMN internet_status TEXT NOT NULL DEFAULT 'blocked'",
+    "ALTER TABLE chats ADD COLUMN internet_reason TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE chats ADD COLUMN internet_turn_id TEXT NOT NULL DEFAULT ''",
 )
 
 _EDITABLE_CHAT_COLUMNS = ("title", "agent_set", "model", "tools")

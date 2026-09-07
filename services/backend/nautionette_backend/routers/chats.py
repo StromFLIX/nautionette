@@ -16,6 +16,7 @@ from ..agent import (
     summarise_for_title,
 )
 from ..background import spawn
+from ..clients import broker
 from ..conversations import chat_snapshots, run_turn, turn_events
 from ..db import db
 from ..events import bus
@@ -116,6 +117,19 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
         tools=chat.get("tools"),
         run_id=f"chat-{chat_id}",
     )
+    job.update(
+        chat_id=chat_id,
+        turn_id=message_id,
+        internet_allowed=chat["internet_status"] == "allowed",
+        internet_status=chat["internet_status"],
+    )
+    job["system_prompt"] += (
+        "\nDirect internet access is " + chat["internet_status"] + " for this chat. "
+        "Before first accessing the internet, call request_internet_access with a reason and wait "
+        "for approval. Once allowed, use the internet freely for this chat without asking again. "
+        "If denied, continue offline; never bypass the decision via MCP tools or workflows. "
+        "This required internet approval is an exception to routine permission-free operation."
+    )
 
     if created:
         spawn(run_turn(message_id, chat_id, job), name=f"chat-{message_id}")
@@ -136,3 +150,38 @@ async def promote(chat_id: str) -> dict[str, Any]:
     db.execute("UPDATE chats SET promoted_to = ? WHERE id = ?", (published["name"], chat_id))
     bus.publish("promote.completed", {"chat_id": chat_id, "workflow": published["name"]})
     return published
+
+
+@router.post("/api/chats/{chat_id}/internet")
+async def decide_chat_internet(chat_id: str, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    chat = _chat_or_404(chat_id)
+    allowed, turn_id = payload.get("allowed"), payload.get("turn_id")
+    if type(allowed) is not bool or not isinstance(turn_id, str) or not turn_id:
+        raise HTTPException(status_code=422, detail="allowed must be a boolean and turn_id is required")
+    decision = "allowed" if allowed else "denied"
+    if chat["internet_turn_id"] == turn_id and chat["internet_status"] == decision:
+        return chat
+    claimed = db.execute(
+        "UPDATE chats SET internet_status = 'deciding' WHERE id = ? "
+        "AND internet_status = 'pending' AND internet_turn_id = ? "
+        "AND EXISTS (SELECT 1 FROM chat_turns WHERE id = ? AND chat_id = ? AND state = 'running')",
+        (chat_id, turn_id, turn_id, chat_id),
+    ).rowcount
+    if not claimed:
+        raise HTTPException(status_code=409, detail="This internet request is no longer pending")
+    try:
+        await broker.decide_internet(chat_id, turn_id, allowed)
+    except Exception as exc:
+        db.execute(
+            "UPDATE chats SET internet_status = CASE WHEN EXISTS "
+            "(SELECT 1 FROM chat_turns WHERE id = ? AND state = 'running') "
+            "THEN 'pending' ELSE 'blocked' END WHERE id = ? "
+            "AND internet_turn_id = ? AND internet_status = 'deciding'", (turn_id, chat_id, turn_id),
+        )
+        raise HTTPException(status_code=502, detail="Could not deliver the decision; retry shortly") from exc
+    db.execute(
+        "UPDATE chats SET internet_status = ? WHERE id = ? AND internet_turn_id = ?",
+        (decision, chat_id, turn_id),
+    )
+    bus.publish("chat.updated", {"chat_id": chat_id})
+    return _chat_or_404(chat_id)

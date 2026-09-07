@@ -26,6 +26,14 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 timeline.add_text(event.get("text", ""))
             elif kind == "tool":
                 timeline.start_tool(event)
+                if event.get("name") == "request_internet_access":
+                    arguments = event.get("args") or {}
+                    reason = str(arguments.get("reason") or "The agent needs internet access.")[:1000]
+                    db.execute(
+                        "UPDATE chats SET internet_status = 'pending', internet_reason = ?, "
+                        "internet_turn_id = ? WHERE id = ? AND internet_status = 'blocked'",
+                        (reason, turn_id, chat_id),
+                    )
             elif kind == "tool_done":
                 timeline.finish_tool(event)
             elif kind == "error":
@@ -45,6 +53,11 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         if db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
             db.record_chat_progress(turn_id, {"type": "error", "message": failure}, timeline.steps, "")
     finally:
+        db.execute(
+            "UPDATE chats SET internet_status = 'blocked', internet_reason = '', internet_turn_id = '' "
+            "WHERE id = ? AND internet_turn_id = ? AND internet_status = 'pending'",
+            (chat_id, turn_id),
+        )
         content = timeline.text or (f"The agent could not answer: {failure}" if failure else "(no answer)")
         db.finish_chat_turn(
             turn_id, content, {"tools": timeline.tools, "steps": timeline.steps, "error": failure}
@@ -53,6 +66,10 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
 
 
 def recover_interrupted() -> None:
+    db.execute(
+        "UPDATE chats SET internet_status = 'blocked', internet_reason = '', internet_turn_id = '' "
+        "WHERE internet_status IN ('pending', 'deciding')"
+    )
     for turn in db.query("SELECT * FROM chat_turns WHERE state = 'running'"):
         steps = json.loads(turn["steps"])
         failure = "The answer was interrupted by a backend restart."

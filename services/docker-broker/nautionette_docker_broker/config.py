@@ -8,6 +8,8 @@ AGENT_IMAGES_DIR = os.environ.get("AGENT_IMAGES_DIR", "/agent-images")
 IMAGE_PREFIX = os.environ.get("IMAGE_PREFIX", "nautionette/pi-")
 BASE_IMAGE = os.environ.get("BASE_IMAGE", "nautionette/pi-base:dev")
 TARGET_NETWORK = os.environ.get("TARGET_NETWORK", "nautionette-internal")
+AGENT_NETWORK = os.environ.get("AGENT_NETWORK", "nautionette-agents")
+AGENT_EGRESS_NETWORK = os.environ.get("AGENT_EGRESS_NETWORK", "nautionette-agent-egress")
 WORKFLOWS_VOLUME = os.environ.get("WORKFLOWS_VOLUME", "nautionette-workflows")
 WORKER_LABEL = os.environ.get("WORKER_SERVICE_LABEL", "com.docker.compose.service=worker")
 # Set only if this broker cannot read its own compose project label.

@@ -92,6 +92,9 @@ export const api = {
     signal: AbortSignal.timeout(20000), ...json({ text, message_id: messageId })
   }),
   updateChat: (id, payload) => request(`/api/chats/${id}`, { method: 'PATCH', ...json(payload) }),
+  decideInternet: (id, turnId, allowed) => request(`/api/chats/${id}/internet`, {
+    method: 'POST', ...json({ turn_id: turnId, allowed })
+  }),
   deleteChat: (id) => request(`/api/chats/${id}`, { method: 'DELETE' }),
 
   workflows: () => request('/api/workflows'),

@@ -134,6 +134,7 @@ async function main() {
       ...process.env,
       AGENT_MODEL: model,
       NAUTIONETTE_MODE: mode,
+      NAUTIONETTE_INTERNET_STATUS: job.chat_id ? (job.internet_status || "blocked") : "",
       // Empty means "every federated tool"; a list narrows the bridge.
       NAUTIONETTE_TOOLS: Array.isArray(job.tools) ? job.tools.join(",") : "",
     },

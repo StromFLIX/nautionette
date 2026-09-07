@@ -87,6 +87,8 @@ services:
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       TARGET_NETWORK: nautionette-internal
+      AGENT_NETWORK: nautionette-agents
+      AGENT_EGRESS_NETWORK: nautionette-agent-egress
       WORKFLOWS_VOLUME: nautionette-workflows
       IMAGE_PREFIX: nautionette/pi-
       BASE_IMAGE: nautionette/pi-base:dev
@@ -139,7 +141,7 @@ services:
       XAI_API_KEY: ${XAI_API_KEY:-}
     volumes:
       - agentgateway-data:/data
-    networks: [internal]
+    networks: [internal, agents, agent-egress]
     depends_on:
       - workflow-mcp
     <<: *logging
@@ -283,6 +285,11 @@ networks:
   # model provider. Isolation here comes from publishing no ports.
   internal:
     name: nautionette-internal
+  agents:
+    name: nautionette-agents
+    internal: true
+  agent-egress:
+    name: nautionette-agent-egress
   # Backend to broker only, no outbound.
   control:
     name: nautionette-control

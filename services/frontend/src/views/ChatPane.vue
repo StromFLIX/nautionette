@@ -16,6 +16,10 @@
           <template v-if="chat?.promoted_to"> · → {{ chat.promoted_to }}</template>
         </div>
       </div>
+      <span v-if="chat?.internet_status === 'allowed'" class="material-icons internet-indicator" role="img" aria-label="Internet allowed for this chat">
+        public
+        <q-tooltip>Internet allowed for this chat</q-tooltip>
+      </span>
       <RouterLink v-if="chat?.promoted_to" class="btn btn--outline btn--sm" :to="`/workflows/${chat.promoted_to}`">
         <span class="material-icons" style="font-size: 15px">account_tree</span>
         {{ chat.promoted_to }}
@@ -51,6 +55,19 @@
     </div>
 
     <div class="thread__foot">
+      <section v-if="internetPending" class="thread__approval" aria-label="Internet access request" aria-live="polite">
+        <div class="thread__approval-title">Allow internet for this chat?</div>
+        <p class="thread__approval-reason">{{ chat.internet_reason }}</p>
+        <div class="thread__approval-actions">
+          <button class="btn btn--outline btn--sm" :disabled="approvalBusy" @click="decideInternet(false)">
+            <span class="material-icons" aria-hidden="true">block</span>Deny
+          </button>
+          <button class="btn btn--primary btn--sm" :disabled="approvalBusy" @click="decideInternet(true)">
+            <span class="material-icons" aria-hidden="true">public</span>Allow for this chat
+          </button>
+        </div>
+        <p v-if="approvalError" class="thread__approval-error" role="alert">{{ approvalError }}</p>
+      </section>
       <Composer
         ref="composer"
         v-model="draft"
@@ -96,6 +113,10 @@ const liveStatus = computed(() => activeTurn.value?.status || '')
 const starting = ref(false)
 const scroller = ref(null)
 const composer = ref(null)
+const approvalRequest = ref('')
+const approvalError = ref('')
+const internetPending = computed(() => ['pending', 'deciding'].includes(chat.value?.internet_status))
+const approvalBusy = computed(() => approvalRequest.value === chatId.value || chat.value?.internet_status === 'deciding')
 
 const chatId = computed(() => route.params.id || '')
 const messages = computed(() => {
@@ -191,6 +212,22 @@ async function patch (fields) {
   actions.loadChats()
 }
 
+async function decideInternet (allowed) {
+  const id = chatId.value
+  const turnId = chat.value?.internet_turn_id
+  if (!turnId || approvalBusy.value) return
+  approvalRequest.value = id
+  approvalError.value = ''
+  try {
+    const updated = await api.decideInternet(id, turnId, allowed)
+    if (chatId.value === id) chat.value = updated
+  } catch (error) {
+    if (chatId.value === id) approvalError.value = error.message
+  } finally {
+    if (approvalRequest.value === id) approvalRequest.value = ''
+  }
+}
+
 function rename () {
   $q.dialog({
     title: 'Rename chat',
@@ -209,6 +246,7 @@ function remove () {
 }
 
 watch(chatId, (id) => {
+  approvalError.value = ''
   chat.value = null
   savedMessages.value = []
   activeTurn.value = null
@@ -287,6 +325,50 @@ onUnmounted(() => {
 .thread__foot > :deep(.composer) {
   max-width: 900px;
   margin: 0 auto;
+}
+
+.thread__approval {
+  max-width: 900px;
+  margin: 0 auto 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.thread__approval-title {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.thread__approval-reason {
+  max-height: 80px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  margin: 4px 0 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.thread__approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.thread__approval-actions .material-icons {
+  font-size: 16px;
+}
+
+.thread__approval-error {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.internet-indicator {
+  flex: none;
+  font-size: 18px;
+  color: var(--success);
 }
 
 .avatar-sm {

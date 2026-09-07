@@ -16,6 +16,7 @@ ENV PI_OFFLINE=1 \
 
 # The whole contract of a run: AGENT_JOB in, NDJSON out, then the container exits.
 COPY agent-run.mjs /usr/local/lib/nautionette/agent-run.mjs
+COPY internet.ts /root/.pi/agent/extensions/nautionette-internet.ts
 RUN printf '#!/bin/sh\nexec node /usr/local/lib/nautionette/agent-run.mjs "$@"\n' \
       > /usr/local/bin/agent-run \
   && chmod +x /usr/local/bin/agent-run
