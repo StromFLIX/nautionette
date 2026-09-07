@@ -1,5 +1,5 @@
 <template>
-  <div class="composer" :class="[`composer--${variant}`, { 'composer--focus': focused }]">
+  <div class="composer" :class="[`composer--${variant}`, { 'composer--focus': focused, 'composer--running': running }]">
     <textarea
       ref="input"
       class="composer__input"
@@ -65,10 +65,20 @@
       </div>
 
       <button
+        v-if="running"
+        class="composer__stop"
+        :disabled="stopping" aria-label="Stop response" @click="$emit('stop')"
+      >
+        <span class="material-icons" aria-hidden="true">stop</span>
+        <q-tooltip>{{ stopping ? 'Stopping response' : 'Stop response' }}</q-tooltip>
+      </button>
+      <button
         class="composer__send" :class="{ 'composer__send--busy': busy }"
+        :aria-label="running ? 'Queue message' : 'Send message'"
         :disabled="busy || !modelValue.trim()" @click="submit"
       >
-        <span class="material-icons">{{ busy ? 'more_horiz' : 'arrow_upward' }}</span>
+        <span class="material-icons">{{ busy ? 'more_horiz' : running ? 'playlist_add' : 'arrow_upward' }}</span>
+        <q-tooltip>{{ running ? 'Queue message' : 'Send message' }}</q-tooltip>
       </button>
     </div>
   </div>
@@ -89,12 +99,14 @@ const props = defineProps({
   tools: { type: Array, default: null },
   projectIds: { type: Array, default: () => [] },
   busy: { type: Boolean, default: false },
+  running: { type: Boolean, default: false },
+  stopping: { type: Boolean, default: false },
   context: { type: Object, default: null },
   variant: { type: String, default: 'docked' },
   placeholder: { type: String, default: 'Message…' }
 })
 
-const emit = defineEmits(['update:modelValue', 'update:agentSet', 'update:model', 'update:tools', 'update:projectIds', 'send'])
+const emit = defineEmits(['update:modelValue', 'update:agentSet', 'update:model', 'update:tools', 'update:projectIds', 'send', 'stop'])
 
 const input = ref(null)
 const focused = ref(false)
@@ -235,7 +247,8 @@ defineExpose({ focus: () => input.value?.focus() })
   background: var(--warning);
 }
 
-.composer__send {
+.composer__send,
+.composer__stop {
   display: grid;
   place-items: center;
   flex: none;
@@ -249,13 +262,20 @@ defineExpose({ focus: () => input.value?.focus() })
   transition: background var(--transition), opacity var(--transition);
 }
 
-.composer__send:disabled {
+.composer__stop {
+  background: var(--surface-active);
+  color: var(--danger);
+}
+
+.composer__send:disabled,
+.composer__stop:disabled {
   background: var(--surface-active);
   color: var(--text-dim);
   cursor: default;
 }
 
-.composer__send .material-icons {
+.composer__send .material-icons,
+.composer__stop .material-icons {
   font-size: 18px;
 }
 
@@ -279,6 +299,8 @@ defineExpose({ focus: () => input.value?.focus() })
 
   .pick:nth-of-type(3) { grid-column: 1; }
   .composer__send { grid-column: 3; grid-row: 1 / 3; align-self: end; }
+  .composer__stop { grid-column: 3; grid-row: 1; }
+  .composer--running .composer__send { grid-row: 2; }
 
   .pick > .truncate,
   .pick > span:not(.material-icons) {

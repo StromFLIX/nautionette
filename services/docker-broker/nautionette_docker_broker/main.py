@@ -105,3 +105,23 @@ def agent_internet(
     if not agent_run.decide_internet(chat_id, turn_id, payload["allowed"]):
         raise HTTPException(status_code=409, detail="The requesting agent is no longer running")
     return {"ok": True}
+
+
+@app.post("/agent/control")
+def agent_control(
+    payload: dict[str, Any] = Body(...), x_internal_token: str | None = Header(default=None)
+) -> dict[str, Any]:
+    _check_internal(x_internal_token)
+    chat_id, turn_id = payload.get("chat_id"), payload.get("turn_id")
+    command = payload.get("command")
+    if (
+        not isinstance(chat_id, str) or not chat_id
+        or not isinstance(turn_id, str) or not turn_id
+        or not isinstance(command, dict) or command.get("type") not in {"stop", "steer"}
+        or not isinstance(command.get("id"), str) or not command["id"]
+        or (command["type"] == "steer" and (
+            not isinstance(command.get("text"), str) or not command["text"].strip()
+        ))
+    ):
+        raise HTTPException(status_code=422, detail="Valid chat, turn and command are required")
+    return {"ok": agent_run.control(chat_id, turn_id, command)}

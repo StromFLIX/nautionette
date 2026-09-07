@@ -15,10 +15,28 @@ async function mockChats (context, state) {
     if (path === '/api/workflows') return route.fulfill({ json: { workflows: [] } })
     if (path === '/api/drafts') return route.fulfill({ json: { drafts: [] } })
     if (path === '/api/runs') return route.fulfill({ json: { runs: [] } })
-    const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|messages|internet))?$/)
+    const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|messages|internet|stop|queue\/resume))?$/)
     if (match) {
       const [, chatId, action] = match
       const data = state.chats[chatId]
+      if (action === 'stop' && method === 'POST') {
+        const payload = route.request().postDataJSON()
+        state.stops.push({ chatId, ...payload })
+        if (state.stopFailure) return route.fulfill({ status: 503, json: { detail: 'Stop could not be delivered' } })
+        data.messages.push({ id: 'partial', role: 'assistant', content: data.active_turn.steps[0].text, meta: { interrupted: true, error: 'Stopped by you.' } })
+        data.active_turn = null
+        data.chat.queue_paused = 1
+        return route.fulfill({ json: data })
+      }
+      if (action === 'queue/resume' && method === 'POST') {
+        data.chat.queue_paused = 0
+        const message = data.messages.find((item) => item.meta?.queued)
+        if (message) {
+          message.meta.queued = false
+          data.active_turn = { id: message.id, steps: [{ kind: 'text', text: `Working on ${message.content}` }], status: '' }
+        }
+        return route.fulfill({ json: data })
+      }
       if (action === 'internet' && method === 'POST') {
         const payload = route.request().postDataJSON()
         state.decisions.push({ chatId, ...payload })
@@ -36,9 +54,10 @@ async function mockChats (context, state) {
         if (state.reject) return route.fulfill({ status: 422, json: { detail: 'Message rejected' } })
         let message = data.messages.find((item) => item.id === payload.message_id)
         if (!message) {
-          message = { id: payload.message_id, chat_id: chatId, role: 'user', content: payload.text, meta: {}, created_at: Date.now() / 1000 }
+          const queued = Boolean(payload.queue && (data.active_turn || data.chat.queue_paused))
+          message = { id: payload.message_id, chat_id: chatId, role: 'user', content: payload.text, meta: queued ? { queued: true } : {}, created_at: Date.now() / 1000 }
           data.messages.push(message)
-          data.active_turn = { id: payload.message_id, steps: [{ kind: 'text', text: `Working on ${payload.text}` }], status: '' }
+          if (!queued) data.active_turn = { id: payload.message_id, steps: [{ kind: 'text', text: `Working on ${payload.text}` }], status: '' }
         }
         return route.fulfill({ status: 202, json: { message, turn_id: payload.message_id } })
       }
@@ -50,12 +69,45 @@ async function mockChats (context, state) {
 
 function initial () {
   return {
-    attempts: [], decisions: [], offline: false, reject: false,
+    attempts: [], decisions: [], stops: [], offline: false, reject: false,
     chats: Object.fromEntries(['alpha', 'beta'].map((id) => [id, {
       chat: { id, title: id, agent_set: 'default', model: 'test/model', tools: null, updated_at: Date.now() / 1000 },
       messages: [], active_turn: null
     }]))
   }
+}
+
+for (const width of [1440, 320]) {
+  test(`running chats queue messages and stop without overlapping controls at ${width}px`, async ({ page, context }) => {
+    const state = initial()
+    state.chats.alpha.active_turn = { id: 'active', steps: [{ kind: 'text', text: 'Running command' }] }
+    await mockChats(context, state)
+    await page.setViewportSize({ width, height: width === 320 ? 568 : 1000 })
+    await page.goto('/chats/alpha')
+    await expect(page.getByRole('button', { name: 'Stop response' })).toBeVisible()
+    await page.locator('textarea').fill('Use the smaller implementation')
+    await page.getByRole('button', { name: 'Queue message', exact: true }).click()
+    await expect(page.getByRole('region', { name: 'Queued messages' })).toContainText('Use the smaller implementation')
+    await expect(page.locator('.msg--assistant')).toContainText('Running command')
+    await page.reload()
+    await expect(page.getByRole('region', { name: 'Queued messages' })).toContainText('Use the smaller implementation')
+    const stop = await page.getByRole('button', { name: 'Stop response' }).boundingBox()
+    const send = await page.getByRole('button', { name: 'Queue message', exact: true }).boundingBox()
+    expect(stop.x + stop.width <= send.x || send.x + send.width <= stop.x || stop.y + stop.height <= send.y || send.y + send.height <= stop.y).toBe(true)
+    await page.screenshot({ path: `/tmp/nautionette-chat-queue-${width}.png` })
+    state.stopFailure = true
+    await page.getByRole('button', { name: 'Stop response' }).click()
+    await expect(page.getByRole('alert')).toContainText('Stop could not be delivered')
+    state.stopFailure = false
+    await page.getByRole('button', { name: 'Stop response' }).click()
+    await expect(page.getByRole('region', { name: 'Queued messages' })).toContainText('Queue paused')
+    await expect(page.getByRole('button', { name: 'Stop response' })).toHaveCount(0)
+    expect(state.stops).toEqual([{ chatId: 'alpha', turn_id: 'active' }, { chatId: 'alpha', turn_id: 'active' }])
+    await page.getByRole('button', { name: 'Resume queued messages' }).click()
+    await expect(page.locator('.thread__body')).toContainText('Working on Use the smaller implementation')
+    await expect(page.getByRole('region', { name: 'Queued messages' })).toHaveCount(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  })
 }
 
 test('web and mobile attach to the same live answer and switch between concurrent chats', async ({ browser }) => {

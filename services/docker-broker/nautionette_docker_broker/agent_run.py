@@ -31,17 +31,55 @@ BUILD_STAGES = (
 )
 STAGE_SECONDS = 20
 BUILD_POLL_SECONDS = 3
+_controls_lock = threading.Lock()
+_stopped: dict[tuple[str, str], threading.Event] = {}
+
+
+def control(chat_id: str, turn_id: str, command: dict[str, Any]) -> bool:
+    if command["type"] == "stop":
+        with _controls_lock:
+            stopped = _stopped.get((chat_id, turn_id))
+            if stopped is not None:
+                stopped.set()
+    containers = daemon.client().containers.list(filters={"label": [
+        f"nautionette.chat={chat_id}", f"nautionette.turn={turn_id}",
+    ]})
+    if not containers:
+        return command["type"] == "stop" and stopped is not None
+    delivered = False
+    for container in containers:
+        if command["type"] == "stop":
+            container.kill()
+            delivered = True
+            continue
+        script = (
+            "const net = require('node:net');"
+            "const client = net.connect('/tmp/nautionette-chat.sock');"
+            "client.setTimeout(5000, () => process.exit(1));"
+            "client.on('error', () => process.exit(1));"
+            "client.on('connect', () => client.write(process.argv[1] + '\\n'));"
+            "client.on('data', chunk => process.stdout.write(chunk));"
+        )
+        result = container.exec_run(["node", "-e", script, json.dumps(command)])
+        if result.exit_code == 0:
+            try:
+                delivered = json.loads(result.output).get("ok") is True
+            except (ValueError, TypeError):
+                pass
+    return delivered
 
 
 def _ndjson(payload: dict[str, Any]) -> str:
     return json.dumps(payload, default=str) + "\n"
 
 
-def _await_image(tag: str) -> Iterator[str]:
+def _await_image(tag: str, stopped: threading.Event | None = None) -> Iterator[str]:
     """Narrate a missing image being built. Yields an error only if it never arrives."""
     images.start_build()
     started = time.monotonic()
     while True:
+        if stopped is not None and stopped.is_set():
+            return
         if images.has_image(tag):
             return
         state = images.snapshot()
@@ -116,6 +154,23 @@ def decide_internet(chat_id: str, turn_id: str, allowed: bool) -> bool:
 
 
 def run(job: dict[str, Any]) -> Iterator[str]:
+    stopped = threading.Event()
+    key = (job.get("chat_id", ""), job.get("turn_id", ""))
+    if key[0]:
+        with _controls_lock:
+            if key in _stopped:
+                yield _ndjson({"type": "error", "message": "This turn is already running"})
+                return
+            _stopped[key] = stopped
+    try:
+        yield from _run(job, stopped)
+    finally:
+        if key[0]:
+            with _controls_lock:
+                _stopped.pop(key, None)
+
+
+def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
     agent_set = job.get("agent_set") or "default"
     if agent_set not in images.discovered_agent_sets():
         yield _ndjson({"type": "error", "message": f"unknown agent set '{agent_set}'"})
@@ -123,7 +178,7 @@ def run(job: dict[str, Any]) -> Iterator[str]:
     tag = images.image_tag(agent_set)
     if not images.has_image(tag):
         # The image can vanish under us: an idle host prunes it between calls.
-        yield from _await_image(tag)
+        yield from _await_image(tag, stopped)
         if not images.has_image(tag):
             return  # _await_image already said why
 
@@ -133,6 +188,8 @@ def run(job: dict[str, Any]) -> Iterator[str]:
     claimed_projects = []
     yield _ndjson({"type": "started", "agent_set": agent_set, "image": tag})
     try:
+        if stopped.is_set():
+            return
         project_ids = job.get("project_ids", [])
         if project_ids and tuple(map(int, daemon.client().api._version.split("."))) < (1, 45):
             raise RuntimeError("Project isolation requires Docker Engine 26+ with API 1.45+")
@@ -165,7 +222,10 @@ def run(job: dict[str, Any]) -> Iterator[str]:
         )
         if job.get("chat_id") and job.get("internet_allowed") is True:
             daemon.client().networks.get(AGENT_EGRESS_NETWORK).connect(container)
-        container.start()
+        with _controls_lock:
+            if stopped.is_set():
+                return
+            container.start()
         watchdog = threading.Timer(timeout, container.kill)
         watchdog.daemon = True
         watchdog.start()
@@ -203,5 +263,5 @@ def run(job: dict[str, Any]) -> Iterator[str]:
                 container.remove(force=True)
             except Exception:  # noqa: BLE001, S110 - already gone is the outcome we wanted
                 pass
-            projects.release(claimed_projects, job.get("chat_id", ""))
+        projects.release(claimed_projects, job.get("chat_id", ""))
         yield _ndjson({"type": "closed"})

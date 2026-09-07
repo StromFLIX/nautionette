@@ -4,26 +4,96 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import Any
 
 from . import projects
-from .agent import Timeline, stream_agent
+from .agent import Timeline, build_history, stream_agent
+from .background import spawn
+from .clients import broker
 from .db import db
 from .events import bus, sse
-from .runtime import remember_agent_result
+from .runtime import history_budget, remember_agent_result
+
+
+def launch_next(chat_id: str) -> None:
+    turn = db.next_chat_turn(chat_id)
+    if turn:
+        spawn(run_turn(turn["id"], chat_id, json.loads(turn["job"])), name=f"chat-{turn['id']}")
+
+
+async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished: asyncio.Event) -> None:
+    sent = set()
+    while not finished.is_set():
+        turn = db.one("SELECT * FROM chat_turns WHERE id = ? AND state = 'running'", (turn_id,))
+        if not turn:
+            return
+        try:
+            if turn["stop_requested"]:
+                await broker.control_agent(chat_id, turn_id, {"id": f"stop-{turn_id}", "type": "stop"})
+            else:
+                queued = db.query(
+                    "SELECT * FROM chat_turns WHERE chat_id = ? AND state = 'queued' ORDER BY rowid",
+                    (chat_id,),
+                )
+                for pending in queued:
+                    if not pending["job"]:
+                        break
+                    candidate = json.loads(pending["job"])
+                    if any(candidate.get(key) != job.get(key) for key in ("agent_set", "model", "tools", "project_ids")):
+                        break
+                    if pending["id"] in sent:
+                        continue
+                    if not await broker.control_agent(chat_id, turn_id, {
+                        "id": pending["id"], "type": "steer", "text": candidate["prompt"],
+                    }):
+                        break
+                    sent.add(pending["id"])
+        except Exception as exc:
+            logging.getLogger("nautionette").warning("Chat control delivery failed: %s", exc)
+        try:
+            await asyncio.wait_for(finished.wait(), 0.2)
+        except TimeoutError:
+            pass
 
 
 async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     timeline = Timeline()
     failure = None
     status = ""
+    controller = None
+    finished = asyncio.Event()
+    interrupted = False
+    shutdown = False
     try:
+        turn = db.one("SELECT stop_requested FROM chat_turns WHERE id = ?", (turn_id,))
+        if not turn or turn["stop_requested"]:
+            interrupted = True
+            return
+        job["history"] = build_history(
+            [message for message in db.list_messages(chat_id)
+             if message["id"] != turn_id and not message["meta"].get("queued")],
+            max_chars=history_budget(job.get("model")),
+        )
+        chat = db.get_chat(chat_id)
+        if chat:
+            previous_status = job.get("internet_status", "blocked")
+            job["internet_status"] = chat["internet_status"]
+            job["internet_allowed"] = chat["internet_status"] == "allowed"
+            job["system_prompt"] = job.get("system_prompt", "").replace(
+                f"Direct internet access is {previous_status}", f"Direct internet access is {chat['internet_status']}",
+            )
+        controller = spawn(control_turn(turn_id, chat_id, job, finished), name=f"chat-control-{turn_id}")
         job.update(projects.prepare_worktrees(chat_id, job.get("project_ids", [])))
         job["project_credentials"] = await projects.agent_credentials(job.get("project_ids", []))
         async for event in stream_agent(job):
             if not db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
                 return
             kind = event.get("type")
+            if kind == "input_consumed":
+                db.consume_chat_input(turn_id, event.get("id", ""))
+            elif kind == "interrupted":
+                interrupted = True
             status = event.get("message", "") if kind == "status" else ""
             if kind == "delta":
                 timeline.add_text(event.get("text", ""))
@@ -49,6 +119,7 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                     timeline.add_text(event["text"])
             db.record_chat_progress(turn_id, event, timeline.steps, status)
     except asyncio.CancelledError:
+        shutdown = True
         failure = "The answer was interrupted by a backend shutdown."
         raise
     except Exception as exc:
@@ -56,6 +127,15 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         if db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
             db.record_chat_progress(turn_id, {"type": "error", "message": failure}, timeline.steps, "")
     finally:
+        if controller is not None:
+            finished.set()
+            if shutdown:
+                controller.cancel()
+            await asyncio.gather(controller, return_exceptions=True)
+        turn = db.one("SELECT stop_requested FROM chat_turns WHERE id = ?", (turn_id,))
+        interrupted = interrupted or bool(turn and turn["stop_requested"])
+        if interrupted:
+            failure = "Stopped by you."
         db.execute(
             "UPDATE chats SET internet_status = 'blocked', internet_reason = '', internet_turn_id = '' "
             "WHERE id = ? AND internet_turn_id = ? AND internet_status = 'pending'",
@@ -63,13 +143,20 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         )
         content = timeline.text or (f"The agent could not answer: {failure}" if failure else "(no answer)")
         db.finish_chat_turn(
-            turn_id, content, {"tools": timeline.tools, "steps": timeline.steps, "error": failure}
+            turn_id, content, {"tools": timeline.tools, "steps": timeline.steps, "error": failure,
+                              "interrupted": interrupted}
         )
         bus.publish("chat.answered", {"chat_id": chat_id, "ok": failure is None})
         await projects.revoke_credentials(job.pop("project_credentials", []))
+        if not shutdown:
+            launch_next(chat_id)
 
 
 def recover_interrupted() -> None:
+    db.execute(
+        "UPDATE chats SET queue_paused = 1 WHERE id IN "
+        "(SELECT chat_id FROM chat_turns WHERE state IN ('running', 'queued'))"
+    )
     db.execute("UPDATE projects SET status = 'failed', error = 'Download interrupted; retry' WHERE status = 'cloning'")
     db.execute(
         "UPDATE chats SET internet_status = 'blocked', internet_reason = '', internet_turn_id = '' "
