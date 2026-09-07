@@ -18,6 +18,7 @@ from ..agent import (
     summarise_for_title,
 )
 from ..background import spawn
+from ..chat_titles import rewrite_chat_title
 from ..clients import broker
 from ..config import settings
 from ..conversations import chat_snapshots, launch_next, run_turn, turn_events
@@ -127,7 +128,12 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="This chat is still answering; retry shortly.") from exc
     if created and chat["title"] in {"New chat", ""} and not history:
-        db.execute("UPDATE chats SET title = ? WHERE id = ?", (summarise_for_title(text), chat_id))
+        preview = summarise_for_title(text)
+        db.execute("UPDATE chats SET title = ? WHERE id = ?", (preview, chat_id))
+        spawn(
+            rewrite_chat_title(chat_id, text, chat.get("model") or runtime("default_model"), preview),
+            name=f"chat-title-{chat_id}",
+        )
 
     job = agent_job(
         prompt=text,

@@ -167,6 +167,39 @@ class GatewayClient:
             "message": upstream_problem(name, credential, response.status_code, response.text),
         }
 
+    async def chat_title(self, model: str, instructions: str, text: str) -> str:
+        """One tool-free generation, without starting a coding-agent container."""
+        use_responses = model.startswith("copilot/")
+        endpoint = "responses" if use_responses else "chat/completions"
+        request = {
+            "model": model,
+            "stream": False,
+            **(
+                {"instructions": instructions, "input": text, "max_output_tokens": 1024}
+                if use_responses
+                else {
+                    "messages": [
+                        {"role": "system", "content": instructions},
+                        {"role": "user", "content": text},
+                    ],
+                    "max_completion_tokens": 1024,
+                }
+            ),
+        }
+        response = await shared().post(f"{self.base_url}/v1/{endpoint}", json=request, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+        if use_responses:
+            return "".join(
+                part.get("text", "")
+                for item in payload.get("output", [])
+                if item.get("type") == "message"
+                for part in item.get("content", [])
+                if part.get("type") == "output_text"
+            )
+        choices = payload.get("choices") or []
+        return (choices[0].get("message", {}).get("content") or "") if choices else ""
+
     async def models(self) -> list[dict[str, Any]]:
         """Whatever the provider behind the gateway is willing to serve."""
         response = await shared().get(f"{self.base_url}/v1/models", timeout=15)
