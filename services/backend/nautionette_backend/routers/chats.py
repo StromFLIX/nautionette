@@ -144,7 +144,7 @@ async def promote(chat_id: str) -> dict[str, Any]:
     if not messages:
         raise HTTPException(status_code=400, detail="nothing to promote yet")
     bus.publish("promote.start", {"chat_id": chat_id})
-    draft = await promote_chat(chat, messages)
-    db.execute("UPDATE chats SET promoted_to = ? WHERE id = ?", (draft["name"], chat_id))
-    bus.publish("promote.draft", {"chat_id": chat_id, "workflow": draft["name"]})
-    return draft
+    published = await promote_chat(chat, messages)
+    db.execute("UPDATE chats SET promoted_to = ? WHERE id = ?", (published["name"], chat_id))
+    bus.publish("promote.completed", {"chat_id": chat_id, "workflow": published["name"]})
+    return published

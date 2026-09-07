@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import ipaddress
+import logging
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -18,6 +19,7 @@ from fastapi import HTTPException
 from .catalog import tool_catalog
 from .clients import gateway
 from .config import settings
+from .events import bus
 from .fields import SECRET, SLUG
 from .gateway_config import (
     attempt,
@@ -27,6 +29,7 @@ from .gateway_config import (
     resource_map,
     storage_mode,
 )
+from .runtime import forget_catalog
 
 _URL = r"https?://[A-Za-z0-9.-]+(?::\d{1,5})?(?:/[^\s?#]*)?(?:\?[^\s#]*)?"
 
@@ -182,3 +185,23 @@ async def test(name: str) -> dict[str, Any]:
     if not target:
         raise HTTPException(status_code=404, detail="unknown MCP server")
     return await probe(target["mcp"]["host"], stored_credential(name, targets))
+
+
+async def bootstrap_backend() -> None:
+    credential = settings.internal_token or settings.app_token
+    target = target_value("backend", settings.backend_mcp_url, credential)
+    for retry in range(8):
+        try:
+            mode, targets = await fetch_resources()
+            require_writable(mode)
+            verdict = await probe(settings.backend_mcp_url, credential)
+            if verdict["ok"]:
+                if resource_map(targets).get("backend", {}).get("value") != target:
+                    await gateway.put_config_resources("mcp.target", [target])
+                forget_catalog()
+                bus.publish("mcp.server.changed", {"server": "backend", "configured": True})
+                return
+        except (HTTPException, httpx.HTTPError):
+            pass
+        await asyncio.sleep(min(0.25 * 2**retry, 5.0))
+    logging.getLogger(__name__).warning("Backend MCP registration failed; agentgateway has no backend tools")

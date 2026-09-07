@@ -1,10 +1,12 @@
-"""Turning a chat into a workflow draft a human can approve."""
+"""Turning a chat into a validated, deployed workflow."""
 
 from __future__ import annotations
 
 import re
 import textwrap
 from typing import Any
+
+from fastapi import HTTPException
 
 from ..clients import authoring
 from .prompts import DRAFT_SCHEMA, WORKFLOW_AUTHOR_PROMPT
@@ -35,12 +37,12 @@ def extract_code(text: str) -> str | None:
 
 
 def scaffold(name: str, title: str, description: str, transcript: str) -> str:
-    """A workflow the user can read and finish by hand when no model answered."""
+    """A fallback workflow template when no model produced a complete source file."""
     quoted = textwrap.indent(transcript[:1500].strip(), "    ")
     class_name = "".join(part.title() for part in name.split("_")) or "PromotedChat"
     return f'''"""{title}
 
-Drafted from a chat. Edit freely: this is a normal Python file.
+Generated from a chat. Edit freely: this is a normal Python file.
 
 Transcript excerpt:
 {quoted}
@@ -113,7 +115,9 @@ def _author(prompt: str, agent_set: str | None) -> dict[str, Any]:
 
 
 async def promote_chat(chat: dict[str, Any], messages: list[dict[str, Any]]) -> dict[str, Any]:
-    """Read a transcript, write a workflow draft, hand back a diff to approve."""
+    """Read a transcript, validate the workflow, and deploy it without an approval gate."""
+    from ..deployment import deploy
+
     transcript = "\n\n".join(
         f"{m['role'].upper()}: {m['content']}" for m in messages if m.get("content")
     )
@@ -169,8 +173,9 @@ async def promote_chat(chat: dict[str, Any], messages: list[dict[str, Any]]) -> 
         origin = "scaffold"
         report = await authoring.validate(name, code)
 
-    draft = await authoring.write_draft(name, code, message=f"promoted from chat {chat['id']}")
-    draft["origin"] = origin
-    draft["agent_error"] = agent_error
-    draft["validation"] = report
-    return draft
+    if not report.get("valid"):
+        raise HTTPException(status_code=400, detail={"published": False, "validation": report})
+    published = await deploy(name, code, message=f"promoted from chat {chat['id']}")
+    published["origin"] = origin
+    published["agent_error"] = agent_error
+    return published

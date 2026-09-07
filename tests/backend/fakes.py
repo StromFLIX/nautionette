@@ -185,6 +185,12 @@ class FakeAuthoring:
     async def validate(self, name: str, code: str) -> dict[str, Any]:
         return dict(self.validation)
 
+    async def deploy(self, name: str, code: str) -> dict[str, Any]:
+        if not self.validation.get("valid"):
+            raise http_error(400, "workflow does not validate")
+        self.add_workflow(name, code=code)
+        return {"name": name, "published": True, "diff": f"+++ {name}.py", "validation": self.validation}
+
     async def write_draft(self, name: str, code: str, message: str = "") -> dict[str, Any]:
         draft = {"name": name, "code": code, "message": message, "diff": f"+++ {name}.py", "is_new": True}
         self.drafts[name] = draft

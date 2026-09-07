@@ -29,6 +29,13 @@ async def get(path: str, **params: Any) -> dict[str, Any]:
         return response.json()
 
 
+async def post(path: str, payload: dict[str, Any]) -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=240) as client:
+        response = await client.post(f"{BACKEND_URL}{path}", headers=_headers(), json=payload)
+        response.raise_for_status()
+        return response.json()
+
+
 async def request_worker_restart(reason: str) -> dict[str, Any]:
     """A published workflow is useless until a worker has it loaded."""
     try:

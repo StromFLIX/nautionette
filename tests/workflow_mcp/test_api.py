@@ -1,4 +1,4 @@
-"""The REST face the backend calls, so approval stays a human action."""
+"""Validated deployment and backward-compatible draft storage."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ def test_health_says_what_is_on_the_volume(client, workflows):
     (workflows / "url_digest.py").write_text(GOOD_WORKFLOW)
     payload = client.get("/healthz").json()
     assert payload["status"] == "ok"
+    assert payload["mcp"] is True
     assert payload["workflows"] == 1
     assert payload["drafts"] == 0
 
@@ -34,6 +35,30 @@ def test_a_workflow_can_be_listed_and_read(client, workflows):
     assert [w["name"] for w in client.get("/api/workflows").json()["workflows"]] == ["url_digest"]
     assert client.get("/api/workflows/url_digest").json()["code"] == GOOD_WORKFLOW
     assert client.get("/api/workflows/nope").status_code == 404
+
+
+def test_direct_deploy_validates_and_publishes_without_a_draft(client, workflows):
+    response = client.post("/api/workflows/url_digest/deploy", json={"code": GOOD_WORKFLOW})
+    assert response.status_code == 200
+    assert response.json()["published"] is True
+    assert response.json()["validation"]["valid"] is True
+    assert response.json()["diff"]
+    assert (workflows / "url_digest.py").read_text() == GOOD_WORKFLOW
+    assert store.list_drafts() == []
+
+
+def test_invalid_deploy_leaves_the_previous_workflow_and_existing_draft_intact(client, workflows):
+    (workflows / "url_digest.py").write_text(GOOD_WORKFLOW)
+    store.write_draft("url_digest", GOOD_WORKFLOW, "existing draft")
+    response = client.post("/api/workflows/url_digest/deploy", json={"code": "x = 1\n"})
+    assert response.status_code == 400
+    assert response.json()["detail"]["validation"]["valid"] is False
+    assert (workflows / "url_digest.py").read_text() == GOOD_WORKFLOW
+    assert store.read_draft("url_digest")["meta"]["message"] == "existing draft"
+
+
+def test_deploy_rejects_non_string_code(client):
+    assert client.post("/api/workflows/url_digest/deploy", json={"code": {}}).status_code == 400
 
 
 def test_a_write_lands_in_a_draft_never_on_the_live_file(client, workflows):

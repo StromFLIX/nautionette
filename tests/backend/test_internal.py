@@ -30,9 +30,7 @@ def test_an_activity_gets_one_object_back(client, internal_headers, broker):
 
 def test_an_agent_that_never_produced_a_result_is_not_reported_as_one(client, internal_headers, broker):
     broker.events = [{"type": "error", "message": "container exited 1"}]
-    result = client.post(
-        "/internal/agent/call", headers=internal_headers, json={"prompt": "hi"}
-    ).json()
+    result = client.post("/internal/agent/call", headers=internal_headers, json={"prompt": "hi"}).json()
     assert result["ok"] is False
     assert result["error"] == "container exited 1"
 
@@ -78,7 +76,9 @@ def test_an_authoring_agent_can_read_the_run_history(client, internal_headers, o
 
 
 def test_one_run_reads_back_with_its_timeline(client, internal_headers, one_run, backend):
-    backend.temporal.histories[one_run] = [{"id": 1, "event": "workflow.started", "input": {"url": "https://a"}}]
+    backend.temporal.histories[one_run] = [
+        {"id": 1, "event": "workflow.started", "input": {"url": "https://a"}}
+    ]
     detail = client.get(f"/internal/runs/{one_run}", headers=internal_headers).json()
     assert detail["input"] == {"url": "https://a"}
     assert detail["events"][0]["event"] == "workflow.started"
@@ -95,3 +95,36 @@ def test_an_empty_timeline_says_so_rather_than_looking_like_nothing_happened(
 
 def test_a_run_nobody_has_heard_of_is_a_404(client, internal_headers):
     assert client.get("/internal/runs/never-existed", headers=internal_headers).status_code == 404
+
+
+def test_agent_reads_completed_results_before_the_local_watcher_catches_up(
+    client, internal_headers, one_run, backend
+):
+    backend.temporal.executions[one_run]["status"] = "COMPLETED"
+    backend.temporal.results[one_run] = {"summary": "done"}
+    detail = client.get(f"/internal/runs/{one_run}", headers=internal_headers).json()
+    assert detail["result"] == {"summary": "done"}
+
+
+def test_internal_deploy_and_run_need_service_auth_and_skip_drafts(client, internal_headers, backend):
+    assert client.post("/internal/workflows/demo/deploy", json={"code": "code"}).status_code == 401
+    deployed = client.post(
+        "/internal/workflows/demo/deploy", headers=internal_headers, json={"code": "code"}
+    ).json()
+    assert deployed["published"] and deployed["ready"]
+    assert backend.authoring.drafts == {}
+    started = client.post(
+        "/internal/workflows/demo/run", headers=internal_headers, json={"input": {"value": 1}}
+    ).json()
+    assert started["workflow_id"]
+    assert backend.db.list_runs("demo")[0]["trigger"] == "agent"
+
+
+def test_deployment_reports_worker_failure_without_claiming_readiness(client, internal_headers, backend):
+    backend.broker.restart_error = RuntimeError("worker unavailable")
+    deployed = client.post(
+        "/internal/workflows/demo/deploy", headers=internal_headers, json={"code": "code"}
+    ).json()
+    assert deployed["published"] is True
+    assert deployed["ready"] is False
+    assert deployed["worker_restart"]["error"] == "worker unavailable"

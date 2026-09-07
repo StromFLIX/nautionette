@@ -32,6 +32,8 @@ mcp:
     - name: workflows
       mcp:
         host: http://workflow-mcp:8000/mcp
+    # The backend registers its own authenticated /mcp/ target after a successful
+    # handshake. Its tools arrive as backend_<operation>; no manual approval gate.
     # Further servers are added in the app, under Settings > MCP servers, and
     # persist as mcp.target resources beside them. Targets listed here are the
     # baseline the app cannot remove.

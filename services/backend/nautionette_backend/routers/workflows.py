@@ -9,6 +9,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from ..background import spawn
 from ..clients import authoring, temporal
 from ..db import db
+from ..deployment import WorkflowSource, deploy
 from ..events import bus
 from ..runs import restart_worker
 from ..security import require_user
@@ -60,6 +61,12 @@ async def patch_workflow_settings(name: str, payload: dict[str, Any] = Body(...)
     updated = db.set_workflow_settings(name, fields)
     bus.publish("workflow.settings", {"workflow": name, **fields})
     return updated
+
+
+@router.post("/api/workflows/{name}/deploy")
+async def deploy_workflow(name: str, payload: WorkflowSource) -> dict[str, Any]:
+    """Validate and deploy a complete Python workflow, then reload workers. No approval required."""
+    return await deploy(name, payload.code, payload.message)
 
 
 @router.delete("/api/workflows/{name}")

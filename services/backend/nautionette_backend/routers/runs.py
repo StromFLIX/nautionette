@@ -13,6 +13,7 @@ from ..db import db
 from ..events import bus
 from ..execution_graph import execution_graph
 from ..security import require_user, token_matches
+from .internal import internal_run
 
 router = APIRouter()
 
@@ -56,6 +57,12 @@ async def get_run_graph(workflow_id: str) -> dict[str, Any]:
     info = await temporal.describe(workflow_id)
     history = await temporal.history(workflow_id, limit=2001, run_id=info.get("run_id"))
     return execution_graph(info, history[:2000], truncated=len(history) > 2000)
+
+
+@router.get("/api/runs/{workflow_id}/history", dependencies=[Depends(require_user)])
+async def read_run(workflow_id: str, limit: int = Query(default=200, ge=1, le=2000)) -> dict[str, Any]:
+    """Inspect a run's inputs, activity results, failures, and final result before repairing it."""
+    return await internal_run(workflow_id, limit)
 
 
 @router.post("/api/runs/{workflow_id}/cancel", dependencies=[Depends(require_user)])

@@ -170,7 +170,7 @@ def test_a_tool_that_failed_says_so(client, broker):
 # --------------------------------------------------------------------- promote
 
 
-def test_promoting_a_chat_writes_a_draft(client, broker, authoring):
+def test_promoting_a_chat_deploys_without_approval(client, broker, authoring):
     broker.events = [
         {
             "type": "result",
@@ -186,20 +186,23 @@ def test_promoting_a_chat_writes_a_draft(client, broker, authoring):
     chat = client.post("/api/chats", json={"title": "Release digest"}).json()
     send(client, chat["id"], "summarise releases every morning")
 
-    draft = client.post(f"/api/chats/{chat['id']}/promote").json()
-    assert draft["origin"] == "agent"
-    assert draft["name"] == "release_digest"
-    assert "release_digest" in authoring.drafts
+    published = client.post(f"/api/chats/{chat['id']}/promote").json()
+    assert published["origin"] == "agent"
+    assert published["name"] == "release_digest"
+    assert published["ready"] is True
+    assert "release_digest" in authoring.workflows
+    assert authoring.drafts == {}
     assert client.get(f"/api/chats/{chat['id']}").json()["chat"]["promoted_to"] == "release_digest"
 
 
-def test_promotion_falls_back_to_a_file_a_human_can_finish(client, broker, authoring):
+def test_promotion_can_deploy_a_validated_fallback(client, broker, authoring):
     chat = client.post("/api/chats", json={"title": "Daily digest"}).json()
     send(client, chat["id"], "every morning, summarise the news")
-    draft = client.post(f"/api/chats/{chat['id']}/promote").json()
-    assert draft["origin"] == "scaffold"
-    assert draft["name"] == "daily_digest"
-    assert "@workflow.defn" in authoring.drafts["daily_digest"]["code"]
+    published = client.post(f"/api/chats/{chat['id']}/promote").json()
+    assert published["origin"] == "scaffold"
+    assert published["name"] == "daily_digest"
+    assert "@workflow.defn" in authoring.workflows["daily_digest"]["code"]
+    assert authoring.drafts == {}
 
 
 def test_an_empty_chat_has_nothing_to_promote(client):

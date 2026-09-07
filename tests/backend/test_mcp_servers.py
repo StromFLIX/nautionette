@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+from nautionette_backend import mcp_servers
+from nautionette_backend.config import settings
 
 from .fakes import http_error
 
@@ -152,3 +154,32 @@ def test_tool_counts_follow_the_federated_endpoint(client, reachable):
     client.put("/api/mcp-servers/linear", json={"url": LINEAR})
     reachable.gateway.tools[""] = [{"name": "linear_search", "description": ""}]
     assert client.get("/api/mcp-servers").json()["servers"][0]["tool_count"] == 1
+
+
+async def test_backend_bootstrap_probes_with_service_auth_before_registering(backend, monkeypatch):
+    probed = []
+
+    async def probe(url, credential):
+        assert "backend" not in backend.gateway.resources.get("mcp.target", {})
+        probed.append((url, credential))
+        return {"ok": True}
+
+    monkeypatch.setattr(mcp_servers, "probe", probe)
+    await mcp_servers.bootstrap_backend()
+    assert probed == [(settings.backend_mcp_url, settings.internal_token)]
+    target = backend.gateway.resources["mcp.target"]["backend"]
+    assert target["mcp"]["host"] == settings.backend_mcp_url
+    assert target["policies"]["backendAuth"]["key"]["value"] == settings.internal_token
+
+
+async def test_unreachable_backend_is_never_registered(backend, monkeypatch):
+    async def probe(url, credential):
+        return {"ok": False}
+
+    async def no_delay(seconds):
+        pass
+
+    monkeypatch.setattr(mcp_servers, "probe", probe)
+    monkeypatch.setattr(mcp_servers.asyncio, "sleep", no_delay)
+    await mcp_servers.bootstrap_backend()
+    assert "backend" not in backend.gateway.resources.get("mcp.target", {})

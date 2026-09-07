@@ -10,6 +10,7 @@ dependencies = [
     "temporalio>=1.9",
     "jsonschema>=4.23",
     "nautionette",
+    "mcp>=2.1",
 ]
 
 [tool.uv.sources]

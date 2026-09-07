@@ -41,6 +41,14 @@ class AuthoringClient:
     async def validate(self, name: str, code: str) -> dict[str, Any]:
         return await self._request("POST", "/api/validate", json={"name": name, "code": code})
 
+    async def deploy(self, name: str, code: str) -> dict[str, Any]:
+        response = await shared().post(
+            f"{self.base_url}/api/workflows/{name}/deploy",
+            headers=internal_headers(), json={"code": code}, timeout=180,
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def write_draft(self, name: str, code: str, message: str = "") -> dict[str, Any]:
         return await self._request(
             "POST", "/api/drafts", json={"name": name, "code": code, "message": message}

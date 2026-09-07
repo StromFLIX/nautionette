@@ -12,7 +12,7 @@ Three things decide every trade-off below.
 
 - **Extensible.** A new agent set, a new tool, a new validation step is a directory or a list entry — not a refactor.
 - **Open.** Workflows are Python files you can read, edit and commit. Models and storage sit behind standard interfaces, so you can swap what is behind them.
-- **Friendly.** You see a readable diff before code goes live, and a sentence where a stack trace would do.
+- **Friendly.** The agent validates changes, verifies real runs, and reports diffs and outcomes without routine approval prompts.
 
 ## Architecture
 
@@ -29,7 +29,6 @@ flowchart TB
         orch(["Temporal orchestrator"])
         pg[("PostgreSQL")]
         wk["Temporal workers 1..n<br/>at least one always running"]
-        flags["Manual approval"]
         pi["Pi run<br/>one container per call<br/>exits when the call ends"]
     end
 
@@ -47,9 +46,9 @@ flowchart TB
     wk --> orch
     orch --> pg
     wk <-->|"tools and models"| gw
-    wk --> flags
     pi --> gw
     gw --> wfmcp
+    gw -->|"Backend MCP tools"| be
     wfmcp --> vol
     wfmcp -->|"restart request"| be
     be --- vol
@@ -74,7 +73,7 @@ Five rules the diagram encodes:
 | **Backend** | The only entrypoint: auth, triggers, webhooks, streaming to clients. Also memory, search and metadata in a SQLite store. Calls the broker, but does not hold the Docker socket. |
 | **Docker broker** | Holds `/var/run/docker.sock`. Runs one Pi container per agent call (`docker run --rm`), builds missing agent images, and reconciles worker containers using fixed configuration and an image allowlist. |
 | **agentgateway** | Upstream image, run as-is. One data plane for tools and models: federates MCP servers on `/mcp`, fronts every configured model provider on `/v1`, adds per-tool authorization and an audit trail. Its checked-in config is the baseline; the model integrations and MCP servers added in the app persist as runtime resources in its own SQLite volume. Config in [services/agentgateway/config/config.yaml](services/agentgateway/config/config.yaml). |
-| **workflow-mcp** | Our own MCP server, registered behind the gateway. Provides the validated tools that create, update and delete workflow files, plus the REST side the backend uses for approval. |
+| **workflow-mcp** | Our own MCP server, registered behind the gateway. Provides validated workflow authoring, immediate deployment, run controls and history, plus the REST side the backend uses to publish files. |
 | **Pi runs** | The agent runtime ([Pi](https://pi.dev), `@earendil-works/pi-coding-agent`). Pi is a CLI, so a call is a container run: start, work, exit. The base image is Node plus the Pi CLI plus `agent-run`, the wrapper that turns a job into NDJSON. An agent set extends it with Pi extensions and packages. |
 | **Temporal** | Orchestrator and workers. Durable runs, retries, schedules and history, stored in PostgreSQL. A workflow step can call MCP tools, invoke Pi, or run plain Python. |
 | **Shared volume** | Where workflow files live. What an agent writes is what a worker loads. Run artifacts land on their own volume, until there is an object store. |
@@ -91,14 +90,40 @@ Promotion does five things:
 4. Write the workflow file and deploy it.
 5. Attach a trigger: a Temporal schedule, a webhook, or another workflow.
 
-Because this deploys code, the user approves the result before it is scheduled.
+There is no mandatory draft or approval step. The agent deploys validated code, runs it with relevant inputs, inspects results, and repairs failures without routine permission questions. Scheduling still follows the user's requested task.
 
 The deploy itself:
 
 1. Pi calls an authoring tool in `workflow-mcp` through the gateway — not a shell. The operations are validated and deterministic, so the same request always produces the same file.
-2. The file lands in the shared volume, so workers can see it immediately.
-3. Pi asks for a worker restart. `workflow-mcp` tells the backend, the backend tells the broker.
-4. The worker comes back with the new workflow registered, and the backend exposes it.
+2. The backend asks workflow-mcp to validate and atomically replace the live file on the shared volume. Invalid code leaves the previous version untouched.
+3. The backend publishes the change event and asks the broker to reload workers. The deployment response includes its diff, validation report, and worker restart status.
+4. The agent starts a run, inspects its history and results, and fixes/redeploys errors. A started run is not reported as successful until the result confirms it.
+
+### Backend MCP
+
+The backend exposes streamable HTTP MCP at `/mcp/`, authenticated with a bearer
+`INTERNAL_TOKEN` or `APP_TOKEN`. With both tokens empty it follows the app's open
+development mode; configure tokens for a shared deployment. At startup it probes
+its own endpoint and registers an authenticated `backend` target in agentgateway,
+so tools arrive as `backend_<operation>` without manual setup. `BACKEND_MCP_URL`
+defaults to `http://backend:8080/mcp/` and must be reachable from agentgateway.
+
+Tools are generated from the existing backend API schemas and dispatch through the
+same routes and validation as the app. They cover system health, recent events,
+workflow validation/deployment/settings/schedules, runs and execution history,
+worker restarts, model integrations, and MCP server configuration. For example:
+`backend_system_status`, `backend_deploy_workflow`, `backend_run_workflow`,
+`backend_read_run`, and `backend_restart_workers`. JSON request bodies are passed
+as the tool's `body` argument. Mutations emit audit events without their credentials
+or request payloads.
+
+The workflow tools also support this loop directly: `workflows_write_workflow`
+deploys and reloads workers, `workflows_run_workflow` starts a run, and
+`workflows_read_run` reports its results and failures. Check `ready` and
+`worker_restart` after deployment; reload failures are returned, not hidden.
+Backend source-code rewriting, arbitrary shell/proxy access, and recursive chat
+invocations are not exposed. Existing drafts remain available for compatibility,
+but new agent writes and chat promotions deploy directly.
 
 ## Workflows are Python files
 
@@ -136,9 +161,9 @@ execution states, retry attempts, durations, inputs, results, and failures. Refr
 preserve the camera and selection. The active step opens in view on short screens;
 node details become a bottom sheet on mobile.
 
-Drafts open with a visual comparison: green additions, amber changes, and dashed red
+Legacy drafts open with a visual comparison: green additions, amber changes, and dashed red
 removals, including changed connections. **Proposed**, **Deployed**, and **Code diff**
-remain available before approving. Changes outside diagrammed steps are reflected on
+remain available for inspection and deployment. Changes outside diagrammed steps are reflected on
 the workflow node and in the code diff.
 
 Definition diagrams are structural previews, not a Python execution engine. Helper
@@ -174,7 +199,9 @@ An agent that writes code needs a narrow door. `workflow-mcp` is that door: ever
 | `list_workflows` | Names, manifests, versions. |
 | `read_workflow` | The current file. |
 | `validate_workflow` | Runs the checks below and writes nothing. |
-| `write_workflow` | Validates, writes, returns a diff. |
+| `write_workflow` | Validates, deploys, reloads workers, and returns a diff and status. |
+| `run_workflow` | Starts a deployed workflow with its input; returns a workflow ID. |
+| `list_runs` / `read_run` | Finds runs and inspects progress, errors and final results. |
 | `delete_workflow` | Removes a file. Run history stays in Temporal. |
 
 The checks, in order:
@@ -182,7 +209,7 @@ The checks, in order:
 1. Tool arguments against the tool schema.
 2. Manifest against the workflow schema — name, `schema` version, input and output schemas, agent set.
 3. The file parses, imports in a throwaway subprocess, and registers with the Temporal SDK.
-4. The diff goes to the user. Nothing runs on a schedule before it is approved.
+4. Validated source is deployed atomically. The agent receives the diff and reload status, then tests the workflow and inspects results without an approval gate.
 
 Extensible on purpose: the manifest schema is versioned and additive, unknown keys prefixed `x_` are preserved instead of rejected, and a new rule is a new step in that list. It is deliberately not a policy engine — good enough to stop broken code, cheap enough to change.
 

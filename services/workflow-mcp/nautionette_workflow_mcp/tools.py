@@ -20,19 +20,17 @@ log = logging.getLogger("workflow-mcp")
 INSTRUCTIONS = (
     "Author Nautionette workflows. Read before you write, validate before you write. "
     "When a workflow misbehaves, read its runs first: list_runs finds it, read_run shows "
-    "every step it took. Every write lands as a draft with a diff that a human approves; "
-    "you never deploy anything yourself."
+    "every step it took. write_workflow validates and deploys directly, without approval. "
+    "Check ready and worker_restart, then use run_workflow and read_run to verify real results. "
+    "Repair failures and redeploy as needed. Do not ask for routine permissions or confirmations. "
+    "Use the backend MCP tools for system diagnostics and configuration repairs."
 )
 
 
 def _register(server: Any) -> None:
-    @server.tool(
-        description="List every workflow with its manifest, plus the drafts waiting for approval."
-    )
+    @server.tool(description="List deployed workflows and any legacy drafts that remain on the volume.")
     def list_workflows() -> str:
-        return json.dumps(
-            {"workflows": store.list_workflows(), "drafts": store.list_drafts()}, default=str
-        )
+        return json.dumps({"workflows": store.list_workflows(), "drafts": store.list_drafts()}, default=str)
 
     @server.tool(description="Read one workflow file and its manifest.")
     def read_workflow(name: str) -> str:
@@ -56,23 +54,39 @@ def _register(server: Any) -> None:
 
     @server.tool(
         description=(
-            "Validate a workflow file and save it as a draft. Never touches a live workflow: a "
-            "human approves the returned diff before it runs."
+            "Validate and deploy a complete workflow file immediately, then reload workers. "
+            "Returns the diff, validation report, worker_restart and ready. No approval is needed. "
+            "When ready is true, use run_workflow to test it and read_run to inspect results."
         )
     )
-    def write_workflow(name: str, code: str, message: str = "") -> str:
+    async def write_workflow(name: str, code: str, message: str = "") -> str:
         try:
-            store.check_name(name)
+            name = store.check_name(name)
         except store.StoreError as exc:
-            return json.dumps({"written": False, "errors": [str(exc)]})
-        report = run_checks(name, code)
-        if not report["valid"]:
-            return json.dumps({"written": False, **report}, default=str)
-        draft = store.write_draft(name, code, message)
-        return json.dumps(
-            {"written": True, "draft": draft["name"], "diff": draft["diff"], "validation": report},
-            default=str,
+            return json.dumps({"published": False, "errors": [str(exc)]})
+        try:
+            result = await backend.post(
+                f"/internal/workflows/{name}/deploy", {"code": code, "message": message}
+            )
+            return json.dumps(result, default=str)
+        except httpx.HTTPError as exc:
+            return _backend_error(exc)
+
+    @server.tool(
+        description=(
+            "Start a deployed workflow with input matching its manifest. Returns workflow_id. "
+            "Use read_run to inspect progress, failures and the final result; do not assume it succeeded."
         )
+    )
+    async def run_workflow(name: str, input: dict[str, Any] | None = None) -> str:
+        try:
+            name = store.check_name(name)
+        except store.StoreError as exc:
+            return json.dumps({"error": str(exc)})
+        try:
+            return json.dumps(await backend.post(f"/internal/workflows/{name}/run", {"input": input or {}}))
+        except httpx.HTTPError as exc:
+            return _backend_error(exc)
 
     @server.tool(description="Delete a live workflow file. Run history stays in Temporal.")
     def delete_workflow(name: str) -> str:
@@ -108,6 +122,16 @@ def _register(server: Any) -> None:
             return json.dumps({"error": f"could not read run {workflow_id}: {exc}"})
         except httpx.HTTPError as exc:
             return json.dumps({"error": f"could not read run {workflow_id}: {exc}"})
+
+
+def _backend_error(error: httpx.HTTPError) -> str:
+    if isinstance(error, httpx.HTTPStatusError):
+        try:
+            detail = error.response.json().get("detail", "Backend operation failed")
+        except ValueError:
+            detail = "Backend operation failed"
+        return json.dumps({"ok": False, "status": error.response.status_code, "error": detail}, default=str)
+    return json.dumps({"ok": False, "error": "The backend could not be reached"})
 
 
 def build_app() -> Any | None:

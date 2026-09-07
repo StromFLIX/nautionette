@@ -21,6 +21,7 @@ class Settings:
         self.gateway_url = os.environ.get("AGENTGATEWAY_URL", "http://agentgateway:4000")
         self.llm_base_url = os.environ.get("LLM_BASE_URL", f"{self.gateway_url}/v1")
         self.mcp_url = os.environ.get("MCP_URL", f"{self.gateway_url}/mcp")
+        self.backend_mcp_url = os.environ.get("BACKEND_MCP_URL", "http://backend:8080/mcp/")
         self.broker_url = os.environ.get("BROKER_URL", "http://docker-broker:9100")
         self.workflow_mcp_url = os.environ.get("WORKFLOW_MCP_URL", "http://workflow-mcp:8000")
         self.frontend_web_url = os.environ.get("FRONTEND_WEB_URL", "http://frontend-web:80")

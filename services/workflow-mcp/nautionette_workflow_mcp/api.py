@@ -1,4 +1,4 @@
-"""The REST face the backend calls, so approval stays a human action."""
+"""Validated deployment and optional draft storage for the backend."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from . import backend, store
 from .validate import run_checks
@@ -59,6 +60,20 @@ async def validate(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
     except store.StoreError as exc:
         return {"valid": False, "errors": [str(exc)], "warnings": [], "manifest": None, "steps": []}
     return run_checks(name, payload.get("code", ""))
+
+
+@router.post("/workflows/{name}/deploy")
+async def deploy(name: str, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    name = _checked_name(name)
+    code = payload.get("code", "")
+    if not isinstance(code, str):
+        raise HTTPException(status_code=400, detail="code must be a string")
+    report = await run_in_threadpool(run_checks, name, code)
+    if not report["valid"]:
+        raise HTTPException(status_code=400, detail={"published": False, "validation": report})
+    result = store.deploy_workflow(name, code)
+    result["validation"] = report
+    return result
 
 
 @router.get("/drafts")

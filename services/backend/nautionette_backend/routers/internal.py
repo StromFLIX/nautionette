@@ -10,6 +10,7 @@ from .. import runs
 from ..agent import agent_job, call_agent
 from ..clients import temporal
 from ..db import db
+from ..deployment import WorkflowSource, deploy
 from ..events import bus
 from ..gateway_config import attempt
 from ..runtime import remember_agent_result
@@ -52,6 +53,16 @@ async def internal_worker_restart() -> dict[str, Any]:
     return await runs.restart_worker()
 
 
+@router.post("/internal/workflows/{name}/deploy")
+async def internal_deploy_workflow(name: str, payload: WorkflowSource) -> dict[str, Any]:
+    return await deploy(name, payload.code, payload.message)
+
+
+@router.post("/internal/workflows/{name}/run")
+async def internal_run_workflow(name: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    return await runs.start(name, payload.get("input") or {}, trigger="agent")
+
+
 @router.get("/internal/runs")
 async def internal_runs(workflow: str | None = None, limit: int = 20) -> dict[str, Any]:
     """The run history an authoring agent reads before it changes anything."""
@@ -70,8 +81,10 @@ async def internal_run(workflow_id: str, limit: int = 200) -> dict[str, Any]:
         **runs.digest(row, info),
         "input": (row or {}).get("input") or {},
         "result": (row or {}).get("result"),
-        "events": await attempt(temporal.history(workflow_id, limit), []),
+        "events": await attempt(temporal.history(workflow_id, max(1, min(limit, 2000))), []),
     }
+    if info and info.get("status") == "COMPLETED" and detail["result"] is None:
+        detail["result"] = await attempt(temporal.result(workflow_id, timeout=5), None)
     if not detail["events"]:
         # An empty timeline is not the same as a run that did nothing.
         detail["note"] = "Temporal has no history for this run; only what the app recorded is left."

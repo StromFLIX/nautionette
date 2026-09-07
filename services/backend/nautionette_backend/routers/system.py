@@ -8,6 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
+from .. import runs
 from ..clients import authoring, broker, gateway, temporal
 from ..config import settings
 from ..events import bus
@@ -75,3 +76,9 @@ async def events_stream() -> StreamingResponse:
 @router.get("/api/events/recent", dependencies=[Depends(require_user)])
 async def events_recent() -> dict[str, Any]:
     return {"events": bus.recent(100)}
+
+
+@router.post("/api/system/worker/restart", dependencies=[Depends(require_user)])
+async def restart_workers() -> dict[str, Any]:
+    """Reload the workflow workers through the Docker broker's fixed restart operation."""
+    return await runs.restart_worker()

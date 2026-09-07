@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -127,6 +128,30 @@ def write_draft(name: str, code: str, message: str = "") -> dict[str, Any]:
         json.dumps({"message": message, "written_at": time.time()}, indent=2), encoding="utf-8"
     )
     return read_draft(name)
+
+
+def deploy_workflow(name: str, code: str) -> dict[str, Any]:
+    ensure_dirs()
+    name = check_name(name)
+    target = workflow_path(name)
+    previous = target.read_text(encoding="utf-8") if target.is_file() else ""
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=WORKFLOWS_DIR, suffix=".tmp", delete=False
+    ) as output:
+        temporary = Path(output.name)
+        try:
+            output.write(code)
+            output.flush()
+            temporary.chmod(0o644)
+            temporary.replace(target)
+        finally:
+            temporary.unlink(missing_ok=True)
+    return {
+        "name": name,
+        "published": True,
+        "diff": unified_diff(previous, code, f"{name}.py"),
+        "path": str(target),
+    }
 
 
 def publish_draft(name: str) -> dict[str, Any]:

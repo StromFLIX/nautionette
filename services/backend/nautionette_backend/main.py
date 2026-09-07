@@ -15,7 +15,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import runs
+from . import mcp_servers, runs
+from .backend_mcp import BackendMCP
 from .background import drain, spawn
 from .clients.http import close_shared
 from .config import settings
@@ -46,9 +47,13 @@ async def lifespan(_: FastAPI):
     spawn(bootstrap(), name="integration-bootstrap")
     runs.resume_unfinished()
     bus.publish("system.start", {"version": settings.version})
-    yield
-    await drain()
-    await close_shared()
+    async with backend_mcp.http_app.router.lifespan_context(backend_mcp.http_app):
+        spawn(mcp_servers.bootstrap_backend(), name="backend-mcp-bootstrap")
+        try:
+            yield
+        finally:
+            await drain()
+            await close_shared()
 
 
 app = FastAPI(
@@ -69,5 +74,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for router in ROUTERS:
+for router in ROUTERS[:-1]:
     app.include_router(router)
+
+backend_mcp = BackendMCP(app, ROUTERS[:-1])
+app.mount("/mcp", backend_mcp.http_app)
+app.include_router(ROUTERS[-1])

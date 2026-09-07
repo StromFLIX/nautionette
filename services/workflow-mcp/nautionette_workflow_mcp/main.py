@@ -2,9 +2,9 @@
 
 Two faces on the same store:
 * MCP at /mcp   - what agents call, through agentgateway.
-* REST at /api  - what the backend calls, so approval stays a human action.
+* REST at /api  - validated deployment and optional legacy draft management.
 
-A write never lands on a live workflow. It lands in `.drafts`, with a diff.
+Agent writes deploy directly after validation and return their diff and reload status.
 """
 
 from __future__ import annotations
