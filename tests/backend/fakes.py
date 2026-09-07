@@ -42,6 +42,8 @@ class FakeGateway:
         self.writes: list[tuple[str, dict[str, Any]]] = []
         self.deletes: list[tuple[str, str]] = []
         self.fail_kinds: dict[str, Exception] = {}
+        self.generated_title = "Summarise release notes"
+        self.title_requests: list[tuple[str, str, str]] = []
 
     # ------------------------------------------------------------- the client API
 
@@ -103,6 +105,10 @@ class FakeGateway:
 
     async def test_model(self, model: str, name: str, credential: str) -> dict[str, Any]:
         return {**self.test_result, "model": model}
+
+    async def chat_title(self, model: str, instructions: str, text: str) -> str:
+        self.title_requests.append((model, instructions, text))
+        return self.generated_title
 
     async def models(self) -> list[dict[str, Any]]:
         return list(self.served_models)
