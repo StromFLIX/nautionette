@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from docker.errors import NotFound
+from docker.errors import APIError, NotFound
 from nautionette_docker_broker import projects
 
 
@@ -76,6 +76,82 @@ def test_symlink_checkouts_are_rejected(tmp_path, monkeypatch):
     (tmp_path / ("a" * 32)).symlink_to(tmp_path, target_is_directory=True)
     with pytest.raises(ValueError):
         projects.mounts(["a" * 32], "c" * 12)
+
+
+@pytest.mark.parametrize("status", ["exited", "dead"])
+@pytest.mark.parametrize("already_removed", [False, True])
+def test_claim_recovers_exited_container_on_same_volume(monkeypatch, status, already_removed):
+    container = SimpleNamespace(
+        attrs={"Mounts": [{"Name": "stage-projects"}], "State": {"Status": status}},
+        remove=Mock(side_effect=NotFound("already removed") if already_removed else None),
+    )
+    containers = SimpleNamespace(list=Mock(return_value=[container]))
+    monkeypatch.setattr(projects.daemon, "client", lambda: SimpleNamespace(containers=containers))
+    monkeypatch.setattr(projects, "_claimed", set())
+    monkeypatch.setattr(projects, "volume_name", lambda: "stage-projects")
+
+    projects.claim(["a" * 32], "c" * 12)
+
+    container.remove.assert_called_once_with()
+    assert projects._claimed == {("c" * 12, "a" * 32)}
+
+
+@pytest.mark.parametrize("status", ["running", "paused", "restarting", "created", "removing", "unknown"])
+def test_claim_preserves_potentially_active_containers(monkeypatch, status):
+    container = SimpleNamespace(
+        attrs={"Mounts": [{"Name": "prod-projects"}], "State": {"Status": status}},
+        remove=Mock(),
+    )
+    containers = SimpleNamespace(list=Mock(return_value=[container]))
+    monkeypatch.setattr(projects.daemon, "client", lambda: SimpleNamespace(containers=containers))
+    monkeypatch.setattr(projects, "_claimed", set())
+    monkeypatch.setattr(projects, "volume_name", lambda: "prod-projects")
+
+    with pytest.raises(ValueError, match="still in use"):
+        projects.claim(["a" * 32], "c" * 12)
+
+    container.remove.assert_not_called()
+    assert projects._claimed == set()
+
+
+@pytest.mark.parametrize("other_volume", [False, True])
+def test_claim_preserves_exited_container_while_claimed_or_on_other_volume(monkeypatch, other_volume):
+    claim = ("c" * 12, "a" * 32)
+    container = SimpleNamespace(
+        attrs={"Mounts": [{"Name": "stage-projects" if other_volume else "prod-projects"}],
+               "State": {"Status": "exited"}},
+        remove=Mock(),
+    )
+    containers = SimpleNamespace(list=Mock(return_value=[container]))
+    monkeypatch.setattr(projects.daemon, "client", lambda: SimpleNamespace(containers=containers))
+    monkeypatch.setattr(projects, "_claimed", set() if other_volume else {claim})
+    monkeypatch.setattr(projects, "volume_name", lambda: "prod-projects")
+
+    if other_volume:
+        projects.claim([claim[1]], claim[0])
+    else:
+        with pytest.raises(ValueError, match="still in use"):
+            projects.claim([claim[1]], claim[0])
+
+    container.remove.assert_not_called()
+    assert projects._claimed == {claim}
+
+
+def test_claim_refuses_when_stopped_container_cannot_be_removed(monkeypatch):
+    container = SimpleNamespace(
+        attrs={"Mounts": [{"Name": "prod-projects"}], "State": {"Status": "exited"}},
+        remove=Mock(side_effect=APIError("container restarted or removal denied")),
+    )
+    containers = SimpleNamespace(list=Mock(return_value=[container]))
+    monkeypatch.setattr(projects.daemon, "client", lambda: SimpleNamespace(containers=containers))
+    monkeypatch.setattr(projects, "_claimed", set())
+    monkeypatch.setattr(projects, "volume_name", lambda: "prod-projects")
+
+    with pytest.raises(APIError):
+        projects.claim(["a" * 32], "c" * 12)
+
+    container.remove.assert_called_once_with()
+    assert projects._claimed == set()
 
 
 def test_claim_refuses_active_and_surviving_containers(monkeypatch):
