@@ -161,6 +161,43 @@ Now start staging's remaining services and check:
 - Copied schedules remain paused. Explicitly enable only the desired staging jobs.
 - Production is still healthy with its original data and routing.
 
+## Recover a blocked project chat
+
+`This chat's project worktree is still in use by another agent` comes from the
+broker's in-memory claim or a surviving Docker container with matching project/chat
+labels on the same projects volume. It is not a Git lock file copied in a snapshot.
+An interrupted copy alone does not prove the cause. Older broker versions may
+also lack the volume-scoped check needed when copied chat IDs exist in both stacks.
+
+On the deployment host, list agent containers without printing their environment
+(the environment contains credentials and chat content):
+
+```sh
+docker ps -a --filter label=nautionette.chat --format 'table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Label "nautionette.chat"}}'
+```
+
+Match the affected chat ID from its browser URL. Inspect the candidate agent and
+the affected environment's broker, substituting their IDs:
+
+```sh
+docker inspect --format '{{.Name}} status={{.State.Status}} mounts={{json .Mounts}}' AGENT_ID BROKER_ID
+```
+
+Compare the broker's `/projects` volume name with the agent's project mounts.
+Never remove a container merely because its copied chat ID matches: the other
+environment may still be using its own worktree. If the candidate is confirmed
+exited/dead and mounts the affected volume, remove only that container using
+`docker rm AGENT_ID` (no `--force` or `--volumes`), then retry the chat. Project
+files remain on their named volume. Updated brokers do this cleanup automatically.
+
+For running/paused/restarting/created containers, establish ownership and whether
+work is still intended before stopping anything. Do not prune all containers,
+delete `.sessions` or Git locks, or restart both environments. If no matching
+container remains, an in-memory claim may still exist: drain other agent work
+before restarting only the affected broker. A restart does not stop orphaned
+dynamic agents. If both brokers mount the same projects volume, stop staging
+writes and correct its storage isolation before retrying; do not bypass the guard.
+
 ## 4. Enable commit-pinned releases
 
 The simpler path is GitHub Actions -> Coolify; Nautionette does not need a public
