@@ -93,7 +93,7 @@ export const api = {
 
   chats: () => request('/api/chats'),
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
-  chat: (id) => request(`/api/chats/${id}`),
+  chat: (id, signal = AbortSignal.timeout(15000)) => request(`/api/chats/${id}`, { signal }),
   sendMessage: (id, text, messageId, projectIds) => request(`/api/chats/${id}/messages`, {
     method: 'POST', headers: { Accept: 'application/json' },
     signal: AbortSignal.timeout(20000), ...json({ text, message_id: messageId, project_ids: projectIds })

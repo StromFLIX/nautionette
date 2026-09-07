@@ -120,8 +120,14 @@ def test_chat_job_contains_only_selected_projects_and_retry_is_stable(client, db
     assert "request_internet_access and wait; after approval retry" in job["system_prompt"]
     message = db.list_messages(created["id"])[0]
     assert message["meta"]["project_ids"] == [project_id]
+    assert client.get(f"/api/chats/{created['id']}").json()["chat"]["project_ids"] == [project_id]
+    assert client.post(endpoint, json={"text": "continue", "message_id": "follow-up"}).status_code == 200
+    assert broker.jobs[-1]["project_ids"] == [project_id]
     assert client.patch(f"/api/chats/{created['id']}", json={"project_ids": []}).status_code == 200
     assert client.post(endpoint, json={"text": "edit", "message_id": "turn"}).status_code == 200
+    assert client.get(f"/api/chats/{created['id']}").json()["chat"]["project_ids"] == []
+    assert client.post(endpoint, json={"text": "without projects", "message_id": "cleared"}).status_code == 200
+    assert broker.jobs[-1]["project_ids"] == []
     assert (
         client.post(endpoint, json={"text": "edit", "message_id": "turn", "project_ids": []}).status_code
         == 422

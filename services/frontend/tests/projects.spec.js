@@ -51,10 +51,14 @@ async function mockProjects (context) {
     if (path === '/api/chats/alpha/messages') {
       const payload = data()
       state.sent.push(payload)
-      state.chat.project_ids = payload.project_ids
-      const message = { id: payload.message_id, chat_id: 'alpha', role: 'user', content: payload.text, meta: { project_ids: payload.project_ids } }
+      if (payload.project_ids !== undefined) state.chat.project_ids = payload.project_ids
+      const message = { id: payload.message_id, chat_id: 'alpha', role: 'user', content: payload.text, meta: { project_ids: [...state.chat.project_ids] } }
       state.messages.push(message)
       return reply({ message, turn_id: message.id }, 202)
+    }
+    if (path === '/api/chats/alpha' && method === 'PATCH') {
+      Object.assign(state.chat, data())
+      return reply(state.chat)
     }
     const snapshot = { chat: state.chat, messages: state.messages, active_turn: null }
     if (path === '/api/chats/alpha/stream') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 100\ndata: ${JSON.stringify({ type: 'snapshot', ...snapshot })}\n\n` })
@@ -125,7 +129,8 @@ for (const width of [1440, 320]) {
     await page.locator('.composer__input').fill('Update both projects')
     await page.locator('.composer__send').click()
     await expect.poll(() => state.sent.length).toBe(1)
-    expect(state.sent[0].project_ids).toEqual([firstId, secondId])
+    expect(state.sent[0]).not.toHaveProperty('project_ids')
+    expect(state.messages[0].meta.project_ids).toEqual([firstId, secondId])
 
     await page.getByRole('button', { name: 'Select projects', exact: true }).click()
     await page.getByRole('checkbox', { name: 'team/nautionette', exact: true }).uncheck()
@@ -133,11 +138,70 @@ for (const width of [1440, 320]) {
     await page.locator('.composer__input').fill('Work only on the second project')
     await page.locator('.composer__send').click()
     await expect.poll(() => state.sent.length).toBe(2)
-    expect(state.sent[1].project_ids).toEqual([secondId])
+    expect(state.sent[1]).not.toHaveProperty('project_ids')
+    expect(state.messages[1].meta.project_ids).toEqual([secondId])
     await page.reload()
     await expect(page.getByRole('button', { name: 'Select projects', exact: true })).toContainText('1 project')
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     expect(errors).toEqual([])
+  })
+}
+
+test('project selection is saved before sending and follows server snapshots', async ({ page, context }) => {
+  const state = await mockProjects(context)
+  state.projects = [{ id: firstId, full_name: repository.full_name, status: 'ready' }]
+  await page.goto('/chats/alpha')
+  await page.getByRole('button', { name: 'Select projects', exact: true }).click()
+  await page.getByRole('checkbox', { name: repository.full_name, exact: true }).check()
+  await expect.poll(() => state.chat.project_ids).toEqual([firstId])
+  expect(state.sent).toEqual([])
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Select projects', exact: true })).toContainText('1 project')
+  state.chat.project_ids = []
+  await expect(page.getByRole('button', { name: 'Select projects', exact: true })).not.toContainText('1 project')
+  state.chat.project_ids = [firstId]
+  await expect(page.getByRole('button', { name: 'Select projects', exact: true })).toContainText('1 project')
+  await page.locator('.composer__input').fill('Keep working')
+  await page.locator('.composer__send').click()
+  await expect.poll(() => state.sent.length).toBe(1)
+  expect(state.sent[0]).not.toHaveProperty('project_ids')
+  expect(state.messages[0].meta.project_ids).toEqual([firstId])
+})
+
+for (const fail of [false, true]) {
+  test(`sending waits for project settings and ${fail ? 'keeps the draft on failure' : 'uses the saved selection'}`, async ({ page, context }) => {
+    const state = await mockProjects(context)
+    state.projects = [{ id: firstId, full_name: repository.full_name, status: 'ready' }]
+    let release
+    const gate = new Promise((resolve) => { release = resolve })
+    let saving = false
+    await context.route('**/api/chats/alpha', async (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback()
+      saving = true
+      await gate
+      if (fail) return route.fulfill({ status: 422, json: { detail: 'Project is not ready' } })
+      return route.fallback()
+    })
+    await page.goto('/chats/alpha')
+    await page.getByRole('button', { name: 'Select projects', exact: true }).click()
+    await page.getByRole('checkbox', { name: repository.full_name, exact: true }).check()
+    await expect.poll(() => saving).toBe(true)
+    await page.keyboard.press('Escape')
+    await page.locator('.composer__input').fill('Use the selected project')
+    await page.locator('.composer__send').click()
+    await page.locator('.composer__send').click()
+    expect(state.sent).toEqual([])
+    release()
+    if (fail) {
+      await expect(page.getByText('Project is not ready', { exact: true })).toBeVisible()
+      await expect(page.locator('.composer__input')).toHaveValue('Use the selected project')
+      expect(state.sent).toEqual([])
+      expect(state.chat.project_ids).toEqual([])
+    } else {
+      await expect.poll(() => state.sent.length).toBe(1)
+      expect(state.messages[0].meta.project_ids).toEqual([firstId])
+      await expect(page.locator('.composer__input')).toHaveValue('')
+    }
   })
 }
 
@@ -153,7 +217,10 @@ test('unavailable selected projects can be removed without being silently replac
   await page.locator('.composer__input').fill('No project needed')
   await page.locator('.composer__send').click()
   await expect.poll(() => state.sent.length).toBe(1)
-  expect(state.sent[0].project_ids).toEqual([])
+  expect(state.sent[0]).not.toHaveProperty('project_ids')
+  expect(state.messages[0].meta.project_ids).toEqual([])
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Select projects', exact: true })).not.toContainText('1 project')
 })
 
 test('registered Apps can resume installation without uploading credentials', async ({ page, context }) => {

@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { api, server } from './api'
 import { createOutbox } from './outbox'
+import { chatCache, chatCacheScope } from './chat-cache'
 
 export const pendingMessages = ref([])
 const listeners = new Set()
@@ -23,12 +24,16 @@ function resume () {
 export const delivery = {
   connect () {
     delivery.disconnect()
+    const scope = chatCacheScope()
     const current = createOutbox({
       storage: localStorage,
       prefix: `nautionette.outbox.${encodeURIComponent(server.url || location.origin)}.`,
       send: (item) => api.sendMessage(item.chatId, item.text, item.id, item.projectIds),
       changed: (items) => { if (outbox === current) pendingMessages.value = items },
-      accepted: (message) => { if (outbox === current) listeners.forEach((listener) => listener(message)) }
+      accepted: async (message) => {
+        await chatCache.accept(message, scope)
+        if (outbox === current) listeners.forEach((listener) => listener(message))
+      }
     })
     outbox = current
     pendingMessages.value = outbox.items()

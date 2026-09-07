@@ -4,6 +4,7 @@ async function mockChats (context, state) {
   await context.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     const method = route.request().method()
+    if (state.disconnected) return route.abort('internetdisconnected')
     if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: ': connected\n\n' })
     if (path === '/api/system') {
       if (state.systemOffline) return route.abort('internetdisconnected')
@@ -96,6 +97,89 @@ test('web and mobile attach to the same live answer and switch between concurren
     await web.close()
     await mobile.close()
   }
+})
+
+test('cached chats survive offline navigation and reload while replies queue behind stale turns', async ({ page, context }) => {
+  const state = initial()
+  state.chats.alpha.messages = [{ id: 'alpha-answer', role: 'assistant', content: 'Saved alpha answer', meta: {} }]
+  state.chats.alpha.active_turn = { id: 'active-alpha', steps: [{ kind: 'text', text: 'Last known progress' }] }
+  state.chats.beta.messages = [{ id: 'beta-answer', role: 'assistant', content: 'Saved beta answer', meta: {} }]
+  await mockChats(context, state)
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.goto('/chats/alpha')
+  await expect(page.locator('.thread__body')).toContainText('Saved alpha answer')
+  await expect(page.locator('.thread__body')).toContainText('Last known progress')
+  await page.goto('/chats/beta')
+  await expect(page.locator('.thread__body')).toContainText('Saved beta answer')
+  state.disconnected = true
+  await page.reload()
+  await expect(page.locator('.thread__body')).toContainText('Saved beta answer')
+  await page.locator('.pane-head__back').click()
+  await page.locator('a[href="/chats/alpha"]').click()
+  await expect(page.locator('.thread__body')).toContainText('Saved alpha answer')
+  await expect(page.locator('.thread__body')).toContainText('Last known progress')
+  await page.locator('textarea').fill('Continue after reconnect')
+  await page.locator('.composer__send').click()
+  await expect(page.getByRole('status')).toContainText('Sending')
+  await page.reload()
+  await expect(page.locator('.thread__body')).toContainText('Saved alpha answer')
+  await expect(page.locator('.msg--user')).toContainText('Continue after reconnect')
+  await page.screenshot({ path: '/tmp/nautionette-offline-chat-mobile.png' })
+  state.chats.alpha.active_turn = null
+  state.disconnected = false
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await expect(page.locator('.thread__body')).toContainText('Working on Continue after reconnect', { timeout: 10000 })
+  await expect(page.locator('.msg--user')).toHaveCount(1)
+  state.chats.alpha.active_turn.steps[0].text = 'Fresh streamed progress'
+  await expect(page.locator('.thread__body')).toContainText('Fresh streamed progress')
+  expect(new Set(state.attempts).size).toBe(1)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('the latest 100 chats are cached without opening each conversation', async ({ page, context }) => {
+  const state = initial()
+  state.chats = Object.fromEntries(Array.from({ length: 105 }, (_, index) => {
+    const id = `chat-${index}`
+    return [id, { chat: { id, title: id, updated_at: 1000 - index }, messages: [{ id: `answer-${index}`, role: 'assistant', content: `Saved conversation ${index}`, meta: {} }], active_turn: null }]
+  }))
+  await mockChats(context, state)
+  await page.goto('/chats')
+  await expect.poll(() => page.evaluate(async () => {
+    const { chatCache } = await import('/src/chat-cache.js')
+    return Boolean(await chatCache.get('chat-99'))
+  })).toBe(true)
+  expect(await page.evaluate(async () => {
+    const { chatCache } = await import('/src/chat-cache.js')
+    return await chatCache.get('chat-100')
+  })).toBeNull()
+  state.disconnected = true
+  await page.goto('/chats/chat-99')
+  await expect(page.locator('.thread__body')).toContainText('Saved conversation 99')
+})
+
+test('an uncached offline chat shows a connection state and accepts queued messages', async ({ page, context }) => {
+  const state = initial()
+  state.disconnected = true
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await expect(page.getByRole('status')).toContainText('Waiting for connection')
+  await page.locator('textarea').fill('Queue without history')
+  await page.locator('.composer__send').click()
+  await expect(page.locator('.msg--user')).toContainText('Queue without history')
+  await page.reload()
+  await expect(page.locator('.msg--user')).toContainText('Queue without history')
+})
+
+test('unavailable local history storage does not prevent chatting', async ({ page, context }) => {
+  await mockChats(context, initial())
+  await context.addInitScript(() => {
+    Object.defineProperty(window, 'indexedDB', { value: { open () { throw new Error('Storage unavailable') } } })
+  })
+  await page.goto('/chats/alpha')
+  await expect(page.getByRole('alert')).toContainText('Offline history could not be saved')
+  await page.locator('textarea').fill('Keep chatting')
+  await page.locator('.composer__send').click()
+  await expect(page.locator('.msg--assistant')).toContainText('Working on Keep chatting')
 })
 
 test('context meter uses live provider tokens, persists on reload and rejects a different model', async ({ page, context }) => {

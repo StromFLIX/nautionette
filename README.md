@@ -87,8 +87,17 @@ Each conversation has an authenticated reconnecting snapshot stream; opening it
 on another device immediately recovers its current progress. Separate conversations
 run concurrently, and the chat list shows which ones are answering.
 
-The only durable local conversation state is an outbox of messages not yet
-acknowledged by the server, scoped to the instance URL. Messages appear immediately
+The client keeps up to 100 full chat snapshots in IndexedDB, scoped to the instance
+URL, plus the chat list. The latest 100 chats are downloaded in the background
+with two concurrent requests while connected. Opening a conversation displays its
+cached history and last known progress while reconnecting; fresh server snapshots
+replace the cached view. Uncached conversations show a connection state instead of
+a blank transcript. Cached active turns do not block queueing replies offline.
+The backend remains authoritative for projects, models, tools, and other settings.
+Local history depends on available device storage; storage failures show a warning.
+
+A separate durable outbox holds messages not yet acknowledged by the server,
+scoped to the instance URL. Cache eviction never removes queued messages. Messages appear immediately
 as **Sending** with a clock; network errors, timeouts, busy chats, and server errors
 retry with capped exponential backoff while the app is open. Reloading or resuming
 the app resumes delivery. A stable `message_id` prevents a lost acknowledgement

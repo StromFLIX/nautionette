@@ -43,7 +43,7 @@ export function createOutbox ({ storage, prefix, send, changed = () => {}, accep
       work.push((async () => {
         try {
           const result = await send(item)
-          accepted(result.message)
+          await accepted(result.message)
           discard(item.id)
         } catch (error) {
           if (!storage.getItem(prefix + item.id)) return

@@ -39,6 +39,9 @@
 
     <div ref="scroller" class="thread__body scroll-y grow">
       <div class="thread__inner">
+        <p v-if="!messages.length && !activeTurn" class="caption dim" role="status">
+          {{ reconnecting ? 'Waiting for connection. No saved messages on this device.' : 'No messages yet.' }}
+        </p>
         <MessageBubble
           v-for="message in messages" :key="message.id"
           :role="message.role" :content="message.content"
@@ -55,6 +58,7 @@
     </div>
 
     <div class="thread__foot">
+      <p v-if="cacheError" class="caption" role="alert">{{ cacheError }}</p>
       <section v-if="internetPending" class="thread__approval" aria-label="Internet access request" aria-live="polite">
         <div class="thread__approval-title">Allow internet for this chat?</div>
         <p class="thread__approval-reason">{{ chat.internet_reason }}</p>
@@ -74,13 +78,13 @@
         :agent-set="chat?.agent_set || ''"
         :model="chat?.model || store.catalog.default_model"
         :tools="chat?.tools ?? null"
-        :project-ids="projectIds || []"
-        :busy="streaming"
+        :project-ids="chat?.project_ids || []"
+        :busy="sendBusy"
         :context="context"
         @update:agent-set="patch({ agent_set: $event })"
         @update:model="patch({ model: $event })"
         @update:tools="patch({ tools: $event })"
-        @update:project-ids="projectIds = $event"
+        @update:project-ids="patch({ project_ids: $event })"
         @send="send"
       />
     </div>
@@ -100,6 +104,7 @@ import { actions, draftCount, onLiveEvent, store } from '../store'
 import { api, chatStream } from '../api'
 import { delivery, onDelivery, pendingMessages } from '../delivery'
 import { latestContext } from '../context'
+import { cacheError, chatCache, chatCacheScope } from '../chat-cache'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -108,10 +113,10 @@ const router = useRouter()
 const chat = ref(null)
 const savedMessages = ref([])
 const draft = ref('')
-const projectIds = ref(null)
 const activeTurn = ref(null)
 const reconnecting = ref(false)
 const streaming = computed(() => Boolean(activeTurn.value))
+const sendBusy = computed(() => streaming.value && !reconnecting.value)
 const liveSteps = computed(() => activeTurn.value?.steps || [])
 const liveStatus = computed(() => activeTurn.value?.status || '')
 const starting = ref(false)
@@ -137,16 +142,19 @@ const context = computed(() => latestContext(
 
 let stream = null
 let generation = 0
+let settingsSave = Promise.resolve(true)
 
-function applySnapshot (data) {
+function applySnapshot (data, cached = false) {
   const el = scroller.value
   const atBottom = !savedMessages.value.length || !el || el.scrollHeight - el.scrollTop - el.clientHeight < 100
   chat.value = data.chat
-  if (projectIds.value === null) projectIds.value = data.chat?.project_ids || []
   savedMessages.value = data.messages
   activeTurn.value = data.active_turn || null
-  delivery.reconcile(data.messages)
-  reconnecting.value = false
+  if (!cached) {
+    chatCache.put(data)
+    delivery.reconcile(data.messages)
+    reconnecting.value = false
+  }
   if (atBottom) scrollDown('instant')
 }
 
@@ -158,18 +166,29 @@ function connectChat () {
   if (!id) return
   reconnecting.value = true
   let received = false
+  const scope = chatCacheScope()
+  chatCache.get(id, scope).then((data) => {
+    if (data && version === generation && !received && scope === chatCacheScope()) applySnapshot(data, true)
+  })
   api.chat(id).then((data) => {
-    if (version === generation && !received) applySnapshot(data)
+    if (version === generation && !received) {
+      received = true
+      applySnapshot(data)
+    }
   }).catch((error) => {
     if (version !== generation) return
     if (error.status === 401) store.needsToken = true
-    if (error.status === 404) router.replace('/chats')
+    if (error.status === 404) {
+      chatCache.remove(id, scope)
+      router.replace('/chats')
+    }
   })
   stream = chatStream(id, (data) => {
     if (version !== generation) return
     received = true
     if (!data.chat) {
       stream?.close()
+      chatCache.remove(id, scope)
       router.replace('/chats')
       return
     }
@@ -191,7 +210,6 @@ async function start ({ text, agentSet, model, tools, projectIds: selectedProjec
     const created = await api.createChat({ agent_set: agentSet, model, tools, project_ids: selectedProjects })
     await actions.loadChats()
     await router.push(`/chats/${created.id}`)
-    projectIds.value = selectedProjects
     draft.value = text
     await send()
   } catch (error) {
@@ -201,11 +219,15 @@ async function start ({ text, agentSet, model, tools, projectIds: selectedProjec
   }
 }
 
-function send () {
+async function send () {
+  const id = chatId.value
+  const version = generation
   const text = draft.value.trim()
-  if (!text || streaming.value) return
+  if (!text || sendBusy.value) return
+  if (!await settingsSave || version !== generation || id !== chatId.value || sendBusy.value) return
+  if (draft.value.trim() !== text) return
   try {
-    delivery.enqueue(chatId.value, text, projectIds.value || [])
+    delivery.enqueue(id, text)
     draft.value = ''
     scrollDown()
   } catch (error) {
@@ -214,9 +236,21 @@ function send () {
   nextTick(() => composer.value?.focus())
 }
 
-async function patch (fields) {
-  chat.value = await api.updateChat(chatId.value, fields)
-  actions.loadChats()
+function patch (fields) {
+  const id = chatId.value
+  const version = generation
+  settingsSave = settingsSave.then(async () => {
+    try {
+      const updated = await api.updateChat(id, fields)
+      if (id === chatId.value && version === generation) chat.value = updated
+      actions.loadChats()
+      return true
+    } catch (error) {
+      $q.notify({ type: 'negative', message: error.message })
+      return false
+    }
+  })
+  return settingsSave
 }
 
 async function decideInternet (allowed) {
@@ -247,6 +281,7 @@ function remove () {
   $q.dialog({ title: 'Delete chat', message: `Delete “${chat.value?.title}”?`, cancel: true })
     .onOk(async () => {
       await api.deleteChat(chatId.value)
+      await chatCache.remove(chatId.value)
       await actions.loadChats()
       router.push('/chats')
     })
@@ -255,7 +290,7 @@ function remove () {
 watch(chatId, (id) => {
   approvalError.value = ''
   chat.value = null
-  projectIds.value = null
+  settingsSave = Promise.resolve(true)
   savedMessages.value = []
   activeTurn.value = null
   draft.value = ''
@@ -275,6 +310,9 @@ let offDelivery = () => {}
 function resume () {
   if (document.visibilityState === 'visible') connectChat()
 }
+function offline () {
+  reconnecting.value = true
+}
 onMounted(() => {
   connectChat()
   off = onLiveEvent((event) => {
@@ -287,6 +325,7 @@ onMounted(() => {
     }
   })
   window.addEventListener('online', connectChat)
+  window.addEventListener('offline', offline)
   document.addEventListener('visibilitychange', resume)
 })
 onUnmounted(() => {
@@ -295,6 +334,7 @@ onUnmounted(() => {
   off()
   offDelivery()
   window.removeEventListener('online', connectChat)
+  window.removeEventListener('offline', offline)
   document.removeEventListener('visibilitychange', resume)
 })
 </script>

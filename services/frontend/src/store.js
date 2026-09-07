@@ -5,6 +5,7 @@
 import { computed, reactive } from 'vue'
 import { api, auth, isNative, liveEvents, server } from './api'
 import { delivery } from './delivery'
+import { chatCache, chatCacheScope, warmChatCache } from './chat-cache'
 import router from './router'
 
 const state = reactive({
@@ -56,8 +57,13 @@ export const actions = {
   },
 
   async loadChats () {
+    const scope = chatCacheScope()
     const data = await guard(() => api.chats())
-    if (data) state.chats = data.chats
+    if (data && scope === chatCacheScope()) {
+      state.chats = data.chats
+      await chatCache.saveList(data.chats, scope)
+      warmChatCache(data.chats, scope)
+    }
   },
 
   async loadWorkflows () {
@@ -112,6 +118,11 @@ export const actions = {
   connect () {
     if (state.needsServer) return
     source?.close()
+    const scope = chatCacheScope()
+    state.chats = []
+    chatCache.list(scope).then((chats) => {
+      if (scope === chatCacheScope() && !state.chats.length) state.chats = chats || []
+    })
     delivery.connect()
     emit({ kind: 'client.reconnect' })
     source = liveEvents((event) => {
