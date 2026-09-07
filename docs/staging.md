@@ -7,9 +7,11 @@ The initial independent production-data clone was completed and verified on
 [`staging-setup-status.md`](staging-setup-status.md) for actual deployment IDs,
 verification results, and the remaining GitHub Actions configuration blocker.
 
-This remains the runbook for future explicit refreshes; do not rerun the copy on
-ordinary deployments. GitHub Actions deployment is off until its environment
-variables/secrets exist and `COOLIFY_DEPLOY_ENABLED=true` is configured.
+For routine operation, use the [GitHub pipelines and exact secrets guide](github-pipelines.md):
+it covers the manual **Refresh staging data** Action, recovery, and production releases.
+This document retains the initial provisioning/manual cloning procedure for reference;
+do not rerun the copy on ordinary deployments. GitHub Actions deployment is off until
+its environment variables/secrets exist and `COOLIFY_DEPLOY_ENABLED=true` is configured.
 
 Known production resource:
 

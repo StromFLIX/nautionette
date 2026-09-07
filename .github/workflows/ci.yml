@@ -38,6 +38,9 @@ jobs:
       - name: Format
         run: uv run ruff format --check .
 
+      - name: Deployment and snapshot safety tests
+        run: uv run pytest tests/test_coolify_release.py tests/test_staging_refresh.py
+
       - name: Committed workflows still validate
         run: uv run --package nautionette-workflow-mcp python scripts/check_workflows.py
 
