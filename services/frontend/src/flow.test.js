@@ -49,3 +49,42 @@ test('durations retain milliseconds and do not count time after completion', () 
   assert.equal(duration('2026-09-07T12:00:00Z', '2026-09-07T12:03:38Z'), '3m 38s')
   assert.equal(duration('invalid'), '')
 })
+
+test('nested loops enclose their entire body in both directions', () => {
+  const source = graph([
+    { id: 'root', kind: 'workflow' }, { id: 'outer', kind: 'loop' },
+    { id: 'inner', kind: 'loop', parent_id: 'outer' },
+    { id: 'call', kind: 'activity', parent_id: 'inner', details: [{ label: 'Tool', value: 'fetch' }] },
+    { id: 'save', kind: 'activity', parent_id: 'outer' }, { id: 'end', kind: 'return' }
+  ], [
+    { id: 'start', source: 'root', target: 'outer' },
+    { id: 'each', source: 'outer', target: 'inner' },
+    { id: 'part', source: 'inner', target: 'call' },
+    { id: 'next', source: 'call', target: 'inner', role: 'repeat' },
+    { id: 'saved', source: 'inner', target: 'save' },
+    { id: 'repeat', source: 'save', target: 'outer', role: 'repeat' },
+    { id: 'done', source: 'outer', target: 'end' }
+  ])
+  for (const direction of ['TB', 'LR']) {
+    const layout = layoutGraph(source, direction)
+    for (const node of layout.nodes.filter((item) => item.parentNode)) {
+      const parent = layout.nodes.find((item) => item.id === node.parentNode)
+      assert.ok(layout.nodes.indexOf(parent) < layout.nodes.indexOf(node))
+      assert.ok(node.position.y >= 106)
+      assert.ok(node.position.x >= 0)
+      assert.ok(node.position.x + node.width <= parent.width)
+      assert.ok(node.position.y + node.height <= parent.height)
+      assert.equal(node.absolutePosition.x, parent.absolutePosition.x + node.position.x)
+    }
+    assert.deepEqual(layout.edges.map((edge) => edge.id), ['start', 'saved', 'done'])
+  }
+})
+
+test('comparison remaps parents of new and removed loop members', () => {
+  const before = graph([{ id: 'loop', kind: 'loop', label: 'items' }, { id: 'old', kind: 'activity', label: 'old', parent_id: 'loop' }])
+  const after = graph([{ id: 'group', kind: 'loop', label: 'items' }, { id: 'new', kind: 'activity', label: 'new', parent_id: 'group' }])
+  const result = compareGraphs(before, after)
+  assert.equal(result.nodes.find((node) => node.label === 'old').parent_id, 'next-group')
+  assert.equal(result.nodes.find((node) => node.label === 'new').parent_id, 'next-group')
+  assert.ok(layoutGraph(result).nodes.every((node) => Number.isFinite(node.absolutePosition.x)))
+})

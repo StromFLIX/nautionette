@@ -47,6 +47,23 @@
           @nodes-initialized="initialize"
         >
           <Background :gap="22" :size="1" pattern-color="var(--border-strong)" />
+          <template #node-loop="{ data, sourcePosition, targetPosition }">
+            <Handle type="target" :position="targetPosition" />
+            <div class="flow-loop" :class="[
+              data.change && `flow-loop--${data.change}`,
+              { 'flow-loop--selected': selectedId === data.id, 'flow-node--dimmed': search && !matches.includes(data.id) }
+            ]">
+              <header class="flow-loop__header" :title="data.label">
+                <div class="flow-node__top">
+                  <span class="flow-node__kind"><span class="material-icons">repeat</span>Loop</span>
+                  <span v-if="data.change" :class="`flow__change--${data.change}`">{{ data.change }}</span>
+                  <span v-else class="caption dim">{{ data.line ? `Line ${data.line}` : '' }}</span>
+                </div>
+                <div class="flow-loop__name">{{ data.label }}</div>
+              </header>
+            </div>
+            <Handle type="source" :position="sourcePosition" />
+          </template>
           <template #node-operation="{ data, sourcePosition, targetPosition }">
             <Handle type="target" :position="targetPosition" />
             <div
@@ -58,14 +75,19 @@
               :title="data.label"
             >
               <div class="flow-node__top">
-                <span class="flow-node__kind"><span class="material-icons">{{ icon(data.kind) }}</span>{{ kindLabel(data.kind) }}</span>
+                <span class="flow-node__kind"><span class="material-icons">{{ icon(data.activity_type || data.kind) }}</span>{{ data.category || kindLabel(data.kind) }}</span>
                 <span v-if="data.change" :class="`flow__change--${data.change}`">{{ data.change }}</span>
                 <span v-else-if="data.status" class="flow-node__status"><i />{{ data.status.replaceAll('_', ' ') }}</span>
                 <span v-else class="material-icons flow-node__inspect">open_in_full</span>
               </div>
-              <div class="flow-node__name">{{ data.label }}</div>
+              <div class="flow-node__name">{{ data.title || data.label }}</div>
+              <dl v-if="data.details?.length" class="flow-node__details">
+                <template v-for="detail in previewDetails(data)" :key="detail.label">
+                  <dt>{{ detail.label }}</dt><dd :title="detail.value" :class="{ 'flow-node__expression': detail.dynamic }">{{ detail.value }}</dd>
+                </template>
+              </dl>
               <div class="flow-node__bottom">
-                <span>{{ data.task_queue || data.description || (data.line ? `Line ${data.line}` : data.workflow_id || '') }}</span>
+                <span>{{ data.activity_type || data.task_queue || data.description || (data.line ? `Line ${data.line}` : data.workflow_id || '') }}</span>
                 <span v-if="data.attempt > 1">Attempt {{ data.attempt }}</span>
                 <span v-else>{{ duration(data.started_at, data.finished_at, now) }}</span>
               </div>
@@ -87,13 +109,16 @@
 
       <aside v-if="selected" class="flow__inspector scroll-y" aria-label="Step details">
         <header class="flow__inspector-head">
-          <span class="flow__eyebrow">{{ kindLabel(selected.kind) }}</span>
+          <span class="flow__eyebrow">{{ selected.category || kindLabel(selected.kind) }}</span>
           <button class="btn btn--icon" aria-label="Close step details" @click="selectedId = null"><span class="material-icons">close</span></button>
         </header>
-        <h2>{{ selected.label }}</h2>
+        <h2>{{ selected.title || selected.label }}</h2>
         <span v-if="selected.change" class="flow__change" :class="`flow__change--${selected.change}`">{{ selected.change }}</span>
         <dl class="flow__facts">
           <template v-for="(value, label) in facts" :key="label"><dt>{{ label }}</dt><dd>{{ value }}</dd></template>
+          <template v-for="detail in selected.details || []" :key="detail.label">
+            <dt>{{ detail.label }}</dt><dd>{{ detail.value }}<span v-if="detail.dynamic" class="flow__expression-label">Expression</span></dd>
+          </template>
         </dl>
         <RouterLink v-if="selected.kind === 'child' && selected.workflow_id" class="btn btn--outline" :to="`/runs/${encodeURIComponent(selected.workflow_id)}`">
           <span class="material-icons">open_in_new</span>Open child run
@@ -124,7 +149,7 @@ import '@vue-flow/core/dist/theme-default.css'
 
 const props = defineProps({ graph: { type: Object, default: null }, livePaused: Boolean })
 const flowId = useId()
-const { fitView, setCenter, setViewport, zoomIn, zoomOut, viewport, dimensions } = useVueFlow({ id: flowId })
+const { fitView, setViewport, zoomIn, zoomOut, viewport, dimensions } = useVueFlow({ id: flowId })
 const container = ref(null)
 const direction = ref('TB')
 const expanded = ref(false)
@@ -151,7 +176,7 @@ const edges = computed(() => positioned.value.edges.map((edge) => {
 const selected = computed(() => props.graph?.nodes.find((node) => node.id === selectedId.value))
 const activeNode = computed(() => props.graph?.nodes.find((node) => node.kind !== 'workflow' && ['running', 'retrying', 'waiting', 'scheduled'].includes(node.status)))
 const completed = computed(() => props.graph?.nodes.filter((node) => !['workflow', 'return'].includes(node.kind) && node.status === 'completed').length || 0)
-const matches = computed(() => (props.graph?.nodes || []).filter((node) => node.label.toLowerCase().includes(search.value.toLowerCase())).map((node) => node.id))
+const matches = computed(() => (props.graph?.nodes || []).filter((node) => [node.label, node.title, ...(node.details || []).map((detail) => detail.value)].join(' ').toLowerCase().includes(search.value.toLowerCase())).map((node) => node.id))
 const facts = computed(() => {
   if (!selected.value) return {}
   const node = selected.value
@@ -159,7 +184,8 @@ const facts = computed(() => {
     Status: node.status?.replaceAll('_', ' '), Queue: node.task_queue, Attempt: node.attempt,
     Scheduled: node.scheduled_at, Started: node.started_at, Finished: node.finished_at,
     Duration: duration(node.started_at, node.finished_at, now.value), Line: node.line,
-    'Workflow ID': node.workflow_id, 'Run ID': node.run_id, Activity: node.activity_id,
+    'Workflow ID': node.workflow_id, 'Run ID': node.run_id, Activity: node.activity_type || node.activity_id,
+    'Activity ID': node.activity_type ? node.activity_id : null,
     'Next run': node.new_execution_run_id
   }).filter(([, value]) => value != null && value !== ''))
 })
@@ -169,7 +195,7 @@ const payloadFields = computed(() => [
 ].filter((field) => selected.value?.[field.key] != null))
 
 function icon (kind) {
-  return { workflow: 'account_tree', activity: 'bolt', child: 'account_tree', condition: 'call_split', loop: 'repeat', parallel: 'call_split', join: 'call_merge', timer: 'schedule', return: 'flag', error: 'error_outline', signal: 'sensors', continue: 'autorenew', step: 'code' }[kind] || 'code'
+  return { agent_call: 'smart_toy', mcp_call: 'extension', http_fetch: 'http', save_artifact: 'save_alt', read_artifact: 'description', emit_event: 'sensors', workflow: 'account_tree', activity: 'bolt', child: 'account_tree', condition: 'call_split', loop: 'repeat', parallel: 'call_split', join: 'call_merge', timer: 'schedule', return: 'flag', error: 'error_outline', signal: 'sensors', continue: 'autorenew', step: 'code' }[kind] || 'code'
 }
 
 function kindLabel (kind) {
@@ -178,20 +204,36 @@ function kindLabel (kind) {
 
 function pretty (value) { return typeof value === 'string' ? value : JSON.stringify(value, null, 2) }
 
-function focus (id) {
+function previewDetails (node) {
+  const repeated = { agent_call: 'Agent set', mcp_call: 'Tool', http_fetch: 'Method' }[node.activity_type]
+  return node.details.filter((detail) => detail.label !== repeated).slice(0, 2)
+}
+
+async function focus (id) {
+  await nextTick()
   const node = nodes.value.find((item) => item.id === id)
-  if (node) setCenter(node.position.x + 132, node.position.y + 56, { zoom: Math.min(1, (dimensions.value.width - 32) / 264), duration: 200 })
+  if (!node) return
+  const canvas = container.value.querySelector('.flow__canvas').getBoundingClientRect()
+  const inspector = container.value.querySelector('.flow__inspector')?.getBoundingClientRect()
+  const visibleHeight = inspector && inspector.left < canvas.right && inspector.top > canvas.top
+    ? inspector.top - canvas.top : canvas.height
+  const zoom = Math.max(0.1, Math.min(1, (canvas.width - 32) / node.width, (visibleHeight - 48) / node.height))
+  setViewport({
+    x: canvas.width / 2 - (node.absolutePosition.x + node.width / 2) * zoom,
+    y: visibleHeight / 2 - (node.absolutePosition.y + node.height / 2) * zoom,
+    zoom
+  }, { duration: 200 })
 }
 
 function initialize () {
   if (initialized || !nodes.value.length) return
   initialized = true
   const root = nodes.value[0]
-  const zoom = Math.min(1, Math.max(0.6, (dimensions.value.width - 48) / 264))
   const active = nodes.value.find((node) => node.id === activeNode.value?.id)
+  const zoom = Math.max(0.1, Math.min(1, (dimensions.value.width - 48) / 264, (dimensions.value.height - 60) / (active?.height || root.height)))
   if (active && props.graph?.mode === 'execution') {
-    const top = Math.min(36 - root.position.y * zoom, dimensions.value.height - 200 - active.position.y * zoom)
-    setViewport({ x: dimensions.value.width / 2 - (active.position.x + 132) * zoom, y: top, zoom })
+    const top = Math.min(36 - root.absolutePosition.y * zoom, dimensions.value.height - 24 - (active.absolutePosition.y + active.height) * zoom)
+    setViewport({ x: dimensions.value.width / 2 - (active.absolutePosition.x + active.width / 2) * zoom, y: top, zoom })
     return
   }
   setViewport({ x: dimensions.value.width / 2 - (root.position.x + 132) * zoom, y: 36 - root.position.y * zoom, zoom })
@@ -245,7 +287,14 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow :deep(.vue-flow__node) { border: none; border-radius: 8px; width: 264px; padding: 0; background: transparent; box-shadow: none; }
 .flow :deep(.vue-flow__node:focus-visible) { outline: 2px solid var(--accent); outline-offset: 4px; }
 .flow :deep(.vue-flow__edge-path) { transition: stroke 160ms; }
-.flow-node { --node-color: var(--text-muted); width: 264px; height: 112px; padding: 12px 14px 10px; border: 1px solid var(--border-strong); border-left: 3px solid var(--node-color); border-radius: 8px; background: var(--surface-panel); color: var(--text); box-shadow: var(--shadow-md); cursor: pointer; transition: border-color 140ms, box-shadow 140ms; text-align: left; }
+.flow-node { --node-color: var(--text-muted); display: flex; flex-direction: column; width: 100%; height: 100%; padding: 12px 14px 10px; border: 1px solid var(--border-strong); border-left: 3px solid var(--node-color); border-radius: 8px; background: var(--surface-panel); color: var(--text); box-shadow: var(--shadow-md); cursor: pointer; transition: border-color 140ms, box-shadow 140ms; text-align: left; }
+.flow-loop { --node-color: var(--warning); width: 100%; height: 100%; border: 1px dashed color-mix(in srgb, var(--warning) 65%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--warning) 3%, transparent); cursor: pointer; }
+.flow-loop__header { height: 106px; padding: 14px 18px; border-bottom: 1px dashed color-mix(in srgb, var(--warning) 35%, var(--border)); background: color-mix(in srgb, var(--warning) 7%, var(--surface-app)); border-radius: 8px 8px 0 0; }
+.flow-loop__name { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 14px; line-height: 21px; font-weight: 600; margin-top: 8px; }
+.flow-loop--selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.flow-loop--added { border-color: var(--success); }
+.flow-loop--removed { border-color: var(--danger); }
+.flow-loop--changed { border-color: var(--warning); }
 .flow-node--workflow, .flow-node--child { --node-color: var(--accent-hover); }
 .flow-node--activity { --node-color: var(--flow-activity); }
 .flow-node--condition, .flow-node--loop, .flow-node--timer { --node-color: var(--warning); }
@@ -268,7 +317,11 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow-node--failed .flow-node__status, .flow-node--timed_out .flow-node__status { color: var(--danger); }
 .flow-node__inspect { font-size: 14px; color: var(--text-dim); }
 .flow-node__name { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; line-height: 19px; height: 38px; margin: 6px 0; }
-.flow-node__bottom { display: flex; justify-content: space-between; gap: 8px; color: var(--text-dim); font-size: 10px; line-height: 15px; }
+.flow-node__details { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 8px; margin: 0 0 8px; font-size: 11px; line-height: 16px; }
+.flow-node__details dt { color: var(--text-dim); }
+.flow-node__details dd { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-muted); }
+.flow-node__expression { font-family: monospace; }
+.flow-node__bottom { display: flex; justify-content: space-between; gap: 8px; margin-top: auto; color: var(--text-dim); font-size: 10px; line-height: 15px; }
 .flow-node__bottom span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .flow-node__bottom span:last-child { flex: none; }
 .flow__zoom { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-raised); box-shadow: var(--shadow-md); }
@@ -295,6 +348,7 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow__facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px 12px; font-size: 11px; margin: 16px 0; }
 .flow__facts dt { color: var(--text-dim); }
 .flow__facts dd { margin: 0; overflow-wrap: anywhere; }
+.flow__expression-label { display: block; font-size: 10px; color: var(--text-dim); margin-top: 3px; }
 .flow__payload { margin-top: 20px; }
 .flow__payload h3 { color: var(--text-muted); font-size: 11px; font-weight: 600; margin-bottom: 8px; }
 .flow__payload pre { margin: 0; font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-muted); }

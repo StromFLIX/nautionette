@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .activity_details import activity_metadata
+
 
 def execution_graph(
     info: dict[str, Any], history: list[dict[str, Any]], truncated: bool = False
@@ -88,6 +90,11 @@ def execution_graph(
         root["finished_at"] = terminal["at"]
     pending = {item["activity_id"]: item for item in info.get("pending_activities", [])}
     for node in nodes[1:]:
+        if node["kind"] == "activity":
+            payload = node.get("input")
+            if isinstance(payload, list) and len(payload) == 1:
+                payload = payload[0]
+            node.update(activity_metadata(node["label"], payload, result=node.get("result")))
         activity = pending.get(node.get("activity_id"))
         if activity and status == "running" and not node.get("finished_event_id"):
             state = activity["state"]

@@ -3,6 +3,43 @@ from pathlib import Path
 from nautionette_backend.workflow_graph import definition_graph
 
 
+def test_nested_loops_group_their_body_and_keep_exits_outside():
+    graph = definition_graph(
+        """
+from temporalio import workflow
+@workflow.defn
+class Demo:
+    @workflow.run
+    async def run(self, items):
+        for item in items:
+            if item is None:
+                continue
+            for part in item:
+                if not part:
+                    break
+                await workflow.execute_activity("fetch", part)
+            await workflow.execute_activity("save", item)
+        await workflow.execute_activity("finish", {})
+""",
+        "Demo",
+    )
+    nodes = graph["nodes"]
+    outer, inner = [node for node in nodes if node["kind"] == "loop"]
+    by_label = {node["label"]: node for node in nodes}
+    assert outer["parent_id"] is None
+    assert inner["parent_id"] == outer["id"]
+    assert by_label["fetch"]["parent_id"] == inner["id"]
+    assert by_label["save"]["parent_id"] == outer["id"]
+    assert by_label["finish"]["parent_id"] is None
+    next_id = by_label["Next iteration"]["id"]
+    assert [edge["target"] for edge in graph["edges"] if edge["source"] == next_id] == [outer["id"]]
+    assert any(
+        edge["source"] == by_label["Exit loop"]["id"] and edge["target"] == by_label["save"]["id"]
+        for edge in graph["edges"]
+    )
+    assert all(edge["role"] == "repeat" for edge in graph["edges"] if edge["source"] == next_id)
+
+
 def test_digest_branches_and_early_return():
     code = (Path(__file__).parents[2] / "workflows/url_digest.py").read_text()
     graph = definition_graph(code, "url_digest")

@@ -5,11 +5,14 @@ from __future__ import annotations
 import ast
 from typing import Any
 
+from .activity_details import activity_metadata
+
 
 def definition_graph(code: str, name: str) -> dict[str, Any]:
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, str]] = []
     warnings: list[str] = []
+    loops: list[dict[str, Any]] = []
 
     def add(kind: str, label: str, source: ast.AST | None = None) -> str:
         node_id = f"node-{len(nodes)}"
@@ -21,13 +24,22 @@ def definition_graph(code: str, name: str) -> dict[str, Any]:
                 "line": getattr(source, "lineno", None),
                 "code": ast.get_source_segment(code, source) if source else None,
                 "signature": ast.dump(source) if source else None,
+                "parent_id": loops[-1]["id"] if loops else None,
             }
         )
         return node_id
 
-    def connect(incoming: list[tuple[str, str]], target: str) -> None:
+    def connect(incoming: list[tuple[str, str]], target: str, role: str = "flow") -> None:
         for source, label in incoming:
-            edges.append({"id": f"edge-{len(edges)}", "source": source, "target": target, "label": label})
+            edges.append(
+                {
+                    "id": f"edge-{len(edges)}",
+                    "source": source,
+                    "target": target,
+                    "label": label,
+                    "role": role,
+                }
+            )
 
     root = add("workflow", name)
     graph = {"nodes": nodes, "edges": edges, "warnings": warnings, "mode": "definition"}
@@ -138,6 +150,13 @@ def definition_graph(code: str, name: str) -> dict[str, Any]:
                 elif method == "wait_condition":
                     label = "Wait for condition"
                 node_id = add(kind, label, source)
+                if kind == "activity":
+                    options = {keyword.arg: keyword.value for keyword in source.keywords if keyword.arg}
+                    payload = source.args[1] if len(source.args) > 1 else options.get("arg")
+                    arguments = options.get("args")
+                    if payload is None and isinstance(arguments, (ast.List, ast.Tuple)) and arguments.elts:
+                        payload = arguments.elts[0]
+                    nodes[-1].update(activity_metadata(label, payload, options=options))
                 connect(incoming, node_id)
                 if method.startswith("start_"):
                     nodes[-1]["description"] = "Starts asynchronously"
@@ -167,8 +186,11 @@ def definition_graph(code: str, name: str) -> dict[str, Any]:
                 )
                 loop = add("loop", label, statement)
                 connect(incoming, loop)
-                connect(statements(statement.body, [(loop, "Each")]), loop)
-                incoming = statements(statement.orelse, [(loop, "Done")])
+                scope = {"id": loop, "breaks": []}
+                loops.append(scope)
+                connect(statements(statement.body, [(loop, "Each")]), loop, role="repeat")
+                loops.pop()
+                incoming = statements(statement.orelse, [(loop, "Done")]) + scope["breaks"]
                 warnings.append("Loops are structural; iteration counts depend on the run.")
             elif isinstance(statement, ast.Return):
                 if statement.value:
@@ -183,6 +205,18 @@ def definition_graph(code: str, name: str) -> dict[str, Any]:
                 incoming = []
             elif isinstance(statement, (ast.With, ast.AsyncWith)):
                 incoming = statements(statement.body, incoming)
+            elif isinstance(statement, (ast.Break, ast.Continue)) and loops:
+                step = add(
+                    "step",
+                    "Next iteration" if isinstance(statement, ast.Continue) else "Exit loop",
+                    statement,
+                )
+                connect(incoming, step)
+                if isinstance(statement, ast.Continue):
+                    connect([(step, "Next")], loops[-1]["id"], role="repeat")
+                else:
+                    loops[-1]["breaks"].append((step, "Exit"))
+                incoming = []
             elif isinstance(statement, (ast.Try, ast.TryStar, ast.Match, ast.Break, ast.Continue)):
                 step = add("step", type(statement).__name__, statement)
                 connect(incoming, step)

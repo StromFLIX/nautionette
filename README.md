@@ -187,6 +187,16 @@ conditions, loops, timers, parallel groups, and returns without executing the so
 Select a node to inspect its source; pan, zoom, search, or change the layout direction.
 Run controls, code, and history remain in their own tabs.
 
+Loops have a header and a dashed enclosure around their body, including nested
+loops. `continue` and `break` appear as **Next iteration** and **Exit loop**, without
+loop-back arrows crossing the body. Groups retain their structure in revision comparisons.
+
+Built-in activity nodes show agent sets and prompts, MCP servers/tools/arguments,
+HTTP methods and URLs, event payloads, and artifact filenames/content. The inspector
+adds output schemas, timeouts, and retry policies when present. Source expressions
+are marked explicitly and never evaluated; runtime defaults are not guessed.
+Agent run results show the actual tools used when that information is recorded.
+
 Select a run from the flow source menu, or open **Runs**, for observed Temporal history.
 Active runs refresh every three seconds while the page is visible. Nodes carry real
 execution states, retry attempts, durations, inputs, results, and failures. Refreshes

@@ -14,6 +14,24 @@ function definition (code) {
 }
 const original = definition(source)
 const proposed = definition(proposedSource)
+const grouped = definition(`
+from temporalio import workflow
+@workflow.defn(name="url_digest")
+class Digest:
+  @workflow.run
+  async def run(self, params):
+    for repository in params["repositories"]:
+      issues = await workflow.execute_activity("mcp_call", {
+        "tool": "github_search_issues", "arguments": {"repo": repository}
+      })
+      for issue in issues:
+        await workflow.execute_activity("agent_call", {
+          "agent_set": "research", "prompt": f"Summarise {issue}",
+          "output_schema": {"type": "object", "properties": {"summary": {"type": "string"}}}
+        })
+    await workflow.execute_activity("save_artifact", {"name": "digest.md", "content": params["summary"]})
+    return {"ok": True}
+`)
 const start = Date.now() - 45000
 const at = (seconds) => new Date(start + seconds * 1000).toISOString()
 const info = { workflow_id: 'digest-run', run_id: 'temporal-run', workflow_type: 'url_digest', status: 'RUNNING', start_time: at(0), close_time: null }
@@ -29,7 +47,7 @@ function execution (completed = false) {
   return python('import sys,json; from nautionette_backend.execution_graph import execution_graph; data=json.load(sys.stdin); print(json.dumps(execution_graph(data["info"],data["history"])))', {
     info: { ...info, status: completed ? 'COMPLETED' : 'RUNNING', close_time: completed ? at(30) : null },
     history: completed ? [...history,
-      { id: 14, event: 'activity.completed', at: at(25), scheduled_event_id: 10, result: { summary: 'A coding agent toolkit.' } },
+      { id: 14, event: 'activity.completed', at: at(25), scheduled_event_id: 10, result: { summary: 'A coding agent toolkit.', tools: ['github_search_issues'] } },
       { id: 17, event: 'activity.scheduled', at: at(26), activity: 'save_artifact', workflow_task_completed_event_id: 16 },
       { id: 18, event: 'activity.started', at: at(27), scheduled_event_id: 17 },
       { id: 19, event: 'activity.completed', at: at(28), scheduled_event_id: 17 },
@@ -43,7 +61,7 @@ const finishedGraph = execution(true)
 async function mockApi (page, options = {}) {
   const state = { graph: liveGraph, requests: 0, ...options }
   const run = { workflow_id: 'digest-run', workflow: 'url_digest', status: 'running', input: { url: 'https://pi.dev' }, created_at: start / 1000, trigger: 'manual' }
-  const workflow = { name: 'url_digest', title: 'URL digest', description: 'Fetch a page, summarize it, and save the result.', code: source, graph: original, manifest: { inputs: {} }, runs: [run], settings: {} }
+  const workflow = { name: 'url_digest', title: 'URL digest', description: 'Fetch a page, summarize it, and save the result.', code: source, graph: state.definition || original, manifest: { inputs: {} }, runs: [run], settings: {} }
   await page.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     let data = {}
@@ -111,6 +129,8 @@ test('live completion preserves selection and camera, then stops polling', async
   state.graph = finishedGraph
   await expect(page.locator('.flow-node--running')).toHaveCount(0, { timeout: 8000 })
   await expect(page.getByRole('complementary', { name: 'Step details' })).toContainText('A coding agent toolkit.')
+  await expect(page.getByRole('complementary', { name: 'Step details' })).toContainText('Tools used')
+  await expect(page.getByRole('complementary', { name: 'Step details' })).toContainText('github_search_issues')
   expect(await canvas.getAttribute('style')).toBe(camera)
   const requests = state.requests
   await page.clock.install()
@@ -174,3 +194,58 @@ test('mobile new-flow review and live connection failure remain usable', async (
   await page.getByRole('button', { name: 'Retry', exact: true }).click()
   await expect(page.getByRole('status')).toHaveCount(0)
 })
+
+for (const width of [1440, 320]) {
+  test(`nested loop groups and rich activity details at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: width === 320 ? 700 : 1100 })
+    const errors = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    await mockApi(page, { definition: grouped })
+    await page.goto('/workflows/url_digest')
+    await expect(page.locator('.flow-loop')).toHaveCount(2)
+    await page.getByRole('button', { name: 'Fit all steps', exact: true }).click()
+    for (const direction of ['TB', 'LR']) {
+      const boxes = await page.locator('.vue-flow__node').evaluateAll((elements) => Object.fromEntries(elements.map((element) => {
+        const box = element.getBoundingClientRect()
+        return [element.dataset.id, { x: box.x, y: box.y, right: box.right, bottom: box.bottom }]
+      })))
+      for (const node of grouped.nodes.filter((item) => item.parent_id)) {
+        const child = boxes[node.id]
+        const parent = boxes[node.parent_id]
+        expect(child.x).toBeGreaterThan(parent.x)
+        expect(child.y).toBeGreaterThan(parent.y)
+        expect(child.right).toBeLessThan(parent.right)
+        expect(child.bottom).toBeLessThan(parent.bottom)
+      }
+      await expect(page.locator('.flow-loop').first()).toHaveCSS('border-top-style', 'dashed')
+      if (direction === 'TB') await page.screenshot({ path: `/tmp/nautionette-grouped-${width}.png` })
+      await page.getByRole('button', { name: 'Change flow direction' }).click()
+    }
+    await page.getByRole('button', { name: 'Search steps', exact: true }).click()
+    await page.getByRole('textbox', { name: 'Search steps' }).fill('research')
+    await page.getByRole('button', { name: 'Next matching step' }).click()
+    const inspector = page.getByRole('complementary', { name: 'Step details' })
+    await expect(inspector).toContainText('Agent: research')
+    await expect(inspector).toContainText('Output schema')
+    await expect(inspector).toContainText('Expression')
+    const selected = page.locator('.flow-node--selected')
+    await expect(selected).toBeInViewport({ ratio: 1 })
+    if (width === 320) {
+      await expect.poll(async () => {
+        const nodeBox = await selected.boundingBox()
+        const detailsBox = await inspector.boundingBox()
+        return nodeBox.y + nodeBox.height <= detailsBox.y
+      }).toBe(true)
+    }
+    await page.mouse.move(5, 5)
+    await page.screenshot({ path: `/tmp/nautionette-activity-details-${width}.png` })
+    await page.getByRole('button', { name: 'Close step details' }).click()
+    await page.getByRole('textbox', { name: 'Search steps' }).fill('github_search_issues')
+    await page.getByRole('button', { name: 'Next matching step' }).click()
+    await expect(inspector).toContainText('Server')
+    await expect(inspector).toContainText('github')
+    await expect(inspector).toContainText('Arguments')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(errors).toEqual([])
+  })
+}

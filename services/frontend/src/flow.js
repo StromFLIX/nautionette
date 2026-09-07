@@ -8,16 +8,19 @@ export function compareGraphs (before, after) {
   const nodes = after.nodes.map((node) => {
     const match = previous.find((candidate) => !used.has(candidate.id) && candidate.kind === node.kind && candidate.label === node.label)
     const id = `next-${node.id}`
-    if (!match) return { ...node, id, change: 'added' }
+    if (!match) return { ...node, id, parent_id: node.parent_id ? `next-${node.parent_id}` : null, change: 'added' }
     used.add(match.id)
     mapped.set(match.id, id)
     const changed = (match.signature ?? match.code ?? '') !== (node.signature ?? node.code ?? '')
-    return { ...node, id, change: changed ? 'changed' : null, before_code: changed ? match.code : null }
+    return { ...node, id, parent_id: node.parent_id ? `next-${node.parent_id}` : null, change: changed ? 'changed' : null, before_code: changed ? match.code : null }
   })
   for (const node of previous) {
     if (used.has(node.id)) continue
     mapped.set(node.id, `previous-${node.id}`)
     nodes.push({ ...node, id: `previous-${node.id}`, change: 'removed' })
+  }
+  for (const node of nodes) {
+    if (node.change === 'removed') node.parent_id = mapped.get(node.parent_id) || null
   }
   const edgeKey = (edge) => JSON.stringify([edge.source, edge.target, edge.label || ''])
   const oldEdges = (before?.edges || []).map((edge) => ({
@@ -37,23 +40,71 @@ export function compareGraphs (before, after) {
 
 export function layoutGraph (graph, direction = 'TB') {
   if (!graph) return { nodes: [], edges: [] }
-  const layout = new dagre.graphlib.Graph({ multigraph: true })
-    .setGraph({ rankdir: direction, nodesep: 36, ranksep: 70, marginx: 24, marginy: 24 })
-    .setDefaultEdgeLabel(() => ({}))
-  for (const node of graph.nodes) layout.setNode(node.id, { width: 264, height: 112 })
-  for (const edge of graph.edges) layout.setEdge(edge.source, edge.target, {}, edge.id)
-  dagre.layout(layout)
-  return {
-    nodes: graph.nodes.map((node) => {
-      const position = layout.node(node.id)
-      return {
-        id: node.id, type: 'operation', data: node,
-        position: { x: position.x - 132, y: position.y - 56 },
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+  const children = new Map()
+  const sizes = new Map()
+  const positions = new Map()
+  for (const node of graph.nodes) {
+    const parent = byId.get(node.parent_id)?.kind === 'loop' ? node.parent_id : null
+    if (!children.has(parent)) children.set(parent, [])
+    children.get(parent).push(node)
+  }
+  function ancestor (id, parent) {
+    let node = byId.get(id)
+    while (node && (node.parent_id || null) !== parent) node = byId.get(node.parent_id)
+    return node?.id
+  }
+  function arrange (parent = null) {
+    const members = children.get(parent) || []
+    const layout = new dagre.graphlib.Graph({ multigraph: true })
+      .setGraph({ rankdir: direction, nodesep: 36, ranksep: 64, marginx: 28, marginy: 28 })
+      .setDefaultEdgeLabel(() => ({}))
+    for (const node of members) {
+      const body = node.kind === 'loop' ? arrange(node.id) : null
+      const size = body
+        ? { width: Math.max(336, body.width), height: Math.max(190, body.height + 106) }
+        : { width: 264, height: node.details?.length ? 176 : 112 }
+      sizes.set(node.id, size)
+      layout.setNode(node.id, size)
+    }
+    for (const edge of graph.edges) {
+      if (edge.role === 'repeat') continue
+      const source = ancestor(edge.source, parent)
+      const target = ancestor(edge.target, parent)
+      if (source && target && source !== target) layout.setEdge(source, target, {}, edge.id)
+    }
+    if (!members.length) return { width: 336, height: 84 }
+    dagre.layout(layout)
+    for (const node of members) {
+      const point = layout.node(node.id)
+      const size = sizes.get(node.id)
+      positions.set(node.id, { x: point.x - size.width / 2, y: point.y - size.height / 2 + (parent ? 106 : 0) })
+    }
+    return layout.graph()
+  }
+  arrange()
+  const nodes = []
+  function append (parent = null, origin = { x: 0, y: 0 }) {
+    for (const node of children.get(parent) || []) {
+      const position = positions.get(node.id)
+      const size = sizes.get(node.id)
+      const absolutePosition = { x: origin.x + position.x, y: origin.y + position.y }
+      nodes.push({
+        id: node.id, type: node.kind === 'loop' ? 'loop' : 'operation', data: node,
+        position, absolutePosition, ...size,
+        parentNode: parent || undefined, extent: parent ? 'parent' : undefined,
+        style: { width: `${size.width}px`, height: `${size.height}px` },
         sourcePosition: direction === 'TB' ? 'bottom' : 'right',
         targetPosition: direction === 'TB' ? 'top' : 'left'
-      }
-    }),
-    edges: graph.edges.map((edge) => ({ ...edge, type: 'smoothstep' }))
+      })
+      append(node.id, absolutePosition)
+    }
+  }
+  append()
+  return {
+    nodes,
+    edges: graph.edges.filter((edge) => edge.role !== 'repeat' && ancestor(edge.target, byId.get(edge.source)?.parent_id || null) !== edge.source)
+      .map((edge) => ({ ...edge, type: 'smoothstep' }))
   }
 }
 
