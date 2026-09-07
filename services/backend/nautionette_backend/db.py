@@ -258,6 +258,8 @@ class Database:
             summary = summaries.get(row["id"])
             row["unread"] = bool(row["unread"])
             row["answering"] = row["id"] in answering
+            row["tools"] = json.loads(row["tools"]) if row.get("tools") else None
+            row["project_ids"] = json.loads(row["project_ids"]) if isinstance(row.get("project_ids"), str) else (row.get("project_ids") or [])
             row["message_count"] = summary["n"] if summary else 0
             row["last_message"] = (
                 {"role": summary["role"], "preview": " ".join(summary["content"].split())[:120]}

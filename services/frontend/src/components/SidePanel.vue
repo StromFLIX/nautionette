@@ -31,19 +31,24 @@
         </button>
       </div>
       <div v-if="section === 'chats'" class="side__controls">
-        <select v-model="groupBy" class="field field--sm" aria-label="Group chats by">
-          <option value="none">No grouping</option>
-          <option value="project">Group by project</option>
-          <option value="model">Group by model</option>
-          <option value="internet">Group by internet access</option>
-        </select>
-        <select v-model.number="activeMinutes" class="field field--sm" aria-label="Active within">
-          <option :value="10">Active: last 10m</option>
-          <option :value="30">Active: last 30m</option>
-          <option :value="60">Active: last 60m</option>
-          <option :value="1440">Active: last 24h</option>
-          <option :value="0">Active: none (all inactive)</option>
-        </select>
+        <div class="seg" role="group" aria-label="Group chats by">
+          <button
+            v-for="opt in groupOptions" :key="opt.value" type="button"
+            class="seg__btn" :class="{ 'seg__btn--active': groupBy === opt.value }"
+            @click="groupBy = opt.value"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+        <div class="seg" role="group" aria-label="Active within">
+          <button
+            v-for="opt in activeOptions" :key="opt.value" type="button"
+            class="seg__btn" :class="{ 'seg__btn--active': activeMinutes === opt.value }"
+            @click="activeMinutes = opt.value"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
       </div>
     </header>
 
@@ -51,7 +56,10 @@
       <!-- chats -->
       <template v-if="section === 'chats'">
         <div v-for="group in chatGroups" :key="group.key" class="side__chat-group">
-          <div v-if="group.key !== '__all__'" class="side__group section-label">{{ group.label }}</div>
+          <div v-if="group.key !== '__all__'" class="side__group section-label">
+            {{ group.label }}
+            <span class="side__group-count">{{ group.active.length + group.inactive.length }}</span>
+          </div>
 
           <div v-for="chat in group.active" :key="chat.id" class="chat-list-item">
             <ChatRow :chat="chat" :active-route-id="route.params.id" @toggle-unread="setUnread" :read-busy="readBusy" />
@@ -167,6 +175,21 @@ const activeMinutes = ref(30)
 const expanded = ref(new Set())
 const needsInternet = (chat) => ['pending', 'deciding'].includes(chat.internet_status)
 
+const groupOptions = [
+  { value: 'none', label: 'All' },
+  { value: 'project', label: 'Project' },
+  { value: 'model', label: 'Model' },
+  { value: 'internet', label: 'Internet' }
+]
+
+const activeOptions = [
+  { value: 10, label: '10m' },
+  { value: 30, label: '30m' },
+  { value: 60, label: '60m' },
+  { value: 1440, label: '24h' },
+  { value: 0, label: 'None' }
+]
+
 function isExpanded (key) {
   return expanded.value.has(key)
 }
@@ -201,7 +224,8 @@ function internetLabel (chat) {
 
 function groupsFor (chat) {
   if (groupBy.value === 'project') {
-    return chat.project_ids?.length ? chat.project_ids.map((id) => [id, projectLabel(id)]) : [['__none__', 'No project']]
+    const ids = Array.isArray(chat.project_ids) ? chat.project_ids : []
+    return ids.length ? ids.map((id) => [id, projectLabel(id)]) : [['__none__', 'No project']]
   }
   if (groupBy.value === 'model') {
     const id = chat.model || store.catalog.default_model || '__none__'
@@ -217,13 +241,13 @@ const chatGroups = computed(() => {
   const byKey = new Map()
   for (const chat of filteredChats.value) {
     for (const [key, label] of groupsFor(chat)) {
-      if (!byKey.has(key)) byKey.set(key, { key, label, active: [], inactive: [] })
+      if (!byKey.has(key)) byKey.set(key, { key, label: label || 'Unknown', active: [], inactive: [] })
       const group = byKey.get(key)
       if (isChatActive(chat)) group.active.push(chat)
       else group.inactive.push(chat)
     }
   }
-  return [...byKey.values()].sort((a, b) => a.label.localeCompare(b.label))
+  return [...byKey.values()].sort((a, b) => (a.key === '__all__' ? -1 : b.key === '__all__' ? 1 : String(a.label).localeCompare(String(b.label))))
 })
 
 async function setUnread (chat, unread) {
@@ -345,15 +369,38 @@ function refresh () {
   padding: 8px 2px 0;
 }
 
-.field--sm {
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-input);
+  border: 1px solid var(--border);
+}
+
+.seg__btn {
   flex: 1;
   min-width: 0;
   padding: 4px 8px;
-  border-radius: var(--radius-sm, 6px);
-  background: var(--surface-input);
-  border: 1px solid var(--border);
-  color: var(--text);
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
   font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+  white-space: nowrap;
+}
+
+.seg__btn:hover {
+  color: var(--text);
+}
+
+.seg__btn--active {
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
 }
 
 .side__chat-group + .side__chat-group {
@@ -394,7 +441,16 @@ function refresh () {
 }
 
 .side__group {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   padding: 12px 10px 6px;
+}
+
+.side__group-count {
+  color: var(--text-dim);
+  font-weight: 500;
+  font-size: 11px;
 }
 
 .side__empty {
