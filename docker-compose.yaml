@@ -17,6 +17,8 @@ services:
       dockerfile: services/backend/Dockerfile
     image: ${STACK_NAMESPACE:-nautionette}/backend:dev
     restart: unless-stopped
+    # Let active chat tasks confirm agent/worktree cleanup before Docker kills us.
+    stop_grace_period: 120s
     # The only service in the stack that reaches the outside world.
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"

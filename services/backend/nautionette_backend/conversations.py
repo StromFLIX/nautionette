@@ -7,13 +7,57 @@ import json
 import logging
 from typing import Any
 
-from . import chat_images, projects
+from . import chat_images, git_authorship, projects
 from .agent import Timeline, build_history, stream_agent
 from .background import spawn
 from .clients import broker
 from .db import db
 from .events import bus, sse
 from .runtime import history_budget, remember_agent_result
+
+CLEANUP_FAILURE = "The old chat agent could not be cleaned up. Retry your message to retry cleanup."
+
+
+async def reconcile_chat_agents(chat_id: str = "") -> None:
+    """Reap surviving agents only when their exact database turn is not running.
+
+    Startup calls this after interrupting previous turns; each new turn retries
+    it before touching its worktrees. A broker outage must never bypass cleanup.
+    """
+    try:
+        agents = await broker.chat_agents(chat_id)
+        errors = []
+        for agent in agents:
+            chat, turn = agent["chat_id"], agent["turn_id"]
+            if db.one(
+                "SELECT id FROM chat_turns WHERE id = ? AND chat_id = ? AND state = 'running'",
+                (turn, chat),
+            ):
+                continue
+            try:
+                await broker.cleanup_chat_agent(chat, turn)
+            except Exception:
+                db.execute("UPDATE chats SET queue_paused = 1 WHERE id = ?", (chat,))
+                logging.getLogger("nautionette").exception(
+                    "Chat agent cleanup failed: chat=%s turn=%s", chat, turn
+                )
+                errors.append((chat, turn))
+        if errors:
+            raise RuntimeError(f"Cleanup failed for {len(errors)} chat agent(s)")
+    except Exception as exc:
+        raise RuntimeError(CLEANUP_FAILURE) from exc
+
+
+async def recover_chat_agents() -> None:
+    # The broker may still be starting. Keep recovering in the background;
+    # run_turn independently gates each chat before preparing its worktrees.
+    while True:
+        try:
+            await reconcile_chat_agents()
+            return
+        except Exception:
+            logging.getLogger("nautionette").exception("Chat agent recovery will retry")
+            await asyncio.sleep(5)
 
 
 def launch_next(chat_id: str) -> None:
@@ -79,11 +123,18 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     finished = asyncio.Event()
     interrupted = False
     shutdown = False
+    agent_requested = False
+    cleanup_failed = False
     try:
         turn = db.one("SELECT stop_requested FROM chat_turns WHERE id = ?", (turn_id,))
         if not turn or turn["stop_requested"]:
             interrupted = True
             return
+        try:
+            await reconcile_chat_agents(chat_id)
+        except Exception:
+            cleanup_failed = True
+            raise
         job["history"] = build_history(
             [
                 message
@@ -109,8 +160,19 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 f"Direct internet access is {chat['internet_status']}",
             )
         controller = spawn(control_turn(turn_id, chat_id, job, finished), name=f"chat-control-{turn_id}")
+        if job.get("project_ids"):
+            # Resolve on execution, not enqueue: queued/new turns see the latest settings.
+            job["git_authorship"] = git_authorship.for_job()
+            job["system_prompt"] = job.get("system_prompt", "") + (
+                "\nGit authorship is configured by Settings for this call. Use local Git so the configured "
+                "author/committer environment and co-author hook are honored. Do not override identities "
+                "or bypass hooks unless the user explicitly requests it. Verify the author, committer and "
+                "Co-authored-by trailers with git log -1 --format=full before pushing. "
+                "Do not amend or rewrite existing commits merely to apply authorship settings.\n"
+            )
         job.update(projects.prepare_worktrees(chat_id, job.get("project_ids", [])))
         job["project_credentials"] = await projects.agent_credentials(job.get("project_ids", []))
+        agent_requested = True
         async for event in stream_agent(job):
             if not db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
                 return
@@ -172,6 +234,19 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         interrupted = interrupted or bool(turn and turn["stop_requested"])
         if interrupted:
             failure = "Stopped by you."
+        # A disconnected stream (including shutdown) is not proof that Docker
+        # stopped the agent. Confirm cleanup before finishing or advancing queue.
+        if agent_requested:
+            try:
+                await broker.cleanup_chat_agent(chat_id, turn_id)
+            except Exception:
+                cleanup_failed = True
+                failure = CLEANUP_FAILURE
+                logging.getLogger("nautionette").exception(
+                    "Chat agent cleanup failed: chat=%s turn=%s", chat_id, turn_id
+                )
+        if cleanup_failed or shutdown:
+            db.execute("UPDATE chats SET queue_paused = 1 WHERE id = ?", (chat_id,))
         db.execute(
             "UPDATE chats SET internet_status = 'blocked', internet_reason = '', internet_turn_id = '' "
             "WHERE id = ? AND internet_turn_id = ? AND internet_status = 'pending'",
@@ -185,7 +260,7 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         )
         bus.publish("chat.answered", {"chat_id": chat_id, "ok": failure is None})
         await projects.revoke_credentials(job.pop("project_credentials", []))
-        if not shutdown:
+        if not shutdown and not cleanup_failed:
             launch_next(chat_id)
 
 

@@ -30,53 +30,42 @@
           <span class="material-icons" style="font-size: 16px">close</span>
         </button>
       </div>
+      <div v-if="section === 'chats'" class="side__controls">
+        <select v-model="groupBy" class="field field--sm" aria-label="Group chats by">
+          <option value="none">No grouping</option>
+          <option value="project">Group by project</option>
+          <option value="model">Group by model</option>
+          <option value="internet">Group by internet access</option>
+        </select>
+        <select v-model.number="activeMinutes" class="field field--sm" aria-label="Active within">
+          <option :value="10">Active: last 10m</option>
+          <option :value="30">Active: last 30m</option>
+          <option :value="60">Active: last 60m</option>
+          <option :value="1440">Active: last 24h</option>
+          <option :value="0">Active: none (all inactive)</option>
+        </select>
+      </div>
     </header>
 
     <div class="side__list scroll-y grow">
       <!-- chats -->
       <template v-if="section === 'chats'">
-        <div v-for="chat in filteredChats" :key="chat.id" class="chat-list-item">
-          <RouterLink
-            :to="`/chats/${chat.id}`"
-            class="row-item" :class="{
-              'row-item--active': route.params.id === chat.id,
-              'row-item--running': chat.answering && !needsInternet(chat),
-              'row-item--attention': needsInternet(chat),
-              'row-item--unread': chat.unread
-            }"
-          >
-            <div class="avatar" :style="avatarStyle(chat.id)">{{ initials(chat.title) }}</div>
-            <div class="grow">
-              <div class="row">
-                <span class="row-item__title grow truncate">{{ chat.title }}</span>
-                <span v-if="chat.unread" class="row-item__unread" role="img" aria-label="Unread messages" title="Unread messages" />
-                <span class="row-item__time">{{ shortTime(chat.updated_at) }}</span>
-              </div>
-              <div class="row-item__sub truncate">
-                <span v-if="needsInternet(chat)" class="row-item__activity row-item__activity--attention">
-                  <span class="material-icons" aria-hidden="true">public</span>
-                  {{ chat.internet_status === 'deciding' ? 'Applying internet decision' : 'Internet approval needed' }}
-                </span>
-                <span v-else-if="chat.answering" class="row-item__activity">
-                  <span class="row-item__activity-dot" aria-hidden="true" />
-                  In progress
-                </span>
-                <template v-else>
-                  <span v-if="chat.last_message?.role === 'user'" class="dim">You: </span>
-                  {{ chat.last_message?.preview || 'No messages yet' }}
-                </template>
-              </div>
+        <div v-for="group in chatGroups" :key="group.key" class="side__chat-group">
+          <div v-if="group.key !== '__all__'" class="side__group section-label">{{ group.label }}</div>
+
+          <div v-for="chat in group.active" :key="chat.id" class="chat-list-item">
+            <ChatRow :chat="chat" :active-route-id="route.params.id" @toggle-unread="setUnread" :read-busy="readBusy" />
+          </div>
+
+          <details v-if="group.inactive.length" class="side__inactive" :open="isExpanded(group.key)" @toggle="onToggle(group.key, $event)">
+            <summary class="side__inactive-summary">
+              <span class="material-icons" aria-hidden="true">expand_more</span>
+              Inactive ({{ group.inactive.length }})
+            </summary>
+            <div v-for="chat in group.inactive" :key="chat.id" class="chat-list-item">
+              <ChatRow :chat="chat" :active-route-id="route.params.id" @toggle-unread="setUnread" :read-busy="readBusy" />
             </div>
-          </RouterLink>
-          <button class="btn btn--icon btn--sm chat-list-item__menu" :aria-label="`Options for ${chat.title}`">
-            <span class="material-icons" aria-hidden="true">more_vert</span>
-            <q-menu anchor="bottom right" self="top right" class="pick-menu">
-              <button v-close-popup class="pick-menu__item" :disabled="readBusy === chat.id" @click="setUnread(chat, !chat.unread)">
-                <span class="material-icons" aria-hidden="true">{{ chat.unread ? 'mark_email_read' : 'mark_email_unread' }}</span>
-                {{ chat.unread ? 'Mark as read' : 'Mark as unread' }}
-              </button>
-            </q-menu>
-          </button>
+          </details>
         </div>
         <p v-if="readError" class="side__error caption" role="alert">{{ readError }}</p>
         <p v-if="!filteredChats.length" class="side__empty caption">
@@ -163,16 +152,79 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { RUN_TONE, avatarStyle, initials, scheduleTime, shortTime } from '../format'
+import { RUN_TONE, avatarStyle, scheduleTime, shortTime } from '../format'
 import { actions, health, store } from '../store'
 import { api } from '../api'
+import ChatRow from './ChatRow.vue'
 
 const route = useRoute()
 const router = useRouter()
 const query = ref('')
 const readBusy = ref('')
 const readError = ref('')
+const groupBy = ref('none')
+const activeMinutes = ref(30)
+const expanded = ref(new Set())
 const needsInternet = (chat) => ['pending', 'deciding'].includes(chat.internet_status)
+
+function isExpanded (key) {
+  return expanded.value.has(key)
+}
+
+function onToggle (key, event) {
+  const next = new Set(expanded.value)
+  if (event.target.open) next.add(key)
+  else next.delete(key)
+  expanded.value = next
+}
+
+function isChatActive (chat) {
+  if (chat.unread || chat.answering || needsInternet(chat)) return true
+  if (!activeMinutes.value) return false
+  if (!chat.updated_at) return false
+  return (Date.now() / 1000 - chat.updated_at) <= activeMinutes.value * 60
+}
+
+function projectLabel (id) {
+  return store.projects.find((project) => project.id === id)?.full_name || id
+}
+
+function modelLabel (chat) {
+  const id = chat.model || store.catalog.default_model
+  return store.catalog.models.find((model) => model.id === id)?.name || id || 'Default model'
+}
+
+function internetLabel (chat) {
+  if (needsInternet(chat)) return 'Needs approval'
+  return { allowed: 'Internet allowed', blocked: 'Internet blocked' }[chat.internet_status] || chat.internet_status || 'Unknown'
+}
+
+function groupsFor (chat) {
+  if (groupBy.value === 'project') {
+    return chat.project_ids?.length ? chat.project_ids.map((id) => [id, projectLabel(id)]) : [['__none__', 'No project']]
+  }
+  if (groupBy.value === 'model') {
+    const id = chat.model || store.catalog.default_model || '__none__'
+    return [[id, modelLabel(chat)]]
+  }
+  if (groupBy.value === 'internet') {
+    return [[chat.internet_status || '__none__', internetLabel(chat)]]
+  }
+  return [['__all__', 'Chats']]
+}
+
+const chatGroups = computed(() => {
+  const byKey = new Map()
+  for (const chat of filteredChats.value) {
+    for (const [key, label] of groupsFor(chat)) {
+      if (!byKey.has(key)) byKey.set(key, { key, label, active: [], inactive: [] })
+      const group = byKey.get(key)
+      if (isChatActive(chat)) group.active.push(chat)
+      else group.inactive.push(chat)
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.label.localeCompare(b.label))
+})
 
 async function setUnread (chat, unread) {
   readBusy.value = chat.id
@@ -287,6 +339,56 @@ function refresh () {
   color: var(--text-dim);
 }
 
+.side__controls {
+  display: flex;
+  gap: 6px;
+  padding: 8px 2px 0;
+}
+
+.field--sm {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.side__chat-group + .side__chat-group {
+  margin-top: 6px;
+}
+
+.side__inactive {
+  margin-top: 2px;
+}
+
+.side__inactive-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  list-style: none;
+}
+
+.side__inactive-summary::-webkit-details-marker {
+  display: none;
+}
+
+.side__inactive-summary .material-icons {
+  font-size: 16px;
+  transition: transform var(--transition);
+}
+
+.side__inactive[open] .side__inactive-summary .material-icons {
+  transform: rotate(180deg);
+}
+
 .side__list {
   padding: 6px;
 }
@@ -320,153 +422,6 @@ function refresh () {
 .side__error {
   padding: 8px 10px;
   color: var(--danger);
-}
-
-.row-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: var(--radius-md);
-  color: inherit;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background var(--transition);
-}
-
-.row-item:hover {
-  background: var(--surface-hover);
-}
-
-.row-item--active {
-  background: var(--accent-soft);
-}
-
-.row-item--active .row-item__sub {
-  color: #b9cdf5;
-}
-
-.row-item--running {
-  box-shadow: inset 2px 0 var(--accent);
-}
-
-.row-item__activity {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 3px;
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-  color: var(--accent-hover);
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.5;
-}
-
-.row-item--attention {
-  box-shadow: inset 2px 0 var(--warning);
-}
-
-.row-item__activity--attention {
-  color: var(--warning);
-  background: var(--warning-soft);
-}
-
-.row-item__activity .material-icons {
-  font-size: 13px;
-}
-
-.row-item--unread .row-item__title {
-  font-weight: 750;
-}
-
-.row-item__unread {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent-hover);
-}
-
-.row-item__activity-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.row-item--running .avatar {
-  position: relative;
-}
-
-.row-item--running .avatar::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border: 2px solid var(--accent-soft);
-  border-top-color: var(--accent-hover);
-  border-right-color: var(--accent-hover);
-  border-radius: inherit;
-  pointer-events: none;
-  animation: chat-activity-orbit 1.8s linear infinite;
-}
-
-@keyframes chat-activity-orbit {
-  to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .row-item--running .avatar::after {
-    animation: none;
-  }
-}
-
-.row-item__title {
-  font-size: 13.5px;
-  font-weight: 550;
-}
-
-.row-item__sub {
-  font-size: 12.5px;
-  color: var(--text-muted);
-}
-
-.row-item__time {
-  flex: none;
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
-.row-item__pin {
-  font-size: 15px;
-  color: var(--accent-hover);
-}
-
-.avatar {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: 0.02em;
-}
-
-.avatar--square {
-  border-radius: var(--radius-md);
-}
-
-.avatar--draft {
-  background: var(--warning-soft);
-  color: var(--warning);
-}
-
-.avatar .material-icons {
-  font-size: 20px;
 }
 
 @media (max-width: 900px) {

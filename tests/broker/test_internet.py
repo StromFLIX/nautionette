@@ -41,11 +41,16 @@ def test_decision_targets_only_the_requesting_turn(monkeypatch, allowed):
     calls = []
     container = SimpleNamespace(
         reload=lambda: None,
-        attrs={"NetworkSettings": {"Networks": {}}},
+        labels={"nautionette.chat": "chat-a", "nautionette.turn": "turn-a"},
+        attrs={
+            "NetworkSettings": {"Networks": {}},
+            "Mounts": [{"Type": "volume", "Name": agent_run.WORKFLOWS_VOLUME, "Destination": "/workflows"}],
+        },
         exec_run=lambda command: calls.append(command) or SimpleNamespace(exit_code=0),
     )
 
-    def list_containers(filters):
+    def list_containers(all, filters):
+        assert all is False
         assert filters == {"label": ["nautionette.chat=chat-a", "nautionette.turn=turn-a"]}
         return [container]
 

@@ -107,6 +107,28 @@ def agent_internet(
     return {"ok": True}
 
 
+@app.get("/agent/chats")
+def chat_agents(chat_id: str = "", x_internal_token: str | None = Header(default=None)) -> dict[str, Any]:
+    _check_internal(x_internal_token)
+    return {"agents": agent_run.chat_inventory(chat_id)}
+
+
+@app.post("/agent/cleanup")
+def cleanup_chat_agent(
+    payload: dict[str, Any] = Body(...), x_internal_token: str | None = Header(default=None)
+) -> dict[str, Any]:
+    _check_internal(x_internal_token)
+    chat_id, turn_id = payload.get("chat_id"), payload.get("turn_id")
+    if not isinstance(chat_id, str) or not chat_id or not isinstance(turn_id, str) or not turn_id:
+        raise HTTPException(status_code=422, detail="chat_id and turn_id are required")
+    try:
+        agent_run.cleanup_chat(chat_id, turn_id)
+    except Exception as exc:
+        daemon.log.exception("Chat agent cleanup failed: chat=%s turn=%s", chat_id, turn_id)
+        raise HTTPException(status_code=503, detail="Old chat agent cleanup failed; retry") from exc
+    return {"ok": True}
+
+
 @app.post("/agent/control")
 def agent_control(
     payload: dict[str, Any] = Body(...), x_internal_token: str | None = Header(default=None)

@@ -4,7 +4,7 @@ from contextlib import ExitStack
 
 import docker
 import pytest
-from nautionette_docker_broker import agent_run
+from nautionette_docker_broker import agent_run, chat_agents
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("NAUTIONETTE_DOCKER_TESTS") != "1",
@@ -18,6 +18,9 @@ def test_live_chat_egress_requires_approval(monkeypatch):
     prefix = "nautionette-internet-test-" + uuid.uuid4().hex[:12]
     with ExitStack() as cleanup:
         cleanup.callback(client.close)
+        volume = client.volumes.create()
+        cleanup.callback(volume.remove)
+        monkeypatch.setattr(chat_agents, "WORKFLOWS_VOLUME", volume.name)
         isolated = client.networks.create(prefix + "-isolated", internal=True)
         cleanup.callback(isolated.remove)
         egress = client.networks.create(prefix + "-egress")
@@ -37,6 +40,7 @@ def test_live_chat_egress_requires_approval(monkeypatch):
                 detach=True,
                 network=network.name,
                 labels=labels or {},
+                volumes={volume.name: {"bind": "/workflows", "mode": "ro"}},
                 cap_drop=["ALL"],
             )
             cleanup.callback(container.remove, force=True)

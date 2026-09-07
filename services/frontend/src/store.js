@@ -16,6 +16,7 @@ const state = reactive({
   system: { components: [], agent_sets: [] },
   catalog: { agent_sets: [], models: [], tools: [], default_model: '', default_agent_set: 'default' },
   chats: [],
+  projects: [],
   workflows: [],
   drafts: [],
   runs: [],
@@ -66,6 +67,11 @@ export const actions = {
     }
   },
 
+  async loadProjects () {
+    const data = await guard(() => api.projects())
+    if (data) state.projects = data.projects
+  },
+
   async loadWorkflows () {
     const [workflows, drafts] = await Promise.all([
       guard(() => api.workflows()),
@@ -91,6 +97,7 @@ export const actions = {
       actions.loadSystem(),
       actions.loadCatalog(),
       actions.loadChats(),
+      actions.loadProjects(),
       actions.loadWorkflows(),
       actions.loadRuns()
     ])
@@ -133,6 +140,7 @@ export const actions = {
       if (kind.startsWith('run.')) actions.loadRuns()
       if (kind.startsWith('workflow.') || kind.startsWith('promote.')) actions.loadWorkflows()
       if (kind.startsWith('chat.')) actions.loadChats()
+      if (kind.startsWith('project.')) actions.loadProjects()
       if (kind === 'model.integration.changed' || kind === 'mcp.server.changed') actions.loadCatalog(true)
       emit(event)
     })

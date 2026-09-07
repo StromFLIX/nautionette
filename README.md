@@ -137,6 +137,29 @@ until explicitly resumed. Tools are not automatically rerun because
 their external side effects may already have happened. Run one backend process per
 SQLite database; startup recovery assumes ownership of its unfinished turns.
 
+Shutdown waits for each active chat agent to be removed and its worktree claim
+released (the backend has a 120-second Compose stop grace period). After a crash,
+startup recovery reconciles surviving chat agents against their exact database
+turn state, including agents whose turns were already finished. Recovery retries
+if the broker is still starting. Each new turn also requires successful cleanup
+before preparing its project worktrees. Cleanup failures pause the affected queue
+and report a retryable error; retrying the message retries cleanup. Existing edits,
+local commits, and worktree locks are preserved—never delete or bypass the locks.
+
+Broker inventory and cleanup are internal authenticated verbs, scoped by the
+actual deployment workflows-volume mount plus chat/turn IDs. This includes legacy
+containers without a deployment label, excludes staging copies on other volumes,
+and leaves running turns and workflow agents alone. Each deployment must have its
+own workflows volume. Late run requests for a cleaned-up turn are fenced for the
+maximum agent-call and image-build duration.
+
+Deploy recovery changes to **both** services: rebuild/recreate `docker-broker`
+first, then `backend` (or deploy them together). An old broker without the cleanup
+verbs causes new chats to fail closed until it is upgraded. Validate real Docker
+cleanup and Git preservation with
+`NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_chat_recovery_docker.py`
+(on a Docker host with `nautionette/pi-base:dev` built).
+
 Deploy chat controls by rebuilding/recreating the backend, Docker broker, frontend,
 and Pi agent images. Chat containers use Pi RPC mode for live steering; workflow
 agent calls retain their existing one-shot JSON mode. Validate the real runtime with
@@ -316,6 +339,39 @@ key, and must not print or persist credentials. Internet denial leaves local edi
 available but prevents fetching or pushing. The initial repository download from
 Settings runs on the backend, not inside an agent.
 Project management is user-only and is not exposed through backend MCP.
+
+### Git authorship
+
+**Settings > Git authorship** controls attribution for new agent-created commits across
+selected repositories. The options are:
+
+| Mode | Author | Committer | `Co-authored-by` trailer |
+| --- | --- | --- | --- |
+| Nautionette only (default) | Automation | Automation | None |
+| You as author | Human | Automation | None |
+| You as author + automation co-author (recommended) | Human | Automation | Automation |
+| Automation as author + you as co-author | Automation | Automation | Human |
+
+Enter your name and GitHub-associated email before selecting a human-attribution mode.
+Both automation name and email are configurable too. GitHub profile attribution requires
+an email associated with the corresponding account; the default automation email does
+not guarantee a linked bot profile. Commit email addresses are visible in history: use
+the exact GitHub-provided noreply address if you want to keep your email private.
+Co-authorship credits collaboration; it does not add a `Signed-off-by` certification.
+
+Settings are instance-wide, validated together, and read when each agent call starts.
+Running calls keep their original settings; subsequent calls (including queued ones) get
+changes. The default remains automation-only until configured. Reset restores that default.
+No existing commits, repository config, credentials or GitHub App push permissions change.
+
+The agent receives author/committer identity through its Git environment. Co-author modes
+install a temporary, repository-scoped `commit-msg` hook overlay for the selected worktrees;
+it adds a deduplicated trailer after the editor and before any existing commit-message hook.
+Other repository hooks and their failures are preserved. Regular local Git commits honor
+this; GitHub API/MCP commits, `--no-verify`, and low-level `git commit-tree` bypass Git hooks.
+The agent is instructed to use local Git, not bypass identity/hooks, and verify attribution
+before pushing. The empty workspace initialization commit is not a collaborative code change
+and has no co-author trailer. History is never rewritten merely to change attribution.
 
 ### Deployment
 
