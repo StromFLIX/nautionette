@@ -286,6 +286,39 @@ available but prevents fetching or pushing. The initial repository download from
 Settings runs on the backend, not inside an agent.
 Project management is user-only and is not exposed through backend MCP.
 
+### Git authorship
+
+**Settings > Git authorship** controls attribution for new agent-created commits across
+selected repositories. The options are:
+
+| Mode | Author | Committer | `Co-authored-by` trailer |
+| --- | --- | --- | --- |
+| Nautionette only (default) | Automation | Automation | None |
+| You as author | Human | Automation | None |
+| You as author + automation co-author (recommended) | Human | Automation | Automation |
+| Automation as author + you as co-author | Automation | Automation | Human |
+
+Enter your name and GitHub-associated email before selecting a human-attribution mode.
+Both automation name and email are configurable too. GitHub profile attribution requires
+an email associated with the corresponding account; the default automation email does
+not guarantee a linked bot profile. Commit email addresses are visible in history: use
+the exact GitHub-provided noreply address if you want to keep your email private.
+Co-authorship credits collaboration; it does not add a `Signed-off-by` certification.
+
+Settings are instance-wide, validated together, and read when each agent call starts.
+Running calls keep their original settings; subsequent calls (including queued ones) get
+changes. The default remains automation-only until configured. Reset restores that default.
+No existing commits, repository config, credentials or GitHub App push permissions change.
+
+The agent receives author/committer identity through its Git environment. Co-author modes
+install a temporary, repository-scoped `commit-msg` hook overlay for the selected worktrees;
+it adds a deduplicated trailer after the editor and before any existing commit-message hook.
+Other repository hooks and their failures are preserved. Regular local Git commits honor
+this; GitHub API/MCP commits, `--no-verify`, and low-level `git commit-tree` bypass Git hooks.
+The agent is instructed to use local Git, not bypass identity/hooks, and verify attribution
+before pushing. The empty workspace initialization commit is not a collaborative code change
+and has no co-author trailer. History is never rewritten merely to change attribution.
+
 ### Deployment
 
 Docker Engine 26+ (API 1.45+) is required for volume-subpath mounts. Rebuild/recreate

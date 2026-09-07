@@ -7,7 +7,7 @@ import json
 import logging
 from typing import Any
 
-from . import projects
+from . import git_authorship, projects
 from .agent import Timeline, build_history, stream_agent
 from .background import spawn
 from .clients import broker
@@ -98,6 +98,16 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 f"Direct internet access is {chat['internet_status']}",
             )
         controller = spawn(control_turn(turn_id, chat_id, job, finished), name=f"chat-control-{turn_id}")
+        if job.get("project_ids"):
+            # Resolve on execution, not enqueue: queued/new turns see the latest settings.
+            job["git_authorship"] = git_authorship.for_job()
+            job["system_prompt"] = job.get("system_prompt", "") + (
+                "\nGit authorship is configured by Settings for this call. Use local Git so the configured "
+                "author/committer environment and co-author hook are honored. Do not override identities "
+                "or bypass hooks unless the user explicitly requests it. Verify the author, committer and "
+                "Co-authored-by trailers with git log -1 --format=full before pushing. "
+                "Do not amend or rewrite existing commits merely to apply authorship settings.\n"
+            )
         job.update(projects.prepare_worktrees(chat_id, job.get("project_ids", [])))
         job["project_credentials"] = await projects.agent_credentials(job.get("project_ids", []))
         async for event in stream_agent(job):

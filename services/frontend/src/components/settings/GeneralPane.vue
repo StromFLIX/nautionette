@@ -99,7 +99,7 @@ const contextHint = computed(() => {
 })
 
 function apply (data) {
-  Object.assign(form, data.settings)
+  for (const key of Object.keys(form)) form[key] = data.settings[key]
   historyMode.value = data.settings.history_chars > 0 ? 'fixed' : 'auto'
 }
 
