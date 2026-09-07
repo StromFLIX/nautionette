@@ -91,7 +91,7 @@ def test_input_has_to_be_an_object():
 # -------------------------------------------------------------------- source
 
 
-SOURCE = '''
+SOURCE = """
 # /// script
 # dependencies = ["feedparser", "python-dateutil>=2.9"]
 # ///
@@ -112,7 +112,7 @@ class AlsoCounted:
 
 class NotAWorkflow:
     pass
-'''
+"""
 
 
 def test_a_manifest_is_read_without_importing_the_file():

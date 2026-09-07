@@ -15,8 +15,11 @@ def polling(monkeypatch):
 
 def scheduled(backend, workflow_id="digest-scheduled-2026-09-07", status="COMPLETED"):
     backend.temporal.executions[workflow_id] = {
-        "workflow_id": workflow_id, "run_id": "run-1", "workflow_type": "digest",
-        "status": status, "scheduled": True,
+        "workflow_id": workflow_id,
+        "run_id": "run-1",
+        "workflow_type": "digest",
+        "status": status,
+        "scheduled": True,
     }
     backend.temporal.histories[workflow_id] = [{"input": {"text": "x" * 5000}}]
     backend.temporal.results[workflow_id] = {"summary": "Actual result"}

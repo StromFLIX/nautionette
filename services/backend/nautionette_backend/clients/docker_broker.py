@@ -22,15 +22,11 @@ class BrokerClient:
         return response.json()
 
     async def agent_sets(self) -> list[dict[str, Any]]:
-        response = await shared().get(
-            f"{self.base_url}/agent-sets", headers=internal_headers(), timeout=10
-        )
+        response = await shared().get(f"{self.base_url}/agent-sets", headers=internal_headers(), timeout=10)
         response.raise_for_status()
         return response.json().get("agent_sets", [])
 
-    async def run_agent(
-        self, job: dict[str, Any], timeout: float = 900
-    ) -> AsyncIterator[dict[str, Any]]:
+    async def run_agent(self, job: dict[str, Any], timeout: float = 900) -> AsyncIterator[dict[str, Any]]:
         """One container per call. Yields NDJSON events until the container exits."""
         async with shared().stream(
             "POST",

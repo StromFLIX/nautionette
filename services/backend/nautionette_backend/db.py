@@ -230,12 +230,10 @@ class Database:
             f" FROM messages WHERE chat_id IN ({placeholders}) GROUP BY chat_id"
         )
         summaries = {
-            summary["chat_id"]: summary
-            for summary in self.query(summary_sql, [row["id"] for row in rows])
+            summary["chat_id"]: summary for summary in self.query(summary_sql, [row["id"] for row in rows])
         }
         answering = {
-            turn["chat_id"]
-            for turn in self.query("SELECT chat_id FROM chat_turns WHERE state = 'running'")
+            turn["chat_id"] for turn in self.query("SELECT chat_id FROM chat_turns WHERE state = 'running'")
         }
         for row in rows:
             summary = summaries.get(row["id"])
@@ -286,7 +284,11 @@ class Database:
     # -------------------------------------------------------------------- runs
 
     def accept_chat_message(
-        self, chat_id: str, text: str, message_id: str, project_ids: list[str] | None = None,
+        self,
+        chat_id: str,
+        text: str,
+        message_id: str,
+        project_ids: list[str] | None = None,
     ) -> tuple[dict[str, Any], bool]:
         with self._lock, self._conn:
             existing = self._conn.execute(
@@ -296,7 +298,10 @@ class Database:
             if existing:
                 if existing["chat_id"] != chat_id or existing["content"] != text:
                     raise ValueError("message_id was already used for a different message")
-                if project_ids is not None and json.loads(existing["meta"]).get("project_ids", []) != project_ids:
+                if (
+                    project_ids is not None
+                    and json.loads(existing["meta"]).get("project_ids", []) != project_ids
+                ):
                     raise ValueError("message_id was already used with a different project selection")
                 return {**dict(existing), "meta": json.loads(existing["meta"])}, False
             now = time.time()
@@ -311,16 +316,25 @@ class Database:
             )
             for project_id in project_ids or []:
                 ready = self._conn.execute(
-                    "SELECT id FROM projects WHERE id = ? AND status = 'ready'", (project_id,),
+                    "SELECT id FROM projects WHERE id = ? AND status = 'ready'",
+                    (project_id,),
                 ).fetchone()
                 if not ready:
                     raise ValueError("Selected project is not ready")
                 self._conn.execute("INSERT INTO project_leases VALUES (?,?)", (project_id, message_id))
             if project_ids is not None:
-                self._conn.execute("UPDATE chats SET project_ids = ? WHERE id = ?", (json.dumps(project_ids), chat_id))
+                self._conn.execute(
+                    "UPDATE chats SET project_ids = ? WHERE id = ?", (json.dumps(project_ids), chat_id)
+                )
             self._conn.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (now, chat_id))
-            message = {"id": message_id, "chat_id": chat_id, "role": "user", "content": text,
-                       "meta": meta, "created_at": now}
+            message = {
+                "id": message_id,
+                "chat_id": chat_id,
+                "role": "user",
+                "content": text,
+                "meta": meta,
+                "created_at": now,
+            }
             self._conn.execute(
                 "INSERT INTO chat_turn_events (turn_id, payload) VALUES (?,?)",
                 (message_id, json.dumps({"type": "user_message", "message": message})),
@@ -360,8 +374,14 @@ class Database:
             now = time.time()
             # Keep the latest provider measurement through reloads and interrupted-turn recovery.
             meta = {**meta, "context": json.loads(turn["context"]) if turn["context"] else None}
-            message = {"id": uuid.uuid4().hex[:12], "chat_id": turn["chat_id"], "role": "assistant",
-                       "content": content, "meta": meta, "created_at": now}
+            message = {
+                "id": uuid.uuid4().hex[:12],
+                "chat_id": turn["chat_id"],
+                "role": "assistant",
+                "content": content,
+                "meta": meta,
+                "created_at": now,
+            }
             self._conn.execute(
                 "INSERT INTO messages (id, chat_id, role, content, meta, created_at) VALUES (?,?,?,?,?,?)",
                 (message["id"], turn["chat_id"], "assistant", content, json.dumps(meta), now),

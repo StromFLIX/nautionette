@@ -27,7 +27,9 @@ def test_listing_merges_schedules_and_local_settings(client, digest):
     client.post(
         "/api/workflows/url_digest/schedule",
         json={
-            "frequency": "daily", "at": "08:00", "timezone": "Europe/Berlin",
+            "frequency": "daily",
+            "at": "08:00",
+            "timezone": "Europe/Berlin",
             "input": {"url": "https://a"},
         },
     )

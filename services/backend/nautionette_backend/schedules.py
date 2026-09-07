@@ -35,9 +35,7 @@ _WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday"]
 class _ScheduleBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    timezone: str = Field(
-        description="IANA timezone used for local clock times, for example Europe/Berlin."
-    )
+    timezone: str = Field(description="IANA timezone used for local clock times, for example Europe/Berlin.")
     input: dict[str, Any] = Field(
         default_factory=dict, description="Workflow input saved with every scheduled run."
     )
@@ -55,9 +53,7 @@ class _ScheduleBase(BaseModel):
 
 class HourlySchedule(_ScheduleBase):
     frequency: Literal["hourly"]
-    minute: int = Field(
-        default=0, ge=0, le=59, description="Minute after each hour when the workflow runs."
-    )
+    minute: int = Field(default=0, ge=0, le=59, description="Minute after each hour when the workflow runs.")
 
 
 class DailySchedule(_ScheduleBase):
@@ -68,9 +64,7 @@ class DailySchedule(_ScheduleBase):
 class WeeklySchedule(_ScheduleBase):
     frequency: Literal["weekly"]
     at: time = Field(description="Local time of day in HH:MM format.")
-    days: list[Weekday] = Field(
-        min_length=1, description="Days of the week when the workflow runs."
-    )
+    days: list[Weekday] = Field(min_length=1, description="Days of the week when the workflow runs.")
 
 
 class MonthlySchedule(_ScheduleBase):
@@ -200,9 +194,7 @@ def schedule_definition(spec: Any) -> dict[str, Any]:
     return definition
 
 
-def schedule_summary(
-    spec: Any, *, paused: bool = False, next_action_times: Any = ()
-) -> dict[str, Any]:
+def schedule_summary(spec: Any, *, paused: bool = False, next_action_times: Any = ()) -> dict[str, Any]:
     result = schedule_definition(spec)
     next_runs = [value.isoformat() for value in list(next_action_times)[:5]]
     result.update(

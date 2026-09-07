@@ -99,7 +99,9 @@ async def schedule_workflow(name: str, payload: ScheduleRequest) -> dict[str, An
     if problems:
         raise HTTPException(status_code=400, detail={"workflow": name, "input": problems})
     result = await temporal.set_schedule(
-        name, temporal_spec(payload), payload.input,
+        name,
+        temporal_spec(payload),
+        payload.input,
         timeout_minutes=manifest.get("timeout_minutes", 30),
     )
     bus.publish(

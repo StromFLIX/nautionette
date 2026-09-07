@@ -100,9 +100,7 @@ async def publish(name: str) -> dict[str, Any]:
     draft = _found(store.read_draft, name)
     report = run_checks(name, draft["code"])
     if not report["valid"]:
-        raise HTTPException(
-            status_code=400, detail=f"draft does not validate: {'; '.join(report['errors'])}"
-        )
+        raise HTTPException(status_code=400, detail=f"draft does not validate: {'; '.join(report['errors'])}")
     result = store.publish_draft(name)
     result["validation"] = report
     return result

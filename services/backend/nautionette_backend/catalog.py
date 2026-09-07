@@ -53,9 +53,7 @@ async def model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
     """Models the gateway will serve, tagged with who owns them and who fronts them."""
     listed = await attempt(gateway.models(), [])
     instances = configured_instances(config)
-    discoveries = await asyncio.gather(
-        *(attempt(discover_models(instance), []) for instance in instances)
-    )
+    discoveries = await asyncio.gather(*(attempt(discover_models(instance), []) for instance in instances))
     merged: dict[str, dict[str, Any]] = {}
     for model in [*({"id": item["id"]} for item in listed), *(m for d in discoveries for m in d)]:
         merged.setdefault(model["id"], {}).update(model)
@@ -67,20 +65,14 @@ async def model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
         owner, separator, _ = model["id"].lstrip("~").partition("/")
         route = route_for_model(model["id"], config) or {}
         identifier = str(route.get("id") or "")
-        serving = (
-            identifier.removeprefix(RESOURCE_PREFIX)
-            if identifier.startswith(RESOURCE_PREFIX)
-            else ""
-        )
+        serving = identifier.removeprefix(RESOURCE_PREFIX) if identifier.startswith(RESOURCE_PREFIX) else ""
         out.append(
             {
                 "id": model["id"],
                 "name": model.get("name") or model["id"],
                 "provider": model.get("provider") or (owner if separator else "other"),
                 # Attribution follows the winning route, so the label matches where calls go.
-                "gateway": (
-                    instance_label(serving) if serving else str(route.get("provider") or "gateway")
-                ),
+                "gateway": (instance_label(serving) if serving else str(route.get("provider") or "gateway")),
                 "integration": serving or None,
                 "context_length": model.get("context_length"),
                 "alias": alias,

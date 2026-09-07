@@ -2,12 +2,14 @@
 
 ## Status / required access
 
-This is the deployment runbook, **not a record of a completed clone**. The supplied
-Coolify MCP can read resources and trigger existing applications, but cannot
-create/clone/edit applications, change environment values, or execute host volume
-backups. Setup requires a Coolify administrator plus host-level backup/restore
-access. The repository changes alone do not provision staging or copy any data.
-GitHub Actions deployment is off until `COOLIFY_DEPLOY_ENABLED=true` is configured.
+The initial independent production-data clone was completed and verified on
+2026-09-07 using temporary Coolify administrator access. See
+[`staging-setup-status.md`](staging-setup-status.md) for actual deployment IDs,
+verification results, and the remaining GitHub Actions configuration blocker.
+
+This remains the runbook for future explicit refreshes; do not rerun the copy on
+ordinary deployments. GitHub Actions deployment is off until its environment
+variables/secrets exist and `COOLIFY_DEPLOY_ENABLED=true` is configured.
 
 Known production resource:
 

@@ -43,11 +43,7 @@ async def frontend(path: str, request: Request) -> Response:
         )
     except httpx.HTTPError as exc:
         return PlainTextResponse(f"frontend unavailable: {exc}", status_code=502)
-    headers = {
-        key: value
-        for key, value in upstream.headers.items()
-        if key.lower() not in _EXCLUDED_HEADERS
-    }
+    headers = {key: value for key, value in upstream.headers.items() if key.lower() not in _EXCLUDED_HEADERS}
     return Response(
         content=upstream.content,
         status_code=upstream.status_code,

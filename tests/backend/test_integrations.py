@@ -181,9 +181,7 @@ def test_an_unknown_integration_is_a_404(client):
     ],
 )
 def test_an_endpoint_the_gateway_should_not_be_pointed_at_is_refused(client, base_url):
-    response = client.put(
-        "/api/model-integrations/custom", json={"slug": "lab", "base_url": base_url}
-    )
+    response = client.put("/api/model-integrations/custom", json={"slug": "lab", "base_url": base_url})
     assert response.status_code == 400
 
 

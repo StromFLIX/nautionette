@@ -51,9 +51,7 @@ def _await_image(tag: str) -> Iterator[str]:
             yield _ndjson({"type": "error", "message": f"the agent image failed to build: {reason}"})
             return
         if elapsed > IMAGE_BUILD_TIMEOUT:
-            yield _ndjson(
-                {"type": "error", "message": f"{tag} was still building after {int(elapsed)}s"}
-            )
+            yield _ndjson({"type": "error", "message": f"{tag} was still building after {int(elapsed)}s"})
             return
         yield _ndjson(
             {
@@ -68,9 +66,7 @@ def _await_image(tag: str) -> Iterator[str]:
 
 def _environment(job: dict[str, Any]) -> dict[str, str]:
     environment = dict(AGENT_ENVIRONMENT)
-    environment["AGENT_JOB"] = base64.b64encode(
-        json.dumps(job, default=str).encode("utf-8")
-    ).decode("ascii")
+    environment["AGENT_JOB"] = base64.b64encode(json.dumps(job, default=str).encode("utf-8")).decode("ascii")
     if job.get("project_ids"):
         environment["HOME"] = "/workspace"
         environment["PI_CODING_AGENT_DIR"] = "/workspace/.pi-agent"
@@ -82,9 +78,14 @@ def _environment(job: dict[str, Any]) -> dict[str, str]:
 
 
 def decide_internet(chat_id: str, turn_id: str, allowed: bool) -> bool:
-    containers = daemon.client().containers.list(filters={"label": [
-        f"nautionette.chat={chat_id}", f"nautionette.turn={turn_id}",
-    ]})
+    containers = daemon.client().containers.list(
+        filters={
+            "label": [
+                f"nautionette.chat={chat_id}",
+                f"nautionette.turn={turn_id}",
+            ]
+        }
+    )
     if not containers:
         return False
     for container in containers:
@@ -98,11 +99,15 @@ def decide_internet(chat_id: str, turn_id: str, allowed: bool) -> bool:
             network.disconnect(container)
         decision = "allowed" if allowed else "denied"
         try:
-            result = container.exec_run([
-                "node", "-e",
-                'require("node:fs").writeFileSync("/tmp/nautionette-internet-decision", '
-                + json.dumps(decision) + ')',
-            ])
+            result = container.exec_run(
+                [
+                    "node",
+                    "-e",
+                    'require("node:fs").writeFileSync("/tmp/nautionette-internet-decision", '
+                    + json.dumps(decision)
+                    + ")",
+                ]
+            )
             if result.exit_code != 0:
                 raise RuntimeError("Could not deliver the internet approval decision")
         except Exception:
@@ -148,9 +153,14 @@ def run(job: dict[str, Any]) -> Iterator[str]:
             network=AGENT_NETWORK if job.get("chat_id") else TARGET_NETWORK,
             volumes={WORKFLOWS_VOLUME: {"bind": "/workflows", "mode": "ro"}},
             mounts=project_mounts,
-                tmpfs=({"/workspace": "size=256m,exec,uid=10001,gid=10001",
-                    "/projects": "size=1m,uid=10001,gid=10001"} if project_ids
-                   else {"/workspace": "size=256m,exec"}),
+            tmpfs=(
+                {
+                    "/workspace": "size=256m,exec,uid=10001,gid=10001",
+                    "/projects": "size=1m,uid=10001,gid=10001",
+                }
+                if project_ids
+                else {"/workspace": "size=256m,exec"}
+            ),
             user="10001:10001" if project_ids else None,
             mem_limit=AGENT_MEMORY,
             pids_limit=512,
@@ -189,9 +199,7 @@ def run(job: dict[str, Any]) -> Iterator[str]:
         code = status.get("StatusCode", 0)
         if code != 0:
             stderr = container.logs(stdout=False, stderr=True).decode("utf-8", "replace")
-            yield _ndjson(
-                {"type": "error", "message": f"agent container exited {code}: {stderr[-800:]}"}
-            )
+            yield _ndjson({"type": "error", "message": f"agent container exited {code}: {stderr[-800:]}"})
     except Exception as exc:  # noqa: BLE001 - always tell the caller what happened
         daemon.log.exception("agent run failed")
         yield _ndjson({"type": "error", "message": str(exc)[:500]})

@@ -22,10 +22,11 @@ def test_chat_network_requires_explicit_grant(monkeypatch, allowed):
 
     docker = SimpleNamespace(
         containers=SimpleNamespace(create=create),
-        networks=SimpleNamespace(get=lambda name: SimpleNamespace(
-            attrs={"Internal": True},
-            connect=lambda target: calls.append("connect")
-        )),
+        networks=SimpleNamespace(
+            get=lambda name: SimpleNamespace(
+                attrs={"Internal": True}, connect=lambda target: calls.append("connect")
+            )
+        ),
     )
     monkeypatch.setattr(agent_run.daemon, "client", lambda: docker)
     monkeypatch.setattr(agent_run.images, "discovered_agent_sets", lambda: ["default"])
@@ -50,9 +51,9 @@ def test_decision_targets_only_the_requesting_turn(monkeypatch, allowed):
 
     docker = SimpleNamespace(
         containers=SimpleNamespace(list=list_containers),
-        networks=SimpleNamespace(get=lambda name: SimpleNamespace(
-            connect=lambda target: calls.append("connect")
-        )),
+        networks=SimpleNamespace(
+            get=lambda name: SimpleNamespace(connect=lambda target: calls.append("connect"))
+        ),
     )
     monkeypatch.setattr(agent_run.daemon, "client", lambda: docker)
     assert agent_run.decide_internet("chat-a", "turn-a", allowed)
@@ -68,9 +69,9 @@ def test_chat_container_has_no_service_credential():
 
 
 def test_misconfigured_chat_network_fails_closed(monkeypatch):
-    docker = SimpleNamespace(networks=SimpleNamespace(
-        get=lambda name: SimpleNamespace(attrs={"Internal": False})
-    ))
+    docker = SimpleNamespace(
+        networks=SimpleNamespace(get=lambda name: SimpleNamespace(attrs={"Internal": False}))
+    )
     monkeypatch.setattr(agent_run.daemon, "client", lambda: docker)
     monkeypatch.setattr(agent_run.images, "discovered_agent_sets", lambda: ["default"])
     monkeypatch.setattr(agent_run.images, "has_image", lambda tag: True)

@@ -68,10 +68,7 @@ def snapshot() -> dict[str, Any]:
         containers = [
             _state(container) for container in daemon.client().containers.list(all=True, filters=filters)
         ]
-        ready = sum(
-            item["status"] == "running" and item["health"] == "healthy"
-            for item in containers
-        )
+        ready = sum(item["status"] == "running" and item["health"] == "healthy" for item in containers)
         return {
             "status": "ready" if ready >= WORKER_REPLICAS and not last_error else "degraded",
             "desired": WORKER_REPLICAS,
@@ -81,8 +78,11 @@ def snapshot() -> dict[str, Any]:
         }
     except Exception as exc:
         return {
-            "status": "degraded", "desired": WORKER_REPLICAS, "ready": 0,
-            "containers": [], "error": str(exc)[:500],
+            "status": "degraded",
+            "desired": WORKER_REPLICAS,
+            "ready": 0,
+            "containers": [],
+            "error": str(exc)[:500],
         }
 
 
@@ -132,7 +132,8 @@ def reconcile() -> None:
                         ARTIFACTS_VOLUME or f"{project}_artifacts": {"bind": "/artifacts", "mode": "rw"},
                     },
                     labels={
-                        label: value, "com.docker.compose.project": project,
+                        label: value,
+                        "com.docker.compose.project": project,
                         "com.docker.compose.container-number": str(number - 1),
                     },
                     restart_policy={"Name": "unless-stopped"},

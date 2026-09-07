@@ -37,7 +37,8 @@ def test_workflow_agents_use_runtime_defaults(client, internal_headers, broker, 
 
     db.set_setting("default_model", "openai/new-model")
     client.post(
-        "/internal/agent/call", headers=internal_headers,
+        "/internal/agent/call",
+        headers=internal_headers,
         json={"prompt": "hi", "agent_set": "explicit"},
     )
     assert broker.jobs[-1]["model"] == "openai/new-model"

@@ -86,8 +86,7 @@ async def ensure_defaults() -> None:
             legacy = [
                 resource["id"]
                 for resource in models
-                if isinstance(resource.get("id"), str)
-                and resource["id"].startswith(LEGACY_COPILOT_PREFIX)
+                if isinstance(resource.get("id"), str) and resource["id"].startswith(LEGACY_COPILOT_PREFIX)
             ]
             if legacy:
                 await write("copilot", "copilot", {}, models, routes)

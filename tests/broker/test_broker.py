@@ -51,9 +51,7 @@ class FakeDocker:
                     from docker.errors import ImageNotFound
 
                     raise ImageNotFound(tag)
-                return SimpleNamespace(
-                    tag=lambda repository, alias: broker.tags.add(f"{repository}:{alias}")
-                )
+                return SimpleNamespace(tag=lambda repository, alias: broker.tags.add(f"{repository}:{alias}"))
 
             def build(self, path, tag, **_kwargs):
                 broker.built.append((path, tag))
@@ -96,9 +94,7 @@ def docker(monkeypatch: pytest.MonkeyPatch) -> FakeDocker:
     monkeypatch.setattr(workers, "PROJECT_OVERRIDE", "")
     monkeypatch.setattr(workers, "WORKER_REPLICAS", 1)
     monkeypatch.setattr(daemon, "client", lambda: fake)
-    monkeypatch.setattr(
-        images, "image_state", {"status": "pending", "images": {}, "log": [], "error": None}
-    )
+    monkeypatch.setattr(images, "image_state", {"status": "pending", "images": {}, "log": [], "error": None})
     return fake
 
 
@@ -254,10 +250,15 @@ def test_an_agent_set_nobody_declared_is_refused(client, agent_images):
 def test_projects_require_an_api_that_enforces_volume_subpaths(client, agent_images, docker, monkeypatch):
     images.ensure_images()
     monkeypatch.setattr(docker, "api", SimpleNamespace(_version="1.44"), raising=False)
-    response = client.post("/agent/run", headers=HEADERS,
-                           json={"agent_set": "default", "chat_id": "c" * 12, "project_ids": ["a" * 32]})
-    assert any(event.get("message") == "Project isolation requires Docker Engine 26+ with API 1.45+"
-               for event in frames(response))
+    response = client.post(
+        "/agent/run",
+        headers=HEADERS,
+        json={"agent_set": "default", "chat_id": "c" * 12, "project_ids": ["a" * 32]},
+    )
+    assert any(
+        event.get("message") == "Project isolation requires Docker Engine 26+ with API 1.45+"
+        for event in frames(response)
+    )
 
 
 @pytest.mark.parametrize("exit_code", [0, 1])
@@ -269,12 +270,11 @@ def test_agent_creation_uses_valid_sdk_arguments_and_streams_logs(
     container.logs.side_effect = [iter([b'{"type":"text","text":"hello"}\n'])]
     if exit_code:
         container.logs.side_effect = [
-            iter([b'{"type":"text","text":"hello"}\n']), b"agent failed",
+            iter([b'{"type":"text","text":"hello"}\n']),
+            b"agent failed",
         ]
     container.wait.return_value = {"StatusCode": exit_code}
-    api = SimpleNamespace(
-        _version="1.45", create_container=Mock(return_value={"Id": "test-agent"})
-    )
+    api = SimpleNamespace(_version="1.45", create_container=Mock(return_value={"Id": "test-agent"}))
     containers = ContainerCollection(client=SimpleNamespace(api=api))
     monkeypatch.setattr(containers, "get", Mock(return_value=container))
     monkeypatch.setattr(docker, "containers", containers)
@@ -286,7 +286,8 @@ def test_agent_creation_uses_valid_sdk_arguments_and_streams_logs(
     assert events[1] == {"type": "text", "text": "hello"}
     if exit_code:
         assert events[2] == {
-            "type": "error", "message": "agent container exited 1: agent failed",
+            "type": "error",
+            "message": "agent container exited 1: agent failed",
         }
         container.logs.assert_any_call(stdout=False, stderr=True)
     else:
@@ -310,9 +311,7 @@ def test_an_image_that_vanished_is_built_while_the_caller_is_told_what_is_happen
     assert images.image_tag("default") in [tag for _path, tag in docker.built]
 
 
-def test_a_build_that_will_never_finish_says_so_instead_of_hanging(
-    client, agent_images, docker, monkeypatch
-):
+def test_a_build_that_will_never_finish_says_so_instead_of_hanging(client, agent_images, docker, monkeypatch):
     monkeypatch.setattr(agent_run, "BUILD_POLL_SECONDS", 0.01)
     monkeypatch.setattr(images, "start_build", lambda force=False: False)
     images.image_state["status"] = "failed"
@@ -337,9 +336,7 @@ def test_a_restart_is_scoped_to_this_broker_own_stack(client, docker):
     docker.listed = [FakeContainer("nautionette-worker-1")]
     result = client.post("/worker/restart", headers=HEADERS).json()
     assert result["restarted"] == ["nautionette-worker-1"]
-    assert docker.last_filters == {
-        "label": [config.WORKER_LABEL, "com.docker.compose.project=nautionette"]
-    }
+    assert docker.last_filters == {"label": [config.WORKER_LABEL, "com.docker.compose.project=nautionette"]}
 
 
 def test_a_restart_lets_in_flight_activities_drain(client, docker):
@@ -358,9 +355,7 @@ def test_nothing_to_restart_is_reported_not_an_error(client, docker):
 def test_an_override_lets_a_broker_that_cannot_read_its_own_label_still_work(docker, monkeypatch):
     docker.up = False
     monkeypatch.setattr(workers, "PROJECT_OVERRIDE", "explicit")
-    assert workers.worker_filters() == {
-        "label": [config.WORKER_LABEL, "com.docker.compose.project=explicit"]
-    }
+    assert workers.worker_filters() == {"label": [config.WORKER_LABEL, "com.docker.compose.project=explicit"]}
 
 
 def test_missing_workers_are_recreated_once_with_the_shared_workflows(docker, monkeypatch):

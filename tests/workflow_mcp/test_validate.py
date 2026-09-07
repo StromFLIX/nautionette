@@ -64,8 +64,10 @@ def test_the_name_in_the_manifest_has_to_be_the_name_on_the_file():
 
 
 def test_a_file_with_no_workflow_class_is_not_a_workflow():
-    code = 'MANIFEST = {"schema": 1, "name": "empty_flow", "inputs": {"type": "object"},' \
+    code = (
+        'MANIFEST = {"schema": 1, "name": "empty_flow", "inputs": {"type": "object"},'
         ' "outputs": {"type": "object"}}\n'
+    )
     report = run_checks("empty_flow", code)
     assert report["valid"] is False
     assert steps(report)["workflow_class"] is False
@@ -79,7 +81,7 @@ def test_a_declared_dependency_that_is_not_a_package_is_refused():
 
 
 def test_a_workflow_that_does_nothing_says_so():
-    code = '''MANIFEST = {
+    code = """MANIFEST = {
     "schema": 1,
     "name": "idle_flow",
     "inputs": {"type": "object"},
@@ -94,7 +96,7 @@ class IdleFlow:
     @workflow.run
     async def run(self, params: dict) -> dict:
         return {}
-'''
+"""
     report = run_checks("idle_flow", code)
     assert "workflow calls no activities; it will do nothing on its own" in report["warnings"]
 

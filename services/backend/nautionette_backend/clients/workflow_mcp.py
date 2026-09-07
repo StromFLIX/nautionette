@@ -18,9 +18,7 @@ class AuthoringClient:
         )
         if response.status_code >= 400:
             detail = response.text[:500]
-            raise RuntimeError(
-                f"workflow-mcp {method} {path} failed ({response.status_code}): {detail}"
-            )
+            raise RuntimeError(f"workflow-mcp {method} {path} failed ({response.status_code}): {detail}")
         return response.json()
 
     async def health(self) -> dict[str, Any]:
@@ -44,7 +42,9 @@ class AuthoringClient:
     async def deploy(self, name: str, code: str) -> dict[str, Any]:
         response = await shared().post(
             f"{self.base_url}/api/workflows/{name}/deploy",
-            headers=internal_headers(), json={"code": code}, timeout=180,
+            headers=internal_headers(),
+            json={"code": code},
+            timeout=180,
         )
         response.raise_for_status()
         return response.json()

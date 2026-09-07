@@ -42,7 +42,7 @@ def test_a_second_draft_diffs_against_what_is_live(workflows):
     store.publish_draft("url_digest")
     draft = store.write_draft("url_digest", GOOD_WORKFLOW.replace("[:200]", "[:400]"))
     assert draft["is_new"] is False
-    assert "-        return {\"summary\": page[\"body\"][:200]}" in draft["diff"]
+    assert '-        return {"summary": page["body"][:200]}' in draft["diff"]
 
 
 def test_discarding_a_draft_leaves_the_live_file_alone(workflows):

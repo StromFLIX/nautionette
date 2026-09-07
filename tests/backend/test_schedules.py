@@ -22,9 +22,7 @@ def test_daily_schedule_keeps_its_local_time_and_timezone():
             }
         )
     )
-    summary = schedule_summary(
-        spec, next_action_times=[datetime(2026, 9, 8, 5, 30, tzinfo=UTC)]
-    )
+    summary = schedule_summary(spec, next_action_times=[datetime(2026, 9, 8, 5, 30, tzinfo=UTC)])
 
     assert summary == {
         "frequency": "daily",

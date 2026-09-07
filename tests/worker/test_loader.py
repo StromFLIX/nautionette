@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from nautionette_worker.loader import install_dependencies, load_workflows
 
-WORKFLOW = '''from temporalio import workflow
+WORKFLOW = """from temporalio import workflow
 
 MANIFEST = {{"schema": 1, "name": "{name}"}}
 
@@ -14,7 +14,7 @@ class {cls}:
     @workflow.run
     async def run(self, params: dict) -> dict:
         return {{}}
-'''
+"""
 
 
 def write(directory, name, cls, body=None):
@@ -64,7 +64,7 @@ def test_a_missing_directory_is_created_rather_than_fatal(tmp_path):
 
 
 def test_a_declared_dependency_that_is_already_present_installs_nothing(tmp_path):
-    write(tmp_path, "url_digest", "UrlDigest", body="# /// script\n# dependencies = [\"httpx\"]\n# ///\n")
+    write(tmp_path, "url_digest", "UrlDigest", body='# /// script\n# dependencies = ["httpx"]\n# ///\n')
     assert install_dependencies(str(tmp_path)) == (False, {})
 
 

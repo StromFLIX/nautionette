@@ -34,9 +34,7 @@ def main() -> int:
     ok = True
     with httpx.Client(base_url=BASE, headers=headers, timeout=40) as client:
         for name, definition in CASES:
-            response = client.post(
-                f"/api/workflows/{name}/schedule", json={**definition, "input": {}}
-            )
+            response = client.post(f"/api/workflows/{name}/schedule", json={**definition, "input": {}})
             response.raise_for_status()
             print("sent    ", name, "->", response.json().get("description"))
 

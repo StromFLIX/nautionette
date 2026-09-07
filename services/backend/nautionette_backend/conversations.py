@@ -70,7 +70,10 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
 
 
 def recover_interrupted() -> None:
-    db.execute("UPDATE projects SET status = 'failed', error = 'Download interrupted; retry' WHERE status = 'cloning'")
+    db.execute(
+        "UPDATE projects SET status = 'failed', error = 'Download interrupted; retry' "
+        "WHERE status = 'cloning'"
+    )
     db.execute(
         "UPDATE chats SET internet_status = 'blocked', internet_reason = '', internet_turn_id = '' "
         "WHERE internet_status IN ('pending', 'deciding')"

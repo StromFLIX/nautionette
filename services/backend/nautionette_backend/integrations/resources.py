@@ -59,9 +59,7 @@ def existing_credential(instance: str, models: list[dict[str, Any]]) -> str:
     return str((resource.get("value", {}).get("params") or {}).get("apiKey") or "")
 
 
-def model_value(
-    spec: dict[str, Any], instance: str, config: dict[str, str], key: str = ""
-) -> dict[str, Any]:
+def model_value(spec: dict[str, Any], instance: str, config: dict[str, str], key: str = "") -> dict[str, Any]:
     context = integration_context(spec, config)
     prefix = integration_prefix(spec, context)
     value: dict[str, Any] = {
@@ -109,9 +107,7 @@ def discovery_value(
     return {
         "name": discovery_resource_id(instance),
         "gateways": ["default"],
-        "matches": [
-            {"path": {"exact": f"/_nautionette/integrations/{instance}/models"}, "method": "GET"}
-        ],
+        "matches": [{"path": {"exact": f"/_nautionette/integrations/{instance}/models"}, "method": "GET"}],
         "policies": policies,
         "backends": [backend],
     }

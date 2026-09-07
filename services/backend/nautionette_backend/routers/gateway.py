@@ -27,9 +27,7 @@ async def get_model_integrations() -> dict[str, Any]:
 
 
 @router.put("/api/model-integrations/{target}")
-async def put_model_integration(
-    target: str, payload: dict[str, Any] = Body(default={})
-) -> dict[str, Any]:
+async def put_model_integration(target: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     """`target` is a type when adding, or an existing instance when reconfiguring."""
     spec = integration_spec(integration_type(target) or target)
     config = normalise(integration_fields(spec), payload)

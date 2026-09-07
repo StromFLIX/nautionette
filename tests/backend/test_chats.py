@@ -12,11 +12,7 @@ from ..conftest import APP_TOKEN
 
 
 def sse_events(response) -> list[dict]:
-    return [
-        json.loads(line[5:].strip())
-        for line in response.text.splitlines()
-        if line.startswith("data:")
-    ]
+    return [json.loads(line[5:].strip()) for line in response.text.splitlines() if line.startswith("data:")]
 
 
 def send(client, chat_id, text):
@@ -78,9 +74,7 @@ def test_a_message_is_answered_and_both_halves_are_kept(client):
 def test_the_first_message_names_an_unnamed_chat(client):
     chat = client.post("/api/chats", json={}).json()
     send(client, chat["id"], "Summarise the release notes\nand nothing else")
-    assert client.get(f"/api/chats/{chat['id']}").json()["chat"]["title"] == (
-        "Summarise the release notes"
-    )
+    assert client.get(f"/api/chats/{chat['id']}").json()["chat"]["title"] == ("Summarise the release notes")
 
 
 def test_a_named_chat_keeps_its_name(client):
@@ -204,7 +198,8 @@ async def test_separate_conversations_run_concurrently(backend, monkeypatch):
     monkeypatch.setattr(conversations, "stream_agent", agent)
     try:
         async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=main.app), base_url="http://test",
+            transport=httpx.ASGITransport(app=main.app),
+            base_url="http://test",
             headers={"Authorization": f"Bearer {APP_TOKEN}", "Accept": "application/json"},
         ) as client:
             chat_ids = []
@@ -239,9 +234,9 @@ def test_restart_preserves_partial_output_without_repeating_tools(client, db, br
     assert snapshot["messages"][-1]["content"] == "Partial"
     assert "restart" in snapshot["messages"][-1]["meta"]["error"]
     assert broker.jobs == []
-    events = sse_events(client.post(
-        f"/api/chats/{chat_id}/messages", json={"text": "hello", "message_id": "interrupted-1"}
-    ))
+    events = sse_events(
+        client.post(f"/api/chats/{chat_id}/messages", json={"text": "hello", "message_id": "interrupted-1"})
+    )
     assert events[-1]["message"]["content"] == "Partial"
     assert broker.jobs == []
 

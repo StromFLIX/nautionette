@@ -54,9 +54,7 @@ def discovered_agent_sets() -> list[str]:
     if not os.path.isdir(sets_dir):
         return []
     return sorted(
-        name
-        for name in os.listdir(sets_dir)
-        if os.path.isfile(os.path.join(sets_dir, name, "Dockerfile"))
+        name for name in os.listdir(sets_dir) if os.path.isfile(os.path.join(sets_dir, name, "Dockerfile"))
     )
 
 

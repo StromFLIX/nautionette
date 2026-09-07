@@ -76,7 +76,7 @@ def test_code_is_recovered_from_prose(text, expected):
 def test_the_scaffold_is_a_file_python_can_parse():
     code = agent.scaffold("daily_digest", "Daily digest", "summarise the news", "USER: hi")
     ast.parse(code)
-    assert 'MANIFEST' in code
+    assert "MANIFEST" in code
     assert '@workflow.defn(name="daily_digest")' in code
     assert "class DailyDigest:" in code
 

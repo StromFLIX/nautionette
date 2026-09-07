@@ -52,9 +52,7 @@ async def test_schedule_tool_exposes_and_accepts_a_human_recurrence(backend):
         "WeeklySchedule",
         "MonthlySchedule",
     }
-    assert set(body["discriminator"]["mapping"].values()) == {
-        f"#/$defs/{name}" for name in alternatives
-    }
+    assert set(body["discriminator"]["mapping"].values()) == {f"#/$defs/{name}" for name in alternatives}
     daily = tool.input_schema["$defs"]["DailySchedule"]
     assert {"frequency", "at", "timezone"} <= set(daily["required"])
     assert "cron" not in daily["properties"]

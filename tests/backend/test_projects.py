@@ -126,7 +126,9 @@ def test_chat_job_contains_only_selected_projects_and_retry_is_stable(client, db
     assert client.patch(f"/api/chats/{created['id']}", json={"project_ids": []}).status_code == 200
     assert client.post(endpoint, json={"text": "edit", "message_id": "turn"}).status_code == 200
     assert client.get(f"/api/chats/{created['id']}").json()["chat"]["project_ids"] == []
-    assert client.post(endpoint, json={"text": "without projects", "message_id": "cleared"}).status_code == 200
+    assert (
+        client.post(endpoint, json={"text": "without projects", "message_id": "cleared"}).status_code == 200
+    )
     assert broker.jobs[-1]["project_ids"] == []
     assert (
         client.post(endpoint, json={"text": "edit", "message_id": "turn", "project_ids": []}).status_code

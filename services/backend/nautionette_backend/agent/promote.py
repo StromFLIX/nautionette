@@ -118,9 +118,7 @@ async def promote_chat(chat: dict[str, Any], messages: list[dict[str, Any]]) -> 
     """Read a transcript, validate the workflow, and deploy it without an approval gate."""
     from ..deployment import deploy
 
-    transcript = "\n\n".join(
-        f"{m['role'].upper()}: {m['content']}" for m in messages if m.get("content")
-    )
+    transcript = "\n\n".join(f"{m['role'].upper()}: {m['content']}" for m in messages if m.get("content"))
     title = chat.get("title") or "Promoted chat"
     name = slugify(title)
 

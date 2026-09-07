@@ -60,9 +60,7 @@ def test_committed_workflows_are_seeded_once(tmp_path, monkeypatch):
 def test_anything_else_is_handed_to_the_frontend(client, monkeypatch):
     async def serve(self, method, url, **kwargs):
         assert url == "http://frontend.test:80/assets/app.js"
-        return httpx.Response(
-            200, text="console.log(1)", headers={"content-type": "application/javascript"}
-        )
+        return httpx.Response(200, text="console.log(1)", headers={"content-type": "application/javascript"})
 
     monkeypatch.setattr(httpx.AsyncClient, "request", serve)
     response = client.get("/assets/app.js")

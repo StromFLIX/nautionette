@@ -135,10 +135,12 @@ class TemporalGateway:
                 {
                     "activity_id": activity.activity_id,
                     "state": PendingActivityState.Name(activity.state)
-                    .removeprefix("PENDING_ACTIVITY_STATE_").lower(),
+                    .removeprefix("PENDING_ACTIVITY_STATE_")
+                    .lower(),
                     "attempt": activity.attempt,
                     "started_at": activity.last_started_time.ToJsonString()
-                    if activity.HasField("last_started_time") else None,
+                    if activity.HasField("last_started_time")
+                    else None,
                     "error": _failure(activity.last_failure) if activity.HasField("last_failure") else None,
                 }
                 for activity in info.raw_description.pending_activities
@@ -226,9 +228,17 @@ class TemporalGateway:
                 "at": event.event_time.ToJsonString(),
                 "event": label,
             }
-            for key in ("scheduled_event_id", "initiated_event_id", "started_event_id",
-                        "workflow_task_completed_event_id", "activity_id", "timer_id", "attempt",
-                        "signal_name", "new_execution_run_id"):
+            for key in (
+                "scheduled_event_id",
+                "initiated_event_id",
+                "started_event_id",
+                "workflow_task_completed_event_id",
+                "activity_id",
+                "timer_id",
+                "attempt",
+                "signal_name",
+                "new_execution_run_id",
+            ):
                 if value := getattr(body, key, None):
                     entry[key] = value
             if workflow_type := getattr(body, "workflow_type", None):
@@ -276,7 +286,11 @@ class TemporalGateway:
         return f"schedule-{workflow}"
 
     async def set_schedule(
-        self, workflow: str, spec: ScheduleSpec, payload: dict[str, Any], paused: bool = False,
+        self,
+        workflow: str,
+        spec: ScheduleSpec,
+        payload: dict[str, Any],
+        paused: bool = False,
         timeout_minutes: int = 30,
     ) -> dict[str, Any]:
         client = await self.client()

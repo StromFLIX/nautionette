@@ -59,12 +59,21 @@ async def discover_scheduled_runs() -> None:
                 payload = await temporal.execution_input(workflow_id, execution["run_id"])
                 # Another discovery may have inserted it while decoding history.
                 row = db.record_run(
-                    name, workflow_id, execution["run_id"], "schedule", payload,
+                    name,
+                    workflow_id,
+                    execution["run_id"],
+                    "schedule",
+                    payload,
                     created_at=execution["start_time"],
                 )
-                bus.publish("run.started", {
-                    "workflow": name, "workflow_id": workflow_id, "trigger": "schedule",
-                })
+                bus.publish(
+                    "run.started",
+                    {
+                        "workflow": name,
+                        "workflow_id": workflow_id,
+                        "trigger": "schedule",
+                    },
+                )
             if row["status"] == "running":
                 follow(row["workflow"], workflow_id)
         except Exception:  # noqa: BLE001 - retry this run next pass; do not block the others

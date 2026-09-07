@@ -35,13 +35,17 @@ async def test_real_schedule_is_discovered_and_delivered(backend, monkeypatch):
         monkeypatch.setattr(runs, "POLL_FLOOR_SECONDS", 0.05)
         monkeypatch.setattr(runs, "POLL_CEILING_SECONDS", 0.05)
         async with Worker(
-            env.client, task_queue=settings.temporal_task_queue,
-            workflows=[ScheduleProbe], workflow_runner=UnsandboxedWorkflowRunner(),
+            env.client,
+            task_queue=settings.temporal_task_queue,
+            workflows=[ScheduleProbe],
+            workflow_runner=UnsandboxedWorkflowRunner(),
         ):
             payload = {"text": "x" * 5000}
             await gateway.set_schedule(
-                "schedule_probe", ScheduleSpec(intervals=[ScheduleIntervalSpec(every=timedelta(seconds=1))]),
-                payload, timeout_minutes=2,
+                "schedule_probe",
+                ScheduleSpec(intervals=[ScheduleIntervalSpec(every=timedelta(seconds=1))]),
+                payload,
+                timeout_minutes=2,
             )
             handle = env.client.get_schedule_handle("schedule-schedule_probe")
             try:

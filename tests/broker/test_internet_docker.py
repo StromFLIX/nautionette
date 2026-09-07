@@ -28,9 +28,16 @@ def test_live_chat_egress_requires_approval(monkeypatch):
         def serve(network, labels=None):
             container = client.containers.run(
                 image,
-                command=["node", "-e", 'require("http").createServer((request, response) => '
-                         'response.end("ok")).listen(8080, "0.0.0.0", () => console.log("ready"))'],
-                detach=True, network=network.name, labels=labels or {}, cap_drop=["ALL"],
+                command=[
+                    "node",
+                    "-e",
+                    'require("http").createServer((request, response) => '
+                    'response.end("ok")).listen(8080, "0.0.0.0", () => console.log("ready"))',
+                ],
+                detach=True,
+                network=network.name,
+                labels=labels or {},
+                cap_drop=["ALL"],
             )
             cleanup.callback(container.remove, force=True)
             logs = container.logs(stream=True)
@@ -48,24 +55,36 @@ def test_live_chat_egress_requires_approval(monkeypatch):
         gateway_ip = denied.attrs["NetworkSettings"]["Networks"][isolated.name]["IPAddress"]
 
         def can_fetch(container, address):
-            result = container.exec_run([
-                "node", "-e", f'fetch("http://{address}:8080", {{signal: AbortSignal.timeout(1500)}})'
-                '.then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))',
-            ])
+            result = container.exec_run(
+                [
+                    "node",
+                    "-e",
+                    f'fetch("http://{address}:8080", {{signal: AbortSignal.timeout(1500)}})'
+                    ".then(response => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))",
+                ]
+            )
             return result.exit_code == 0
 
         assert can_fetch(approved, gateway_ip)
         assert not can_fetch(approved, upstream_ip)
         assert not can_fetch(denied, upstream_ip)
-        approved.exec_run([
-            "node", "-e", 'require("fs").mkdirSync("/tmp/nautionette-internet-decision")',
-        ])
+        approved.exec_run(
+            [
+                "node",
+                "-e",
+                'require("fs").mkdirSync("/tmp/nautionette-internet-decision")',
+            ]
+        )
         with pytest.raises(RuntimeError, match="Could not deliver"):
             agent_run.decide_internet(prefix, "approved", True)
         assert not can_fetch(approved, upstream_ip)
-        approved.exec_run([
-            "node", "-e", 'require("fs").rmdirSync("/tmp/nautionette-internet-decision")',
-        ])
+        approved.exec_run(
+            [
+                "node",
+                "-e",
+                'require("fs").rmdirSync("/tmp/nautionette-internet-decision")',
+            ]
+        )
         assert agent_run.decide_internet(prefix, "approved", True)
         assert can_fetch(approved, upstream_ip)
         assert can_fetch(approved, gateway_ip)
@@ -73,8 +92,11 @@ def test_live_chat_egress_requires_approval(monkeypatch):
         assert not can_fetch(denied, upstream_ip)
         assert agent_run.decide_internet(prefix, "approved", True)
         for container, expected in [(approved, b"allowed"), (denied, b"denied")]:
-            result = container.exec_run([
-                "node", "-e", 'process.stdout.write(require("fs").readFileSync('
-                '"/tmp/nautionette-internet-decision"))',
-            ])
+            result = container.exec_run(
+                [
+                    "node",
+                    "-e",
+                    'process.stdout.write(require("fs").readFileSync("/tmp/nautionette-internet-decision"))',
+                ]
+            )
             assert result.output == expected

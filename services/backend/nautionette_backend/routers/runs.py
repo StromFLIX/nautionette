@@ -72,9 +72,7 @@ async def cancel_run(workflow_id: str) -> dict[str, Any]:
 
 
 @router.post("/api/runs/{workflow_id}/terminate", dependencies=[Depends(require_user)])
-async def terminate_run(
-    workflow_id: str, payload: dict[str, Any] = Body(default={})
-) -> dict[str, Any]:
+async def terminate_run(workflow_id: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     """For a run that cannot be asked nicely, because its worker cannot load it."""
     await temporal.terminate(workflow_id, payload.get("reason") or "terminated from the app")
     db.update_run(workflow_id, "terminated")
@@ -83,9 +81,7 @@ async def terminate_run(
 
 
 @router.post("/api/triggers/{name}")
-async def trigger(
-    name: str, request: Request, token: str | None = Query(default=None)
-) -> dict[str, Any]:
+async def trigger(name: str, request: Request, token: str | None = Query(default=None)) -> dict[str, Any]:
     """Triggers come in here and nowhere else."""
     if settings.auth_enabled:
         header = request.headers.get("authorization", "")

@@ -107,7 +107,9 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     if not isinstance(message_id, str) or len(message_id) > 128:
         raise HTTPException(status_code=400, detail="message_id must be a string of at most 128 characters")
     existing = db.one("SELECT meta FROM messages WHERE id = ?", (message_id,))
-    default_selection = json.loads(existing["meta"]).get("project_ids", []) if existing else chat["project_ids"]
+    default_selection = (
+        json.loads(existing["meta"]).get("project_ids", []) if existing else chat["project_ids"]
+    )
     project_ids = payload.get("project_ids", default_selection)
     if not existing:
         project_ids = projects.selection(project_ids)
@@ -137,11 +139,18 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
         project_ids=project_ids,
     )
     if created and project_ids:
-        selected_projects = [db.one("SELECT * FROM projects WHERE id = ?", (project_id,)) for project_id in project_ids]
+        selected_projects = [
+            db.one("SELECT * FROM projects WHERE id = ?", (project_id,)) for project_id in project_ids
+        ]
         job["system_prompt"] += (
             "\nSelected writable per-chat Git worktrees (all other projects are unavailable):\n"
-            + "\n".join(f"- {project['full_name']}: /projects/{project['id']}" for project in selected_projects if project)
-            + "\nThese persistent worktrees belong to this chat and start with detached HEAD, without creating branches. "
+            + "\n".join(
+                f"- {project['full_name']}: /projects/{project['id']}"
+                for project in selected_projects
+                if project
+            )
+            + "\nThese persistent worktrees belong to this chat and start with detached HEAD, "
+            "without creating branches. "
             "Other chats have separate working files and HEADs. Preserve uncommitted work and local commits; "
             "never reset or overwrite them by default. Stay detached unless the user asks for a branch. "
             "Worktrees start from the local clone. Request internet access before contacting GitHub, "
@@ -212,7 +221,8 @@ async def decide_chat_internet(chat_id: str, payload: dict[str, Any] = Body(...)
             "UPDATE chats SET internet_status = CASE WHEN EXISTS "
             "(SELECT 1 FROM chat_turns WHERE id = ? AND state = 'running') "
             "THEN 'pending' ELSE 'blocked' END WHERE id = ? "
-            "AND internet_turn_id = ? AND internet_status = 'deciding'", (turn_id, chat_id, turn_id),
+            "AND internet_turn_id = ? AND internet_status = 'deciding'",
+            (turn_id, chat_id, turn_id),
         )
         raise HTTPException(status_code=502, detail="Could not deliver the decision; retry shortly") from exc
     db.execute(

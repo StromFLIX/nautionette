@@ -19,8 +19,7 @@ STALE_SECONDS = 30
 
 def sources(directory: str) -> dict[str, str]:
     return {
-        file.name: hashlib.sha256(file.read_bytes()).hexdigest()
-        for file in _workflow_files(Path(directory))
+        file.name: hashlib.sha256(file.read_bytes()).hexdigest() for file in _workflow_files(Path(directory))
     }
 
 

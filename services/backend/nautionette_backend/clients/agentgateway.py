@@ -108,9 +108,7 @@ class GatewayClient:
         response.raise_for_status()
         return response.json().get("resources", [])
 
-    async def put_config_resources(
-        self, kind: str, values: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    async def put_config_resources(self, kind: str, values: list[dict[str, Any]]) -> list[dict[str, Any]]:
         response = await shared().put(
             f"{self.base_url}/api/config/resources/{kind}",
             json={"resources": [{"value": value} for value in values]},
@@ -121,9 +119,7 @@ class GatewayClient:
 
     async def delete_config_resource(self, kind: str, resource_id: str) -> None:
         encoded = quote(resource_id, safe="")
-        response = await shared().delete(
-            f"{self.base_url}/api/config/resources/{kind}/{encoded}", timeout=20
-        )
+        response = await shared().delete(f"{self.base_url}/api/config/resources/{kind}/{encoded}", timeout=20)
         response.raise_for_status()
 
     async def integration_models(self, instance: str) -> dict[str, Any]:
@@ -210,9 +206,7 @@ class GatewayClient:
         session = handshake.headers.get("mcp-session-id")
         if session:
             headers["Mcp-Session-Id"] = session
-        await client.post(
-            url, headers=headers, timeout=15, json=_rpc(None, "notifications/initialized")
-        )
+        await client.post(url, headers=headers, timeout=15, json=_rpc(None, "notifications/initialized"))
         listing = await client.post(url, headers=headers, timeout=15, json=_rpc(2, "tools/list"))
         listing.raise_for_status()
         body = _rpc_result(listing)

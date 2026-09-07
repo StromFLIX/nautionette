@@ -61,11 +61,7 @@ async def discover_models(instance: str) -> list[dict[str, Any]]:
         vendor = _pluck(item, mapping["vendor"]) if mapping.get("vendor") else None
         label = _pluck(item, mapping["name"]) if mapping.get("name") else None
         window = next(
-            (
-                value
-                for path in mapping.get("context", [])
-                if isinstance(value := _pluck(item, path), int)
-            ),
+            (value for path in mapping.get("context", []) if isinstance(value := _pluck(item, path), int)),
             None,
         )
         owner, separator, _ = identifier.partition("/")

@@ -117,9 +117,7 @@ async def test_a_failed_agent_step_fails_the_activity_so_temporal_retries(env, h
 async def test_prose_where_an_object_was_declared_is_a_failure(env, http):
     http[BACKEND] = json_body({"ok": True, "text": "some prose", "output": None})
     with pytest.raises(RuntimeError, match="structured object was declared"):
-        await env.run(
-            activities.agent_call, {"prompt": "summarise", "output_schema": {"type": "object"}}
-        )
+        await env.run(activities.agent_call, {"prompt": "summarise", "output_schema": {"type": "object"}})
 
 
 # ------------------------------------------------------------------- mcp_call
@@ -149,9 +147,7 @@ async def test_a_tool_answer_is_returned_as_text_and_as_json(http):
 
 
 async def test_a_one_frame_sse_answer_reads_the_same(http):
-    http["http://agentgateway:4000"] = mcp_route(
-        {"content": [{"type": "text", "text": "plain"}]}, sse=True
-    )
+    http["http://agentgateway:4000"] = mcp_route({"content": [{"type": "text", "text": "plain"}]}, sse=True)
     assert await activities.mcp_call({"tool": "search"}) == {"ok": True, "text": "plain", "json": None}
 
 
