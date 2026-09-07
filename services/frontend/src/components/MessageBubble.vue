@@ -15,12 +15,27 @@
       </div>
       <div v-if="error" class="bubble__error caption">{{ error }}</div>
     </div>
-    <span v-if="time" class="msg__time caption">{{ time }}</span>
+    <span v-if="time || deliveryState" class="msg__time caption">
+      {{ time }}
+      <span v-if="deliveryState === 'sending'" class="msg__delivery" role="status">
+        <span class="material-icons" aria-hidden="true">schedule</span>Sending
+      </span>
+      <span v-else-if="deliveryState === 'failed'" class="msg__delivery msg__delivery--failed" role="status">
+        <span :title="deliveryError">Not sent</span>
+        <button class="btn btn--icon" title="Retry message" aria-label="Retry message" @click="$emit('retry')">
+          <span class="material-icons">refresh</span>
+        </button>
+        <button class="btn btn--icon" title="Discard message" aria-label="Discard message" @click="$emit('discard')">
+          <span class="material-icons">close</span>
+        </button>
+      </span>
+      <span v-else-if="showSent" class="material-icons msg__sent" title="Sent" aria-label="Sent">check</span>
+    </span>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import ToolCall from './ToolCall.vue'
 import { renderMarkdown } from '../markdown'
 import { RUN_TONE, shortTime } from '../format'
@@ -31,8 +46,20 @@ const props = defineProps({
   meta: { type: Object, default: () => ({}) },
   createdAt: { type: Number, default: 0 },
   live: { type: Boolean, default: false },
-  status: { type: String, default: '' }
+  status: { type: String, default: '' },
+  deliveryState: { type: String, default: '' },
+  deliveryError: { type: String, default: '' }
 })
+defineEmits(['retry', 'discard'])
+
+const showSent = ref(false)
+let sentTimer
+watch(() => [props.deliveryState, props.createdAt], () => {
+  clearTimeout(sentTimer)
+  showSent.value = props.role === 'user' && !props.deliveryState && Date.now() - props.createdAt * 1000 < 5000
+  if (showSent.value) sentTimer = setTimeout(() => { showSent.value = false }, 3000)
+}, { immediate: true })
+onUnmounted(() => clearTimeout(sentTimer))
 
 // Messages written before answers kept a timeline only remember the tool names.
 const steps = computed(() => {
@@ -119,6 +146,34 @@ const time = computed(() => shortTime(props.createdAt))
   padding-bottom: 3px;
   color: var(--text-dim);
   font-size: 11px;
+}
+
+.msg__delivery {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+}
+
+.msg__delivery .material-icons,
+.msg__sent {
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.msg__sent {
+  color: var(--accent);
+}
+
+.msg__delivery--failed {
+  color: var(--danger);
+}
+
+.msg__delivery .btn {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
 }
 
 .bubble__error {

@@ -37,6 +37,21 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS messages_chat ON messages(chat_id, created_at);
+CREATE TABLE IF NOT EXISTS chat_turns (
+    id TEXT PRIMARY KEY,
+    chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    state TEXT NOT NULL DEFAULT 'running',
+    steps TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS chat_turn_running ON chat_turns(chat_id) WHERE state = 'running';
+CREATE TABLE IF NOT EXISTS chat_turn_events (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT,
+    turn_id TEXT NOT NULL REFERENCES chat_turns(id) ON DELETE CASCADE,
+    payload TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chat_turn_events_turn ON chat_turn_events(turn_id, seq);
 CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY,
     workflow TEXT NOT NULL,
@@ -174,8 +189,13 @@ class Database:
             summary["chat_id"]: summary
             for summary in self.query(summary_sql, [row["id"] for row in rows])
         }
+        answering = {
+            turn["chat_id"]
+            for turn in self.query("SELECT chat_id FROM chat_turns WHERE state = 'running'")
+        }
         for row in rows:
             summary = summaries.get(row["id"])
+            row["answering"] = row["id"] in answering
             row["message_count"] = summary["n"] if summary else 0
             row["last_message"] = (
                 {"role": summary["role"], "preview": " ".join(summary["content"].split())[:120]}
@@ -210,16 +230,82 @@ class Database:
             "created_at": now,
         }
 
-    def list_messages(self, chat_id: str, limit: int = 500) -> list[dict[str, Any]]:
+    def list_messages(self, chat_id: str, limit: int | None = None) -> list[dict[str, Any]]:
         rows = self.query(
-            "SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC LIMIT ?",
-            (chat_id, limit),
+            "SELECT * FROM messages WHERE chat_id = ? ORDER BY rowid ASC LIMIT ?",
+            (chat_id, limit if limit is not None else -1),
         )
         for row in rows:
             row["meta"] = json.loads(row["meta"] or "{}")
         return rows
 
     # -------------------------------------------------------------------- runs
+
+    def accept_chat_message(self, chat_id: str, text: str, message_id: str) -> tuple[dict[str, Any], bool]:
+        with self._lock, self._conn:
+            existing = self._conn.execute(
+                "SELECT m.* FROM chat_turns t JOIN messages m ON m.id = t.user_id WHERE t.id = ?",
+                (message_id,),
+            ).fetchone()
+            if existing:
+                if existing["chat_id"] != chat_id or existing["content"] != text:
+                    raise ValueError("message_id was already used for a different message")
+                return {**dict(existing), "meta": json.loads(existing["meta"])}, False
+            now = time.time()
+            self._conn.execute(
+                "INSERT INTO messages (id, chat_id, role, content, meta, created_at) VALUES (?,?,?,?,?,?)",
+                (message_id, chat_id, "user", text, "{}", now),
+            )
+            self._conn.execute(
+                "INSERT INTO chat_turns (id, chat_id, user_id) VALUES (?,?,?)",
+                (message_id, chat_id, message_id),
+            )
+            self._conn.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (now, chat_id))
+            message = {"id": message_id, "chat_id": chat_id, "role": "user", "content": text,
+                       "meta": {}, "created_at": now}
+            self._conn.execute(
+                "INSERT INTO chat_turn_events (turn_id, payload) VALUES (?,?)",
+                (message_id, json.dumps({"type": "user_message", "message": message})),
+            )
+        return message, True
+
+    def chat_snapshot(self, chat_id: str) -> dict[str, Any]:
+        turn = self.one("SELECT * FROM chat_turns WHERE chat_id = ? AND state = 'running'", (chat_id,))
+        if turn:
+            turn["steps"] = json.loads(turn["steps"])
+        return {"chat": self.get_chat(chat_id), "messages": self.list_messages(chat_id), "active_turn": turn}
+
+    def record_chat_progress(self, turn_id: str, event: dict[str, Any], steps: list, status: str) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE chat_turns SET steps = ?, status = ? WHERE id = ?",
+                (json.dumps(steps), status, turn_id),
+            )
+            self._conn.execute(
+                "INSERT INTO chat_turn_events (turn_id, payload) VALUES (?,?)",
+                (turn_id, json.dumps(event)),
+            )
+
+    def finish_chat_turn(self, turn_id: str, content: str, meta: dict[str, Any]) -> None:
+        with self._lock, self._conn:
+            turn = self._conn.execute(
+                "SELECT * FROM chat_turns WHERE id = ? AND state = 'running'", (turn_id,)
+            ).fetchone()
+            if not turn:
+                return
+            now = time.time()
+            message = {"id": uuid.uuid4().hex[:12], "chat_id": turn["chat_id"], "role": "assistant",
+                       "content": content, "meta": meta, "created_at": now}
+            self._conn.execute(
+                "INSERT INTO messages (id, chat_id, role, content, meta, created_at) VALUES (?,?,?,?,?,?)",
+                (message["id"], turn["chat_id"], "assistant", content, json.dumps(meta), now),
+            )
+            self._conn.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (now, turn["chat_id"]))
+            self._conn.execute("UPDATE chat_turns SET state = 'completed' WHERE id = ?", (turn_id,))
+            self._conn.execute(
+                "INSERT INTO chat_turn_events (turn_id, payload) VALUES (?,?)",
+                (turn_id, json.dumps({"type": "done", "message": message})),
+            )
 
     def record_run(
         self,

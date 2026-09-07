@@ -43,6 +43,21 @@ def test_a_frame_is_one_json_object_in_the_sse_shape():
     assert sse({"kind": "x"}) == 'data: {"kind": "x"}\n\n'
 
 
+async def test_a_slow_subscriber_resyncs_and_keeps_receiving_events():
+    bus = EventBus()
+    stream = bus.stream()
+    await anext(stream)
+    for index in range(257):
+        bus.publish("chat.message", {"index": index})
+    frame = json.loads((await asyncio.wait_for(anext(stream), timeout=1)).removeprefix("data: "))
+    assert frame["kind"] == "connected"
+    assert frame["resync"] is True
+    bus.publish("chat.answered")
+    frame = json.loads((await asyncio.wait_for(anext(stream), timeout=1)).removeprefix("data: "))
+    assert frame["kind"] == "chat.answered"
+    await stream.aclose()
+
+
 # -------------------------------------------------------------------- clients
 
 

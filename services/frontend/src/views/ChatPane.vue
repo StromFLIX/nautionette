@@ -12,6 +12,7 @@
         <div class="pane-head__title truncate">{{ chat?.title || 'Chat' }}</div>
         <div class="caption dim truncate">
           {{ messages.length }} messages · {{ chat?.agent_set }}
+          <template v-if="reconnecting"> · Reconnecting...</template>
           <template v-if="chat?.promoted_to"> · → {{ chat.promoted_to }}</template>
         </div>
       </div>
@@ -38,6 +39,8 @@
           v-for="message in messages" :key="message.id"
           :role="message.role" :content="message.content"
           :meta="message.meta" :created-at="message.created_at"
+          :delivery-state="message.delivery || ''" :delivery-error="message.deliveryError || ''"
+          @retry="delivery.retry(message.id)" @discard="delivery.discard(message.id)"
         />
         <MessageBubble
           v-if="streaming" role="assistant" live
@@ -73,34 +76,78 @@ import ChatWelcome from '../components/ChatWelcome.vue'
 import Composer from '../components/Composer.vue'
 import MessageBubble from '../components/MessageBubble.vue'
 import { avatarStyle, initials } from '../format'
-import { foldEvent } from '../timeline'
 import { backTo } from '../router'
 import { actions, draftCount, onLiveEvent, store } from '../store'
-import { api, streamMessage } from '../api'
+import { api, chatStream } from '../api'
+import { delivery, onDelivery, pendingMessages } from '../delivery'
 
 const $q = useQuasar()
 const route = useRoute()
 const router = useRouter()
 
 const chat = ref(null)
-const messages = ref([])
+const savedMessages = ref([])
 const draft = ref('')
-const streaming = ref(false)
-const liveSteps = ref([])
-const liveStatus = ref('')
+const activeTurn = ref(null)
+const reconnecting = ref(false)
+const streaming = computed(() => Boolean(activeTurn.value))
+const liveSteps = computed(() => activeTurn.value?.steps || [])
+const liveStatus = computed(() => activeTurn.value?.status || '')
 const starting = ref(false)
 const scroller = ref(null)
 const composer = ref(null)
 
 const chatId = computed(() => route.params.id || '')
+const messages = computed(() => {
+  const known = new Set(savedMessages.value.map((message) => message.id))
+  const pending = pendingMessages.value.filter((item) => item.chatId === chatId.value && !known.has(item.id))
+  return [...savedMessages.value, ...pending.map((item) => ({
+    id: item.id, role: 'user', content: item.text, created_at: item.createdAt / 1000,
+    delivery: item.error ? 'failed' : 'sending', deliveryError: item.error
+  }))]
+})
 const contextUsed = computed(() =>
   messages.value.reduce((total, message) => total + (message.content || '').length, 0))
 
-async function load (id) {
-  const data = await api.chat(id)
+let stream = null
+let generation = 0
+
+function applySnapshot (data) {
+  const el = scroller.value
+  const atBottom = !savedMessages.value.length || !el || el.scrollHeight - el.scrollTop - el.clientHeight < 100
   chat.value = data.chat
-  messages.value = data.messages
-  scrollDown('instant')
+  savedMessages.value = data.messages
+  activeTurn.value = data.active_turn || null
+  delivery.reconcile(data.messages)
+  reconnecting.value = false
+  if (atBottom) scrollDown('instant')
+}
+
+function connectChat () {
+  stream?.close()
+  stream = null
+  const version = ++generation
+  const id = chatId.value
+  if (!id) return
+  reconnecting.value = true
+  let received = false
+  api.chat(id).then((data) => {
+    if (version === generation && !received) applySnapshot(data)
+  }).catch((error) => {
+    if (version !== generation) return
+    if (error.status === 401) store.needsToken = true
+    if (error.status === 404) router.replace('/chats')
+  })
+  stream = chatStream(id, (data) => {
+    if (version !== generation) return
+    received = true
+    if (!data.chat) {
+      stream?.close()
+      router.replace('/chats')
+      return
+    }
+    applySnapshot(data)
+  }, () => { if (version === generation) reconnecting.value = true })
 }
 
 function scrollDown (behavior = 'smooth') {
@@ -117,7 +164,6 @@ async function start ({ text, agentSet, model, tools }) {
     const created = await api.createChat({ agent_set: agentSet, model, tools })
     await actions.loadChats()
     await router.push(`/chats/${created.id}`)
-    await load(created.id)
     draft.value = text
     await send()
   } catch (error) {
@@ -127,36 +173,17 @@ async function start ({ text, agentSet, model, tools }) {
   }
 }
 
-async function send () {
+function send () {
   const text = draft.value.trim()
   if (!text || streaming.value) return
-  draft.value = ''
-  streaming.value = true
-  liveSteps.value = []
-  liveStatus.value = ''
   try {
-    await streamMessage(chatId.value, text, (event) => {
-      if (event.type === 'user_message') messages.value.push(event.message)
-      // The broker narrates a cold start (building the agent image) before it runs.
-      else if (event.type === 'status') liveStatus.value = event.message || ''
-      else if (event.type === 'error') $q.notify({ type: 'negative', message: event.message })
-      else if (event.type === 'done') messages.value.push(event.message)
-      else {
-        liveStatus.value = ''
-        foldEvent(liveSteps.value, event)
-      }
-      scrollDown()
-    })
+    delivery.enqueue(chatId.value, text)
+    draft.value = ''
+    scrollDown()
   } catch (error) {
     $q.notify({ type: 'negative', message: error.message })
-  } finally {
-    streaming.value = false
-    liveSteps.value = []
-    liveStatus.value = ''
-    actions.loadChats()
-    actions.loadWorkflows()
-    nextTick(() => composer.value?.focus())
   }
+  nextTick(() => composer.value?.focus())
 }
 
 async function patch (fields) {
@@ -182,11 +209,11 @@ function remove () {
 }
 
 watch(chatId, (id) => {
-  if (id) load(id)
-  else {
-    chat.value = null
-    messages.value = []
-  }
+  chat.value = null
+  savedMessages.value = []
+  activeTurn.value = null
+  draft.value = ''
+  connectChat()
 })
 
 const stopNavigation = router.afterEach((to, from, failure) => {
@@ -198,16 +225,32 @@ const stopNavigation = router.afterEach((to, from, failure) => {
 onUnmounted(stopNavigation)
 
 let off = () => {}
+let offDelivery = () => {}
+function resume () {
+  if (document.visibilityState === 'visible') connectChat()
+}
 onMounted(() => {
-  if (chatId.value) load(chatId.value)
-  // A workflow run can post into the chat that is open right now.
+  connectChat()
   off = onLiveEvent((event) => {
-    if (event.kind === 'chat.answered' && event.chat_id === chatId.value && !streaming.value) {
-      load(chatId.value)
+    if (event.kind === 'client.reconnect') connectChat()
+  })
+  offDelivery = onDelivery((message) => {
+    if (message.chat_id === chatId.value && !savedMessages.value.some((saved) => saved.id === message.id)) {
+      savedMessages.value.push(message)
+      scrollDown()
     }
   })
+  window.addEventListener('online', connectChat)
+  document.addEventListener('visibilitychange', resume)
 })
-onUnmounted(() => off())
+onUnmounted(() => {
+  generation++
+  stream?.close()
+  off()
+  offDelivery()
+  window.removeEventListener('online', connectChat)
+  document.removeEventListener('visibilitychange', resume)
+})
 </script>
 
 <style scoped>

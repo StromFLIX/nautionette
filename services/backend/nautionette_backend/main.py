@@ -20,6 +20,7 @@ from .backend_mcp import BackendMCP
 from .background import drain, spawn
 from .clients.http import close_shared
 from .config import settings
+from .conversations import recover_interrupted
 from .events import bus
 from .integrations import bootstrap
 from .routers import ROUTERS
@@ -42,6 +43,7 @@ def seed_workflows() -> None:
 async def lifespan(_: FastAPI):
     Path(settings.artifacts_dir).mkdir(parents=True, exist_ok=True)
     seed_workflows()
+    recover_interrupted()
     # agentgateway may still be starting, so this retries in the background
     # rather than holding the port closed.
     spawn(bootstrap(), name="integration-bootstrap")

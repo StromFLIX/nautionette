@@ -46,8 +46,11 @@
               <span class="row-item__time">{{ shortTime(chat.updated_at) }}</span>
             </div>
             <div class="row-item__sub truncate">
-              <span v-if="chat.last_message?.role === 'user'" class="dim">You: </span>
-              {{ chat.last_message?.preview || 'No messages yet' }}
+              <template v-if="chat.answering">Answering...</template>
+              <template v-else>
+                <span v-if="chat.last_message?.role === 'user'" class="dim">You: </span>
+                {{ chat.last_message?.preview || 'No messages yet' }}
+              </template>
             </div>
           </div>
         </RouterLink>

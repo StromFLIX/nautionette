@@ -4,6 +4,7 @@
  */
 import { computed, reactive } from 'vue'
 import { api, auth, isNative, liveEvents, server } from './api'
+import { delivery } from './delivery'
 import router from './router'
 
 const state = reactive({
@@ -37,7 +38,7 @@ async function guard (loader) {
     return await loader()
   } catch (error) {
     if (error.status === 401) state.needsToken = true
-    else if (!error.status) state.needsServer = true  // never reached the instance
+    else if (!error.status) return null
     else throw error
     return null
   }
@@ -111,10 +112,13 @@ export const actions = {
   connect () {
     if (state.needsServer) return
     source?.close()
+    delivery.connect()
+    emit({ kind: 'client.reconnect' })
     source = liveEvents((event) => {
       state.events.unshift(event)
       state.events = state.events.slice(0, 200)
       const kind = event.kind || ''
+      if (kind === 'connected') actions.refreshAll()
       if (kind.startsWith('run.')) actions.loadRuns()
       if (kind.startsWith('workflow.') || kind.startsWith('promote.')) actions.loadWorkflows()
       if (kind.startsWith('chat.')) actions.loadChats()
@@ -126,6 +130,7 @@ export const actions = {
   disconnect () {
     source?.close()
     source = null
+    delivery.disconnect()
   }
 }
 

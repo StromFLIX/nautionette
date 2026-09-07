@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+
+import httpx
+from nautionette_backend import background, conversations, main
+
+from ..conftest import APP_TOKEN
 
 
 def sse_events(response) -> list[dict]:
@@ -108,6 +114,145 @@ def test_the_chat_decides_the_agent_set_model_and_tools(client, broker):
 def test_an_empty_message_is_refused(client):
     chat = client.post("/api/chats", json={}).json()
     assert send(client, chat["id"], "   ").status_code == 400
+
+
+def test_retrying_a_message_does_not_run_the_agent_twice(client, broker):
+    chat = client.post("/api/chats", json={}).json()
+    path = f"/api/chats/{chat['id']}/messages"
+    payload = {"text": "hello", "message_id": "device-message-1"}
+    first = sse_events(client.post(path, json=payload))
+    second = sse_events(client.post(path, json=payload))
+    assert first[0]["message"]["id"] == second[0]["message"]["id"]
+    assert first[-1]["message"]["id"] == second[-1]["message"]["id"]
+    assert len(broker.jobs) == 1
+    assert len(client.get(f"/api/chats/{chat['id']}").json()["messages"]) == 2
+
+
+def test_a_reused_message_id_cannot_change_its_text_or_chat(client):
+    first = client.post("/api/chats", json={}).json()["id"]
+    second = client.post("/api/chats", json={}).json()["id"]
+    payload = {"text": "hello", "message_id": "stable-id"}
+    client.post(f"/api/chats/{first}/messages", json=payload)
+    assert client.post(f"/api/chats/{first}/messages", json={**payload, "text": "changed"}).status_code == 422
+    assert client.post(f"/api/chats/{second}/messages", json=payload).status_code == 422
+
+
+async def test_disconnected_senders_and_subscribers_do_not_own_generation(backend, monkeypatch):
+    started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def agent(job):
+        yield {"type": "delta", "text": "Already working"}
+        started.set()
+        await finish.wait()
+        yield {"type": "delta", "text": ", finished"}
+        yield {"type": "result", "ok": True}
+
+    monkeypatch.setattr(conversations, "stream_agent", agent)
+    transport = httpx.ASGITransport(app=main.app)
+    headers = {"Authorization": f"Bearer {APP_TOKEN}", "Accept": "application/json"}
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=headers) as web:
+            chat_id = (await web.post("/api/chats", json={})).json()["id"]
+            response = await web.post(
+                f"/api/chats/{chat_id}/messages", json={"text": "hello", "message_id": "web-1"}
+            )
+            assert response.status_code == 202
+        await asyncio.wait_for(started.wait(), 2)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test", headers=headers) as android:
+            snapshot = (await android.get(f"/api/chats/{chat_id}")).json()
+            assert snapshot["messages"][0]["id"] == "web-1"
+            assert snapshot["active_turn"]["steps"][0]["text"] == "Already working"
+            assert (await android.get("/api/chats")).json()["chats"][0]["answering"] is True
+            subscriber = conversations.chat_snapshots(chat_id)
+            frame = json.loads((await anext(subscriber))[6:])
+            assert frame["active_turn"] == snapshot["active_turn"]
+            await subscriber.aclose()
+            retry = await android.post(
+                f"/api/chats/{chat_id}/messages", json={"text": "hello", "message_id": "web-1"}
+            )
+            assert retry.json()["message"]["id"] == "web-1"
+            busy = await android.post(
+                f"/api/chats/{chat_id}/messages", json={"text": "another", "message_id": "android-1"}
+            )
+            assert busy.status_code == 409
+            assert len(backend.db.list_messages(chat_id)) == 1
+            finish.set()
+            await asyncio.wait_for(asyncio.gather(*background._running), 2)
+            recovered = (await android.get(f"/api/chats/{chat_id}")).json()
+            assert recovered["active_turn"] is None
+            assert (await android.get("/api/chats")).json()["chats"][0]["answering"] is False
+            assert recovered["messages"][-1]["content"] == "Already working, finished"
+    finally:
+        finish.set()
+        await background.drain()
+
+
+async def test_separate_conversations_run_concurrently(backend, monkeypatch):
+    started = set()
+    both_started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def agent(job):
+        started.add(job["run_id"])
+        if len(started) == 2:
+            both_started.set()
+        yield {"type": "delta", "text": job["prompt"]}
+        await finish.wait()
+        yield {"type": "result", "ok": True}
+
+    monkeypatch.setattr(conversations, "stream_agent", agent)
+    try:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=main.app), base_url="http://test",
+            headers={"Authorization": f"Bearer {APP_TOKEN}", "Accept": "application/json"},
+        ) as client:
+            chat_ids = []
+            for text in ("first", "second"):
+                chat_id = (await client.post("/api/chats", json={})).json()["id"]
+                chat_ids.append(chat_id)
+                response = await client.post(f"/api/chats/{chat_id}/messages", json={"text": text})
+                assert response.status_code == 202
+            await asyncio.wait_for(both_started.wait(), 2)
+            for chat_id, text in zip(chat_ids, ("first", "second"), strict=True):
+                snapshot = (await client.get(f"/api/chats/{chat_id}")).json()
+                assert snapshot["active_turn"]["steps"][0]["text"] == text
+            finish.set()
+            await asyncio.wait_for(asyncio.gather(*background._running), 2)
+    finally:
+        finish.set()
+        await background.drain()
+
+
+def test_restart_preserves_partial_output_without_repeating_tools(client, db, broker):
+    chat_id = client.post("/api/chats", json={}).json()["id"]
+    db.accept_chat_message(chat_id, "hello", "interrupted-1")
+    db.execute("UPDATE messages SET created_at = created_at + 3600 WHERE id = ?", ("interrupted-1",))
+    db.record_chat_progress(
+        "interrupted-1", {"type": "delta", "text": "Partial"}, [{"kind": "text", "text": "Partial"}], ""
+    )
+    conversations.recover_interrupted()
+    conversations.recover_interrupted()
+    snapshot = client.get(f"/api/chats/{chat_id}").json()
+    assert snapshot["active_turn"] is None
+    assert len(snapshot["messages"]) == 2
+    assert snapshot["messages"][-1]["content"] == "Partial"
+    assert "restart" in snapshot["messages"][-1]["meta"]["error"]
+    assert broker.jobs == []
+    events = sse_events(client.post(
+        f"/api/chats/{chat_id}/messages", json={"text": "hello", "message_id": "interrupted-1"}
+    ))
+    assert events[-1]["message"]["content"] == "Partial"
+    assert broker.jobs == []
+
+
+def test_long_chats_recover_the_latest_messages_too(client, db):
+    chat_id = client.post("/api/chats", json={}).json()["id"]
+    for index in range(501):
+        db.add_message(chat_id, "assistant", f"message {index}")
+    snapshot = client.get(f"/api/chats/{chat_id}").json()
+    assert len(snapshot["messages"]) == 501
+    assert snapshot["messages"][-1]["content"] == "message 500"
 
 
 def test_a_message_to_a_chat_that_does_not_exist_is_a_404(client):

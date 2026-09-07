@@ -78,6 +78,38 @@ Five rules the diagram encodes:
 | **Temporal** | Orchestrator and workers. Durable runs, retries, schedules and history, stored in PostgreSQL. A workflow step can call MCP tools, invoke Pi, or run plain Python. |
 | **Shared volume** | Where workflow files live. What an agent writes is what a worker loads. Run artifacts land on their own volume, until there is an object store. |
 
+## Chat delivery and recovery
+
+Web and Android use the same thin client. The backend owns accepted messages,
+active turns, partial text/tool timelines, and completed answers in SQLite.
+Closing a tab, navigating away, or suspending Android does not stop an answer.
+Each conversation has an authenticated reconnecting snapshot stream; opening it
+on another device immediately recovers its current progress. Separate conversations
+run concurrently, and the chat list shows which ones are answering.
+
+The only durable local conversation state is an outbox of messages not yet
+acknowledged by the server, scoped to the instance URL. Messages appear immediately
+as **Sending** with a clock; network errors, timeouts, busy chats, and server errors
+retry with capped exponential backoff while the app is open. Reloading or resuming
+the app resumes delivery. A stable `message_id` prevents a lost acknowledgement
+from creating a duplicate turn. Acceptance briefly shows a checkmark; permanent
+rejections remain visible with retry and discard controls. An unsent message cannot
+appear on another device until a client successfully delivers it. Clearing app or
+browser storage removes unsent messages. Creating a new chat requires connectivity.
+
+`POST /api/chats/{id}/messages` accepts `{text, message_id}`. With
+`Accept: application/json`, it returns `202` after durable acceptance; otherwise it
+replays the turn's SSE events for compatibility. `GET /api/chats/{id}` and
+`GET /api/chats/{id}/stream` expose the same recoverable snapshot, including
+`active_turn`. Different IDs sent to a busy chat receive a retryable `409`, keeping
+each conversation's agent history sequential.
+
+Interactive generation is independent of client connections, but is not a Temporal
+workflow. On backend restart, unfinished turns retain their partial output and
+become explicitly interrupted answers; tools are not automatically rerun because
+their external side effects may already have happened. Run one backend process per
+SQLite database; startup recovery assumes ownership of its unfinished turns.
+
 ## Chats become workflows
 
 A chat is the draft: interactive, streaming, temporary. A workflow is the saved version: durable, scheduled, repeatable. Turning one into the other is a normal user action.

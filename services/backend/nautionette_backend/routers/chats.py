@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
+import sqlite3
+import uuid
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..agent import (
-    Timeline,
     agent_job,
     build_history,
     promote_chat,
-    stream_agent,
     summarise_for_title,
 )
+from ..background import spawn
+from ..conversations import chat_snapshots, run_turn, turn_events
 from ..db import db
-from ..events import bus, sse
-from ..runtime import history_budget, remember_agent_result, runtime
+from ..events import bus
+from ..runtime import history_budget, runtime
 from ..security import require_user
 from .system import SSE_HEADERS
 
@@ -61,12 +63,21 @@ async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) 
     if "tools" in payload:
         selected = payload.get("tools")
         fields["tools"] = [str(name) for name in selected] if isinstance(selected, list) else None
-    return db.update_chat(chat_id, fields)  # type: ignore[return-value]
+    chat = db.update_chat(chat_id, fields)
+    bus.publish("chat.updated", {"chat_id": chat_id})
+    return chat  # type: ignore[return-value]
 
 
 @router.get("/api/chats/{chat_id}")
 async def get_chat(chat_id: str) -> dict[str, Any]:
-    return {"chat": _chat_or_404(chat_id), "messages": db.list_messages(chat_id)}
+    _chat_or_404(chat_id)
+    return db.chat_snapshot(chat_id)
+
+
+@router.get("/api/chats/{chat_id}/stream")
+async def subscribe_chat(chat_id: str) -> StreamingResponse:
+    _chat_or_404(chat_id)
+    return StreamingResponse(chat_snapshots(chat_id), media_type="text/event-stream", headers=SSE_HEADERS)
 
 
 @router.delete("/api/chats/{chat_id}")
@@ -76,16 +87,24 @@ async def delete_chat(chat_id: str) -> dict[str, Any]:
     return {"ok": True}
 
 
-@router.post("/api/chats/{chat_id}/messages")
-async def send_message(chat_id: str, payload: dict[str, Any] = Body(...)) -> StreamingResponse:
+@router.post("/api/chats/{chat_id}/messages", response_model=None)
+async def send_message(chat_id: str, request: Request, payload: dict[str, Any] = Body(...)):
     chat = _chat_or_404(chat_id)
     text = (payload.get("text") or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="text is required")
 
     history = build_history(db.list_messages(chat_id), max_chars=history_budget(chat.get("model")))
-    user_message = db.add_message(chat_id, "user", text)
-    if chat["title"] in {"New chat", ""} and not history:
+    message_id = payload.get("message_id") or uuid.uuid4().hex
+    if not isinstance(message_id, str) or len(message_id) > 128:
+        raise HTTPException(status_code=400, detail="message_id must be a string of at most 128 characters")
+    try:
+        user_message, created = db.accept_chat_message(chat_id, text, message_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="This chat is still answering; retry shortly.") from exc
+    if created and chat["title"] in {"New chat", ""} and not history:
         db.execute("UPDATE chats SET title = ? WHERE id = ?", (summarise_for_title(text), chat_id))
 
     job = agent_job(
@@ -98,43 +117,12 @@ async def send_message(chat_id: str, payload: dict[str, Any] = Body(...)) -> Str
         run_id=f"chat-{chat_id}",
     )
 
-    async def generator():
-        yield sse({"type": "user_message", "message": user_message})
-        timeline = Timeline()
-        failure: str | None = None
-        try:
-            async for event in stream_agent(job):
-                kind = event.get("type")
-                if kind == "delta":
-                    timeline.add_text(event.get("text", ""))
-                elif kind == "tool":
-                    timeline.start_tool(event)
-                elif kind == "tool_done":
-                    timeline.finish_tool(event)
-                elif kind == "error":
-                    failure = event.get("message")
-                elif kind == "result":
-                    remember_agent_result(bool(event.get("ok")))
-                    if not timeline.text and event.get("text"):
-                        timeline.add_text(event["text"])
-                yield sse(event)
-        except Exception as exc:  # noqa: BLE001 - always close the stream cleanly
-            failure = str(exc)
-            yield sse({"type": "error", "message": failure})
-
-        content = timeline.text
-        if not content and failure:
-            content = f"The agent could not answer: {failure}"
-        assistant = db.add_message(
-            chat_id,
-            "assistant",
-            content or "(no answer)",
-            {"tools": timeline.tools, "steps": timeline.steps, "error": failure},
-        )
-        bus.publish("chat.answered", {"chat_id": chat_id, "ok": failure is None})
-        yield sse({"type": "done", "message": assistant})
-
-    return StreamingResponse(generator(), media_type="text/event-stream", headers=SSE_HEADERS)
+    if created:
+        spawn(run_turn(message_id, chat_id, job), name=f"chat-{message_id}")
+        bus.publish("chat.message", {"chat_id": chat_id})
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse({"message": user_message, "turn_id": message_id}, status_code=202)
+    return StreamingResponse(turn_events(message_id), media_type="text/event-stream", headers=SSE_HEADERS)
 
 
 @router.post("/api/chats/{chat_id}/promote")

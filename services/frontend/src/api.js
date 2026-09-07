@@ -87,6 +87,10 @@ export const api = {
   chats: () => request('/api/chats'),
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
   chat: (id) => request(`/api/chats/${id}`),
+  sendMessage: (id, text, messageId) => request(`/api/chats/${id}/messages`, {
+    method: 'POST', headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(20000), ...json({ text, message_id: messageId })
+  }),
   updateChat: (id, payload) => request(`/api/chats/${id}`, { method: 'PATCH', ...json(payload) }),
   deleteChat: (id) => request(`/api/chats/${id}`, { method: 'DELETE' }),
 
@@ -112,35 +116,15 @@ export const api = {
   terminateRun: (id) => request(`/api/runs/${id}/terminate`, { method: 'POST', ...json({}) })
 }
 
-/** POST that streams server-sent events back, so a chat answer arrives as it is written. */
-export async function streamMessage (chatId, text, onEvent) {
-  const response = await fetch(endpoint(`/api/chats/${chatId}/messages`), {
-    method: 'POST',
-    headers: headers({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ text })
-  })
-  if (!response.ok || !response.body) {
-    throw new ApiError(`stream failed: ${response.status}`, response.status)
+export function chatStream (chatId, onSnapshot, onError) {
+  const path = `/api/chats/${encodeURIComponent(chatId)}/stream`
+  const source = new EventSource(endpoint(auth.token ? `${path}?token=${encodeURIComponent(auth.token)}` : path))
+  source.onmessage = (event) => {
+    const data = JSON.parse(event.data)
+    if (data.type === 'snapshot') onSnapshot(data)
   }
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    let index
-    while ((index = buffer.indexOf('\n\n')) !== -1) {
-      const frame = buffer.slice(0, index)
-      buffer = buffer.slice(index + 2)
-      for (const line of frame.split('\n')) {
-        if (!line.startsWith('data:')) continue
-        try {
-          onEvent(JSON.parse(line.slice(5).trim()))
-        } catch { /* keep-alive or partial frame */ }
-      }
-    }
-  }
+  source.onerror = onError
+  return source
 }
 
 /** Live system events. EventSource cannot set headers, so the token rides along. */

@@ -29,7 +29,9 @@ class EventBus:
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
-                self._subscribers.discard(queue)
+                while not queue.empty():
+                    queue.get_nowait()
+                queue.put_nowait({"kind": "connected", "at": time.time(), "resync": True})
         return event
 
     def history(self) -> list[dict[str, Any]]:
