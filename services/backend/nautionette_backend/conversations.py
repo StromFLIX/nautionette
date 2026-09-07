@@ -68,6 +68,7 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
 
 async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     timeline = Timeline()
+    received_text = False
     failure = None
     status = ""
     controller = None
@@ -104,12 +105,20 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 return
             kind = event.get("type")
             if kind == "input_consumed":
-                db.consume_chat_input(turn_id, event.get("id", ""))
+                if db.consume_chat_input(
+                    turn_id,
+                    event.get("id", ""),
+                    timeline.text,
+                    {"tools": timeline.tools, "steps": timeline.steps},
+                ):
+                    timeline = Timeline()
             elif kind == "interrupted":
                 interrupted = True
             status = event.get("message", "") if kind == "status" else ""
             if kind == "delta":
-                timeline.add_text(event.get("text", ""))
+                text = event.get("text", "")
+                received_text = received_text or bool(text)
+                timeline.add_text(text)
             elif kind == "tool":
                 timeline.start_tool(event)
                 if event.get("name") == "request_internet_access":
@@ -128,8 +137,11 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 remember_agent_result(bool(event.get("ok")))
                 if not event.get("ok") and not failure:
                     failure = event.get("message") or "The agent did not complete successfully."
-                if not timeline.text and event.get("text"):
+                # The result summarizes the entire container run, not this
+                # segment. Do not replay an already-saved pre-steering answer.
+                if not received_text and event.get("text"):
                     timeline.add_text(event["text"])
+                    received_text = True
             db.record_chat_progress(turn_id, event, timeline.steps, status)
     except asyncio.CancelledError:
         shutdown = True

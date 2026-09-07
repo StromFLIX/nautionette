@@ -1,6 +1,7 @@
 import asyncio
 
 import httpx
+import pytest
 from nautionette_backend import background, conversations, main
 from nautionette_backend.db import Database
 
@@ -53,6 +54,65 @@ def test_steering_cannot_cross_chats_or_run_twice(tmp_path):
     assert database.next_chat_turn(first) is None
 
 
+@pytest.mark.parametrize("text", ["Prior answer", ""])
+def test_consumed_segments_survive_reload_and_restart_with_tools(tmp_path, monkeypatch, text):
+    path = str(tmp_path / "chat.db")
+    database = Database(path)
+    chat_id = database.create_chat("Queue", "default")["id"]
+    database.accept_chat_message(chat_id, "First", "first")
+    database.accept_chat_message(chat_id, "Second", "second", queue=True)
+    database.accept_chat_message(chat_id, "Third", "third", queue=True)
+    steps = [
+        *([{"kind": "text", "text": text}] if text else []),
+        {"kind": "tool", "id": "tool", "name": "bash", "args": {}, "ok": True, "result": "Retained"},
+    ]
+    context = {"tokens": 100}
+    database.record_chat_progress("first", {"type": "usage", "context": context}, steps, "Working")
+    meta = {"tools": ["bash"], "steps": steps}
+    assert database.consume_chat_input("first", "second", text, meta)
+    assert not database.consume_chat_input("first", "second", text, meta)
+    assert not database.consume_chat_input("missing", "third", text, meta)
+    recovered = Database(path)
+    snapshot = recovered.chat_snapshot(chat_id)
+    assert snapshot["active_turn"]["steps"] == []
+    assert snapshot["active_turn"]["status"] == ""
+    visible = [m for m in snapshot["messages"] if not m["meta"].get("queued")]
+    assert [m["content"] for m in visible] == ["First", text, "Second"]
+    assert visible[1]["meta"] == {**meta, "context": context}
+    remaining = [{"kind": "text", "text": "New partial answer"}]
+    recovered.record_chat_progress("first", {"type": "delta", "text": "New partial answer"}, remaining, "")
+    monkeypatch.setattr(conversations, "db", recovered)
+    conversations.recover_interrupted()
+    snapshot = recovered.chat_snapshot(chat_id)
+    visible = [m for m in snapshot["messages"] if not m["meta"].get("queued")]
+    assert [m["content"] for m in visible] == ["First", text, "Second", "New partial answer"]
+    assert visible[1]["meta"] == {**meta, "context": context}
+    assert visible[-1]["meta"]["steps"] == remaining
+    assert visible[-1]["meta"]["error"]
+    assert snapshot["active_turn"] is None
+    assert snapshot["chat"]["queue_paused"] == 1
+    assert next(m for m in snapshot["messages"] if m["id"] == "third")["meta"]["queued"]
+
+
+async def test_result_does_not_replay_text_saved_before_steering(backend, monkeypatch):
+    chat_id = backend.db.create_chat("Queue", "default")["id"]
+    backend.db.accept_chat_message(chat_id, "Run", "first")
+    backend.db.accept_chat_message(chat_id, "Next", "second", queue=True)
+
+    async def agent(job):
+        yield {"type": "delta", "text": "Already saved"}
+        yield {"type": "input_consumed", "id": "second"}
+        yield {"type": "interrupted"}
+        yield {"type": "result", "ok": True, "text": "Already saved"}
+
+    monkeypatch.setattr(conversations, "stream_agent", agent)
+    await conversations.run_turn("first", chat_id, {"prompt": "Run"})
+    messages = backend.db.list_messages(chat_id)
+    assert [m["content"] for m in messages[:3]] == ["Run", "Already saved", "Next"]
+    assert "Already saved" not in messages[-1]["content"]
+    assert messages[-1]["meta"]["interrupted"] is True
+
+
 def test_stop_targets_exact_turn_and_pauses_queue(tmp_path):
     database = Database(str(tmp_path / "chat.db"))
     chat_id = database.create_chat("Queue", "default")["id"]
@@ -75,13 +135,35 @@ async def test_messages_steer_the_running_turn_once_in_order(backend, monkeypatc
     commands = []
 
     async def agent(job):
-        jobs.append(job)
+        jobs.append(job.copy())
+        if len(jobs) > 1:
+            yield {"type": "delta", "text": "Follow-up answer"}
+            yield {"type": "result", "ok": True}
+            return
         started.set()
-        yield {"type": "tool", "id": "command", "name": "bash", "args": {}}
-        for _ in range(2):
+        yield {"type": "delta", "text": "Before the queue"}
+        yield {"type": "tool", "id": "command", "name": "bash", "args": {"command": "pwd"}}
+        yield {"type": "tool_done", "id": "command", "result": "/workspace", "error": False}
+        for index in range(2):
             message = await inbox.get()
             yield {"type": "input_consumed", "id": message["id"]}
-        yield {"type": "delta", "text": "Used both queued instructions"}
+            snapshot = backend.db.chat_snapshot(job["chat_id"])
+            visible = [m for m in snapshot["messages"] if not m["meta"].get("queued")]
+            assert [m["content"] for m in visible] == [
+                "Earlier question",
+                "Earlier answer",
+                "Run",
+                "Before the queue",
+                "second",
+                *(["Between queued messages", "third"] if index else []),
+            ]
+            assert snapshot["active_turn"]["steps"] == []
+            yield {
+                "type": "delta",
+                "text": "Used both queued instructions" if index else "Between queued messages",
+            }
+            # A duplicate acknowledgement must neither split nor clear this answer.
+            yield {"type": "input_consumed", "id": message["id"]}
         yield {"type": "result", "ok": True}
 
     async def control(chat_id, turn_id, command):
@@ -95,6 +177,8 @@ async def test_messages_steer_the_running_turn_once_in_order(backend, monkeypatc
     try:
         async with chat_client() as client:
             chat_id = (await client.post("/api/chats", json={})).json()["id"]
+            backend.db.add_message(chat_id, "user", "Earlier question")
+            backend.db.add_message(chat_id, "assistant", "Earlier answer")
             await client.post(f"/api/chats/{chat_id}/messages", json={"text": "Run", "message_id": "first"})
             await asyncio.wait_for(started.wait(), 2)
             for message_id in ("second", "third"):
@@ -109,7 +193,29 @@ async def test_messages_steer_the_running_turn_once_in_order(backend, monkeypatc
             snapshot = (await client.get(f"/api/chats/{chat_id}")).json()
             assert snapshot["active_turn"] is None
             assert not any(message["meta"].get("queued") for message in snapshot["messages"])
-            assert snapshot["messages"][-1]["content"] == "Used both queued instructions"
+            assert [m["content"] for m in snapshot["messages"]] == [
+                "Earlier question",
+                "Earlier answer",
+                "Run",
+                "Before the queue",
+                "second",
+                "Between queued messages",
+                "third",
+                "Used both queued instructions",
+            ]
+            assert [m["role"] for m in snapshot["messages"]] == ["user", "assistant"] * 4
+            before = snapshot["messages"][3]
+            assert before["meta"]["tools"] == ["bash"]
+            assert before["meta"]["steps"][1]["result"] == "/workspace"
+            assert before["meta"]["steps"][1]["ok"] is True
+            assert snapshot["messages"][-1]["meta"]["tools"] == []
+            await client.post(
+                f"/api/chats/{chat_id}/messages", json={"text": "Follow up", "message_id": "follow-up"}
+            )
+            await finish_background()
+            assert jobs[1]["history"] == [
+                {"role": m["role"], "content": m["content"]} for m in snapshot["messages"]
+            ]
     finally:
         await background.drain()
 
