@@ -67,6 +67,27 @@ class BrokerClient:
         )
         response.raise_for_status()
 
+    async def chat_agents(self, chat_id: str = "") -> list[dict[str, str]]:
+        response = await shared().get(
+            f"{self.base_url}/agent/chats",
+            headers=internal_headers(),
+            params={"chat_id": chat_id},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json()["agents"]
+
+    async def cleanup_chat_agent(self, chat_id: str, turn_id: str) -> None:
+        response = await shared().post(
+            f"{self.base_url}/agent/cleanup",
+            headers=internal_headers(),
+            json={"chat_id": chat_id, "turn_id": turn_id},
+            timeout=90,
+        )
+        response.raise_for_status()
+        if response.json().get("ok") is not True:
+            raise RuntimeError("Old chat agent cleanup was not confirmed")
+
     async def control_agent(self, chat_id: str, turn_id: str, command: dict[str, Any]) -> bool:
         response = await shared().post(
             f"{self.base_url}/agent/control",

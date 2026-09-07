@@ -1,24 +1,26 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
 import { test } from "node:test";
 
-const require = createRequire(import.meta.url);
-const extensionPath = require.resolve("../../images/agent-sets/default/extensions/nautionette/index.ts");
-
-for (const [model, api] of [
-  ["copilot/gpt-4o", "openai-responses"],
-  ["copilot/gpt-5", "openai-responses"],
-  ["openai/gpt-4o-mini", "openai-completions"],
-  ["anthropic/claude-sonnet-4", "openai-completions"],
+for (const [model, api, images] of [
+  ["copilot/gpt-4o", "openai-responses", undefined],
+  ["copilot/gpt-5", "openai-responses", "true"],
+  ["openai/gpt-4o-mini", "openai-completions", "true"],
+  ["anthropic/claude-sonnet-4", "openai-completions", undefined],
+  ["text-only/model", "openai-completions", "false"],
 ]) {
-  test(`${model} uses ${api} through the gateway`, async () => {
+  test(`${model} uses ${api} through the gateway with image support ${images}`, async () => {
     const originalModel = process.env.AGENT_MODEL;
+    const originalImages = process.env.NAUTIONETTE_MODEL_IMAGES;
     const originalFetch = globalThis.fetch;
     process.env.AGENT_MODEL = model;
+    if (images === undefined) delete process.env.NAUTIONETTE_MODEL_IMAGES;
+    else process.env.NAUTIONETTE_MODEL_IMAGES = images;
     globalThis.fetch = async () => new Response(JSON.stringify({ result: { tools: [] } }));
     try {
-      delete require.cache[extensionPath];
-      const { default: extension } = require(extensionPath);
+      // Give each env configuration a fresh ESM module, including with Node's native TS loader.
+      const url = new URL("../../images/agent-sets/default/extensions/nautionette/index.ts", import.meta.url);
+      url.searchParams.set("model", model);
+      const { default: extension } = await import(url.href);
       let registration;
       await extension({
         registerProvider(name, config) {
@@ -29,12 +31,15 @@ for (const [model, api] of [
       });
       assert.equal(registration.api, api);
       assert.equal(registration.models[0].id, model);
+      assert.deepEqual(registration.models[0].input, images === "false" ? ["text"] : ["text", "image"]);
       assert.equal(registration.baseUrl.endsWith("/v1"), true);
       assert.equal(registration.apiKey, "gateway");
     } finally {
       globalThis.fetch = originalFetch;
       if (originalModel === undefined) delete process.env.AGENT_MODEL;
       else process.env.AGENT_MODEL = originalModel;
+      if (originalImages === undefined) delete process.env.NAUTIONETTE_MODEL_IMAGES;
+      else process.env.NAUTIONETTE_MODEL_IMAGES = originalImages;
     }
   });
 }

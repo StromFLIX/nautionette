@@ -2,13 +2,13 @@
 /**
  * The whole contract of a Pi container.
  *
- * In:  AGENT_JOB, a base64 JSON job (prompt, history, optional output schema).
+ * In:  AGENT_JOB (base64 JSON) or AGENT_JOB_FILE (large jobs with images/history).
  * Out: NDJSON events on stdout, one JSON object per line, ending in `result`.
  *
  * Nothing is remembered between runs: the container starts, works and exits.
  */
 import { spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { prepareProjects, projectEnvironment } from "./project-git.mjs";
 import { contextUsage } from "./context-usage.mjs";
 import { createChatControl, listenForChatControl } from "./chat-control.mjs";
@@ -25,6 +25,11 @@ function log(...args) {
 }
 
 function readJob() {
+  if (process.env.AGENT_JOB_FILE) {
+    const job = JSON.parse(readFileSync(process.env.AGENT_JOB_FILE, "utf8"));
+    unlinkSync(process.env.AGENT_JOB_FILE);
+    return job;
+  }
   const raw = process.env.AGENT_JOB;
   if (!raw) throw new Error("AGENT_JOB is not set");
   return JSON.parse(Buffer.from(raw, "base64").toString("utf8"));
@@ -32,15 +37,19 @@ function readJob() {
 
 function renderPrompt(job) {
   const parts = [];
+  let imageNumber = 0;
+  const references = (images = []) => images.map(() => `[Attached image ${++imageNumber}]`).join("\n");
   if (job.history?.length) {
     parts.push("Conversation so far:");
     for (const message of job.history) {
       const who = message.role === "assistant" ? "Assistant" : "User";
       parts.push(`${who}: ${message.content}`);
+      if (message.images?.length) parts.push(references(message.images));
     }
     parts.push("---");
   }
-  parts.push(job.prompt ?? "");
+  parts.push(job.prompt || (job.images?.length ? "Please examine the attached image(s)." : ""));
+  if (job.images?.length) parts.push(references(job.images));
   if (job.output_schema) {
     parts.push(
       "",
@@ -123,7 +132,7 @@ async function main() {
   if (existsSync("/workspace-defaults")) {
     cpSync("/workspace-defaults", workspace, { recursive: true });
   }
-  writeFileSync(`${workspace}/JOB.json`, JSON.stringify({ ...job, history: undefined, project_credentials: undefined }, null, 2));
+  writeFileSync(`${workspace}/JOB.json`, JSON.stringify({ ...job, history: undefined, images: undefined, project_credentials: undefined }, null, 2));
   if (job.project_ids?.length) {
     emit({ type: "status", state: "projects", message: "Preparing this chat's project worktrees" });
     prepareProjects(job);
@@ -142,6 +151,7 @@ async function main() {
       ...process.env,
       ...projectEnvironment(job),
       AGENT_MODEL: model,
+      NAUTIONETTE_MODEL_IMAGES: job.supports_images === false ? "false" : "true",
       NAUTIONETTE_MODE: mode,
       NAUTIONETTE_INTERNET_STATUS: job.chat_id ? (job.internet_status || "blocked") : "",
       // Empty means "every federated tool"; a list narrows the bridge.
@@ -260,7 +270,8 @@ async function main() {
   });
   if (interactive) {
     send({ type: "set_steering_mode", mode: "one-at-a-time" });
-    send({ id: "initial", type: "prompt", message: prompt });
+    const images = [...(job.history || []).flatMap((message) => message.images || []), ...(job.images || [])];
+    send({ id: "initial", type: "prompt", message: prompt, ...(images.length ? { images } : {}) });
   }
   const code = await completion;
   control?.close();

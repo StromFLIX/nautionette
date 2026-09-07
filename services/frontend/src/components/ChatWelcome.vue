@@ -7,6 +7,7 @@
       <Composer
         ref="composer"
         v-model="text"
+        v-model:attachments="attachments"
         v-model:agent-set="agentSet"
         v-model:model="model"
         v-model:tools="tools"
@@ -14,7 +15,7 @@
         variant="welcome"
         :busy="busy"
         placeholder="e.g. Summarise the changelog at this URL every morning at 8."
-        @send="$emit('start', { text, agentSet, model, tools, projectIds })"
+        @send="$emit('start', { text, agentSet, model, tools, projectIds, attachments })"
       />
       <div class="welcome__chips">
         <button v-for="prompt in prompts" :key="prompt" class="starter" @click="use(prompt)">
@@ -79,6 +80,7 @@ const prompts = [
 ]
 
 const text = ref('')
+const attachments = ref([])
 const agentSet = ref(store.catalog.default_agent_set || 'default')
 const model = ref(store.catalog.default_model || '')
 const tools = ref(null)

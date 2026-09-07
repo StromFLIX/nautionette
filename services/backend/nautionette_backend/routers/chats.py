@@ -8,9 +8,10 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
-from .. import projects
+from .. import chat_images, projects
 from ..agent import (
     agent_job,
     build_history,
@@ -24,7 +25,7 @@ from ..config import settings
 from ..conversations import chat_snapshots, launch_next, run_turn, turn_events
 from ..db import db
 from ..events import bus
-from ..runtime import history_budget, runtime
+from ..runtime import cached_catalog, history_budget, runtime
 from ..security import require_user
 from .system import SSE_HEADERS
 
@@ -129,12 +130,59 @@ async def delete_chat(chat_id: str) -> dict[str, Any]:
     return {"ok": True}
 
 
+@router.post("/api/chats/{chat_id}/images")
+async def upload_image(chat_id: str, request: Request, name: str = "image") -> dict[str, Any]:
+    _chat_or_404(chat_id)
+    data = bytearray()
+    async for chunk in request.stream():
+        if len(data) + len(chunk) > chat_images.MAX_IMAGE_BYTES:
+            raise HTTPException(413, "Images must be at most 5 MiB each")
+        data.extend(chunk)
+    return await run_in_threadpool(
+        chat_images.store_image, chat_id, bytes(data), request.headers.get("content-type", ""), name
+    )
+
+
+@router.get("/api/chats/{chat_id}/images/{image_id}")
+def get_image(chat_id: str, image_id: str) -> Response:
+    image = db.one(
+        "SELECT data, mime_type FROM chat_images WHERE id = ? AND chat_id = ?", (image_id, chat_id)
+    )
+    if not image:
+        raise HTTPException(404, "Image not found")
+    return Response(
+        image["data"],
+        media_type=image["mime_type"],
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+        },
+    )
+
+
+@router.delete("/api/chats/{chat_id}/images/{image_id}")
+def discard_image(chat_id: str, image_id: str) -> dict[str, bool]:
+    _chat_or_404(chat_id)
+    db.execute(
+        "DELETE FROM chat_images WHERE id = ? AND chat_id = ? AND message_id IS NULL", (image_id, chat_id)
+    )
+    return {"ok": True}
+
+
 @router.post("/api/chats/{chat_id}/messages", response_model=None)
 async def send_message(chat_id: str, request: Request, payload: dict[str, Any] = Body(...)):
     chat = _chat_or_404(chat_id)
-    text = (payload.get("text") or "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="text is required")
+    if not isinstance(payload.get("text", ""), str):
+        raise HTTPException(422, "text must be a string")
+    text = payload.get("text", "").strip()
+    attachment_ids = chat_images.image_ids(payload.get("attachment_ids", []))
+    if not text and not attachment_ids:
+        raise HTTPException(status_code=400, detail="text or an image is required")
+    model_id = chat.get("model") or runtime("default_model")
+    model_info = next((m for m in (cached_catalog() or {}).get("models", []) if m["id"] == model_id), {})
+    if attachment_ids and model_info.get("supports_images") is False:
+        raise HTTPException(422, "This model is text-only. Choose a vision-capable model to send images.")
 
     history = build_history(db.list_messages(chat_id), max_chars=history_budget(chat.get("model")))
     message_id = payload.get("message_id") or uuid.uuid4().hex
@@ -154,16 +202,17 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
             message_id,
             project_ids,
             queue=payload.get("queue") is True,
+            attachment_ids=attachment_ids,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="This chat is still answering; retry shortly.") from exc
     if created and chat["title"] in {"New chat", ""} and not history:
-        preview = summarise_for_title(text)
+        preview = summarise_for_title(text or "Image attachment")
         db.execute("UPDATE chats SET title = ? WHERE id = ?", (preview, chat_id))
         spawn(
-            rewrite_chat_title(chat_id, text, chat.get("model") or runtime("default_model"), preview),
+            rewrite_chat_title(chat_id, text or "Image attachment", model_id, preview),
             name=f"chat-title-{chat_id}",
         )
 
@@ -183,6 +232,8 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
         internet_allowed=chat["internet_status"] == "allowed",
         internet_status=chat["internet_status"],
         project_ids=project_ids,
+        attachments=user_message["meta"].get("attachments", []),
+        supports_images=model_info.get("supports_images"),
     )
     if created and project_ids:
         selected_projects = [

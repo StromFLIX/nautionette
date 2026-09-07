@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
+import tarfile
 import threading
 import time
 from collections.abc import Iterator
 from typing import Any
 
-from . import daemon, images, projects
+from docker.errors import NotFound
+
+from . import chat_agents, daemon, images, projects
 from .config import (
     AGENT_EGRESS_NETWORK,
     AGENT_ENVIRONMENT,
@@ -33,6 +37,47 @@ STAGE_SECONDS = 20
 BUILD_POLL_SECONDS = 3
 _controls_lock = threading.Lock()
 _stopped: dict[tuple[str, str], threading.Event] = {}
+_completed: dict[tuple[str, str], threading.Event] = {}
+# Fence delayed HTTP requests for a cleaned-up turn, including ones that had
+# not yet registered when cleanup arrived. Bound retention to the call horizon.
+_retired: dict[tuple[str, str], float] = {}
+CLEANUP_TIMEOUT = 30
+
+
+def chat_inventory(chat_id: str = "") -> list[dict[str, str]]:
+    # Include calls still waiting for an image, before a container exists.
+    with _controls_lock:
+        keys = {key for key in _stopped if not chat_id or key[0] == chat_id}
+    keys.update(
+        (container.labels["nautionette.chat"], container.labels["nautionette.turn"])
+        for container in chat_agents.containers(chat_id)
+    )
+    return [{"chat_id": chat, "turn_id": turn} for chat, turn in sorted(keys)]
+
+
+def cleanup_chat(chat_id: str, turn_id: str) -> None:
+    """Stop an exact turn and wait for both Docker and its worktree claim.
+
+    The backend decides whether a turn is inactive. This verb never infers
+    orphanhood from age, and never releases claims or removes worktree files.
+    """
+    with _controls_lock:
+        _retired[(chat_id, turn_id)] = time.monotonic() + RUN_TIMEOUT + IMAGE_BUILD_TIMEOUT
+        stopped = _stopped.get((chat_id, turn_id))
+        completed = _completed.get((chat_id, turn_id))
+        if stopped is not None:
+            stopped.set()
+    for container in chat_agents.containers(chat_id, turn_id):
+        try:
+            # Force removal also handles created/paused agents. Docker does not
+            # return until removal completes; the mounted volumes are retained.
+            container.remove(force=True)
+        except NotFound:
+            pass  # The streaming owner may have removed it concurrently.
+    if completed is not None and not completed.wait(CLEANUP_TIMEOUT):
+        raise RuntimeError("The old chat agent has not released its worktree yet; retry cleanup")
+    if chat_agents.containers(chat_id, turn_id):
+        raise RuntimeError("The old chat agent is still present; retry cleanup")
 
 
 def control(chat_id: str, turn_id: str, command: dict[str, Any]) -> bool:
@@ -41,14 +86,7 @@ def control(chat_id: str, turn_id: str, command: dict[str, Any]) -> bool:
             stopped = _stopped.get((chat_id, turn_id))
             if stopped is not None:
                 stopped.set()
-    containers = daemon.client().containers.list(
-        filters={
-            "label": [
-                f"nautionette.chat={chat_id}",
-                f"nautionette.turn={turn_id}",
-            ]
-        }
-    )
+    containers = chat_agents.containers(chat_id, turn_id, include_stopped=False)
     if not containers:
         return command["type"] == "stop" and stopped is not None
     delivered = False
@@ -109,7 +147,13 @@ def _await_image(tag: str, stopped: threading.Event | None = None) -> Iterator[s
 
 def _environment(job: dict[str, Any]) -> dict[str, str]:
     environment = dict(AGENT_ENVIRONMENT)
-    environment["AGENT_JOB"] = base64.b64encode(json.dumps(job, default=str).encode("utf-8")).decode("ascii")
+    raw = json.dumps(job, default=str).encode("utf-8")
+    # Linux caps a single environment value at ~128 KiB. Image bytes (and long
+    # transcripts) go through Docker's archive API, never argv or environment.
+    if len(raw) > 32_000:
+        environment["AGENT_JOB_FILE"] = "/tmp/nautionette-job.json"  # noqa: S108 - private container filesystem
+    else:
+        environment["AGENT_JOB"] = base64.b64encode(raw).decode("ascii")
     if job.get("project_ids"):
         environment["HOME"] = "/workspace"
         environment["PI_CODING_AGENT_DIR"] = "/workspace/.pi-agent"
@@ -120,15 +164,21 @@ def _environment(job: dict[str, Any]) -> dict[str, str]:
     return environment
 
 
+def _copy_job(container: Any, job: dict[str, Any]) -> None:
+    raw = json.dumps(job, default=str).encode("utf-8")
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w") as tar:
+        entry = tarfile.TarInfo("nautionette-job.json")
+        entry.size = len(raw)
+        entry.mode = 0o600
+        entry.uid = entry.gid = 10001 if job.get("project_ids") else 0
+        tar.addfile(entry, io.BytesIO(raw))
+    if not container.put_archive("/tmp", archive.getvalue()):  # noqa: S108
+        raise RuntimeError("Could not deliver the agent job")
+
+
 def decide_internet(chat_id: str, turn_id: str, allowed: bool) -> bool:
-    containers = daemon.client().containers.list(
-        filters={
-            "label": [
-                f"nautionette.chat={chat_id}",
-                f"nautionette.turn={turn_id}",
-            ]
-        }
-    )
+    containers = chat_agents.containers(chat_id, turn_id, include_stopped=False)
     if not containers:
         return False
     for container in containers:
@@ -165,19 +215,34 @@ def decide_internet(chat_id: str, turn_id: str, allowed: bool) -> bool:
 
 def run(job: dict[str, Any]) -> Iterator[str]:
     stopped = threading.Event()
+    completed = threading.Event()
     key = (job.get("chat_id", ""), job.get("turn_id", ""))
     if key[0]:
         with _controls_lock:
-            if key in _stopped:
-                yield _ndjson({"type": "error", "message": "This turn is already running"})
-                return
-            _stopped[key] = stopped
+            now = time.monotonic()
+            for retired in [item for item, deadline in _retired.items() if deadline <= now]:
+                _retired.pop(retired)
+            rejection = (
+                "This turn was already cleaned up"
+                if key in _retired
+                else "This turn is already running"
+                if key in _stopped
+                else ""
+            )
+            if not rejection:
+                _stopped[key] = stopped
+                _completed[key] = completed
+        if rejection:
+            yield _ndjson({"type": "error", "message": rejection})
+            return
     try:
-        yield from _run(job, stopped)
+        yield from _run(job, stopped, completed)
     finally:
         if key[0]:
             with _controls_lock:
                 _stopped.pop(key, None)
+                _completed.pop(key, None)
+        completed.set()
 
 
 def _timeout_error(timeout: int) -> dict[str, Any]:
@@ -193,7 +258,9 @@ def _timeout_error(timeout: int) -> dict[str, Any]:
     }
 
 
-def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
+def _run(
+    job: dict[str, Any], stopped: threading.Event, completed: threading.Event | None = None
+) -> Iterator[str]:
     agent_set = job.get("agent_set") or "default"
     if agent_set not in images.discovered_agent_sets():
         yield _ndjson({"type": "error", "message": f"unknown agent set '{agent_set}'"})
@@ -222,10 +289,11 @@ def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
         claimed_projects = project_ids
         if job.get("chat_id") and not daemon.client().networks.get(AGENT_NETWORK).attrs.get("Internal"):
             raise RuntimeError("Chat agents require an internal Docker network with egress disabled")
+        environment = _environment(job)
         container = daemon.client().containers.create(
             tag,
             detach=True,
-            environment=_environment(job),
+            environment=environment,
             network=AGENT_NETWORK if job.get("chat_id") else TARGET_NETWORK,
             volumes={WORKFLOWS_VOLUME: {"bind": "/workflows", "mode": "ro"}},
             mounts=project_mounts,
@@ -243,12 +311,15 @@ def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
             security_opt=["no-new-privileges:true"],
             cap_drop=["ALL"],
             labels={
+                "nautionette.deployment": WORKFLOWS_VOLUME,
                 "nautionette.chat": job.get("chat_id", ""),
                 "nautionette.turn": job.get("turn_id", ""),
                 **projects.labels(project_ids, job.get("chat_id", "")),
             },
             tty=False,
         )
+        if "AGENT_JOB_FILE" in environment:
+            _copy_job(container, job)
         if job.get("chat_id") and job.get("internet_allowed") is True:
             daemon.client().networks.get(AGENT_EGRESS_NETWORK).connect(container)
         with _controls_lock:
@@ -346,4 +417,6 @@ def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
             except Exception:  # noqa: BLE001, S110 - already gone is the outcome we wanted
                 pass
         projects.release(claimed_projects, job.get("chat_id", ""))
+        if completed is not None:
+            completed.set()
         yield _ndjson({"type": "closed"})

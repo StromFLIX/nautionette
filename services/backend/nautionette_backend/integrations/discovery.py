@@ -30,6 +30,18 @@ def _pluck(item: dict[str, Any], path: str) -> Any:
     return value
 
 
+def image_support(item: dict[str, Any]) -> bool | None:
+    """Unknown is not text-only: many OpenAI-compatible catalogs omit capabilities."""
+    modalities = _pluck(item, "architecture.input_modalities")
+    if isinstance(modalities, list):
+        return "image" in modalities
+    for path in ("capabilities.supports.vision", "capabilities.vision"):
+        value = _pluck(item, path)
+        if type(value) is bool:
+            return value
+    return None
+
+
 async def discover_models(instance: str) -> list[dict[str, Any]]:
     type_id = integration_type(instance)
     if not type_id:
@@ -74,6 +86,7 @@ async def discover_models(instance: str) -> list[dict[str, Any]]:
                 ),
                 "instance": instance,
                 "context_length": window,
+                "supports_images": image_support(item),
             }
         )
     return models

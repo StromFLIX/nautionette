@@ -37,6 +37,17 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS messages_chat ON messages(chat_id, created_at);
+CREATE TABLE IF NOT EXISTS chat_images (
+    id TEXT PRIMARY KEY,
+    chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+    message_id TEXT REFERENCES messages(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chat_images_chat ON chat_images(chat_id);
 CREATE TABLE IF NOT EXISTS chat_turns (
     id TEXT PRIMARY KEY,
     chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
@@ -360,6 +371,7 @@ class Database:
         project_ids: list[str] | None = None,
         *,
         queue: bool = False,
+        attachment_ids: list[str] | None = None,
     ) -> tuple[dict[str, Any], bool]:
         with self._lock, self._conn:
             existing = self._conn.execute(
@@ -374,7 +386,21 @@ class Database:
                     and json.loads(existing["meta"]).get("project_ids", []) != project_ids
                 ):
                     raise ValueError("message_id was already used with a different project selection")
+                if [a["id"] for a in json.loads(existing["meta"]).get("attachments", [])] != (
+                    attachment_ids or []
+                ):
+                    raise ValueError("message_id was already used with different images")
                 return {**dict(existing), "meta": json.loads(existing["meta"])}, False
+            attachments = []
+            for image_id in attachment_ids or []:
+                image = self._conn.execute(
+                    "SELECT id, name, mime_type, size FROM chat_images "
+                    "WHERE id = ? AND chat_id = ? AND message_id IS NULL",
+                    (image_id, chat_id),
+                ).fetchone()
+                if not image:
+                    raise ValueError("An image is missing or already attached to another message")
+                attachments.append(dict(image))
             waiting = (
                 queue
                 and self._conn.execute(
@@ -386,12 +412,18 @@ class Database:
             state = "queued" if waiting else "running"
             now = time.time()
             meta = {"project_ids": project_ids} if project_ids else {}
+            if attachments:
+                meta["attachments"] = attachments
             if waiting:
                 meta["queued"] = True
             self._conn.execute(
                 "INSERT INTO messages (id, chat_id, role, content, meta, created_at) VALUES (?,?,?,?,?,?)",
                 (message_id, chat_id, "user", text, json.dumps(meta), now),
             )
+            for image in attachments:
+                self._conn.execute(
+                    "UPDATE chat_images SET message_id = ? WHERE id = ?", (message_id, image["id"])
+                )
             self._conn.execute(
                 "INSERT INTO chat_turns (id, chat_id, user_id, state) VALUES (?,?,?,?)",
                 (message_id, chat_id, message_id, state),

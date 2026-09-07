@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import json
+import tarfile
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -328,6 +330,32 @@ def running_agent(agent_images, docker, monkeypatch):
 
     monkeypatch.setattr(agent_run.threading, "Timer", Timer)
     return container, timers
+
+
+def test_large_jobs_are_copied_before_start_not_put_in_environment(client, running_agent, docker):
+    container, _ = running_agent
+    job = {"prompt": "look", "images": [{"type": "image", "mimeType": "image/png", "data": "x" * 200000}]}
+    events = frames(client.post("/agent/run", headers=HEADERS, json=job))
+    assert not any(event["type"] == "error" for event in events)
+    environment = docker.containers.create.call_args.kwargs["environment"]
+    assert "AGENT_JOB" not in environment and environment["AGENT_JOB_FILE"].endswith("nautionette-job.json")
+    directory, archive = container.put_archive.call_args.args
+    assert directory == "/tmp"  # noqa: S108
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+        entry = tar.getmembers()[0]
+        assert entry.name == "nautionette-job.json" and entry.mode == 0o600
+        assert json.loads(tar.extractfile(entry).read()) == job
+    calls = [call[0] for call in container.mock_calls]
+    assert calls.index("put_archive") < calls.index("start")
+
+
+def test_failed_job_copy_does_not_start_the_agent(client, running_agent):
+    container, _ = running_agent
+    container.put_archive.return_value = False
+    events = frames(client.post("/agent/run", headers=HEADERS, json={"prompt": "x" * 200000}))
+    assert any(event.get("message") == "Could not deliver the agent job" for event in events)
+    container.start.assert_not_called()
+    container.remove.assert_called_once_with(force=True)
 
 
 @pytest.mark.parametrize("has_output", [False, True])

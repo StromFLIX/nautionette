@@ -6,6 +6,9 @@
         <span class="grow truncate">{{ run.workflow }}</span>
         <span class="chip" :class="`chip--${RUN_TONE[run.status] || ''}`">{{ run.status }}</span>
       </RouterLink>
+      <div v-if="meta.attachments?.length" class="bubble__images">
+        <ChatImage v-for="image in meta.attachments" :key="image.id" :image="image" :chat-id="chatId" />
+      </div>
       <template v-for="(part, index) in parts" :key="part.id || index">
         <ToolCall v-if="part.kind === 'tool'" :step="part" :live="live" />
         <div v-else-if="part.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(part.text)" />
@@ -43,12 +46,14 @@
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue'
 import ToolCall from './ToolCall.vue'
+import ChatImage from './ChatImage.vue'
 import { renderMarkdown } from '../markdown'
 import { copyText } from '../clipboard'
 import { RUN_TONE, shortTime } from '../format'
 
 const props = defineProps({
   role: { type: String, default: 'assistant' },
+  chatId: { type: String, default: '' },
   content: { type: String, default: '' },
   meta: { type: Object, default: () => ({}) },
   createdAt: { type: Number, default: 0 },
@@ -120,6 +125,7 @@ const time = computed(() => shortTime(props.createdAt))
 </script>
 
 <style scoped>
+.bubble__images { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
 .msg {
   display: flex;
   align-items: flex-end;

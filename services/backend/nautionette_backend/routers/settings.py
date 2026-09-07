@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from .. import catalog as catalog_service
 from ..db import db
 from ..events import bus
+from ..git_authorship import DEFAULTS as GIT_AUTHORSHIP_DEFAULTS
+from ..git_authorship import validate as validate_git_authorship
 from ..runtime import defaults, forget_catalog, runtime
 from ..security import require_user
 
@@ -29,6 +31,23 @@ async def get_settings() -> dict[str, Any]:
 
 @router.put("/api/settings")
 async def put_settings(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    git_keys = GIT_AUTHORSHIP_DEFAULTS.keys() & payload.keys()
+    if git_keys:
+        merged = {key: runtime(key) for key in GIT_AUTHORSHIP_DEFAULTS}
+        merged.update(
+            {
+                key: GIT_AUTHORSHIP_DEFAULTS[key] if payload[key] in (None, "") else payload[key]
+                for key in git_keys
+            }
+        )
+        try:
+            validated = validate_git_authorship(merged)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        payload = {
+            **payload,
+            **{key: validated[key] for key in git_keys if payload[key] not in (None, "")},
+        }
     for key in defaults():
         if key not in payload:
             continue
