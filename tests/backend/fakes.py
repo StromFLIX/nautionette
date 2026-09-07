@@ -132,6 +132,9 @@ class FakeBroker:
         self.jobs: list[dict[str, Any]] = []
         self.restarts = 0
         self.restart_error: Exception | None = None
+        self.agents: list[dict[str, str]] = []
+        self.cleanups: list[tuple[str, str]] = []
+        self.cleanup_error: Exception | None = None
 
     async def health(self) -> dict[str, Any]:
         return {"status": "ok"}
@@ -143,6 +146,17 @@ class FakeBroker:
         self.jobs.append(job)
         for event in self.events:
             yield event
+
+    async def chat_agents(self, chat_id: str = "") -> list[dict[str, str]]:
+        return [agent for agent in self.agents if not chat_id or agent["chat_id"] == chat_id]
+
+    async def cleanup_chat_agent(self, chat_id: str, turn_id: str) -> None:
+        self.cleanups.append((chat_id, turn_id))
+        if self.cleanup_error:
+            raise self.cleanup_error
+        self.agents = [
+            agent for agent in self.agents if (agent["chat_id"], agent["turn_id"]) != (chat_id, turn_id)
+        ]
 
     async def restart_worker(self) -> dict[str, Any]:
         if self.restart_error:

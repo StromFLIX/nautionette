@@ -8,7 +8,7 @@ from contextlib import ExitStack
 
 import docker
 import pytest
-from nautionette_docker_broker import agent_run
+from nautionette_docker_broker import agent_run, chat_agents
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("NAUTIONETTE_DOCKER_TESTS") != "1",
@@ -21,6 +21,9 @@ def test_real_pi_steering_and_stop_at_a_running_tool(monkeypatch, repo_root, sto
     client = docker.from_env()
     with ExitStack() as cleanup:
         cleanup.callback(client.close)
+        volume = client.volumes.create()
+        cleanup.callback(volume.remove)
+        monkeypatch.setattr(chat_agents, "WORKFLOWS_VOLUME", volume.name)
         job = {
             "chat_id": "chat-test",
             "turn_id": "turn-test",
@@ -36,6 +39,7 @@ def test_real_pi_steering_and_stop_at_a_running_tool(monkeypatch, repo_root, sto
                 "PI_CODING_AGENT_DIR": "/workspace/pi-config",
             },
             labels={"nautionette.chat": job["chat_id"], "nautionette.turn": job["turn_id"]},
+            volumes={volume.name: {"bind": "/workflows", "mode": "ro"}},
             network="none",
             cap_drop=["ALL"],
             security_opt=["no-new-privileges:true"],

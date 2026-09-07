@@ -8,6 +8,10 @@ from nautionette_docker_broker import agent_run
 
 def test_control_targets_only_the_exact_chat_and_turn(monkeypatch):
     container = SimpleNamespace(
+        labels={"nautionette.chat": "chat-a", "nautionette.turn": "turn-a"},
+        attrs={
+            "Mounts": [{"Type": "volume", "Name": agent_run.WORKFLOWS_VOLUME, "Destination": "/workflows"}]
+        },
         kill=Mock(),
         exec_run=Mock(
             return_value=SimpleNamespace(
@@ -21,7 +25,7 @@ def test_control_targets_only_the_exact_chat_and_turn(monkeypatch):
     command = {"id": "input", "type": "steer", "text": "Next instruction"}
     assert agent_run.control("chat-a", "turn-a", command)
     containers.list.assert_called_with(
-        filters={"label": ["nautionette.chat=chat-a", "nautionette.turn=turn-a"]}
+        all=False, filters={"label": ["nautionette.chat=chat-a", "nautionette.turn=turn-a"]}
     )
     assert json.loads(container.exec_run.call_args.args[0][-1]) == command
     assert agent_run.control("chat-a", "turn-a", {"id": "stop", "type": "stop"})

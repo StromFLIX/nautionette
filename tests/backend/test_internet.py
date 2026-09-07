@@ -71,7 +71,7 @@ def test_future_turns_inherit_only_their_chats_grant(client, db, broker):
     assert [job["chat_id"] for job in broker.jobs] == [approved, approved, blocked]
 
 
-async def test_tool_request_is_visible_until_turn_ends(db, monkeypatch):
+async def test_tool_request_is_visible_until_turn_ends(db, broker, monkeypatch):
     chat = db.create_chat("Research", "default")
     db.accept_chat_message(chat["id"], "Research this", "turn-a")
     requested = asyncio.Event()
