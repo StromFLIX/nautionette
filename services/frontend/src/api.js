@@ -107,6 +107,7 @@ export const api = {
 
   runs: (workflow) => request(`/api/runs${workflow ? `?workflow=${encodeURIComponent(workflow)}` : ''}`),
   run: (id) => request(`/api/runs/${id}`),
+  runGraph: (id, signal) => request(`/api/runs/${encodeURIComponent(id)}/graph`, { signal }),
   cancelRun: (id) => request(`/api/runs/${id}/cancel`, { method: 'POST' }),
   terminateRun: (id) => request(`/api/runs/${id}/terminate`, { method: 'POST', ...json({}) })
 }

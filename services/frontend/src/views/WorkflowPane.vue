@@ -6,7 +6,7 @@
 
   <!-- a draft waiting for a human -->
   <div v-else-if="draft" class="stack grow">
-    <header class="pane-head">
+    <header class="pane-head draft-head">
       <button class="btn btn--icon pane-head__back" @click="backTo('/workflows')">
         <span class="material-icons">arrow_back</span>
       </button>
@@ -26,7 +26,19 @@
       </button>
     </header>
 
-    <div class="pane-body scroll-y grow">
+    <nav class="tabs" aria-label="Draft views">
+      <button v-for="item in ['Flow', 'Code diff']" :key="item" class="tab" :class="{ 'tab--active': tab === item }" @click="tab = item">{{ item }}</button>
+    </nav>
+    <WorkflowGraph v-if="tab === 'Flow'" :graph="draftGraph">
+      <template #source>
+        <select v-model="draftMode" class="field flow-picker" aria-label="Draft comparison version">
+          <option value="changes">{{ draft.previous_graph ? 'Changes' : 'New workflow' }}</option>
+          <option value="proposed">Proposed</option>
+          <option v-if="draft.previous_graph" value="deployed">Deployed</option>
+        </select>
+      </template>
+    </WorkflowGraph>
+    <div v-else class="pane-body scroll-y grow">
       <section v-if="validation?.steps?.length" class="block">
         <div class="row" style="flex-wrap: wrap">
           <span
@@ -90,7 +102,25 @@
       >{{ item }}</button>
     </nav>
 
-    <div class="pane-body scroll-y grow">
+    <template v-if="tab === 'Flow'">
+      <ExecutionFlow v-if="selectedRun" :key="selectedRun" :workflow-id="selectedRun">
+        <template #source>
+          <select v-model="selectedRun" class="field flow-picker" aria-label="Flow source">
+            <option value="">Definition</option>
+            <option v-for="entry in workflow.runs || []" :key="entry.workflow_id" :value="entry.workflow_id">{{ entry.status }} - {{ fullTime(entry.created_at) }}</option>
+          </select>
+        </template>
+      </ExecutionFlow>
+      <WorkflowGraph v-else :key="name" :graph="workflow.graph">
+        <template #source>
+          <select v-model="selectedRun" class="field flow-picker" aria-label="Flow source">
+            <option value="">Definition</option>
+            <option v-for="entry in workflow.runs || []" :key="entry.workflow_id" :value="entry.workflow_id">{{ entry.status }} - {{ fullTime(entry.created_at) }}</option>
+          </select>
+        </template>
+      </WorkflowGraph>
+    </template>
+    <div v-else class="pane-body scroll-y grow">
       <template v-if="tab === 'Run'">
         <section v-if="disabled" class="notice">
           <span class="material-icons">pause_circle</span>
@@ -155,7 +185,10 @@
     </div>
   </div>
 
-  <div v-else class="empty" />
+  <div v-else class="empty">
+    <span>{{ loadError || 'Loading...' }}</span>
+    <button v-if="loadError" class="btn btn--outline" @click="load">Retry</button>
+  </div>
 </template>
 
 <script setup>
@@ -164,6 +197,9 @@ import { useQuasar } from 'quasar'
 import { useRoute, useRouter } from 'vue-router'
 import CodeViewer from '../components/CodeViewer.vue'
 import TriggerSnippet from '../components/TriggerSnippet.vue'
+import WorkflowGraph from '../components/WorkflowGraph.vue'
+import ExecutionFlow from '../components/ExecutionFlow.vue'
+import { compareGraphs } from '../flow'
 import { RUN_TONE, avatarStyle, diffLines, fullTime } from '../format'
 import { backTo } from '../router'
 import { actions, store } from '../store'
@@ -173,12 +209,16 @@ const $q = useQuasar()
 const route = useRoute()
 const router = useRouter()
 
-const tabs = ['Run', 'Code', 'History']
+const tabs = ['Flow', 'Run', 'Code', 'History']
 const chatModes = [
   { value: 'same', label: 'One chat' },
   { value: 'new', label: 'A chat per run' }
 ]
-const tab = ref('Run')
+const tab = ref('Flow')
+const selectedRun = ref('')
+const draftMode = ref('changes')
+const loadError = ref('')
+let loadVersion = 0
 const workflow = ref(null)
 const draft = ref(null)
 const validation = ref(null)
@@ -191,6 +231,12 @@ const name = computed(() => route.params.name || '')
 const inputProperties = computed(() => workflow.value?.manifest?.inputs?.properties || {})
 const disabled = computed(() => Boolean(workflow.value?.settings?.disabled))
 const chatMode = computed(() => workflow.value?.settings?.chat_mode || 'same')
+const draftGraph = computed(() => {
+  if (!draft.value) return null
+  if (draftMode.value === 'proposed') return draft.value.graph
+  if (draftMode.value === 'deployed') return draft.value.previous_graph
+  return compareGraphs(draft.value.previous_graph, draft.value.graph)
+})
 
 const files = computed(() => [
   { name: `${workflow.value.name}.py`, code: workflow.value.code, language: 'python', icon: 'description' },
@@ -203,19 +249,32 @@ const files = computed(() => [
 ])
 
 async function load () {
+  const version = ++loadVersion
   workflow.value = null
   draft.value = null
   validation.value = null
+  loadError.value = ''
+  tab.value = 'Flow'
+  selectedRun.value = ''
+  draftMode.value = 'changes'
   if (!name.value) return
-  if (store.drafts.some((item) => item.name === name.value)) {
-    draft.value = await api.draft(name.value)
-    validation.value = draft.value.validation || await api.validate(name.value, draft.value.code)
-    return
+  try {
+    if (store.drafts.some((item) => item.name === name.value)) {
+      const result = await api.draft(name.value)
+      if (version !== loadVersion) return
+      draft.value = result
+      const report = result.validation || await api.validate(name.value, result.code)
+      if (version === loadVersion) validation.value = report
+      return
+    }
+    const result = await api.workflow(name.value)
+    if (version !== loadVersion) return
+    workflow.value = result
+    inputs.value = {}
+    cron.value = result.schedule?.cron || '0 8 * * *'
+  } catch (error) {
+    if (version === loadVersion) loadError.value = error.message
   }
-  workflow.value = await api.workflow(name.value)
-  inputs.value = {}
-  tab.value = 'Run'
-  cron.value = workflow.value.schedule?.cron || '0 8 * * *'
 }
 
 function payload () {
@@ -288,10 +347,29 @@ async function discard () {
 }
 
 watch(name, load)
+watch(() => store.drafts.some((item) => item.name === name.value), load)
 onMounted(load)
 </script>
 
 <style scoped>
+.flow-picker {
+  width: 100%;
+  max-width: 290px;
+  min-width: 0;
+  height: 32px;
+  padding: 4px 8px;
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+.draft-head {
+  flex-wrap: wrap;
+}
+
+.draft-head > .grow {
+  min-width: 100px;
+}
+
 .pane-body {
   padding: 18px 22px 40px;
 }

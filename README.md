@@ -123,6 +123,48 @@ Where the files live:
 
 Git is the reason a workflow is a file at all. Nothing in the design assumes an agent wrote it — a workflow typed by hand in an editor and pushed from a laptop takes exactly the same path through validation and deploy.
 
+### Interactive flow views
+
+Workflows open on **Flow**. The definition diagram shows activities, child workflows,
+conditions, loops, timers, parallel groups, and returns without executing the source.
+Select a node to inspect its source; pan, zoom, search, or change the layout direction.
+Run controls, code, and history remain in their own tabs.
+
+Select a run from the flow source menu, or open **Runs**, for observed Temporal history.
+Active runs refresh every three seconds while the page is visible. Nodes carry real
+execution states, retry attempts, durations, inputs, results, and failures. Refreshes
+preserve the camera and selection. The active step opens in view on short screens;
+node details become a bottom sheet on mobile.
+
+Drafts open with a visual comparison: green additions, amber changes, and dashed red
+removals, including changed connections. **Proposed**, **Deployed**, and **Code diff**
+remain available before approving. Changes outside diagrammed steps are reflected on
+the workflow node and in the code diff.
+
+Definition diagrams are structural previews, not a Python execution engine. Helper
+calls, dynamic expressions, and complex exception handling stay as source blocks;
+warnings flag partial diagrams. Run diagrams cover ordinary activities, child workflows,
+timers, and received signals in a single execution, with edges based on observed command
+and completion order, not inferred data dependencies. Local activity markers and child
+execution internals are not expanded; child nodes link to their own run. History is
+capped at 2,000 relevant events with an explicit warning, and payloads use the history
+reader's existing truncation limits. A lost connection leaves the last graph visible
+and marks updates as paused.
+
+Frontend verification (from the repository root):
+
+```sh
+npm --prefix services/frontend ci
+npm --prefix services/frontend test
+services/frontend/node_modules/.bin/playwright install chromium
+npm --prefix services/frontend run test:e2e
+npm --prefix services/frontend run build
+```
+
+The browser tests use mocked API responses and the real Python graph builders via
+`uv`, so the workspace's Python dependencies must also be installed. They do not
+start workflows or require a running Temporal server.
+
 ## The authoring schema
 
 An agent that writes code needs a narrow door. `workflow-mcp` is that door: every tool takes JSON-Schema-validated arguments, and every write runs the same checks, no matter whether Pi, the frontend or a future git sync asked for it.

@@ -12,6 +12,7 @@ from ..db import db
 from ..events import bus
 from ..runs import restart_worker
 from ..security import require_user
+from ..workflow_graph import definition_graph
 
 router = APIRouter(dependencies=[Depends(require_user)])
 
@@ -38,6 +39,7 @@ async def list_workflows() -> dict[str, Any]:
 @router.get("/api/workflows/{name}")
 async def get_workflow(name: str) -> dict[str, Any]:
     workflow = await authoring.get_workflow(name)
+    workflow["graph"] = definition_graph(workflow.get("code", ""), name)
     workflow["runs"] = db.list_runs(name, limit=25)
     workflow["settings"] = db.workflow_settings(name)
     workflow["schedule"] = next(
@@ -101,7 +103,15 @@ async def list_drafts() -> dict[str, Any]:
 
 @router.get("/api/drafts/{name}")
 async def get_draft(name: str) -> dict[str, Any]:
-    return await authoring.get_draft(name)
+    draft = await authoring.get_draft(name)
+    draft["graph"] = definition_graph(draft.get("code", ""), name)
+    draft["previous_graph"] = None
+    if not draft.get("is_new", False):
+        published = next((item for item in await authoring.list_workflows() if item["name"] == name), None)
+        if published:
+            previous = await authoring.get_workflow(name)
+            draft["previous_graph"] = definition_graph(previous.get("code", ""), name)
+    return draft
 
 
 @router.post("/api/drafts/{name}/approve")

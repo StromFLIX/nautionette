@@ -7,6 +7,7 @@ import json
 from datetime import timedelta
 from typing import Any
 
+from temporalio.api.enums.v1 import PendingActivityState
 from temporalio.client import (
     Client,
     Schedule,
@@ -25,13 +26,26 @@ _HISTORY_EVENTS = {
     "workflow_execution_timed_out_event_attributes": "workflow.timed_out",
     "workflow_execution_terminated_event_attributes": "workflow.terminated",
     "workflow_execution_canceled_event_attributes": "workflow.canceled",
+    "workflow_execution_continued_as_new_event_attributes": "workflow.continued_as_new",
+    "workflow_execution_signaled_event_attributes": "signal.received",
     "workflow_task_failed_event_attributes": "workflow.task_failed",
     "activity_task_scheduled_event_attributes": "activity.scheduled",
+    "activity_task_started_event_attributes": "activity.started",
+    "activity_task_canceled_event_attributes": "activity.canceled",
     "activity_task_completed_event_attributes": "activity.completed",
     "activity_task_failed_event_attributes": "activity.failed",
     "activity_task_timed_out_event_attributes": "activity.timed_out",
     "timer_started_event_attributes": "timer.started",
     "timer_fired_event_attributes": "timer.fired",
+    "timer_canceled_event_attributes": "timer.canceled",
+    "start_child_workflow_execution_initiated_event_attributes": "child.scheduled",
+    "start_child_workflow_execution_failed_event_attributes": "child.failed",
+    "child_workflow_execution_started_event_attributes": "child.started",
+    "child_workflow_execution_completed_event_attributes": "child.completed",
+    "child_workflow_execution_failed_event_attributes": "child.failed",
+    "child_workflow_execution_canceled_event_attributes": "child.canceled",
+    "child_workflow_execution_timed_out_event_attributes": "child.timed_out",
+    "child_workflow_execution_terminated_event_attributes": "child.terminated",
 }
 
 # Whoever reads a history pays for every character of it.
@@ -112,6 +126,18 @@ class TemporalGateway:
             "status": info.status.name if info.status else "UNKNOWN",
             "start_time": info.start_time.isoformat() if info.start_time else None,
             "close_time": info.close_time.isoformat() if info.close_time else None,
+            "pending_activities": [
+                {
+                    "activity_id": activity.activity_id,
+                    "state": PendingActivityState.Name(activity.state)
+                    .removeprefix("PENDING_ACTIVITY_STATE_").lower(),
+                    "attempt": activity.attempt,
+                    "started_at": activity.last_started_time.ToJsonString()
+                    if activity.HasField("last_started_time") else None,
+                    "error": _failure(activity.last_failure) if activity.HasField("last_failure") else None,
+                }
+                for activity in info.raw_description.pending_activities
+            ],
         }
 
     async def recent(self, limit: int = 50) -> list[dict[str, Any]]:
@@ -132,10 +158,12 @@ class TemporalGateway:
                 break
         return out
 
-    async def history(self, workflow_id: str, limit: int = 200) -> list[dict[str, Any]]:
+    async def history(
+        self, workflow_id: str, limit: int = 200, run_id: str | None = None
+    ) -> list[dict[str, Any]]:
         """One run's timeline: what each step was given, and what came back."""
         client = await self.client()
-        handle = client.get_workflow_handle(workflow_id)
+        handle = client.get_workflow_handle(workflow_id, run_id=run_id)
 
         async def decode(payloads: Any) -> Any:
             if payloads is None or not getattr(payloads, "payloads", None):
@@ -158,9 +186,25 @@ class TemporalGateway:
                 activities[event.event_id] = body.activity_type.name
             entry: dict[str, Any] = {
                 "id": event.event_id,
-                "at": event.event_time.ToDatetime().isoformat(timespec="seconds") + "Z",
+                "at": event.event_time.ToJsonString(),
                 "event": label,
             }
+            for key in ("scheduled_event_id", "initiated_event_id", "started_event_id",
+                        "workflow_task_completed_event_id", "activity_id", "timer_id", "attempt",
+                        "signal_name", "new_execution_run_id"):
+                if value := getattr(body, key, None):
+                    entry[key] = value
+            if workflow_type := getattr(body, "workflow_type", None):
+                entry["workflow_type"] = workflow_type.name
+            if execution := getattr(body, "workflow_execution", None):
+                entry["workflow_id"] = execution.workflow_id
+                entry["run_id"] = execution.run_id
+            elif child_id := getattr(body, "workflow_id", None):
+                entry["workflow_id"] = child_id
+            if task_queue := getattr(body, "task_queue", None):
+                entry["task_queue"] = task_queue.name
+            if timeout := getattr(body, "start_to_fire_timeout", None):
+                entry["duration_seconds"] = timeout.ToTimedelta().total_seconds()
             # Every later activity event points back at the one that scheduled it.
             if activity := activities.get(getattr(body, "scheduled_event_id", 0) or event.event_id):
                 entry["activity"] = activity

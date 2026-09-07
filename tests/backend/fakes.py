@@ -258,7 +258,9 @@ class FakeTemporal:
     async def recent(self, limit: int = 50) -> list[dict[str, Any]]:
         return [dict(item) for item in list(self.executions.values())[:limit]]
 
-    async def history(self, workflow_id: str, limit: int = 200) -> list[dict[str, Any]]:
+    async def history(
+        self, workflow_id: str, limit: int = 200, run_id: str | None = None
+    ) -> list[dict[str, Any]]:
         return list(self.histories.get(workflow_id, []))[:limit]
 
     async def cancel(self, workflow_id: str) -> None:

@@ -11,6 +11,7 @@ from ..clients import temporal
 from ..config import settings
 from ..db import db
 from ..events import bus
+from ..execution_graph import execution_graph
 from ..security import require_user, token_matches
 
 router = APIRouter()
@@ -48,6 +49,13 @@ async def get_run(workflow_id: str) -> dict[str, Any]:
         except Exception:  # noqa: BLE001
             info["result"] = None
     return {"run": row, "temporal": info}
+
+
+@router.get("/api/runs/{workflow_id}/graph", dependencies=[Depends(require_user)])
+async def get_run_graph(workflow_id: str) -> dict[str, Any]:
+    info = await temporal.describe(workflow_id)
+    history = await temporal.history(workflow_id, limit=2001, run_id=info.get("run_id"))
+    return execution_graph(info, history[:2000], truncated=len(history) > 2000)
 
 
 @router.post("/api/runs/{workflow_id}/cancel", dependencies=[Depends(require_user)])

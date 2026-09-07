@@ -18,5 +18,7 @@ venv/
 
 # Written by the Playwright MCP browser tools.
 .playwright-mcp/
+services/frontend/test-results/
+services/frontend/playwright-report/
 
 .DS_Store

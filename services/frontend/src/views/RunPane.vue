@@ -20,7 +20,11 @@
       <button v-if="isLive" class="btn btn--danger btn--sm" @click="cancel">Cancel</button>
     </header>
 
-    <div class="pane-body scroll-y grow">
+    <nav class="tabs" aria-label="Run views">
+      <button v-for="item in ['Flow', 'Details']" :key="item" class="tab" :class="{ 'tab--active': tab === item }" @click="tab = item">{{ item }}</button>
+    </nav>
+    <ExecutionFlow v-if="tab === 'Flow'" :key="id" :workflow-id="id" @status="updateStatus" />
+    <div v-else class="pane-body scroll-y grow">
       <section class="block">
         <div class="facts">
           <div class="fact-cell">
@@ -55,7 +59,10 @@
     </div>
   </div>
 
-  <div v-else class="empty">Loading…</div>
+  <div v-else class="empty">
+    <span>{{ loadError || 'Loading...' }}</span>
+    <button v-if="loadError" class="btn btn--outline" @click="load">Retry</button>
+  </div>
 </template>
 
 <script setup>
@@ -66,22 +73,36 @@ import { RUN_TONE, fullTime } from '../format'
 import { backTo } from '../router'
 import { actions, onLiveEvent } from '../store'
 import { api } from '../api'
+import ExecutionFlow from '../components/ExecutionFlow.vue'
 
 const $q = useQuasar()
 const route = useRoute()
 const detail = ref(null)
+const tab = ref('Flow')
+const loadError = ref('')
+let loadVersion = 0
 let off = () => {}
 
 const id = computed(() => route.params.id || '')
 const run = computed(() => detail.value?.run)
 const temporal = computed(() => detail.value?.temporal)
-const status = computed(() => (run.value?.status || temporal.value?.status || 'unknown').toLowerCase())
+const status = computed(() => (temporal.value?.status || run.value?.status || 'unknown').toLowerCase())
 const isLive = computed(() => ['running', 'started'].includes(status.value))
 
 async function load () {
-  detail.value = null
+  const version = ++loadVersion
+  loadError.value = ''
   if (!id.value) return
-  detail.value = await api.run(id.value)
+  try {
+    const result = await api.run(id.value)
+    if (version === loadVersion) detail.value = result
+  } catch (error) {
+    if (version === loadVersion) loadError.value = error.message
+  }
+}
+
+function updateStatus (value) {
+  if (detail.value?.temporal) detail.value.temporal.status = value.toUpperCase()
 }
 
 function pretty (value) {
@@ -99,7 +120,7 @@ async function cancel () {
   actions.loadRuns()
 }
 
-watch(id, load)
+watch(id, () => { detail.value = null; tab.value = 'Flow'; load() })
 onMounted(() => {
   load()
   off = onLiveEvent((event) => {
