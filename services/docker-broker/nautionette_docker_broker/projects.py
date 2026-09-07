@@ -74,12 +74,21 @@ def labels(project_ids: list[str], chat_id: str) -> dict[str, str]:
 
 
 def claim(project_ids: list[str], chat_id: str) -> None:
+    volume = volume_name() if project_ids else None
     with _lock:
         for project_id in project_ids:
-            if (chat_id, project_id) in _claimed or daemon.client().containers.list(
+            surviving = daemon.client().containers.list(
                 all=True,
                 filters={"label": f"nautionette.project.{project_id}={chat_id}"},
-            ):
+            )
+            # A staging snapshot preserves chat/project IDs, but its worktrees
+            # live on a different volume. Include legacy agents without a stack label.
+            same_volume = any(
+                mount.get("Name") == volume
+                for container in surviving
+                for mount in container.attrs.get("Mounts", [])
+            )
+            if (chat_id, project_id) in _claimed or same_volume:
                 raise ValueError("This chat's project worktree is still in use by another agent")
         _claimed.update((chat_id, project_id) for project_id in project_ids)
 

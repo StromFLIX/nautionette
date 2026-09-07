@@ -85,6 +85,7 @@ def test_claim_refuses_active_and_surviving_containers(monkeypatch):
     containers = SimpleNamespace(list=Mock(return_value=[]))
     monkeypatch.setattr(projects.daemon, "client", lambda: SimpleNamespace(containers=containers))
     monkeypatch.setattr(projects, "_claimed", set())
+    monkeypatch.setattr(projects, "volume_name", lambda: "prod-projects")
     project_id = "a" * 32
     chat_id = "c" * 12
     other_chat = "d" * 12
@@ -94,7 +95,10 @@ def test_claim_refuses_active_and_surviving_containers(monkeypatch):
     projects.claim([project_id], other_chat)
     projects.release([project_id], other_chat)
     projects.release([project_id], chat_id)
-    containers.list.return_value = [object()]
+    containers.list.return_value = [SimpleNamespace(attrs={"Mounts": [{"Name": "stage-projects"}]})]
+    projects.claim([project_id], chat_id)
+    projects.release([project_id], chat_id)
+    containers.list.return_value = [SimpleNamespace(attrs={"Mounts": [{"Name": "prod-projects"}]})]
     with pytest.raises(ValueError):
         projects.claim([project_id], chat_id)
     assert projects._claimed == set()

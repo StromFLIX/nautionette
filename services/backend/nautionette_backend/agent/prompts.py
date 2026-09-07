@@ -77,6 +77,11 @@ Rules for the file you produce:
 - Anything the chat fixed (a date, a repo, a customer) becomes a key in MANIFEST["inputs"]
   and is read from `params`.
 - Return a dict that matches MANIFEST["outputs"].
+- For successful no-op runs (nothing new, irrelevant event, already handled), return
+  {"notify": False, "reason": "..."} and include these fields in the outputs schema.
+  The backend retains the run history but creates no chat/message. Do not call an
+  agent or a notification tool merely to announce that nothing happened. Failures
+  must raise rather than masquerading as successful silent results.
 
 This is the shape. Follow it exactly; only the names, the schemas and the body change.
 Note that the parsing here is code, and the model is asked for the one thing code cannot do.

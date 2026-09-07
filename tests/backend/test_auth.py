@@ -8,7 +8,7 @@ from ..conftest import APP_TOKEN, INTERNAL_TOKEN
 def test_healthz_needs_no_token(anonymous):
     response = anonymous.get("/healthz")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": "test"}
+    assert response.json() == {"status": "ok", "version": "test", "environment": "production"}
 
 
 def test_api_refuses_an_anonymous_caller(anonymous):

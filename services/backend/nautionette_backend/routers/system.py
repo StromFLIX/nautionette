@@ -22,7 +22,7 @@ SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 @router.get("/healthz")
 async def healthz() -> dict[str, Any]:
-    return {"status": "ok", "version": settings.version}
+    return {"status": "ok", "version": settings.version, "environment": settings.environment}
 
 
 @router.get("/api/system", dependencies=[Depends(require_user)])
@@ -51,6 +51,7 @@ async def system_status() -> dict[str, Any]:
             agent_sets = []
     return {
         "version": settings.version,
+        "environment": settings.environment,
         "auth_enabled": settings.auth_enabled,
         "model": settings.agent_model,
         "model_key_present": settings.model_key_present or agent_has_answered(),

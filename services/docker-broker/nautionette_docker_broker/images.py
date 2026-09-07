@@ -92,10 +92,12 @@ def has_image(tag: str) -> bool:
         return False
 
 
-def _build(path: str, tag: str) -> None:
+def _build(path: str, tag: str, *, base_image: str | None = None) -> None:
     note(f"building {tag}")
     started = time.time()
-    _, logs = daemon.client().images.build(path=path, tag=tag, rm=True, pull=False)
+    # Never resolve an agent set through a mutable alias owned by another build.
+    buildargs = {"BASE_IMAGE": base_image} if base_image else {}
+    _, logs = daemon.client().images.build(path=path, tag=tag, rm=True, pull=False, buildargs=buildargs)
     for chunk in logs:
         stream = (chunk.get("stream") or "").strip()
         if stream:
@@ -122,7 +124,7 @@ def ensure_images(force: bool = False) -> None:
         for agent_set in discovered_agent_sets():
             tag = image_tag(agent_set)
             if force or not has_image(tag):
-                _build(os.path.join(AGENT_IMAGES_DIR, "agent-sets", agent_set), tag)
+                _build(os.path.join(AGENT_IMAGES_DIR, "agent-sets", agent_set), tag, base_image=base_tag)
             else:
                 note(f"{tag} already present")
             images[agent_set] = tag

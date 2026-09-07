@@ -28,6 +28,21 @@ document.addEventListener('DOMContentLoaded', () => {
     })
   })
 
+  function showStaging () {
+    if (document.getElementById('staging-banner')) return
+    const banner = document.createElement('div')
+    banner.id = 'staging-banner'
+    banner.textContent = 'STAGING — independent copy of production'
+    banner.setAttribute('role', 'status')
+    banner.style.cssText = 'position:sticky;top:0;z-index:1000;padding:10px;text-align:center;background:#ffcf5c;color:#302000;font-weight:700'
+    document.body.prepend(banner)
+  }
+  if (/(^|\.)(stage|staging)(\.|$)/i.test(location.hostname)) showStaging()
+  fetch('/environment.txt', { cache: 'no-store' })
+    .then((response) => response.ok ? response.text() : '')
+    .then((environment) => { if (environment.trim() === 'staging') showStaging() })
+    .catch(() => {})
+
   // APP_URL is injected at container start; without it the buttons scroll to self-host.
   fetch('/app-url.txt', { cache: 'no-store' })
     .then((response) => (response.ok ? response.text() : ''))

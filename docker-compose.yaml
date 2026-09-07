@@ -1,4 +1,4 @@
-name: nautionette
+name: ${STACK_NAMESPACE:-nautionette}
 
 x-logging: &logging
   logging:
@@ -15,13 +15,14 @@ services:
     build:
       context: .
       dockerfile: services/backend/Dockerfile
-    image: nautionette/backend:dev
+    image: ${STACK_NAMESPACE:-nautionette}/backend:dev
     restart: unless-stopped
     # The only service in the stack that reaches the outside world.
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     environment:
       APP_VERSION: ${APP_VERSION:-dev}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
       APP_TOKEN: ${APP_TOKEN:-}
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
@@ -66,12 +67,13 @@ services:
   website:
     build:
       context: ./services/website
-    image: nautionette/website:dev
+    image: ${STACK_NAMESPACE:-nautionette}/website:dev
     restart: unless-stopped
     ports:
       - "127.0.0.1:${WEBSITE_PORT:-8081}:80"
     environment:
       APP_URL: ${APP_URL:-}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
     networks: [edge]
     <<: *logging
 
@@ -81,7 +83,7 @@ services:
     build:
       context: .
       dockerfile: services/docker-broker/Dockerfile
-    image: nautionette/docker-broker:dev
+    image: ${STACK_NAMESPACE:-nautionette}/docker-broker:dev
     restart: unless-stopped
     # Trust boundary. Only container with the Docker socket, so it exposes fixed
     # verbs (run_agent / restart_worker) and never a generic run call.
@@ -90,14 +92,15 @@ services:
       - projects:/projects:ro
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
-      TARGET_NETWORK: nautionette-internal
-      AGENT_NETWORK: nautionette-agents
-      AGENT_EGRESS_NETWORK: nautionette-agent-egress
-      WORKFLOWS_VOLUME: nautionette-workflows
-      IMAGE_PREFIX: nautionette/pi-
-      BASE_IMAGE: nautionette/pi-base:dev
+      TARGET_NETWORK: ${STACK_NAMESPACE:-nautionette}-internal
+      AGENT_NETWORK: ${STACK_NAMESPACE:-nautionette}-agents
+      AGENT_EGRESS_NETWORK: ${STACK_NAMESPACE:-nautionette}-agent-egress
+      # Coolify rewrites service volume names; pass its rendered name there.
+      WORKFLOWS_VOLUME: ${BROKER_WORKFLOWS_VOLUME:-${STACK_NAMESPACE:-nautionette}-workflows}
+      IMAGE_PREFIX: ${STACK_NAMESPACE:-nautionette}/pi-
+      BASE_IMAGE: ${STACK_NAMESPACE:-nautionette}/pi-base:dev
       WORKER_SERVICE_LABEL: com.docker.compose.service=worker
-      WORKER_IMAGE: nautionette/worker:dev
+      WORKER_IMAGE: ${STACK_NAMESPACE:-nautionette}/worker:dev
       WORKER_REPLICAS: ${WORKER_REPLICAS:-1}
       CONTAINER_RECONCILE_SECONDS: ${CONTAINER_RECONCILE_SECONDS:-30}
       TEMPORAL_ADDRESS: temporal:7233
@@ -129,7 +132,7 @@ services:
       context: ./services/agentgateway
       args:
         AGENTGATEWAY_VERSION: ${AGENTGATEWAY_VERSION:-v1.5.0}
-    image: nautionette/agentgateway:dev
+    image: ${STACK_NAMESPACE:-nautionette}/agentgateway:dev
     restart: unless-stopped
     command: ["-f", "/config/config.yaml"]
     environment:
@@ -156,7 +159,7 @@ services:
     build:
       context: .
       dockerfile: services/workflow-mcp/Dockerfile
-    image: nautionette/workflow-mcp:dev
+    image: ${STACK_NAMESPACE:-nautionette}/workflow-mcp:dev
     restart: unless-stopped
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
@@ -173,7 +176,7 @@ services:
     build:
       context: .
       dockerfile: services/worker/Dockerfile
-    image: nautionette/worker:dev
+    image: ${STACK_NAMESPACE:-nautionette}/worker:dev
     restart: unless-stopped
     # Never scales to zero: something must always be able to pick work up.
     deploy:
@@ -203,7 +206,7 @@ services:
       context: ./infra/temporal
       args:
         TEMPORAL_VERSION: ${TEMPORAL_VERSION:-1.29.0}
-    image: nautionette/temporal:dev
+    image: ${STACK_NAMESPACE:-nautionette}/temporal:dev
     restart: unless-stopped
     environment:
       DB: postgres12
@@ -245,7 +248,7 @@ services:
   frontend-web:
     build:
       context: ./services/frontend
-    image: nautionette/frontend:dev
+    image: ${STACK_NAMESPACE:-nautionette}/frontend:dev
     restart: unless-stopped
     networks: [internal]
     <<: *logging
@@ -256,13 +259,16 @@ services:
 
   pi-base:
     build: ./images/pi-base
-    image: nautionette/pi-base:dev
+    image: ${STACK_NAMESPACE:-nautionette}/pi-base:dev
     profiles: [images]
     entrypoint: ["true"]
 
   pi-agent-default:
-    build: ./images/agent-sets/default
-    image: nautionette/pi-agent-default:dev
+    build:
+      context: ./images/agent-sets/default
+      args:
+        BASE_IMAGE: ${STACK_NAMESPACE:-nautionette}/pi-base:dev
+    image: ${STACK_NAMESPACE:-nautionette}/pi-agent-default:dev
     profiles: [images]
     entrypoint: ["true"]
     depends_on: [pi-base]
@@ -290,31 +296,31 @@ services:
 networks:
   # Published traffic only. Nothing but the backend and the site join this.
   edge:
-    name: nautionette-edge
+    name: ${STACK_NAMESPACE:-nautionette}-edge
   # Service-to-service. Not internal:true - the gateway needs outbound to the
   # model provider. Isolation here comes from publishing no ports.
   internal:
-    name: nautionette-internal
+    name: ${STACK_NAMESPACE:-nautionette}-internal
   agents:
-    name: nautionette-agents
+    name: ${STACK_NAMESPACE:-nautionette}-agents
     internal: true
   agent-egress:
-    name: nautionette-agent-egress
+    name: ${STACK_NAMESPACE:-nautionette}-agent-egress
   # Backend to broker only, no outbound.
   control:
-    name: nautionette-control
+    name: ${STACK_NAMESPACE:-nautionette}-control
     internal: true
   # Temporal to Postgres only, no outbound.
   data:
-    name: nautionette-data
+    name: ${STACK_NAMESPACE:-nautionette}-data
     internal: true
 
 volumes:
-  # Fixed name: the broker attaches this volume to the Pi containers it runs.
+  # Namespaced: each broker attaches only its own stack's workflow volume.
   workflows:
-    name: nautionette-workflows
+    name: ${STACK_NAMESPACE:-nautionette}-workflows
   projects:
-    name: nautionette-projects
+    name: ${STACK_NAMESPACE:-nautionette}-projects
   artifacts:
   backend-data:
   agentgateway-data:
