@@ -75,6 +75,7 @@ async def model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
                 "gateway": (instance_label(serving) if serving else str(route.get("provider") or "gateway")),
                 "integration": serving or None,
                 "context_length": model.get("context_length"),
+                "supports_images": model.get("supports_images"),
                 "alias": alias,
             }
         )

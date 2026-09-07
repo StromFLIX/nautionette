@@ -1,5 +1,18 @@
 <template>
-  <div class="composer" :class="[`composer--${variant}`, { 'composer--focus': focused, 'composer--running': running }]">
+  <div class="composer" :class="[`composer--${variant}`, { 'composer--focus': focused, 'composer--running': running }]"
+    @dragover.prevent @drop.prevent="drop" @paste="paste">
+    <div class="composer__attachments">
+      <div v-for="image in attachments" :key="image.id" class="composer__attachment">
+        <ChatImage :image="image" />
+        <button class="btn btn--icon" type="button" :disabled="busy" :aria-label="`Remove ${image.name}`" @click="removeImage(image)">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+    </div>
+    <p v-if="imageError" class="composer__notice caption" role="alert">{{ imageError }}</p>
+    <p v-if="attachments.length && imageSupport !== true" class="composer__notice caption" role="status">
+      {{ imageSupport === false ? 'This model is text-only. Choose a vision-capable model or remove the images.' : 'Image support is unknown for this model. A vision-capable model is required.' }}
+    </p>
     <textarea
       ref="input"
       class="composer__input"
@@ -13,6 +26,13 @@
       @keydown.enter.exact.prevent="submit"
     />
 
+    <div class="composer__image-picker">
+      <input ref="fileInput" type="file" :accept="IMAGE_TYPES.join(',')" multiple hidden @change="chooseFiles" />
+      <button class="pick" type="button" :disabled="busy" aria-label="Attach images" @click="fileInput?.click()">
+        <span class="material-icons pick__icon">add_photo_alternate</span>Attach images
+        <q-tooltip>Paste, drop or select images · up to 4, 5 MiB each</q-tooltip>
+      </button>
+    </div>
     <div class="composer__bar">
       <button class="pick">
         <span class="material-icons pick__icon">smart_toy</span>
@@ -75,7 +95,7 @@
       <button
         class="composer__send" :class="{ 'composer__send--busy': busy }"
         :aria-label="running ? 'Queue message' : 'Send message'"
-        :disabled="busy || !modelValue.trim()" @click="submit"
+        :disabled="busy || (!modelValue.trim() && !attachments.length) || (attachments.length > 0 && imageSupport === false)" @click="submit"
       >
         <span class="material-icons">{{ busy ? 'more_horiz' : running ? 'playlist_add' : 'arrow_upward' }}</span>
         <q-tooltip>{{ running ? 'Queue message' : 'Send message' }}</q-tooltip>
@@ -87,6 +107,9 @@
 <script setup>
 import { computed, ref } from 'vue'
 import ModelPicker from './ModelPicker.vue'
+import ChatImage from './ChatImage.vue'
+import { addImages, IMAGE_TYPES } from '../attachments'
+import { api } from '../api'
 import ToolPicker from './ToolPicker.vue'
 import ProjectPicker from './ProjectPicker.vue'
 import { store } from '../store'
@@ -94,6 +117,7 @@ import { contextMeter, modelContextWindow } from '../context'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
+  attachments: { type: Array, default: () => [] },
   agentSet: { type: String, default: '' },
   model: { type: String, default: '' },
   tools: { type: Array, default: null },
@@ -106,10 +130,37 @@ const props = defineProps({
   placeholder: { type: String, default: 'Message…' }
 })
 
-const emit = defineEmits(['update:modelValue', 'update:agentSet', 'update:model', 'update:tools', 'update:projectIds', 'send', 'stop'])
+const emit = defineEmits(['update:attachments', 'update:modelValue', 'update:agentSet', 'update:model', 'update:tools', 'update:projectIds', 'send', 'stop'])
 
 const input = ref(null)
 const focused = ref(false)
+const fileInput = ref(null)
+const imageError = ref('')
+const imageSupport = computed(() => store.catalog.models?.find((m) => m.id === (props.model || store.catalog.default_model))?.supports_images)
+
+function attach (files) {
+  if (props.busy) return
+  try {
+    emit('update:attachments', addImages(props.attachments, files))
+    imageError.value = ''
+  } catch (error) { imageError.value = error.message }
+}
+function chooseFiles (event) {
+  attach(event.target.files)
+  event.target.value = ''
+}
+function drop (event) { attach(event.dataTransfer.files) }
+function paste (event) {
+  const files = Array.from(event.clipboardData?.items || []).filter((item) => item.kind === 'file').map((item) => item.getAsFile()).filter(Boolean)
+  if (!files.length) return // Leave ordinary text paste untouched.
+  event.preventDefault()
+  attach(files)
+}
+function removeImage (image) {
+  emit('update:attachments', props.attachments.filter((item) => item.id !== image.id))
+  imageError.value = ''
+  if (image.uploaded) api.discardImage(image.uploadedChat, image.uploaded.id).catch(() => {})
+}
 
 const agentSets = computed(() => store.catalog.agent_sets || [])
 const allTools = computed(() => store.catalog.tools || [])
@@ -130,7 +181,8 @@ function onInput (event) {
 }
 
 function submit () {
-  if (props.busy || !props.modelValue.trim()) return
+  if (props.busy || (!props.modelValue.trim() && !props.attachments.length) ||
+      (props.attachments.length && imageSupport.value === false)) return
   emit('send')
   if (input.value) input.value.style.height = 'auto'
 }
@@ -139,6 +191,11 @@ defineExpose({ focus: () => input.value?.focus() })
 </script>
 
 <style scoped>
+.composer__attachments { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 12px; }
+.composer__attachment { position: relative; padding-top: 12px; max-width: 150px; }
+.composer__attachment > button { position: absolute; right: 0; top: 8px; background: var(--surface-input); }
+.composer__notice { margin: 8px 12px; color: var(--warning); }
+.composer__image-picker { padding: 0 8px; }
 .composer {
   position: relative;
   min-width: 0;

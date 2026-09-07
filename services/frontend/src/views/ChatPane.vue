@@ -48,7 +48,7 @@
         <MessageBubble
           v-for="message in messages" :key="message.id"
           :role="message.role" :content="message.content"
-          :meta="message.meta" :created-at="message.created_at"
+          :meta="message.meta" :created-at="message.created_at" :chat-id="chatId"
           :delivery-state="message.delivery || ''" :delivery-error="message.deliveryError || ''"
           @retry="delivery.retry(message.id)" @discard="delivery.discard(message.id)"
         />
@@ -66,7 +66,12 @@
             </button>
           </div>
           <div v-for="message in queuedMessages" :key="message.id" class="thread__queued-message">
-            <p>{{ message.content }}</p>
+            <div>
+              <p>{{ message.content }}</p>
+              <div class="thread__queued-images">
+                <ChatImage v-for="image in message.meta?.attachments || []" :key="image.id" :image="image" :chat-id="chatId" />
+              </div>
+            </div>
             <button v-if="!streaming" class="btn btn--icon" aria-label="Remove queued message" :disabled="controlBusy" @click="discardQueued(message.id)">
               <span class="material-icons" aria-hidden="true">close</span>
               <q-tooltip>Remove queued message</q-tooltip>
@@ -99,6 +104,8 @@
       <Composer
         ref="composer"
         v-model="draft"
+        v-model:attachments="attachments"
+        :busy="sendingDraft"
         :agent-set="chat?.agent_set || ''"
         :model="chat?.model || store.catalog.default_model"
         :tools="chat?.tools ?? null"
@@ -124,6 +131,8 @@ import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from 
 import ChatWelcome from '../components/ChatWelcome.vue'
 import Composer from '../components/Composer.vue'
 import MessageBubble from '../components/MessageBubble.vue'
+import ChatImage from '../components/ChatImage.vue'
+import { uploadImages } from '../attachments'
 import { avatarStyle, initials } from '../format'
 import { backTo } from '../router'
 import { actions, draftCount, onLiveEvent, store } from '../store'
@@ -139,6 +148,8 @@ const router = useRouter()
 const chat = ref(null)
 const savedMessages = ref([])
 const draft = ref('')
+const attachments = ref([])
+const sendingDraft = ref(false)
 const activeTurn = ref(null)
 const reconnecting = ref(false)
 const streaming = computed(() => Boolean(activeTurn.value))
@@ -162,6 +173,7 @@ const messages = computed(() => {
   const pending = pendingMessages.value.filter((item) => item.chatId === chatId.value && !known.has(item.id))
   return [...savedMessages.value.filter((message) => !message.meta?.queued), ...pending.map((item) => ({
     id: item.id, role: 'user', content: item.text, created_at: item.createdAt / 1000,
+    meta: { attachments: item.attachments || [] },
     delivery: item.error ? 'failed' : 'sending', deliveryError: item.error
   }))]
 })
@@ -277,14 +289,16 @@ function scrollDown (behavior = 'smooth') {
   })
 }
 
-async function start ({ text, agentSet, model, tools, projectIds: selectedProjects = [] }) {
-  if (!text.trim()) return
+async function start ({ text, agentSet, model, tools, projectIds: selectedProjects = [], attachments: images = [] }) {
+  if (starting.value || (!text.trim() && !images.length)) return
   starting.value = true
   try {
     const created = await api.createChat({ agent_set: agentSet, model, tools, project_ids: selectedProjects })
     await actions.loadChats()
     await router.push(`/chats/${created.id}`)
     draft.value = text
+    attachments.value = images
+    chat.value = chat.value || created
     await send()
   } catch (error) {
     $q.notify({ type: 'negative', message: error.message })
@@ -294,18 +308,26 @@ async function start ({ text, agentSet, model, tools, projectIds: selectedProjec
 }
 
 async function send () {
+  if (sendingDraft.value) return
   const id = chatId.value
   const version = generation
   const text = draft.value.trim()
-  if (!text) return
-  if (!await settingsSave || version !== generation || id !== chatId.value) return
-  if (draft.value.trim() !== text) return
+  const images = attachments.value
+  if (!text && !images.length) return
+  sendingDraft.value = true
   try {
-    delivery.enqueue(id, text, chat.value?.project_ids || [])
+    if (!await settingsSave || version !== generation || id !== chatId.value) return
+    const selectedProjects = [...(chat.value?.project_ids || [])]
+    const uploaded = await uploadImages(id, images, api.uploadImage)
+    if (version !== generation || id !== chatId.value) return
+    delivery.enqueue(id, text, selectedProjects, uploaded)
     draft.value = ''
+    attachments.value = []
     scrollDown()
   } catch (error) {
     $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    if (version === generation) sendingDraft.value = false
   }
   nextTick(() => composer.value?.focus())
 }
@@ -403,6 +425,8 @@ watch(chatId, (id) => {
   savedMessages.value = []
   activeTurn.value = null
   draft.value = ''
+  attachments.value = []
+  sendingDraft.value = false
   connectChat()
 })
 
@@ -449,6 +473,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.thread__queued-images { display: flex; flex-wrap: wrap; gap: 8px; }
 .thread {
   min-width: 0;
   overflow: hidden;

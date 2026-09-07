@@ -129,7 +129,7 @@ for (const width of [1440, 320]) {
     await page.locator('.composer__input').fill('Update both projects')
     await page.locator('.composer__send').click()
     await expect.poll(() => state.sent.length).toBe(1)
-    expect(state.sent[0]).not.toHaveProperty('project_ids')
+    expect(state.sent[0].project_ids).toEqual([firstId, secondId])
     expect(state.messages[0].meta.project_ids).toEqual([firstId, secondId])
 
     await page.getByRole('button', { name: 'Select projects', exact: true }).click()
@@ -138,7 +138,7 @@ for (const width of [1440, 320]) {
     await page.locator('.composer__input').fill('Work only on the second project')
     await page.locator('.composer__send').click()
     await expect.poll(() => state.sent.length).toBe(2)
-    expect(state.sent[1]).not.toHaveProperty('project_ids')
+    expect(state.sent[1].project_ids).toEqual([secondId])
     expect(state.messages[1].meta.project_ids).toEqual([secondId])
     await page.reload()
     await expect(page.getByRole('button', { name: 'Select projects', exact: true })).toContainText('1 project')
@@ -164,7 +164,7 @@ test('project selection is saved before sending and follows server snapshots', a
   await page.locator('.composer__input').fill('Keep working')
   await page.locator('.composer__send').click()
   await expect.poll(() => state.sent.length).toBe(1)
-  expect(state.sent[0]).not.toHaveProperty('project_ids')
+  expect(state.sent[0].project_ids).toEqual([firstId])
   expect(state.messages[0].meta.project_ids).toEqual([firstId])
 })
 
@@ -189,7 +189,8 @@ for (const fail of [false, true]) {
     await page.keyboard.press('Escape')
     await page.locator('.composer__input').fill('Use the selected project')
     await page.locator('.composer__send').click()
-    await page.locator('.composer__send').click()
+    await expect(page.locator('.composer__send')).toBeDisabled()
+    await page.locator('.composer__send').dispatchEvent('click') // Guard duplicate sends even if dispatched.
     expect(state.sent).toEqual([])
     release()
     if (fail) {
@@ -217,7 +218,7 @@ test('unavailable selected projects can be removed without being silently replac
   await page.locator('.composer__input').fill('No project needed')
   await page.locator('.composer__send').click()
   await expect.poll(() => state.sent.length).toBe(1)
-  expect(state.sent[0]).not.toHaveProperty('project_ids')
+  expect(state.sent[0].project_ids).toEqual([])
   expect(state.messages[0].meta.project_ids).toEqual([])
   await page.reload()
   await expect(page.getByRole('button', { name: 'Select projects', exact: true })).not.toContainText('1 project')

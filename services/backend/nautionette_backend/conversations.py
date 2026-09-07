@@ -7,7 +7,7 @@ import json
 import logging
 from typing import Any
 
-from . import projects
+from . import chat_images, projects
 from .agent import Timeline, build_history, stream_agent
 from .background import spawn
 from .clients import broker
@@ -40,6 +40,10 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
                     if not pending["job"]:
                         break
                     candidate = json.loads(pending["job"])
+                    # Image messages run as their own durable turn. Never send a text-only
+                    # steering command that silently drops attachments (or exceed exec argv limits).
+                    if candidate.get("attachments"):
+                        break
                     if any(
                         candidate.get(key) != job.get(key)
                         for key in ("agent_set", "model", "tools", "project_ids")
@@ -88,6 +92,13 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
             ],
             max_chars=history_budget(job.get("model")),
         )
+        job["images"] = chat_images.load_images(chat_id, job.get("attachments", []))
+        for message in job["history"]:
+            attachments = message.pop("attachments", [])
+            if attachments and job.get("supports_images") is False:
+                message["content"] += f"\n[{len(attachments)} image(s) omitted for this text-only model]"
+            elif attachments:
+                message["images"] = chat_images.load_images(chat_id, attachments)
         chat = db.get_chat(chat_id)
         if chat:
             previous_status = job.get("internet_status", "blocked")

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
+import tarfile
 import threading
 import time
 from collections.abc import Iterator
@@ -109,7 +111,13 @@ def _await_image(tag: str, stopped: threading.Event | None = None) -> Iterator[s
 
 def _environment(job: dict[str, Any]) -> dict[str, str]:
     environment = dict(AGENT_ENVIRONMENT)
-    environment["AGENT_JOB"] = base64.b64encode(json.dumps(job, default=str).encode("utf-8")).decode("ascii")
+    raw = json.dumps(job, default=str).encode("utf-8")
+    # Linux caps a single environment value at ~128 KiB. Image bytes (and long
+    # transcripts) go through Docker's archive API, never argv or environment.
+    if len(raw) > 32_000:
+        environment["AGENT_JOB_FILE"] = "/tmp/nautionette-job.json"  # noqa: S108 - private container filesystem
+    else:
+        environment["AGENT_JOB"] = base64.b64encode(raw).decode("ascii")
     if job.get("project_ids"):
         environment["HOME"] = "/workspace"
         environment["PI_CODING_AGENT_DIR"] = "/workspace/.pi-agent"
@@ -118,6 +126,19 @@ def _environment(job: dict[str, Any]) -> dict[str, str]:
     elif INTERNAL_TOKEN:
         environment["INTERNAL_TOKEN"] = INTERNAL_TOKEN
     return environment
+
+
+def _copy_job(container: Any, job: dict[str, Any]) -> None:
+    raw = json.dumps(job, default=str).encode("utf-8")
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w") as tar:
+        entry = tarfile.TarInfo("nautionette-job.json")
+        entry.size = len(raw)
+        entry.mode = 0o600
+        entry.uid = entry.gid = 10001 if job.get("project_ids") else 0
+        tar.addfile(entry, io.BytesIO(raw))
+    if not container.put_archive("/tmp", archive.getvalue()):  # noqa: S108
+        raise RuntimeError("Could not deliver the agent job")
 
 
 def decide_internet(chat_id: str, turn_id: str, allowed: bool) -> bool:
@@ -222,10 +243,11 @@ def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
         claimed_projects = project_ids
         if job.get("chat_id") and not daemon.client().networks.get(AGENT_NETWORK).attrs.get("Internal"):
             raise RuntimeError("Chat agents require an internal Docker network with egress disabled")
+        environment = _environment(job)
         container = daemon.client().containers.create(
             tag,
             detach=True,
-            environment=_environment(job),
+            environment=environment,
             network=AGENT_NETWORK if job.get("chat_id") else TARGET_NETWORK,
             volumes={WORKFLOWS_VOLUME: {"bind": "/workflows", "mode": "ro"}},
             mounts=project_mounts,
@@ -249,6 +271,8 @@ def _run(job: dict[str, Any], stopped: threading.Event) -> Iterator[str]:
             },
             tty=False,
         )
+        if "AGENT_JOB_FILE" in environment:
+            _copy_job(container, job)
         if job.get("chat_id") and job.get("internet_allowed") is True:
             daemon.client().networks.get(AGENT_EGRESS_NETWORK).connect(container)
         with _controls_lock:

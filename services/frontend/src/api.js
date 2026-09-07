@@ -57,7 +57,7 @@ async function request (path, options = {}) {
     throw new ApiError(detail, response.status)
   }
   if (response.status === 204) return null
-  return response.json()
+  return options.responseType === 'blob' ? response.blob() : response.json()
 }
 
 const json = (body) => ({ body: JSON.stringify(body ?? {}) })
@@ -95,9 +95,15 @@ export const api = {
   chats: () => request('/api/chats'),
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
   chat: (id, signal = AbortSignal.timeout(15000)) => request(`/api/chats/${id}`, { signal }),
-  sendMessage: (id, text, messageId, projectIds) => request(`/api/chats/${id}/messages`, {
+  uploadImage: (id, file) => request(`/api/chats/${id}/images?name=${encodeURIComponent(file.name)}`, {
+    method: 'POST', body: file, headers: { 'Content-Type': file.type }, signal: AbortSignal.timeout(60000)
+  }),
+  image: (chatId, imageId, signal) => request(`/api/chats/${chatId}/images/${imageId}`, { responseType: 'blob', signal }),
+  discardImage: (chatId, imageId) => request(`/api/chats/${chatId}/images/${imageId}`, { method: 'DELETE' }),
+  sendMessage: (id, text, messageId, projectIds, attachments = []) => request(`/api/chats/${id}/messages`, {
     method: 'POST', headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(20000), ...json({ text, message_id: messageId, project_ids: projectIds, queue: true })
+    signal: AbortSignal.timeout(20000), ...json({ text, message_id: messageId, project_ids: projectIds,
+      attachment_ids: attachments.map((image) => image.id), queue: true })
   }),
   stopChat: (id, turnId) => request(`/api/chats/${id}/stop`, { method: 'POST', ...json({ turn_id: turnId }) }),
   resumeChatQueue: (id) => request(`/api/chats/${id}/queue/resume`, { method: 'POST' }),

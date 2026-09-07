@@ -74,18 +74,27 @@ class Timeline:
 
 def build_history(
     messages: list[dict[str, Any]], max_chars: int = DEFAULT_HISTORY_CHARS
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     """Trim a transcript to something a cold container can be handed."""
     trimmed = [m for m in messages if m.get("role") in {"user", "assistant"}]
     trimmed = trimmed[-MAX_HISTORY_MESSAGES:]
     total = 0
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
+    remaining_images = 4  # Current-turn images are separate; bound replay bytes and visual context.
     for message in reversed(trimmed):
         content = (message.get("content") or "")[:MAX_MESSAGE_CHARS]
-        total += len(content)
+        attachments = (message.get("meta") or {}).get("attachments", []) if message["role"] == "user" else []
+        included = attachments[-remaining_images:] if remaining_images else []
+        total += len(content) + len(included) * 8000
         if total > max_chars:
             break
-        out.append({"role": message["role"], "content": content})
+        remaining_images -= len(included)
+        if len(included) < len(attachments):
+            content += f"\n[{len(attachments) - len(included)} older image(s) omitted from context]"
+        entry: dict[str, Any] = {"role": message["role"], "content": content}
+        if included:
+            entry["attachments"] = included
+        out.append(entry)
     return list(reversed(out))
 
 
@@ -94,7 +103,7 @@ def agent_job(
     prompt: str,
     mode: str = "interactive",
     system_prompt: str | None = None,
-    history: list[dict[str, str]] | None = None,
+    history: list[dict[str, Any]] | None = None,
     output_schema: dict[str, Any] | None = None,
     agent_set: str | None = None,
     model: str | None = None,

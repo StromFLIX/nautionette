@@ -106,7 +106,7 @@ rejections remain visible with retry and discard controls. An unsent message can
 appear on another device until a client successfully delivers it. Clearing app or
 browser storage removes unsent messages. Creating a new chat requires connectivity.
 
-`POST /api/chats/{id}/messages` accepts `{text, message_id, project_ids?, queue?}`. With
+`POST /api/chats/{id}/messages` accepts `{text, message_id, project_ids?, attachment_ids?, queue?}`. With
 `Accept: application/json`, it returns `202` after durable acceptance; otherwise it
 replays the turn's SSE events for compatibility. `GET /api/chats/{id}` and
 `GET /api/chats/{id}/stream` expose the same recoverable snapshot, including
@@ -141,6 +141,37 @@ Deploy chat controls by rebuilding/recreating the backend, Docker broker, fronte
 and Pi agent images. Chat containers use Pi RPC mode for live steering; workflow
 agent calls retain their existing one-shot JSON mode. Validate the real runtime with
 `NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_chat_control_docker.py`.
+
+### Image attachments
+
+Use **Attach images**, paste a screenshot, or drop images onto the composer. Preview,
+expand, and remove attachments before sending; text is optional for image messages.
+PNG, JPEG, GIF, and WebP are supported, with at most **four images per message**,
+**5 MiB per image**, and **25 megapixels per image**. The backend checks image content
+and MIME type; SVG and other file types are rejected. Known text-only models block
+image messages; models with unknown capabilities show a warning rather than silently
+dropping images.
+
+Images upload before a message enters the durable outbox. Upload failures keep the
+current draft for retry; successful uploads are reused. Uploading requires connectivity,
+and unsent draft files do not survive page reload. Once uploaded, only attachment IDs
+and metadata enter the outbox and transcript cache—not image bytes. Images in history
+are fetched through authenticated endpoints, so offline snapshots retain text and
+attachment metadata but cannot load images without a connection.
+
+`POST /api/chats/{id}/images?name=...` accepts raw image bytes with their image
+`Content-Type` and returns `{id, name, mime_type, size}`. Send the returned IDs as
+`attachment_ids` with a message. `GET /api/chats/{id}/images/{image_id}` retrieves an
+image; `DELETE` discards an upload only while it is unattached. Image bytes live in
+SQLite separately from messages/events and are deleted with the message or chat.
+Unattached uploads older than 24 hours are cleaned up on subsequent uploads.
+
+Queued image messages wait for their own turn so steering cannot drop attachments.
+Pi receives images through RPC; up to four recent history images are replayed alongside
+current attachments, subject to the history budget. Older omitted images are marked
+in the prompt. Large agent jobs use a private file copied into the container rather
+than exceeding Linux environment-variable limits. Deploy this feature by rebuilding
+the backend, Docker broker, frontend, and Pi images together.
 
 ### Agent runtime limits
 

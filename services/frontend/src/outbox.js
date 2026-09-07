@@ -24,10 +24,11 @@ export function createOutbox ({ storage, prefix, send, changed = () => {}, accep
     changed(items())
   }
 
-  function enqueue (chatId, text, projectIds) {
+  function enqueue (chatId, text, projectIds, attachments = []) {
     const createdAt = Math.max(now(), (items().at(-1)?.createdAt || 0) + 1)
     const item = { id: uuid(), chatId, text, createdAt, attempts: 0, nextAttempt: 0, error: '' }
     if (projectIds !== undefined) item.projectIds = [...projectIds]
+    if (attachments.length) item.attachments = attachments.map(({ id, name, mime_type, size }) => ({ id, name, mime_type, size }))
     save(item)
     return item
   }
