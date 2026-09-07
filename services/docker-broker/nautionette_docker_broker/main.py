@@ -9,13 +9,15 @@ endpoint, and no shell. Two things happen here:
 
 from __future__ import annotations
 
+import asyncio
+import threading
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Body, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
-from . import agent_run, daemon, images, workers
+from . import agent_run, daemon, images, monitor, workers
 from .config import INTERNAL_TOKEN
 
 
@@ -26,8 +28,14 @@ def _check_internal(token: str | None) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    images.start_build()
-    yield
+    stopping = threading.Event()
+    thread = threading.Thread(target=monitor.run, args=(stopping,), name="container-monitor", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stopping.set()
+        await asyncio.to_thread(thread.join)
 
 
 app = FastAPI(title="nautionette docker-broker", docs_url=None, redoc_url=None, lifespan=lifespan)
@@ -40,11 +48,14 @@ def healthz() -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         return {"status": "degraded", "docker": False, "error": str(exc)[:200]}
     state = images.snapshot()
+    worker_state = workers.snapshot()
     return {
-        "status": "ok" if state["status"] == "ready" else state["status"],
+        "status": "ok" if state["status"] == "ready" and worker_state["status"] == "ready" else "degraded",
         "docker": True,
         "images": state["images"],
         "image_status": state["status"],
+        "missing_images": state.get("missing", []),
+        "workers": worker_state,
         "error": state["error"],
     }
 

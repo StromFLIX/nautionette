@@ -28,7 +28,11 @@ async def healthz() -> dict[str, Any]:
 async def system_status() -> dict[str, Any]:
     async def safe(coro, name: str) -> dict[str, Any]:
         try:
-            return {"name": name, "status": "ok", "detail": await coro}
+            detail = await coro
+            status = "ok"
+            if name == "broker" and isinstance(detail, dict) and detail.get("status", "ok") != "ok":
+                status = "degraded"
+            return {"name": name, "status": status, "detail": detail}
         except Exception as exc:  # noqa: BLE001 - status page must never 500
             return {"name": name, "status": "down", "detail": str(exc)[:200]}
 
@@ -39,7 +43,7 @@ async def system_status() -> dict[str, Any]:
         safe(authoring.health(), "workflow-mcp"),
     )
     agent_sets: list[dict[str, Any]] = []
-    if broker_state["status"] == "ok":
+    if broker_state["status"] != "down":
         try:
             agent_sets = await broker.agent_sets()
         except Exception:  # noqa: BLE001

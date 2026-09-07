@@ -72,7 +72,7 @@ Five rules the diagram encodes:
 | **Frontend** | One Quasar (Vue 3) codebase built with Vite. `npm run build` produces the web bundle served here; Capacitor wraps the same `dist/` as the app. The list is split into Chats and Workflows; every run appears as its own thread. |
 | **Website** | The promotional site. Static, its own container and its own domain, so the app and the pitch never share a deploy. |
 | **Backend** | The only entrypoint: auth, triggers, webhooks, streaming to clients. Also memory, search and metadata in a SQLite store. Calls the broker, but does not hold the Docker socket. |
-| **Docker broker** | Holds `/var/run/docker.sock`. Runs one Pi container per agent call (`docker run --rm`) and restarts workers, using fixed commands and an image allowlist. Builds the agent images once at startup, so a call never waits on a build. |
+| **Docker broker** | Holds `/var/run/docker.sock`. Runs one Pi container per agent call (`docker run --rm`), builds missing agent images, and reconciles worker containers using fixed configuration and an image allowlist. |
 | **agentgateway** | Upstream image, run as-is. One data plane for tools and models: federates MCP servers on `/mcp`, fronts every configured model provider on `/v1`, adds per-tool authorization and an audit trail. Its checked-in config is the baseline; the model integrations and MCP servers added in the app persist as runtime resources in its own SQLite volume. Config in [services/agentgateway/config/config.yaml](services/agentgateway/config/config.yaml). |
 | **workflow-mcp** | Our own MCP server, registered behind the gateway. Provides the validated tools that create, update and delete workflow files, plus the REST side the backend uses for approval. |
 | **Pi runs** | The agent runtime ([Pi](https://pi.dev), `@earendil-works/pi-coding-agent`). Pi is a CLI, so a call is a container run: start, work, exit. The base image is Node plus the Pi CLI plus `agent-run`, the wrapper that turns a job into NDJSON. An agent set extends it with Pi extensions and packages. |
@@ -170,7 +170,36 @@ stream into `delta`, `tool`, `error` and a final `result` line. Nothing else cro
 | Temporal workers | At least one always running. Never scale to zero, or triggers pile up with nothing to pick them up. |
 | Pi | Always zero between calls. One `docker run --rm` per call, gone when the call returns — including for pinned or busy workflows. |
 | State | Nothing survives in a Pi container. History, inputs and the workspace are handed in at start; results come back as JSON. |
-| Images | Built in advance. A cold start is a container start, never a build. |
+| Images | Built in advance and checked periodically. If cleanup removes one, it is rebuilt; a call arriving during recovery waits for the build. |
+
+### Execution health and recovery
+
+The broker checks Docker at startup and every `CONTAINER_RECONCILE_SECONDS` (default: 30).
+It rebuilds missing Pi base and agent-set images, restores the base-image alias, starts stopped
+workers, restarts unhealthy workers with the configured drain timeout, and recreates deleted
+workers up to `WORKER_REPLICAS` (minimum: one). Failures are reported and retried on later passes.
+All worker operations are scoped to the broker's own Compose project.
+
+Every worker loads all workflow files on the configured Temporal task queue; separate containers
+per workflow are unnecessary. A Docker readiness probe checks a fresh worker heartbeat, successful
+workflow loading, and whether the loaded source files still match the shared volume. Changed files
+therefore trigger recovery even if the explicit deploy-time restart was missed. Invalid workflows
+remain degraded until their code or dependencies are fixed; recovery cannot repair workflow code.
+
+`/api/system` exposes the broker's live image status, missing images, desired/ready worker counts,
+container states, and readiness errors. An HTTP-successful but degraded broker is not shown as healthy.
+Pi containers themselves remain intentionally ephemeral: there is no idle Pi container to keep alive.
+
+Recovery is eventual, not uninterrupted availability: allow for the reconciliation interval, image
+builds, dependency installation, and worker startup. Worker probes run every 10 seconds, require
+three failed checks, and allow 360 seconds for initial dependency installation. Docker and the broker
+must remain running; the worker image must be locally available or pullable. Recreated workers use
+the fixed image, environment, network, and volume configuration in the broker, not arbitrary container
+arguments. Custom deployments must keep those settings aligned with their worker configuration.
+
+Deploy these checks with `docker compose up -d --build worker docker-broker backend`. Compose starts
+workers before the broker and stops the broker first on stack shutdown. Stop the broker before
+intentionally stopping or removing individual workers for maintenance, or it will restore them.
 
 ## Layout
 

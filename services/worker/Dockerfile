@@ -22,4 +22,6 @@ USER app
 
 # Workflow definitions come from the shared volume at /workflows.
 STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=10s --timeout=5s --start-period=360s --retries=3 \
+    CMD ["python", "-m", "nautionette_worker.health"]
 CMD ["python", "-m", "nautionette_worker.main"]

@@ -1,4 +1,4 @@
-"""Building the agent images, once at startup and never during a call.
+"""Building and reconciling the agent images.
 
 An image is tagged by the hash of the context that built it, so a changed agent
 set is simply a different image rather than something anyone has to invalidate.
@@ -32,7 +32,21 @@ def note(message: str) -> None:
 
 def snapshot() -> dict[str, Any]:
     with state_lock:
-        return dict(image_state)
+        state = dict(image_state)
+    if state["status"] == "ready":
+        expected = {"base": f"{IMAGE_PREFIX}base:{base_hash()}"}
+        expected.update({name: image_tag(name) for name in discovered_agent_sets()})
+        missing = [tag for tag in [*expected.values(), BASE_IMAGE] if not has_image(tag)]
+        state["images"] = expected
+        state["missing"] = missing
+        if missing:
+            state["status"] = "missing"
+    return state
+
+
+def reconcile() -> None:
+    if snapshot()["status"] not in {"ready", "building"}:
+        start_build()
 
 
 def discovered_agent_sets() -> list[str]:
@@ -90,7 +104,7 @@ def _build(path: str, tag: str) -> None:
 
 
 def ensure_images(force: bool = False) -> None:
-    """Built at startup, and again whenever a call finds one missing. A call never waits."""
+    """Build missing images and restore the base alias."""
     with state_lock:
         image_state["status"] = "building"
         image_state["error"] = None

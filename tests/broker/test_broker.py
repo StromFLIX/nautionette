@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from nautionette_docker_broker import agent_run, config, daemon, images, main, workers
+from nautionette_docker_broker import agent_run, config, daemon, images, main, monitor, workers
 
 from ..conftest import INTERNAL_TOKEN
 
@@ -15,12 +15,19 @@ HEADERS = {"X-Internal-Token": INTERNAL_TOKEN}
 
 
 class FakeContainer:
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, status: str = "running", health: str = "healthy") -> None:
         self.name = name
         self.restarts: list[int] = []
+        self.starts = 0
+        self.attrs = {"State": {"Status": status, "Health": {"Status": health}}}
+
+    def start(self) -> None:
+        self.starts += 1
+        self.attrs["State"]["Status"] = "running"
 
     def restart(self, timeout: int = 0) -> None:
         self.restarts.append(timeout)
+        self.attrs["State"]["Health"]["Status"] = "starting"
 
 
 class FakeDocker:
@@ -33,6 +40,7 @@ class FakeDocker:
         self.own_labels: dict[str, str] = {"com.docker.compose.project": "nautionette"}
         self.last_filters: dict | None = None
         self.up = True
+        self.runs: list[dict] = []
         broker = self
 
         class Images:
@@ -56,12 +64,19 @@ class FakeDocker:
                     raise RuntimeError("docker is unreachable")
                 return SimpleNamespace(labels=broker.own_labels)
 
-            def list(self, filters=None):
+            def list(self, filters=None, all=False):
+                if not broker.up:
+                    raise RuntimeError("docker is unreachable")
                 broker.last_filters = filters
                 return list(broker.listed)
 
-            def run(self, *_args, **_kwargs):
-                raise AssertionError("no test should really start a container")
+            def run(self, image, **kwargs):
+                if image != workers.WORKER_IMAGE:
+                    raise AssertionError("no test should really start an agent container")
+                broker.runs.append({"image": image, **kwargs})
+                container = FakeContainer(kwargs["name"])
+                broker.listed.append(container)
+                return container
 
         self.images = Images()
         self.containers = Containers()
@@ -75,6 +90,9 @@ class FakeDocker:
 @pytest.fixture
 def docker(monkeypatch: pytest.MonkeyPatch) -> FakeDocker:
     fake = FakeDocker()
+    monkeypatch.setattr(workers, "last_error", None)
+    monkeypatch.setattr(workers, "PROJECT_OVERRIDE", "")
+    monkeypatch.setattr(workers, "WORKER_REPLICAS", 1)
     monkeypatch.setattr(daemon, "client", lambda: fake)
     monkeypatch.setattr(
         images, "image_state", {"status": "pending", "images": {}, "log": [], "error": None}
@@ -145,6 +163,28 @@ def test_a_build_that_fails_is_reported_never_fatal(agent_images, docker, monkey
     assert "no space left" in state["error"]
 
 
+def test_pruned_images_are_detected_and_rebuilt(agent_images, docker, monkeypatch):
+    images.ensure_images()
+    tag = images.image_tag("default")
+    docker.tags.remove(tag)
+    docker.built.clear()
+    assert images.snapshot()["status"] == "missing"
+    monkeypatch.setattr(images, "start_build", lambda: images.ensure_images())
+    images.reconcile()
+    assert images.snapshot()["status"] == "ready"
+    assert [built_tag for _path, built_tag in docker.built] == [tag]
+
+
+def test_a_pruned_base_alias_is_restored_without_rebuilding(agent_images, docker, monkeypatch):
+    images.ensure_images()
+    docker.tags.remove(config.BASE_IMAGE)
+    docker.built.clear()
+    monkeypatch.setattr(images, "start_build", lambda: images.ensure_images())
+    images.reconcile()
+    assert config.BASE_IMAGE in docker.tags
+    assert docker.built == []
+
+
 # --------------------------------------------------------------------- health
 
 
@@ -154,6 +194,14 @@ def test_health_reports_the_images_it_holds(client, agent_images, docker):
     assert payload["docker"] is True
     assert payload["image_status"] == "ready"
     assert payload["images"]["default"] == images.image_tag("default")
+    assert payload["status"] == "degraded"
+    workers.reconcile()
+    assert client.get("/healthz").json()["status"] == "ok"
+    docker.tags.remove(images.image_tag("default"))
+    payload = client.get("/healthz").json()
+    assert payload["status"] == "degraded"
+    assert payload["image_status"] == "missing"
+    assert payload["workers"]["ready"] == 1
 
 
 def test_a_docker_that_is_not_there_degrades_rather_than_crashes(client, docker):
@@ -264,3 +312,143 @@ def test_an_override_lets_a_broker_that_cannot_read_its_own_label_still_work(doc
     assert workers.worker_filters() == {
         "label": [config.WORKER_LABEL, "com.docker.compose.project=explicit"]
     }
+
+
+def test_missing_workers_are_recreated_once_with_the_shared_workflows(docker, monkeypatch):
+    monkeypatch.setattr(workers, "WORKER_REPLICAS", 2)
+    assert workers.snapshot()["ready"] == 0
+    workers.reconcile()
+    workers.reconcile()
+    assert len(docker.runs) == 2
+    assert workers.snapshot()["ready"] == 2
+    assert docker.runs[0]["volumes"][config.WORKFLOWS_VOLUME]["bind"] == "/workflows"
+    assert docker.runs[0]["labels"]["com.docker.compose.project"] == "nautionette"
+    docker.listed.pop()
+    assert workers.snapshot()["status"] == "degraded"
+    workers.reconcile()
+    assert len(docker.runs) == 3
+    assert workers.snapshot()["status"] == "ready"
+
+
+def test_stopped_and_unhealthy_workers_are_repaired_in_place(docker, monkeypatch):
+    monkeypatch.setattr(workers, "WORKER_REPLICAS", 2)
+    stopped = FakeContainer("nautionette-worker-1", status="exited")
+    unhealthy = FakeContainer("nautionette-worker-2", health="unhealthy")
+    docker.listed = [stopped, unhealthy]
+    workers.reconcile()
+    workers.reconcile()
+    assert stopped.starts == 1
+    assert unhealthy.restarts == [config.STOP_GRACE]
+    assert docker.runs == []
+    assert workers.snapshot()["status"] == "degraded"
+
+
+def test_worker_reconciliation_fails_closed_and_recovers_after_docker_returns(docker):
+    docker.up = False
+    workers.reconcile()
+    assert workers.snapshot()["status"] == "degraded"
+    assert docker.runs == []
+    docker.up = True
+    workers.reconcile()
+    assert workers.snapshot()["status"] == "ready"
+
+
+def test_a_worker_that_cannot_start_does_not_create_unbounded_replacements(docker, monkeypatch):
+    stopped = FakeContainer("nautionette-worker-1", status="exited")
+    docker.listed = [stopped]
+
+    def fail():
+        raise RuntimeError("out of memory")
+
+    monkeypatch.setattr(stopped, "start", fail)
+    workers.reconcile()
+    workers.reconcile()
+    assert docker.runs == []
+    assert "out of memory" in workers.snapshot()["error"]
+
+
+def test_worker_creation_failure_is_reported_and_retried(docker, monkeypatch):
+    run = docker.containers.run
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("worker image missing")
+
+    monkeypatch.setattr(docker.containers, "run", fail)
+    workers.reconcile()
+    assert "worker image missing" in workers.snapshot()["error"]
+    monkeypatch.setattr(docker.containers, "run", run)
+    workers.reconcile()
+    assert workers.snapshot()["status"] == "ready"
+
+
+def test_a_worker_without_a_readiness_probe_is_not_reported_as_ready(docker):
+    container = FakeContainer("nautionette-worker-1")
+    del container.attrs["State"]["Health"]
+    docker.listed = [container]
+    assert workers.snapshot()["ready"] == 0
+
+
+def test_a_dead_worker_is_removed_and_replaced(docker, monkeypatch):
+    container = FakeContainer("nautionette-worker-1", status="dead")
+    docker.listed = [container]
+    monkeypatch.setattr(container, "remove", lambda: docker.listed.remove(container), raising=False)
+    workers.reconcile()
+    assert len(docker.runs) == 1
+    assert workers.snapshot()["status"] == "ready"
+
+
+def test_monitor_keeps_reconciling_workers_when_image_inspection_fails(monkeypatch):
+    import threading
+
+    stopping = threading.Event()
+    calls = []
+
+    def broken_images():
+        raise RuntimeError("cannot inspect images")
+
+    def reconcile_workers():
+        calls.append("workers")
+        stopping.set()
+
+    monkeypatch.setattr(images, "reconcile", broken_images)
+    monkeypatch.setattr(workers, "reconcile", reconcile_workers)
+    monitor.run(stopping)
+    assert calls == ["workers"]
+
+
+def test_lifespan_starts_and_stops_the_monitor(monkeypatch, docker):
+    import threading
+
+    started = threading.Event()
+    stopped = threading.Event()
+
+    def run(stopping):
+        started.set()
+        stopping.wait()
+        stopped.set()
+
+    monkeypatch.setattr(monitor, "run", run)
+    with TestClient(main.app):
+        assert started.wait(timeout=2)
+    assert stopped.is_set()
+
+
+def test_monitor_restores_resources_removed_between_passes(agent_images, docker, monkeypatch):
+    passes = []
+
+    def wait(interval):
+        assert interval == monitor.RECONCILE_SECONDS
+        assert images.snapshot()["status"] == "ready"
+        assert workers.snapshot()["status"] == "ready"
+        passes.append(True)
+        if len(passes) == 1:
+            docker.tags.clear()
+            docker.listed.clear()
+            return False
+        return True
+
+    monkeypatch.setattr(images, "start_build", lambda: images.ensure_images())
+    monitor.run(SimpleNamespace(is_set=lambda: False, wait=wait))
+    assert len(passes) == 2
+    assert len(docker.built) == 4
+    assert len(docker.runs) == 2

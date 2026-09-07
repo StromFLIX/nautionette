@@ -91,6 +91,13 @@ services:
       IMAGE_PREFIX: nautionette/pi-
       BASE_IMAGE: nautionette/pi-base:dev
       WORKER_SERVICE_LABEL: com.docker.compose.service=worker
+      WORKER_IMAGE: nautionette/worker:dev
+      WORKER_REPLICAS: ${WORKER_REPLICAS:-1}
+      CONTAINER_RECONCILE_SECONDS: ${CONTAINER_RECONCILE_SECONDS:-30}
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-nautionette}
+      WORKER_GRACE_SECONDS: ${WORKER_GRACE_SECONDS:-50}
       # One container per agent call, so the only knob is how long a single call
       # may take before it is killed.
       AGENT_RUN_TIMEOUT_SECONDS: ${AGENT_RUN_TIMEOUT_SECONDS:-900}
@@ -100,6 +107,9 @@ services:
       AGENT_AGENTGATEWAY_URL: http://agentgateway:4000
       AGENT_BACKEND_URL: http://backend:8080
     networks: [control, internal]
+    depends_on:
+      worker:
+        condition: service_started
     security_opt:
       - no-new-privileges:true
     <<: *logging

@@ -19,6 +19,7 @@ import httpx
 from temporalio.client import Client
 from temporalio.worker import UnsandboxedWorkflowRunner, Worker
 
+from . import health
 from .activities import ALL as ACTIVITIES
 from .loader import install_dependencies, load_workflows
 
@@ -67,7 +68,9 @@ async def connect_with_retry() -> Client:
 
 
 async def main() -> None:
+    health.clear()
     client = await connect_with_retry()
+    loaded_sources = health.sources(WORKFLOWS_DIR)
     workflows, report = load_workflows(WORKFLOWS_DIR, BAD_HEADERS)
     log.info(
         "starting worker on %s with %d workflow(s) and %d activities",
@@ -97,12 +100,18 @@ async def main() -> None:
         with contextlib.suppress(NotImplementedError):
             loop.add_signal_handler(sig, stopping.set)
 
-    async with worker:
-        await stopping.wait()
-        log.info("shutdown requested, draining for up to %ss", GRACE_SECONDS)
+    try:
+        async with worker, asyncio.TaskGroup() as tasks:
+            tasks.create_task(health.maintain(stopping, report, loaded_sources))
+            await stopping.wait()
+            health.clear()
+            log.info("shutdown requested, draining for up to %ss", GRACE_SECONDS)
+    finally:
+        health.clear()
 
 
 if __name__ == "__main__":
+    health.clear()
     # Dependencies first, then a clean interpreter: a package that appears part way
     # through a process does not import reliably.
     installed, BAD_HEADERS = install_dependencies(WORKFLOWS_DIR)

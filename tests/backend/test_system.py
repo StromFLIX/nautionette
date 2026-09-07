@@ -39,6 +39,17 @@ def test_a_component_that_raises_is_reported_not_fatal(client, live, monkeypatch
     assert payload["agent_sets"] == []
 
 
+def test_broker_resource_degradation_is_not_hidden_by_http_success(client, live, monkeypatch):
+    async def degraded():
+        return {"status": "degraded", "image_status": "missing", "workers": {"ready": 0}}
+
+    monkeypatch.setattr(live.broker, "health", degraded)
+    payload = client.get("/api/system").json()
+    assert _component(payload, "broker")["status"] == "degraded"
+    assert _component(payload, "broker")["detail"]["workers"]["ready"] == 0
+    assert payload["agent_sets"]
+
+
 def test_temporal_being_down_carries_its_last_error(client, live, temporal, monkeypatch):
     temporal.up = False
     monkeypatch.setattr(live.temporal, "last_error", "temporal:7233 unreachable")
