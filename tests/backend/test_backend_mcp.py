@@ -41,6 +41,7 @@ async def test_backend_tool_executes_the_real_api_and_preserves_validation_error
 
 
 async def test_schedule_tool_exposes_and_accepts_a_human_recurrence(backend):
+    backend.authoring.add_workflow("demo", manifest={"timeout_minutes": 12})
     tools = await main.backend_mcp.list_tools(None, None)
     tool = next(item for item in tools.tools if item.name == "schedule_workflow")
     body = tool.input_schema["properties"]["body"]

@@ -381,12 +381,15 @@ class Database:
         run_id: str | None,
         trigger: str,
         payload: dict[str, Any],
+        *,
+        created_at: float | None = None,
     ) -> dict[str, Any]:
         now = time.time()
         row_id = uuid.uuid4().hex[:12]
         self.execute(
             "INSERT INTO runs (id, workflow, workflow_id, run_id, trigger, input, status, created_at,"
-            " updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            " updated_at) SELECT ?,?,?,?,?,?,?,?,?"
+            " WHERE NOT EXISTS (SELECT 1 FROM runs WHERE workflow_id = ?)",
             (
                 row_id,
                 workflow,
@@ -395,11 +398,12 @@ class Database:
                 trigger,
                 json.dumps(payload),
                 "running",
+                created_at if created_at is not None else now,
                 now,
-                now,
+                workflow_id,
             ),
         )
-        return self.one("SELECT * FROM runs WHERE id = ?", (row_id,))  # type: ignore[return-value]
+        return self.one("SELECT * FROM runs WHERE workflow_id = ?", (workflow_id,))  # type: ignore[return-value]
 
     def update_run(self, workflow_id: str, status: str, result: Any = None) -> None:
         self.execute(

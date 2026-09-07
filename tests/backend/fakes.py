@@ -276,16 +276,30 @@ class FakeTemporal:
         self.terminated.append((workflow_id, reason))
 
     async def set_schedule(
-        self, workflow: str, spec: Any, payload: dict[str, Any], paused: bool = False
+        self, workflow: str, spec: Any, payload: dict[str, Any], paused: bool = False,
+        timeout_minutes: int = 30,
     ) -> dict[str, Any]:
         from nautionette_backend.schedules import schedule_summary
 
-        self.schedule_specs[workflow] = {"spec": spec, "input": payload, "paused": paused}
+        self.schedule_specs[workflow] = {
+            "spec": spec, "input": payload, "paused": paused, "timeout_minutes": timeout_minutes,
+        }
         return {
             "schedule_id": f"schedule-{workflow}",
             "input": payload,
             **schedule_summary(spec, paused=paused),
         }
+
+    async def ensure_schedule_timeout(self, workflow: str, timeout_minutes: int) -> None:
+        self.schedule_specs[workflow]["timeout_minutes"] = timeout_minutes
+
+    async def scheduled_executions(self):
+        for item in self.executions.values():
+            if item.get("scheduled"):
+                yield {**item, "start_time": 1788782400.0}
+
+    async def execution_input(self, workflow_id: str, run_id: str) -> dict[str, Any]:
+        return self.histories[workflow_id][0]["input"]
 
     async def delete_schedule(self, workflow: str) -> None:
         self.schedule_specs.pop(workflow, None)

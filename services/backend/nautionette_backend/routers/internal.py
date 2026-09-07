@@ -13,7 +13,7 @@ from ..db import db
 from ..deployment import WorkflowSource, deploy
 from ..events import bus
 from ..gateway_config import attempt
-from ..runtime import remember_agent_result
+from ..runtime import remember_agent_result, runtime
 from ..security import require_internal
 
 router = APIRouter(dependencies=[Depends(require_internal)])
@@ -28,7 +28,8 @@ async def internal_agent_call(payload: dict[str, Any] = Body(...)) -> dict[str, 
         system_prompt=payload.get("system_prompt"),
         history=payload.get("history") or [],
         output_schema=payload.get("output_schema"),
-        agent_set=payload.get("agent_set"),
+        agent_set=payload.get("agent_set") or runtime("default_agent_set"),
+        model=runtime("default_model"),
         run_id=payload.get("run_id", ""),
         timeout_seconds=int(payload.get("timeout_seconds") or 900),
     )

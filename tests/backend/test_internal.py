@@ -28,6 +28,22 @@ def test_an_activity_gets_one_object_back(client, internal_headers, broker):
     assert broker.jobs[0]["run_id"] == "wf-1"
 
 
+def test_workflow_agents_use_runtime_defaults(client, internal_headers, broker, db):
+    db.set_setting("default_model", "anthropic/claude")
+    db.set_setting("default_agent_set", "custom")
+    client.post("/internal/agent/call", headers=internal_headers, json={"prompt": "hi"})
+    assert broker.jobs[-1]["model"] == "anthropic/claude"
+    assert broker.jobs[-1]["agent_set"] == "custom"
+
+    db.set_setting("default_model", "openai/new-model")
+    client.post(
+        "/internal/agent/call", headers=internal_headers,
+        json={"prompt": "hi", "agent_set": "explicit"},
+    )
+    assert broker.jobs[-1]["model"] == "openai/new-model"
+    assert broker.jobs[-1]["agent_set"] == "explicit"
+
+
 def test_an_agent_that_never_produced_a_result_is_not_reported_as_one(client, internal_headers, broker):
     broker.events = [{"type": "error", "message": "container exited 1"}]
     result = client.post("/internal/agent/call", headers=internal_headers, json={"prompt": "hi"}).json()

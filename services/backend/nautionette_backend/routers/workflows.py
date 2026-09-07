@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+from nautionette import input_problems
 
 from ..background import spawn
 from ..clients import authoring, temporal
@@ -92,7 +93,15 @@ async def validate_workflow(payload: dict[str, Any] = Body(...)) -> dict[str, An
 @router.post("/api/workflows/{name}/schedule")
 async def schedule_workflow(name: str, payload: ScheduleRequest) -> dict[str, Any]:
     """Schedule a workflow with a human recurrence and an explicit IANA timezone."""
-    result = await temporal.set_schedule(name, temporal_spec(payload), payload.input)
+    workflow = await authoring.get_workflow(name)
+    manifest = workflow.get("manifest") or {}
+    problems = input_problems(manifest.get("inputs"), payload.input)
+    if problems:
+        raise HTTPException(status_code=400, detail={"workflow": name, "input": problems})
+    result = await temporal.set_schedule(
+        name, temporal_spec(payload), payload.input,
+        timeout_minutes=manifest.get("timeout_minutes", 30),
+    )
     bus.publish(
         "workflow.scheduled",
         {"workflow": name, "frequency": payload.frequency, "timezone": payload.timezone},

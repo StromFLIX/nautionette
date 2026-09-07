@@ -48,6 +48,7 @@ async def lifespan(_: FastAPI):
     # rather than holding the port closed.
     spawn(bootstrap(), name="integration-bootstrap")
     runs.resume_unfinished()
+    spawn(runs.reconcile_schedules(), name="schedule-reconciliation")
     bus.publish("system.start", {"version": settings.version})
     async with backend_mcp.http_app.router.lifespan_context(backend_mcp.http_app):
         spawn(mcp_servers.bootstrap_backend(), name="backend-mcp-bootstrap")
