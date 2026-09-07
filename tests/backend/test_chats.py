@@ -312,6 +312,43 @@ def test_a_tool_that_failed_says_so(client, broker):
     assert (steps[0]["ok"], steps[0]["result"]) == (False, "boom")
 
 
+def test_provider_context_is_persisted_from_the_latest_request(client, broker):
+    context = {"model": "openai/gpt-4o-mini", "tokens": 4600, "source": "provider"}
+    broker.events = [
+        {"type": "usage", "context": {**context, "tokens": 9000}},
+        {"type": "usage", "context": context},
+        {"type": "result", "ok": True, "text": "hello", "context": context},
+    ]
+    chat_id = client.post("/api/chats", json={}).json()["id"]
+    events = sse_events(send(client, chat_id, "hello"))
+    assert events[-1]["message"]["meta"]["context"] == context
+    assert client.get(f"/api/chats/{chat_id}").json()["messages"][-1]["meta"]["context"] == context
+
+
+def test_live_context_survives_reconnect_and_backend_restart(client, db):
+    chat_id = client.post("/api/chats", json={}).json()["id"]
+    db.accept_chat_message(chat_id, "hello", "usage-turn")
+    assert db.chat_snapshot(chat_id)["active_turn"]["context"] is None
+    context = {"model": "test/model", "tokens": 1234, "source": "provider"}
+    db.record_chat_progress("usage-turn", {"type": "usage", "context": context}, [], "")
+    db.record_chat_progress("usage-turn", {"type": "delta", "text": "hi"}, [], "")
+    assert client.get(f"/api/chats/{chat_id}").json()["active_turn"]["context"] == context
+    conversations.recover_interrupted()
+    assert db.chat_snapshot(chat_id)["messages"][-1]["meta"]["context"] == context
+    db.accept_chat_message(chat_id, "again", "next-turn")
+    assert db.chat_snapshot(chat_id)["active_turn"]["context"] is None
+
+
+def test_missing_context_clears_a_previous_measurement(client, db):
+    chat_id = client.post("/api/chats", json={}).json()["id"]
+    db.accept_chat_message(chat_id, "hello", "missing-usage")
+    db.record_chat_progress("missing-usage", {"type": "usage", "context": {"tokens": 1234}}, [], "")
+    db.record_chat_progress("missing-usage", {"type": "usage", "context": None}, [], "")
+    assert db.chat_snapshot(chat_id)["active_turn"]["context"] is None
+    db.finish_chat_turn("missing-usage", "hi", {})
+    assert db.chat_snapshot(chat_id)["messages"][-1]["meta"]["context"] is None
+
+
 # --------------------------------------------------------------------- promote
 
 

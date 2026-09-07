@@ -76,7 +76,7 @@
         :tools="chat?.tools ?? null"
         :project-ids="projectIds || []"
         :busy="streaming"
-        :context-used="contextUsed"
+        :context="context"
         @update:agent-set="patch({ agent_set: $event })"
         @update:model="patch({ model: $event })"
         @update:tools="patch({ tools: $event })"
@@ -99,6 +99,7 @@ import { backTo } from '../router'
 import { actions, draftCount, onLiveEvent, store } from '../store'
 import { api, chatStream } from '../api'
 import { delivery, onDelivery, pendingMessages } from '../delivery'
+import { latestContext } from '../context'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -130,8 +131,9 @@ const messages = computed(() => {
     delivery: item.error ? 'failed' : 'sending', deliveryError: item.error
   }))]
 })
-const contextUsed = computed(() =>
-  messages.value.reduce((total, message) => total + (message.content || '').length, 0))
+const context = computed(() => latestContext(
+  savedMessages.value, activeTurn.value, chat.value?.model || store.catalog.default_model
+))
 
 let stream = null
 let generation = 0

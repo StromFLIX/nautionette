@@ -105,6 +105,13 @@ jobs:
       - name: agent set default
         run: docker build -t nautionette/pi-agent-default:dev images/agent-sets/default
 
+      - name: Development tools work offline as the project user
+        run: |
+          docker run --rm --network none --user 10001:10001 \
+            --env HOME=/workspace --tmpfs /workspace:rw,mode=1777 --shm-size=256m \
+            --volume "$PWD/scripts/check-pi-dev-tools.sh:/check-pi-dev-tools.sh:ro" \
+            --entrypoint bash nautionette/pi-agent-default:dev /check-pi-dev-tools.sh
+
   compose:
     name: Compose file
     runs-on: ubuntu-latest

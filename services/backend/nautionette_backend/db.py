@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
 
 # Applied on every start; each one fails harmlessly once it is already in place.
 _MIGRATIONS = (
+    "ALTER TABLE chat_turns ADD COLUMN context TEXT",
     "ALTER TABLE chats ADD COLUMN model TEXT",
     "ALTER TABLE chats ADD COLUMN tools TEXT",
     "ALTER TABLE chats ADD COLUMN internet_status TEXT NOT NULL DEFAULT 'blocked'",
@@ -330,10 +331,16 @@ class Database:
         turn = self.one("SELECT * FROM chat_turns WHERE chat_id = ? AND state = 'running'", (chat_id,))
         if turn:
             turn["steps"] = json.loads(turn["steps"])
+            turn["context"] = json.loads(turn["context"]) if turn["context"] else None
         return {"chat": self.get_chat(chat_id), "messages": self.list_messages(chat_id), "active_turn": turn}
 
     def record_chat_progress(self, turn_id: str, event: dict[str, Any], steps: list, status: str) -> None:
         with self._lock, self._conn:
+            if event.get("type") in {"usage", "result"} and "context" in event:
+                self._conn.execute(
+                    "UPDATE chat_turns SET context = ? WHERE id = ?",
+                    (json.dumps(event["context"]), turn_id),
+                )
             self._conn.execute(
                 "UPDATE chat_turns SET steps = ?, status = ? WHERE id = ?",
                 (json.dumps(steps), status, turn_id),
@@ -351,6 +358,8 @@ class Database:
             if not turn:
                 return
             now = time.time()
+            # Keep the latest provider measurement through reloads and interrupted-turn recovery.
+            meta = {**meta, "context": json.loads(turn["context"]) if turn["context"] else None}
             message = {"id": uuid.uuid4().hex[:12], "chat_id": turn["chat_id"], "role": "assistant",
                        "content": content, "meta": meta, "created_at": now}
             self._conn.execute(

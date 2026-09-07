@@ -9,7 +9,7 @@ async function mockChats (context, state) {
       if (state.systemOffline) return route.abort('internetdisconnected')
       return route.fulfill({ json: { components: [], agent_sets: [] } })
     }
-    if (path === '/api/catalog') return route.fulfill({ json: { models: [], tools: [], agent_sets: [], default_model: 'test/model' } })
+    if (path === '/api/catalog') return route.fulfill({ json: { models: state.models || [], tools: [], agent_sets: [], default_model: 'test/model' } })
     if (path === '/api/chats') return route.fulfill({ json: { chats: Object.values(state.chats).map((data) => data.chat) } })
     if (path === '/api/workflows') return route.fulfill({ json: { workflows: [] } })
     if (path === '/api/drafts') return route.fulfill({ json: { drafts: [] } })
@@ -96,6 +96,32 @@ test('web and mobile attach to the same live answer and switch between concurren
     await web.close()
     await mobile.close()
   }
+})
+
+test('context meter uses live provider tokens, persists on reload and rejects a different model', async ({ page, context }) => {
+  const state = initial()
+  state.models = [{ id: 'test/model', context_length: 10000 }]
+  const data = state.chats.alpha
+  data.messages = [{ id: 'user-1', role: 'user', content: 'short', meta: {} }]
+  data.active_turn = { id: 'user-1', steps: [], context: null }
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  const meter = page.locator('.composer__context')
+  await expect(meter).toHaveText('Context unknown')
+  const usage = { model: 'test/model', tokens: 4600, source: 'provider' }
+  data.active_turn.context = usage
+  await expect(meter).toHaveText('46% context')
+  await expect(meter).toHaveAttribute('title', /4,600 of 10,000 tokens/)
+  data.active_turn.context = { ...usage, tokens: 1000 }
+  await expect(meter).toHaveText('10% context')
+  data.messages.push({ id: 'answer-1', role: 'assistant', content: 'done', meta: { context: data.active_turn.context } })
+  data.active_turn = null
+  await page.reload()
+  await expect(meter).toHaveText('10% context')
+  await page.locator('textarea').fill('This draft must not count as reported usage')
+  await expect(meter).toHaveText('10% context')
+  data.chat.model = 'another/model'
+  await expect(meter).toHaveText('Context unknown')
 })
 
 test('offline messages show Sending, survive reload, and retry with the original ID', async ({ page, context }) => {

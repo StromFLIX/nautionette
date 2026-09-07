@@ -47,8 +47,8 @@
         <div class="fact">
           <span class="material-icons">history</span>
           <div>
-            <div class="fact__title">{{ compactChars(historyBudget(model)) }} chars</div>
-            <button class="caption fact__link" @click="actions.openSettings('general')">context</button>
+            <div class="fact__title">{{ contextWindow ? `${contextWindow.toLocaleString()} tokens` : 'Unknown' }}</div>
+            <div class="caption dim">model context window</div>
           </div>
         </div>
       </div>
@@ -65,8 +65,8 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import Composer from './Composer.vue'
-import { compactChars } from '../format'
-import { actions, historyBudget, store } from '../store'
+import { modelContextWindow } from '../context'
+import { actions, store } from '../store'
 
 defineProps({ busy: { type: Boolean, default: false } })
 defineEmits(['start'])
@@ -84,6 +84,7 @@ const model = ref(store.catalog.default_model || '')
 const tools = ref(null)
 const projectIds = ref([])
 const composer = ref(null)
+const contextWindow = computed(() => modelContextWindow(store.catalog, model.value))
 
 function use (prompt) {
   text.value = prompt
