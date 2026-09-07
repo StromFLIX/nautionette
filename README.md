@@ -745,3 +745,5 @@ and runs by default, since the committed workflows are validated with the real c
 - **Git sync** needs a conflict story: what happens when a push and an agent write touch the same file.
 - **Composable workflows.** Inputs and outputs are covered by the manifest; one workflow calling another still needs versioning and permissions.
 - **Object storage.** The boundary is S3-shaped, but there is no store behind it yet — MaxIO is not ready, so artifacts stay on the shared volume.
+
+<!-- test commit 2026-09-07T22:19:41Z -->
