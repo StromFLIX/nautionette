@@ -134,7 +134,19 @@ def render_result(result: Any) -> str:
     return f"```json\n{json.dumps(result, indent=2, ensure_ascii=False)}\n```"
 
 
+def should_deliver(status: str, result: Any) -> bool:
+    """Silence is explicit, successful-only, and never removes the run history."""
+    if status != "completed":
+        return True
+    if result is None or result == "":
+        return False
+    return not (isinstance(result, dict) and result.get("notify") is False)
+
+
 async def deliver_to_chat(name: str, workflow_id: str, status: str, result: Any) -> None:
+    # Check before creating a chat or touching its timestamp/context.
+    if not should_deliver(status, result):
+        return
     config = db.workflow_settings(name)
     workflow_title = name
     # A deleted workflow still deserves to deliver its last result.

@@ -1,4 +1,6 @@
 <template>
+  <div class="app-frame">
+    <EnvironmentBanner />
   <div class="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage }">
     <template v-if="!fullPage">
       <NavRail class="shell__rail" />
@@ -42,11 +44,13 @@
       </q-card>
     </q-dialog>
   </div>
+  </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import EnvironmentBanner from './components/EnvironmentBanner.vue'
 import NavRail from './components/NavRail.vue'
 import SidePanel from './components/SidePanel.vue'
 import { actions, store } from './store'
@@ -104,7 +108,15 @@ onUnmounted(() => actions.disconnect())
 </script>
 
 <style scoped>
+.app-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
 .shell {
+  flex: 1;
   display: grid;
   grid-template-columns: var(--rail-width) auto 1fr;
   grid-template-rows: minmax(0, 1fr);

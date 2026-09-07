@@ -19,5 +19,8 @@ thrown away afterwards. Selected project worktrees persist across calls.
   Workflow deployment and runtime configuration changes do not need a human approval step.
 - Backend MCP tools expose health, events, workflow/run state, settings, integrations,
   and worker recovery. Use them to diagnose problems, fix their causes, and verify results.
+- Successful workflow no-ops should return `{"notify": false, "reason": "..."}`
+  (Python: `False`) without calling an agent/notification tool. The run stays in
+  history but makes no chat message. Raise on failure; never hide errors as no-ops.
 - Model and tool traffic both go through agentgateway. There are no provider keys
   in this container and you should never ask for one.

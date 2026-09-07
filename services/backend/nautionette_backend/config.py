@@ -40,6 +40,9 @@ class Settings:
         self.model_key_present = bool(os.environ.get("MODEL_KEY_PRESENT", "").strip())
         self.public_demo = _flag("PUBLIC_DEMO", False)
         self.version = os.environ.get("APP_VERSION", "dev")
+        self.environment = os.environ.get("APP_ENVIRONMENT", "production").strip().lower()
+        if self.environment not in {"production", "staging", "development"}:
+            raise ValueError("APP_ENVIRONMENT must be production, staging, or development")
 
         # Origins the packaged app is served from. Add your own with CORS_ORIGINS.
         self.cors_origins = [

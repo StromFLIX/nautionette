@@ -63,6 +63,7 @@ async function request (path, options = {}) {
 const json = (body) => ({ body: JSON.stringify(body ?? {}) })
 
 export const api = {
+  health: () => request('/healthz', { signal: AbortSignal.timeout(5000) }),
   system: () => request('/api/system'),
   catalog: (refresh = false) => request(`/api/catalog${refresh ? '?refresh=true' : ''}`),
   events: () => request('/api/events/recent'),

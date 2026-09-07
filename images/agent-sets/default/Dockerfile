@@ -1,4 +1,5 @@
-FROM nautionette/pi-base:dev
+ARG BASE_IMAGE=nautionette/pi-base:dev
+FROM ${BASE_IMAGE}
 
 # One agent set for now. A second set is a second directory like this one:
 # same base, different extensions and packages.
