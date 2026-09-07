@@ -35,25 +35,50 @@
     <div class="side__list scroll-y grow">
       <!-- chats -->
       <template v-if="section === 'chats'">
-        <RouterLink
-          v-for="chat in filteredChats" :key="chat.id" :to="`/chats/${chat.id}`"
-          class="row-item" :class="{ 'row-item--active': route.params.id === chat.id }"
-        >
-          <div class="avatar" :style="avatarStyle(chat.id)">{{ initials(chat.title) }}</div>
-          <div class="grow">
-            <div class="row">
-              <span class="row-item__title grow truncate">{{ chat.title }}</span>
-              <span class="row-item__time">{{ shortTime(chat.updated_at) }}</span>
+        <div v-for="chat in filteredChats" :key="chat.id" class="chat-list-item">
+          <RouterLink
+            :to="`/chats/${chat.id}`"
+            class="row-item" :class="{
+              'row-item--active': route.params.id === chat.id,
+              'row-item--running': chat.answering && !needsInternet(chat),
+              'row-item--attention': needsInternet(chat),
+              'row-item--unread': chat.unread
+            }"
+          >
+            <div class="avatar" :style="avatarStyle(chat.id)">{{ initials(chat.title) }}</div>
+            <div class="grow">
+              <div class="row">
+                <span class="row-item__title grow truncate">{{ chat.title }}</span>
+                <span v-if="chat.unread" class="row-item__unread" role="img" aria-label="Unread messages" title="Unread messages" />
+                <span class="row-item__time">{{ shortTime(chat.updated_at) }}</span>
+              </div>
+              <div class="row-item__sub truncate">
+                <span v-if="needsInternet(chat)" class="row-item__activity row-item__activity--attention">
+                  <span class="material-icons" aria-hidden="true">public</span>
+                  {{ chat.internet_status === 'deciding' ? 'Applying internet decision' : 'Internet approval needed' }}
+                </span>
+                <span v-else-if="chat.answering" class="row-item__activity">
+                  <span class="row-item__activity-dot" aria-hidden="true" />
+                  In progress
+                </span>
+                <template v-else>
+                  <span v-if="chat.last_message?.role === 'user'" class="dim">You: </span>
+                  {{ chat.last_message?.preview || 'No messages yet' }}
+                </template>
+              </div>
             </div>
-            <div class="row-item__sub truncate">
-              <template v-if="chat.answering">Answering...</template>
-              <template v-else>
-                <span v-if="chat.last_message?.role === 'user'" class="dim">You: </span>
-                {{ chat.last_message?.preview || 'No messages yet' }}
-              </template>
-            </div>
-          </div>
-        </RouterLink>
+          </RouterLink>
+          <button class="btn btn--icon btn--sm chat-list-item__menu" :aria-label="`Options for ${chat.title}`">
+            <span class="material-icons" aria-hidden="true">more_vert</span>
+            <q-menu anchor="bottom right" self="top right" class="pick-menu">
+              <button v-close-popup class="pick-menu__item" :disabled="readBusy === chat.id" @click="setUnread(chat, !chat.unread)">
+                <span class="material-icons" aria-hidden="true">{{ chat.unread ? 'mark_email_read' : 'mark_email_unread' }}</span>
+                {{ chat.unread ? 'Mark as read' : 'Mark as unread' }}
+              </button>
+            </q-menu>
+          </button>
+        </div>
+        <p v-if="readError" class="side__error caption" role="alert">{{ readError }}</p>
         <p v-if="!filteredChats.length" class="side__empty caption">
           {{ query ? 'Nothing matches that.' : 'No chats yet.' }}
         </p>
@@ -145,6 +170,24 @@ import { api } from '../api'
 const route = useRoute()
 const router = useRouter()
 const query = ref('')
+const readBusy = ref('')
+const readError = ref('')
+const needsInternet = (chat) => ['pending', 'deciding'].includes(chat.internet_status)
+
+async function setUnread (chat, unread) {
+  readBusy.value = chat.id
+  readError.value = ''
+  try {
+    // Leave the open chat first so it is not immediately acknowledged again.
+    if (unread && route.params.id === chat.id) await router.push('/chats')
+    await api.updateChatReadState(chat.id, { unread })
+    await actions.loadChats()
+  } catch (error) {
+    readError.value = `Could not update read status: ${error.message}`
+  } finally {
+    readBusy.value = ''
+  }
+}
 
 const section = computed(() => route.name || 'chats')
 const heading = computed(() => ({ chats: 'Chats', workflows: 'Workflows', runs: 'Runs' }[section.value]))
@@ -258,6 +301,27 @@ function refresh () {
   text-align: center;
 }
 
+.chat-list-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.chat-list-item > .row-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-list-item__menu {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.side__error {
+  padding: 8px 10px;
+  color: var(--danger);
+}
+
 .row-item {
   display: flex;
   align-items: center;
@@ -280,6 +344,82 @@ function refresh () {
 
 .row-item--active .row-item__sub {
   color: #b9cdf5;
+}
+
+.row-item--running {
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.row-item__activity {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.row-item--attention {
+  box-shadow: inset 2px 0 var(--warning);
+}
+
+.row-item__activity--attention {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.row-item__activity .material-icons {
+  font-size: 13px;
+}
+
+.row-item--unread .row-item__title {
+  font-weight: 750;
+}
+
+.row-item__unread {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-hover);
+}
+
+.row-item__activity-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.row-item--running .avatar {
+  position: relative;
+}
+
+.row-item--running .avatar::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 2px solid var(--accent-soft);
+  border-top-color: var(--accent-hover);
+  border-right-color: var(--accent-hover);
+  border-radius: inherit;
+  pointer-events: none;
+  animation: chat-activity-orbit 1.8s linear infinite;
+}
+
+@keyframes chat-activity-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-item--running .avatar::after {
+    animation: none;
+  }
 }
 
 .row-item__title {

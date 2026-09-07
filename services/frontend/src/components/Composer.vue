@@ -140,6 +140,7 @@ defineExpose({ focus: () => input.value?.focus() })
 
 <style scoped>
 .composer {
+  position: relative;
   min-width: 0;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
@@ -154,6 +155,48 @@ defineExpose({ focus: () => input.value?.focus() })
 
 .composer--welcome {
   box-shadow: var(--shadow-md);
+}
+
+.composer--running {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft), 0 0 20px var(--accent-soft);
+}
+
+.composer--running.composer--focus {
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 0 24px var(--accent-soft);
+}
+
+/* Mask the light to the border so it never covers the input or intercepts clicks. */
+.composer--running::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 2px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--composer-orbit-angle),
+    transparent 0deg 240deg,
+    var(--accent) 285deg,
+    var(--accent-text) 315deg,
+    var(--accent-hover) 330deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: composer-light-orbit 4s linear infinite;
+}
+
+@keyframes composer-light-orbit {
+  to { --composer-orbit-angle: 360deg; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer--running::before {
+    animation: none;
+  }
 }
 
 .composer__input {
@@ -336,6 +379,13 @@ defineExpose({ focus: () => input.value?.focus() })
 </style>
 
 <style>
+/* Registered globally so the angle interpolates smoothly instead of jumping. */
+@property --composer-orbit-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
 .pick-menu {
   min-width: 240px;
   max-width: 340px;

@@ -24,9 +24,12 @@
         <span class="material-icons" style="font-size: 15px">account_tree</span>
         {{ chat.promoted_to }}
       </RouterLink>
-      <button class="btn btn--icon">
+      <button class="btn btn--icon" aria-label="Chat options">
         <span class="material-icons">more_vert</span>
         <q-menu anchor="bottom right" self="top right" class="pick-menu">
+          <button v-close-popup class="pick-menu__item" @click="markUnread">
+            <span class="material-icons" aria-hidden="true">mark_email_unread</span>Mark as unread
+          </button>
           <button class="pick-menu__item" @click="rename">
             <span class="material-icons pick__icon">edit</span>Rename
           </button>
@@ -37,7 +40,7 @@
       </button>
     </header>
 
-    <div ref="scroller" class="thread__body scroll-y grow">
+    <div ref="scroller" class="thread__body scroll-y grow" @scroll.passive="acknowledgeRead">
       <div class="thread__inner">
         <p v-if="!messages.length && !activeTurn" class="caption dim" role="status">
           {{ reconnecting ? 'Waiting for connection. No saved messages on this device.' : 'No messages yet.' }}
@@ -76,6 +79,7 @@
     <div class="thread__foot">
       <p v-if="cacheError" class="caption" role="alert">{{ cacheError }}</p>
       <p v-if="controlError" class="caption" role="alert">{{ controlError }}</p>
+      <p v-if="readError" class="caption" role="alert">{{ readError }}</p>
       <button v-if="chat?.queue_paused && !streaming && !queuedMessages.length" class="btn btn--sm" :disabled="controlBusy" @click="resumeQueue">
         <span class="material-icons" aria-hidden="true">play_arrow</span>Resume chat
       </button>
@@ -168,6 +172,50 @@ const context = computed(() => latestContext(
 let stream = null
 let generation = 0
 let settingsSave = Promise.resolve(true)
+let readKey = ''
+let readSuspended = false
+let clearManualOnOpen = true
+const readError = ref('')
+
+async function acknowledgeRead () {
+  const el = scroller.value
+  if (readSuspended || !chat.value || reconnecting.value || document.visibilityState !== 'visible' || !el ||
+      el.scrollHeight - el.scrollTop - el.clientHeight > 100) return
+  const id = chatId.value
+  const revision = chat.value.read_revision
+  if (!Number.isInteger(revision)) return
+  const messageId = savedMessages.value.findLast((message) => message.role === 'assistant')?.id || null
+  const key = JSON.stringify([id, messageId, revision])
+  if (readKey === key) return
+  readKey = key
+  const clearManual = clearManualOnOpen
+  clearManualOnOpen = false
+  try {
+    await api.updateChatReadState(id, { message_id: messageId, revision, clear_manual: clearManual })
+    if (chatId.value === id) readError.value = ''
+    await actions.loadChats()
+  } catch (error) {
+    if (readKey === key) {
+      readKey = ''
+      clearManualOnOpen = clearManual
+      readError.value = `Could not save read status: ${error.message}`
+    }
+  }
+}
+
+async function markUnread () {
+  const id = chatId.value
+  // Keep the reminder until the next visit, rather than clearing it in this view.
+  readSuspended = true
+  try {
+    await api.updateChatReadState(id, { unread: true })
+    await router.push('/chats')
+    await actions.loadChats()
+  } catch (error) {
+    readSuspended = false
+    readError.value = `Could not mark chat as unread: ${error.message}`
+  }
+}
 
 function applySnapshot (data, cached = false) {
   const el = scroller.value
@@ -181,6 +229,7 @@ function applySnapshot (data, cached = false) {
     reconnecting.value = false
   }
   if (atBottom) scrollDown('instant')
+  if (!cached) nextTick(acknowledgeRead)
 }
 
 function connectChat () {
@@ -342,6 +391,10 @@ function remove () {
 }
 
 watch(chatId, (id) => {
+  readSuspended = false
+  readKey = ''
+  clearManualOnOpen = true
+  readError.value = ''
   controlBusy.value = false
   controlError.value = ''
   approvalError.value = ''

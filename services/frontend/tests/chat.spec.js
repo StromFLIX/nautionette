@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test'
 
+function refreshReadState (data) {
+  const lastRead = data.messages.findIndex((message) => message.id === data.chat.last_read_message_id)
+  data.chat.unread = Boolean(data.chat.marked_unread || data.messages.some((message, index) => index > lastRead && message.role === 'assistant'))
+  data.chat.answering = Boolean(data.active_turn)
+  return data
+}
+
 async function mockChats (context, state) {
   await context.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
@@ -11,14 +18,29 @@ async function mockChats (context, state) {
       return route.fulfill({ json: { components: [], agent_sets: [] } })
     }
     if (path === '/api/catalog') return route.fulfill({ json: { models: state.models || [], tools: [], agent_sets: [], default_model: 'test/model' } })
-    if (path === '/api/chats') return route.fulfill({ json: { chats: Object.values(state.chats).map((data) => data.chat) } })
+    if (path === '/api/chats') return route.fulfill({ json: { chats: Object.values(state.chats).map((data) => refreshReadState(data).chat) } })
     if (path === '/api/workflows') return route.fulfill({ json: { workflows: [] } })
     if (path === '/api/drafts') return route.fulfill({ json: { drafts: [] } })
     if (path === '/api/runs') return route.fulfill({ json: { runs: [] } })
-    const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|messages|internet|stop|queue\/resume))?$/)
+    const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|messages|internet|stop|queue\/resume|read-state))?$/)
     if (match) {
       const [, chatId, action] = match
-      const data = state.chats[chatId]
+      const data = refreshReadState(state.chats[chatId])
+      if (action === 'read-state' && method === 'PATCH') {
+        if (state.readFailure) return route.fulfill({ status: 503, json: { detail: 'Read status unavailable' } })
+        const payload = route.request().postDataJSON()
+        if ('unread' in payload) {
+          data.chat.marked_unread = payload.unread
+          data.chat.read_revision++
+          if (!payload.unread) data.chat.last_read_message_id = data.messages.findLast((message) => message.role === 'assistant')?.id || null
+        } else if (payload.revision === data.chat.read_revision) {
+          if (payload.clear_manual) data.chat.marked_unread = false
+          const index = data.messages.findIndex((message) => message.id === payload.message_id)
+          const previous = data.messages.findIndex((message) => message.id === data.chat.last_read_message_id)
+          if (index > previous) data.chat.last_read_message_id = payload.message_id
+        }
+        return route.fulfill({ json: refreshReadState(data).chat })
+      }
       if (action === 'stop' && method === 'POST') {
         const payload = route.request().postDataJSON()
         state.stops.push({ chatId, ...payload })
@@ -71,13 +93,70 @@ function initial () {
   return {
     attempts: [], decisions: [], stops: [], offline: false, reject: false,
     chats: Object.fromEntries(['alpha', 'beta'].map((id) => [id, {
-      chat: { id, title: id, agent_set: 'default', model: 'test/model', tools: null, updated_at: Date.now() / 1000 },
+      chat: { id, title: id, agent_set: 'default', model: 'test/model', tools: null, updated_at: Date.now() / 1000, read_revision: 0, marked_unread: false, last_read_message_id: null },
       messages: [], active_turn: null
     }]))
   }
 }
 
 for (const width of [1440, 320]) {
+  test(`chat list distinguishes unread replies, progress and internet approval at ${width}px`, async ({ page, context }) => {
+    const state = initial()
+    state.chats.alpha.active_turn = { id: 'active', steps: [] }
+    state.chats.beta.active_turn = { id: 'approval', steps: [] }
+    state.chats.beta.chat.internet_status = 'pending'
+    state.chats.beta.messages = [{ id: 'reply', role: 'assistant', content: 'Please review this', meta: {} }]
+    await mockChats(context, state)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats')
+    const alpha = page.locator('a[href="/chats/alpha"]')
+    const beta = page.locator('a[href="/chats/beta"]')
+    await expect(alpha).toContainText('In progress')
+    await expect(alpha).toHaveClass(/row-item--running/)
+    await expect(beta).toContainText('Internet approval needed')
+    await expect(beta).not.toHaveClass(/row-item--running/)
+    await expect(beta.getByLabel('Unread messages')).toBeVisible()
+    await page.getByRole('button', { name: 'Options for beta' }).click()
+    await page.getByRole('button', { name: 'Mark as read', exact: true }).click()
+    await expect(beta.getByLabel('Unread messages')).toHaveCount(0)
+    await expect(beta).toContainText('Internet approval needed')
+    await page.getByRole('button', { name: 'Options for alpha' }).click()
+    await page.getByRole('button', { name: 'Mark as unread', exact: true }).click()
+    await expect(alpha.getByLabel('Unread messages')).toBeVisible()
+    await page.reload()
+    await expect(alpha.getByLabel('Unread messages')).toBeVisible()
+    await page.screenshot({ path: `/tmp/nautionette-chat-states-${width}.png` })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await alpha.click()
+    await expect.poll(() => state.chats.alpha.chat.unread).toBe(false)
+  })
+
+  test(`composer light follows progress and respects reduced motion at ${width}px`, async ({ page, context }) => {
+    const state = initial()
+    state.chats.alpha.active_turn = { id: 'active', steps: [{ kind: 'text', text: 'Working' }] }
+    await mockChats(context, state)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats/alpha')
+    const composer = page.locator('.composer')
+    await expect(composer).toHaveClass(/composer--running/)
+    const light = () => composer.evaluate((el) => {
+      const style = getComputedStyle(el, '::before')
+      return { animation: style.animationName, angle: style.getPropertyValue('--composer-orbit-angle'), pointerEvents: style.pointerEvents }
+    })
+    expect((await light()).animation).toContain('composer-light-orbit')
+    expect((await light()).pointerEvents).toBe('none')
+    const angle = (await light()).angle
+    await expect.poll(async () => (await light()).angle).not.toBe(angle)
+    await page.locator('textarea').fill('Still editable')
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await expect.poll(async () => (await light()).animation).toBe('none')
+    const avatar = page.locator('a[href="/chats/alpha"] .avatar')
+    expect(await avatar.evaluate((el) => getComputedStyle(el, '::after').animationName)).toBe('none')
+    await page.getByRole('button', { name: 'Stop response' }).click()
+    await expect(composer).not.toHaveClass(/composer--running/)
+    expect(await composer.evaluate((el) => getComputedStyle(el, '::before').content)).toBe('none')
+  })
+
   test(`running chats queue messages and stop without overlapping controls at ${width}px`, async ({ page, context }) => {
     const state = initial()
     state.chats.alpha.active_turn = { id: 'active', steps: [{ kind: 'text', text: 'Running command' }] }
@@ -344,6 +423,58 @@ for (const width of [1440, 320]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   })
 }
+
+test('marking an open chat unread keeps the reminder until it is reopened', async ({ page, context }) => {
+  const state = initial()
+  state.chats.alpha.messages = [{ id: 'reply', role: 'assistant', content: 'Finished work', meta: {} }]
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await expect.poll(() => state.chats.alpha.chat.last_read_message_id).toBe('reply')
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+  await page.getByRole('button', { name: 'Mark as unread', exact: true }).click()
+  await expect(page).toHaveURL(/\/chats$/)
+  const alpha = page.locator('a[href="/chats/alpha"]')
+  await expect(alpha.getByLabel('Unread messages')).toBeVisible()
+  await page.reload()
+  await expect(alpha.getByLabel('Unread messages')).toBeVisible()
+  await alpha.click()
+  await expect(alpha.getByLabel('Unread messages')).toHaveCount(0)
+  state.chats.alpha.messages.push({ id: 'next', role: 'assistant', content: 'Fresh result', meta: {} })
+  await expect.poll(() => state.chats.alpha.chat.last_read_message_id).toBe('next')
+})
+
+test('hidden chats and replies below the scroll position are not acknowledged', async ({ page, context }) => {
+  const state = initial()
+  state.chats.alpha.messages = [{ id: 'long', role: 'assistant', content: 'A paragraph.\n\n'.repeat(100), meta: {} }]
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await expect.poll(() => state.chats.alpha.chat.last_read_message_id).toBe('long')
+  await page.locator('.thread__body').evaluate((el) => { el.scrollTop = 0 })
+  state.chats.alpha.messages.push({ id: 'below', role: 'assistant', content: 'New reply below', meta: {} })
+  await expect(page.locator('.thread__body')).toContainText('New reply below')
+  expect(state.chats.alpha.chat.last_read_message_id).toBe('long')
+  await page.evaluate(() => Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }))
+  await page.locator('.thread__body').evaluate((el) => { el.scrollTop = el.scrollHeight })
+  state.chats.alpha.messages.push({ id: 'hidden', role: 'assistant', content: 'Reply while hidden', meta: {} })
+  await expect(page.locator('.thread__body')).toContainText('Reply while hidden')
+  expect(state.chats.alpha.chat.last_read_message_id).toBe('long')
+  await page.evaluate(() => {
+    delete document.visibilityState
+    document.dispatchEvent(new Event('visibilitychange'))
+  })
+  await expect.poll(() => state.chats.alpha.chat.last_read_message_id).toBe('hidden')
+})
+
+test('read-state failures are visible and do not fake success', async ({ page, context }) => {
+  const state = initial()
+  state.readFailure = true
+  await mockChats(context, state)
+  await page.goto('/chats')
+  await page.getByRole('button', { name: 'Options for alpha' }).click()
+  await page.getByRole('button', { name: 'Mark as unread', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Could not update read status')
+  await expect(page.getByLabel('Unread messages')).toHaveCount(0)
+})
 
 test('internet denial can be retried after delivery fails', async ({ page, context }) => {
   const state = initial()

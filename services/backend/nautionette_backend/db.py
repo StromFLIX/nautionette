@@ -124,12 +124,21 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN internet_reason TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE chats ADD COLUMN internet_turn_id TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE chats ADD COLUMN project_ids TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE chats ADD COLUMN last_read_message_id TEXT",
+    "ALTER TABLE chats ADD COLUMN marked_unread INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE chats ADD COLUMN read_revision INTEGER NOT NULL DEFAULT 0",
 )
 
 _EDITABLE_CHAT_COLUMNS = ("title", "agent_set", "model", "tools", "project_ids")
 _EDITABLE_WORKFLOW_COLUMNS = ("disabled", "chat_mode", "chat_id")
 
 WORKFLOW_DEFAULTS = {"disabled": False, "chat_mode": "same", "chat_id": None}
+
+# Only incoming, saved replies count as unread; queue edits and user messages do not.
+_CHAT_UNREAD = """(marked_unread = 1 OR EXISTS (
+    SELECT 1 FROM messages m WHERE m.chat_id = chats.id AND m.role = 'assistant'
+    AND m.rowid > COALESCE((SELECT rowid FROM messages WHERE id = chats.last_read_message_id), 0)
+)) AS unread"""
 
 
 def _dump_tools(tools: list[str] | None) -> str | None:
@@ -215,14 +224,21 @@ class Database:
         return self.get_chat(chat_id)
 
     def get_chat(self, chat_id: str) -> dict[str, Any] | None:
-        row = self.one("SELECT * FROM chats WHERE id = ?", (chat_id,))
+        row = self.one(
+            f"SELECT *, {_CHAT_UNREAD} FROM chats WHERE id = ?",  # noqa: S608
+            (chat_id,),
+        )
         if row:
+            row["unread"] = bool(row["unread"])
             row["tools"] = json.loads(row["tools"]) if row.get("tools") else None
             row["project_ids"] = json.loads(row["project_ids"])
         return row
 
     def list_chats(self, limit: int = 200) -> list[dict[str, Any]]:
-        rows = self.query("SELECT * FROM chats ORDER BY updated_at DESC LIMIT ?", (limit,))
+        rows = self.query(
+            f"SELECT *, {_CHAT_UNREAD} FROM chats ORDER BY updated_at DESC LIMIT ?",  # noqa: S608
+            (limit,),
+        )
         if not rows:
             return rows
         placeholders = ", ".join("?" for _ in rows)
@@ -240,6 +256,7 @@ class Database:
         }
         for row in rows:
             summary = summaries.get(row["id"])
+            row["unread"] = bool(row["unread"])
             row["answering"] = row["id"] in answering
             row["message_count"] = summary["n"] if summary else 0
             row["last_message"] = (
@@ -248,6 +265,53 @@ class Database:
                 else None
             )
         return rows
+
+    def set_chat_read_state(
+        self,
+        chat_id: str,
+        *,
+        unread: bool | None = None,
+        message_id: str | None = None,
+        revision: int | None = None,
+        clear_manual: bool = False,
+    ) -> bool:
+        """Acknowledge only the reply actually displayed, never a concurrently arriving one.
+
+        Manual changes advance a revision so in-flight acknowledgements cannot undo them.
+        Read state never changes the chat's ordering timestamp.
+        """
+        with self._lock, self._conn:
+            if unread is not None:
+                return bool(
+                    self._conn.execute(
+                        "UPDATE chats SET marked_unread = ?, read_revision = read_revision + 1, "
+                        "last_read_message_id = CASE WHEN ? THEN last_read_message_id ELSE "
+                        "(SELECT id FROM messages WHERE chat_id = ? AND role = 'assistant' "
+                        "ORDER BY rowid DESC LIMIT 1) END WHERE id = ?",
+                        (int(unread), int(unread), chat_id, chat_id),
+                    ).rowcount
+                )
+            message = None
+            if message_id is not None:
+                message = self._conn.execute(
+                    "SELECT rowid FROM messages WHERE id = ? AND chat_id = ? AND role = 'assistant'",
+                    (message_id, chat_id),
+                ).fetchone()
+                if not message:
+                    raise ValueError("message_id must identify an assistant reply in this chat")
+            position = message["rowid"] if message else 0
+            return bool(
+                self._conn.execute(
+                    "UPDATE chats SET last_read_message_id = CASE WHEN ? > "
+                    "COALESCE((SELECT rowid FROM messages WHERE id = chats.last_read_message_id), 0) "
+                    "THEN ? ELSE last_read_message_id END, "
+                    "marked_unread = CASE WHEN ? THEN 0 ELSE marked_unread END "
+                    "WHERE id = ? AND read_revision = ? AND ("
+                    "? > COALESCE((SELECT rowid FROM messages WHERE id = chats.last_read_message_id), 0) "
+                    "OR (? AND marked_unread = 1))",
+                    (position, message_id, clear_manual, chat_id, revision, position, clear_manual),
+                ).rowcount
+            )
 
     def touch_chat(self, chat_id: str) -> None:
         self.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (time.time(), chat_id))

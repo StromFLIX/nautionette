@@ -103,6 +103,7 @@ export const api = {
   resumeChatQueue: (id) => request(`/api/chats/${id}/queue/resume`, { method: 'POST' }),
   discardQueuedMessage: (id, messageId) => request(`/api/chats/${id}/queue/${encodeURIComponent(messageId)}`, { method: 'DELETE' }),
   updateChat: (id, payload) => request(`/api/chats/${id}`, { method: 'PATCH', ...json(payload) }),
+  updateChatReadState: (id, payload) => request(`/api/chats/${id}/read-state`, { method: 'PATCH', ...json(payload) }),
   decideInternet: (id, turnId, allowed) => request(`/api/chats/${id}/internet`, {
     method: 'POST', ...json({ turn_id: turnId, allowed })
   }),

@@ -82,6 +82,38 @@ async def get_chat(chat_id: str) -> dict[str, Any]:
     return db.chat_snapshot(chat_id)
 
 
+@router.patch("/api/chats/{chat_id}/read-state")
+async def update_read_state(chat_id: str, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    _chat_or_404(chat_id)
+    if "unread" in payload:
+        if type(payload["unread"]) is not bool:
+            raise HTTPException(status_code=422, detail="unread must be a boolean")
+        changed = db.set_chat_read_state(chat_id, unread=payload["unread"])
+    else:
+        if (
+            type(payload.get("revision")) is not int
+            or payload["revision"] < 0
+            or "message_id" not in payload
+            or (payload["message_id"] is not None and not isinstance(payload["message_id"], str))
+            or type(payload.get("clear_manual", False)) is not bool
+        ):
+            raise HTTPException(
+                status_code=422, detail="Provide message_id, revision and optional clear_manual"
+            )
+        try:
+            changed = db.set_chat_read_state(
+                chat_id,
+                message_id=payload["message_id"],
+                revision=payload["revision"],
+                clear_manual=payload.get("clear_manual", False),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if changed:
+        bus.publish("chat.read", {"chat_id": chat_id})
+    return _chat_or_404(chat_id)
+
+
 @router.get("/api/chats/{chat_id}/stream")
 async def subscribe_chat(chat_id: str) -> StreamingResponse:
     _chat_or_404(chat_id)
