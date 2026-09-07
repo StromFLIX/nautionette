@@ -82,9 +82,10 @@ const time = computed(() => shortTime(props.createdAt))
 }
 
 .msg--assistant .bubble {
-  background: var(--bubble-in);
-  border: 1px solid var(--border);
-  border-bottom-left-radius: var(--radius-xs);
+  padding: 9px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }
 
 .bubble--wide {
