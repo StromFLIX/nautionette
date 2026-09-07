@@ -106,18 +106,38 @@ rejections remain visible with retry and discard controls. An unsent message can
 appear on another device until a client successfully delivers it. Clearing app or
 browser storage removes unsent messages. Creating a new chat requires connectivity.
 
-`POST /api/chats/{id}/messages` accepts `{text, message_id, project_ids?}`. With
+`POST /api/chats/{id}/messages` accepts `{text, message_id, project_ids?, queue?}`. With
 `Accept: application/json`, it returns `202` after durable acceptance; otherwise it
 replays the turn's SSE events for compatibility. `GET /api/chats/{id}` and
 `GET /api/chats/{id}/stream` expose the same recoverable snapshot, including
-`active_turn`. Different IDs sent to a busy chat receive a retryable `409`, keeping
-each conversation's agent history sequential.
+`active_turn`. The app sends `queue: true`: messages sent during a response are
+persisted in the backend and shown under **Queued**, including after reconnecting
+on another device. Pi receives compatible messages in order after its current
+assistant turn's tool calls finish, before the next model request. Messages with
+different model, tools, agent set, or project selections wait for a fresh container.
+Unconsumed messages automatically start subsequent turns with updated history.
+Only one container processes a chat at a time. Legacy clients omitting `queue`
+still receive a retryable `409` for a busy chat. Queue requests return JSON `202`.
+
+**Stop response** requests `POST /api/chats/{id}/stop` with `{turn_id}`. The broker
+terminates that exact chat container (including running shell commands), or cancels
+its pending startup. Partial output is retained, and queued messages are paused,
+not discarded. Stop cannot undo tools' already-completed external side effects.
+Use **Resume queued messages** (`POST /api/chats/{id}/queue/resume`) to continue;
+idle queued messages can be removed with `DELETE /api/chats/{id}/queue/{message_id}`.
+These controls require user authentication and are not exposed as MCP tools.
 
 Interactive generation is independent of client connections, but is not a Temporal
 workflow. On backend restart, unfinished turns retain their partial output and
-become explicitly interrupted answers; tools are not automatically rerun because
+become explicitly interrupted answers; pending messages remain queued and paused
+until explicitly resumed. Tools are not automatically rerun because
 their external side effects may already have happened. Run one backend process per
 SQLite database; startup recovery assumes ownership of its unfinished turns.
+
+Deploy chat controls by rebuilding/recreating the backend, Docker broker, frontend,
+and Pi agent images. Chat containers use Pi RPC mode for live steering; workflow
+agent calls retain their existing one-shot JSON mode. Validate the real runtime with
+`NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_chat_control_docker.py`.
 
 ### Session internet approval
 

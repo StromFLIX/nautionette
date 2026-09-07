@@ -115,6 +115,9 @@ CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
 # Applied on every start; each one fails harmlessly once it is already in place.
 _MIGRATIONS = (
     "ALTER TABLE chat_turns ADD COLUMN context TEXT",
+    "ALTER TABLE chat_turns ADD COLUMN job TEXT",
+    "ALTER TABLE chat_turns ADD COLUMN stop_requested INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE chats ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN model TEXT",
     "ALTER TABLE chats ADD COLUMN tools TEXT",
     "ALTER TABLE chats ADD COLUMN internet_status TEXT NOT NULL DEFAULT 'blocked'",
@@ -289,6 +292,8 @@ class Database:
         text: str,
         message_id: str,
         project_ids: list[str] | None = None,
+        *,
+        queue: bool = False,
     ) -> tuple[dict[str, Any], bool]:
         with self._lock, self._conn:
             existing = self._conn.execute(
@@ -304,15 +309,26 @@ class Database:
                 ):
                     raise ValueError("message_id was already used with a different project selection")
                 return {**dict(existing), "meta": json.loads(existing["meta"])}, False
+            waiting = (
+                queue
+                and self._conn.execute(
+                    "SELECT 1 FROM chat_turns WHERE chat_id = ? AND state IN ('running', 'queued') "
+                    "UNION ALL SELECT 1 FROM chats WHERE id = ? AND queue_paused = 1",
+                    (chat_id, chat_id),
+                ).fetchone()
+            )
+            state = "queued" if waiting else "running"
             now = time.time()
             meta = {"project_ids": project_ids} if project_ids else {}
+            if waiting:
+                meta["queued"] = True
             self._conn.execute(
                 "INSERT INTO messages (id, chat_id, role, content, meta, created_at) VALUES (?,?,?,?,?,?)",
                 (message_id, chat_id, "user", text, json.dumps(meta), now),
             )
             self._conn.execute(
-                "INSERT INTO chat_turns (id, chat_id, user_id) VALUES (?,?,?)",
-                (message_id, chat_id, message_id),
+                "INSERT INTO chat_turns (id, chat_id, user_id, state) VALUES (?,?,?,?)",
+                (message_id, chat_id, message_id, state),
             )
             for project_id in project_ids or []:
                 ready = self._conn.execute(
@@ -344,9 +360,57 @@ class Database:
     def chat_snapshot(self, chat_id: str) -> dict[str, Any]:
         turn = self.one("SELECT * FROM chat_turns WHERE chat_id = ? AND state = 'running'", (chat_id,))
         if turn:
+            turn.pop("job", None)
             turn["steps"] = json.loads(turn["steps"])
             turn["context"] = json.loads(turn["context"]) if turn["context"] else None
         return {"chat": self.get_chat(chat_id), "messages": self.list_messages(chat_id), "active_turn": turn}
+
+    def next_chat_turn(self, chat_id: str) -> dict[str, Any] | None:
+        with self._lock, self._conn:
+            if self._conn.execute(
+                "SELECT 1 FROM chats WHERE id = ? AND queue_paused = 1 "
+                "UNION ALL SELECT 1 FROM chat_turns WHERE chat_id = ? AND state = 'running'",
+                (chat_id, chat_id),
+            ).fetchone():
+                return None
+            turn = self._conn.execute(
+                "SELECT * FROM chat_turns WHERE chat_id = ? AND state = 'queued' ORDER BY rowid LIMIT 1",
+                (chat_id,),
+            ).fetchone()
+            if not turn or not turn["job"]:
+                return None
+            self._conn.execute("UPDATE chat_turns SET state = 'running' WHERE id = ?", (turn["id"],))
+            self._conn.execute(
+                "UPDATE messages SET meta = json_remove(meta, '$.queued'), "
+                "rowid = (SELECT COALESCE(MAX(rowid), 0) + 1 FROM messages) WHERE id = ?",
+                (turn["id"],),
+            )
+            return dict(turn)
+
+    def consume_chat_input(self, turn_id: str, message_id: str) -> bool:
+        with self._lock, self._conn:
+            changed = self._conn.execute(
+                "UPDATE chat_turns SET state = 'steered' WHERE id = ? AND state = 'queued' "
+                "AND chat_id = (SELECT chat_id FROM chat_turns WHERE id = ? AND state = 'running')",
+                (message_id, turn_id),
+            ).rowcount
+            if changed:
+                self._conn.execute(
+                    "UPDATE messages SET meta = json_remove(meta, '$.queued') WHERE id = ?",
+                    (message_id,),
+                )
+                self._conn.execute("DELETE FROM project_leases WHERE turn_id = ?", (message_id,))
+            return bool(changed)
+
+    def stop_chat_turn(self, chat_id: str, turn_id: str) -> bool:
+        with self._lock, self._conn:
+            changed = self._conn.execute(
+                "UPDATE chat_turns SET stop_requested = 1 WHERE id = ? AND chat_id = ? AND state = 'running'",
+                (turn_id, chat_id),
+            ).rowcount
+            if changed:
+                self._conn.execute("UPDATE chats SET queue_paused = 1 WHERE id = ?", (chat_id,))
+            return bool(changed)
 
     def record_chat_progress(self, turn_id: str, event: dict[str, Any], steps: list, status: str) -> None:
         with self._lock, self._conn:

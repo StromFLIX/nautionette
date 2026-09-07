@@ -19,7 +19,7 @@ from ..agent import (
 )
 from ..background import spawn
 from ..clients import broker
-from ..conversations import chat_snapshots, run_turn, turn_events
+from ..conversations import chat_snapshots, launch_next, run_turn, turn_events
 from ..db import db
 from ..events import bus
 from ..runtime import history_budget, runtime
@@ -114,7 +114,13 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     if not existing:
         project_ids = projects.selection(project_ids)
     try:
-        user_message, created = db.accept_chat_message(chat_id, text, message_id, project_ids)
+        user_message, created = db.accept_chat_message(
+            chat_id,
+            text,
+            message_id,
+            project_ids,
+            queue=payload.get("queue") is True,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:
@@ -177,11 +183,50 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     )
 
     if created:
-        spawn(run_turn(message_id, chat_id, job), name=f"chat-{message_id}")
+        db.execute("UPDATE chat_turns SET job = ? WHERE id = ?", (json.dumps(job), message_id))
+        if not user_message["meta"].get("queued"):
+            spawn(run_turn(message_id, chat_id, job), name=f"chat-{message_id}")
+        else:
+            launch_next(chat_id)
         bus.publish("chat.message", {"chat_id": chat_id})
-    if "application/json" in request.headers.get("accept", ""):
+    if payload.get("queue") is True or "application/json" in request.headers.get("accept", ""):
         return JSONResponse({"message": user_message, "turn_id": message_id}, status_code=202)
     return StreamingResponse(turn_events(message_id), media_type="text/event-stream", headers=SSE_HEADERS)
+
+
+@router.post("/api/chats/{chat_id}/stop")
+async def stop_chat(chat_id: str, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    _chat_or_404(chat_id)
+    turn_id = payload.get("turn_id")
+    if not isinstance(turn_id, str) or not turn_id:
+        raise HTTPException(status_code=422, detail="turn_id is required")
+    if not db.stop_chat_turn(chat_id, turn_id):
+        raise HTTPException(status_code=409, detail="This turn is no longer running")
+    return db.chat_snapshot(chat_id)
+
+
+@router.post("/api/chats/{chat_id}/queue/resume")
+async def resume_chat_queue(chat_id: str) -> dict[str, Any]:
+    _chat_or_404(chat_id)
+    if db.one("SELECT 1 FROM chat_turns WHERE chat_id = ? AND state = 'running'", (chat_id,)):
+        raise HTTPException(status_code=409, detail="Wait for the current turn to stop")
+    db.execute("UPDATE chats SET queue_paused = 0 WHERE id = ?", (chat_id,))
+    launch_next(chat_id)
+    return db.chat_snapshot(chat_id)
+
+
+@router.delete("/api/chats/{chat_id}/queue/{message_id}")
+async def discard_queued_message(chat_id: str, message_id: str) -> dict[str, Any]:
+    _chat_or_404(chat_id)
+    removed = db.execute(
+        "DELETE FROM messages WHERE id = ? AND chat_id = ? "
+        "AND EXISTS (SELECT 1 FROM chat_turns WHERE id = ? AND state = 'queued') "
+        "AND NOT EXISTS (SELECT 1 FROM chat_turns WHERE chat_id = ? AND state = 'running')",
+        (message_id, chat_id, message_id, chat_id),
+    ).rowcount
+    if not removed:
+        raise HTTPException(status_code=409, detail="Stop the chat before removing a queued message")
+    return db.chat_snapshot(chat_id)
 
 
 @router.post("/api/chats/{chat_id}/promote")

@@ -97,8 +97,11 @@ export const api = {
   chat: (id, signal = AbortSignal.timeout(15000)) => request(`/api/chats/${id}`, { signal }),
   sendMessage: (id, text, messageId, projectIds) => request(`/api/chats/${id}/messages`, {
     method: 'POST', headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(20000), ...json({ text, message_id: messageId, project_ids: projectIds })
+    signal: AbortSignal.timeout(20000), ...json({ text, message_id: messageId, project_ids: projectIds, queue: true })
   }),
+  stopChat: (id, turnId) => request(`/api/chats/${id}/stop`, { method: 'POST', ...json({ turn_id: turnId }) }),
+  resumeChatQueue: (id) => request(`/api/chats/${id}/queue/resume`, { method: 'POST' }),
+  discardQueuedMessage: (id, messageId) => request(`/api/chats/${id}/queue/${encodeURIComponent(messageId)}`, { method: 'DELETE' }),
   updateChat: (id, payload) => request(`/api/chats/${id}`, { method: 'PATCH', ...json(payload) }),
   decideInternet: (id, turnId, allowed) => request(`/api/chats/${id}/internet`, {
     method: 'POST', ...json({ turn_id: turnId, allowed })

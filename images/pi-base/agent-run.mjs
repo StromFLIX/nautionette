@@ -11,6 +11,7 @@ import { spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { prepareProjects, projectEnvironment } from "./project-git.mjs";
 import { contextUsage } from "./context-usage.mjs";
+import { createChatControl, listenForChatControl } from "./chat-control.mjs";
 
 const OUT = process.stdout;
 
@@ -132,10 +133,11 @@ async function main() {
   }
 
   const prompt = renderPrompt(job);
-  const args = ["--mode", "json", "--no-session", "--provider", "nautionette",
+  const interactive = Boolean(job.chat_id);
+  const args = ["--mode", interactive ? "rpc" : "json", "--no-session", "--provider", "nautionette",
                 "--model", model, "--approve"];
   if (job.system_prompt) args.push("--append-system-prompt", job.system_prompt);
-  args.push("--", prompt);
+  if (!interactive) args.push("--", prompt);
 
   const child = spawn("pi", args, {
     cwd: workspace,
@@ -148,8 +150,13 @@ async function main() {
       // Empty means "every federated tool"; a list narrows the bridge.
       NAUTIONETTE_TOOLS: Array.isArray(job.tools) ? job.tools.join(",") : "",
     },
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: [interactive ? "pipe" : "ignore", "pipe", "pipe"],
   });
+
+  const send = (command) => child.stdin.write(JSON.stringify(command) + "\n");
+  const control = interactive ? createChatControl({ send, emit }) : null;
+  const controlServer = control ? listenForChatControl(control) : null;
+  child.stdin?.on("error", (error) => log("pi input closed:", error.message));
 
   let finalText = "";
   let streamed = "";
@@ -185,7 +192,15 @@ async function main() {
   });
 
   function translate(event) {
+    control?.receive(event);
     switch (event.type) {
+      case "response":
+        if (event.id === "initial" && !event.success) {
+          runError = event.error || "Pi rejected the initial prompt";
+          emit({ type: "error", message: runError });
+          child.kill();
+        }
+        break;
       case "session":
         emit({ type: "session", id: event.id });
         break;
@@ -231,13 +246,14 @@ async function main() {
       }
       case "agent_end":
         emit({ type: "agent_end" });
+        if (interactive) child.kill();
         break;
       default:
         break;
     }
   }
 
-  const code = await new Promise((resolve) => {
+  const completion = new Promise((resolve) => {
     child.on("error", (error) => {
       log("failed to start pi:", error.message);
       stderr += `\n${error.message}`;
@@ -245,6 +261,13 @@ async function main() {
     });
     child.on("close", resolve);
   });
+  if (interactive) {
+    send({ type: "set_steering_mode", mode: "one-at-a-time" });
+    send({ id: "initial", type: "prompt", message: prompt });
+  }
+  const code = await completion;
+  control?.close();
+  controlServer?.close();
 
   const text = (finalText || streamed).trim();
 

@@ -67,5 +67,15 @@ class BrokerClient:
         )
         response.raise_for_status()
 
+    async def control_agent(self, chat_id: str, turn_id: str, command: dict[str, Any]) -> bool:
+        response = await shared().post(
+            f"{self.base_url}/agent/control",
+            headers=internal_headers(),
+            json={"chat_id": chat_id, "turn_id": turn_id, "command": command},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json().get("ok") is True
+
 
 broker = BrokerClient()

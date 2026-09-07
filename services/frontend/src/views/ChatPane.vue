@@ -54,11 +54,31 @@
           :content="liveSteps.length || liveStatus ? '' : '…'" :meta="{ steps: liveSteps }"
           :status="liveStatus"
         />
+        <section v-if="queuedMessages.length" class="thread__queue" aria-label="Queued messages">
+          <div class="thread__queue-heading caption dim" role="status">
+            {{ chat?.queue_paused ? 'Queue paused' : 'Queued' }} · {{ queuedMessages.length }}
+            <button v-if="chat?.queue_paused && !streaming" class="btn btn--icon" aria-label="Resume queued messages" :disabled="controlBusy" @click="resumeQueue">
+              <span class="material-icons" aria-hidden="true">play_arrow</span>
+              <q-tooltip>Resume queued messages</q-tooltip>
+            </button>
+          </div>
+          <div v-for="message in queuedMessages" :key="message.id" class="thread__queued-message">
+            <p>{{ message.content }}</p>
+            <button v-if="!streaming" class="btn btn--icon" aria-label="Remove queued message" :disabled="controlBusy" @click="discardQueued(message.id)">
+              <span class="material-icons" aria-hidden="true">close</span>
+              <q-tooltip>Remove queued message</q-tooltip>
+            </button>
+          </div>
+        </section>
       </div>
     </div>
 
     <div class="thread__foot">
       <p v-if="cacheError" class="caption" role="alert">{{ cacheError }}</p>
+      <p v-if="controlError" class="caption" role="alert">{{ controlError }}</p>
+      <button v-if="chat?.queue_paused && !streaming && !queuedMessages.length" class="btn btn--sm" :disabled="controlBusy" @click="resumeQueue">
+        <span class="material-icons" aria-hidden="true">play_arrow</span>Resume chat
+      </button>
       <section v-if="internetPending" class="thread__approval" aria-label="Internet access request" aria-live="polite">
         <div class="thread__approval-title">Allow internet for this chat?</div>
         <p class="thread__approval-reason">{{ chat.internet_reason }}</p>
@@ -79,13 +99,15 @@
         :model="chat?.model || store.catalog.default_model"
         :tools="chat?.tools ?? null"
         :project-ids="chat?.project_ids || []"
-        :busy="sendBusy"
+        :running="streaming"
+        :stopping="stopping"
         :context="context"
         @update:agent-set="patch({ agent_set: $event })"
         @update:model="patch({ model: $event })"
         @update:tools="patch({ tools: $event })"
         @update:project-ids="patch({ project_ids: $event })"
         @send="send"
+        @stop="stopResponse"
       />
     </div>
   </div>
@@ -116,9 +138,11 @@ const draft = ref('')
 const activeTurn = ref(null)
 const reconnecting = ref(false)
 const streaming = computed(() => Boolean(activeTurn.value))
-const sendBusy = computed(() => streaming.value && !reconnecting.value)
+const controlBusy = ref(false)
+const controlError = ref('')
+const stopping = computed(() => controlBusy.value || Boolean(activeTurn.value?.stop_requested))
 const liveSteps = computed(() => activeTurn.value?.steps || [])
-const liveStatus = computed(() => activeTurn.value?.status || '')
+const liveStatus = computed(() => activeTurn.value?.stop_requested ? 'Stopping...' : activeTurn.value?.status || '')
 const starting = ref(false)
 const scroller = ref(null)
 const composer = ref(null)
@@ -128,10 +152,11 @@ const internetPending = computed(() => ['pending', 'deciding'].includes(chat.val
 const approvalBusy = computed(() => approvalRequest.value === chatId.value || chat.value?.internet_status === 'deciding')
 
 const chatId = computed(() => route.params.id || '')
+const queuedMessages = computed(() => savedMessages.value.filter((message) => message.meta?.queued))
 const messages = computed(() => {
   const known = new Set(savedMessages.value.map((message) => message.id))
   const pending = pendingMessages.value.filter((item) => item.chatId === chatId.value && !known.has(item.id))
-  return [...savedMessages.value, ...pending.map((item) => ({
+  return [...savedMessages.value.filter((message) => !message.meta?.queued), ...pending.map((item) => ({
     id: item.id, role: 'user', content: item.text, created_at: item.createdAt / 1000,
     delivery: item.error ? 'failed' : 'sending', deliveryError: item.error
   }))]
@@ -223,11 +248,11 @@ async function send () {
   const id = chatId.value
   const version = generation
   const text = draft.value.trim()
-  if (!text || sendBusy.value) return
-  if (!await settingsSave || version !== generation || id !== chatId.value || sendBusy.value) return
+  if (!text) return
+  if (!await settingsSave || version !== generation || id !== chatId.value) return
   if (draft.value.trim() !== text) return
   try {
-    delivery.enqueue(id, text)
+    delivery.enqueue(id, text, chat.value?.project_ids || [])
     draft.value = ''
     scrollDown()
   } catch (error) {
@@ -251,6 +276,35 @@ function patch (fields) {
     }
   })
   return settingsSave
+}
+
+async function chatControl (operation) {
+  const id = chatId.value
+  const version = generation
+  if (controlBusy.value) return
+  controlBusy.value = true
+  controlError.value = ''
+  try {
+    const data = await operation(id)
+    if (version === generation) applySnapshot(data)
+  } catch (error) {
+    if (version === generation) controlError.value = error.message
+  } finally {
+    if (version === generation) controlBusy.value = false
+  }
+}
+
+function stopResponse () {
+  const turnId = activeTurn.value?.id
+  if (turnId) chatControl((id) => api.stopChat(id, turnId))
+}
+
+function resumeQueue () {
+  chatControl((id) => api.resumeChatQueue(id))
+}
+
+function discardQueued (messageId) {
+  chatControl((id) => api.discardQueuedMessage(id, messageId))
 }
 
 async function decideInternet (allowed) {
@@ -288,6 +342,8 @@ function remove () {
 }
 
 watch(chatId, (id) => {
+  controlBusy.value = false
+  controlError.value = ''
   approvalError.value = ''
   chat.value = null
   settingsSave = Promise.resolve(true)
@@ -362,6 +418,28 @@ onUnmounted(() => {
 .thread__hint {
   padding: 40px 0;
   text-align: center;
+}
+
+.thread__queue {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 8px;
+}
+
+.thread__queue-heading,
+.thread__queued-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thread__queued-message p {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 8px 0;
+  font-size: 14px;
 }
 
 .thread__foot {

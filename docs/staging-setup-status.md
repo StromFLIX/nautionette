@@ -103,6 +103,10 @@ results send Nautionette chat messages. Failures are not suppressed.
 
 The existing Python lint/format CI failures were fixed in a formatting-only
 follow-up: all tracked Python ASTs are unchanged, lint/format checks pass, the
-full local test suite passes (557 passed, 3 skipped), and both seed workflows
-validate. These checks do not substitute for the still-unconfigured end-to-end
-GitHub release test.
+initial local test suite passed (557 passed, 3 skipped), and both seed workflows
+validate. A concurrent main update (`2607ffe`) was merged without dropping its
+chat-control/queue changes. After reconciliation, all Python ASTs match that
+upstream version, lint/format checks pass, tests report 567 passed / 5 skipped,
+and the frontend build passes. The merged main update is not automatically
+promoted to either pinned environment. These checks do not substitute for the
+still-unconfigured end-to-end GitHub release test.
