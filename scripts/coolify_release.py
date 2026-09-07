@@ -47,7 +47,7 @@ def candidate(event_name: str, event: dict, repository: str) -> tuple[str, str] 
         if (
             event.get("action") != "completed"
             or run.get("conclusion") != "success"
-            or run.get("event") != "push"
+            or run.get("event") not in {"push", "workflow_dispatch"}
             or run.get("head_branch") != "main"
             or run.get("head_repository", {}).get("full_name") != repository
         ):
@@ -154,8 +154,10 @@ def deploy(target: str, commit: str) -> str | None:
     if api.deployed(app, commit):
         healthy(target)
         return None
+    staging = identifier(required("COOLIFY_STAGING_APPLICATION_UUID")) if target == "production" else app
+    if str(api.call(f"/applications/{staging}").get("description") or "").startswith("[nautionette-refresh:"):
+        raise RuntimeError("Staging refresh maintenance guard is active; finish/recover the refresh first")
     if target == "production":
-        staging = identifier(required("COOLIFY_STAGING_APPLICATION_UUID"))
         if staging == app or not api.deployed(staging, commit):
             raise RuntimeError("Release must be the exact commit currently deployed successfully in staging")
     if any(row.get("status") in {"queued", "in_progress"} for row in api.history(app)):

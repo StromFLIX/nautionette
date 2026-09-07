@@ -54,18 +54,15 @@ function renderPrompt(job) {
 
 function extractJson(text) {
   if (!text) return null;
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidates = [fenced?.[1], text];
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    const trimmed = candidate.trim();
-    const start = trimmed.indexOf("{");
-    const end = trimmed.lastIndexOf("}");
-    if (start === -1 || end <= start) continue;
+  // Only accept an object at the END of the answer (optionally fenced).
+  // An earlier example/placeholder must never outrank a later final answer.
+  // If that final answer is malformed, fail rather than use stale draft JSON.
+  const trimmed = text.trim().replace(/\s*```$/, "").trim();
+  for (let start = trimmed.indexOf("{"); start !== -1; start = trimmed.indexOf("{", start + 1)) {
     try {
-      return JSON.parse(trimmed.slice(start, end + 1));
+      return JSON.parse(trimmed.slice(start));
     } catch {
-      /* try the next candidate */
+      /* This opening brace is not the start of a complete final object. */
     }
   }
   return null;

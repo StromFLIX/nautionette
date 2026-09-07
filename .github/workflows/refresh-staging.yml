@@ -1,0 +1,60 @@
+name: Refresh staging data
+
+# Deliberately separate from release/deploy. No schedule, webhook, or chat calls.
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: New refresh, or finish monitoring a disconnected run without copying again
+        type: choice
+        options: [refresh, check-existing-run]
+        default: refresh
+      existing_run_id:
+        description: 'For check-existing-run: host run ID printed by the original job (e.g. 123456-1)'
+        type: string
+        default: ''
+      dry_run:
+        description: Preflight only (no service stop or data copy)
+        type: boolean
+        default: true
+        required: true
+      confirmation:
+        description: 'For a real refresh, enter OVERWRITE STAGING (brief production downtime)'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+# Same repository-wide lock as deploy.yml, not a separate environment lock.
+concurrency:
+  group: coolify-nautionette-deploy
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: staging-refresh
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Back up, snapshot, restore and quarantine on the host
+        env:
+          OPERATION: ${{ inputs.operation }}
+          EXISTING_RUN_ID: ${{ inputs.existing_run_id }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          PRODUCTION_APPLICATION_UUID: ${{ vars.PRODUCTION_APPLICATION_UUID }}
+          STAGING_APPLICATION_UUID: ${{ vars.STAGING_APPLICATION_UUID }}
+          REFRESH_SSH_HOST: ${{ vars.REFRESH_SSH_HOST }}
+          REFRESH_SSH_PORT: ${{ vars.REFRESH_SSH_PORT }}
+          REFRESH_SSH_USER: ${{ vars.REFRESH_SSH_USER }}
+          REFRESH_SSH_PRIVATE_KEY: ${{ secrets.REFRESH_SSH_PRIVATE_KEY }}
+          REFRESH_SSH_KNOWN_HOSTS: ${{ secrets.REFRESH_SSH_KNOWN_HOSTS }}
+          COOLIFY_URL: ${{ vars.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: python3 -m scripts.staging_refresh
