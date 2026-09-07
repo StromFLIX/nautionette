@@ -24,7 +24,7 @@ jobs:
       vars.COOLIFY_DEPLOY_ENABLED == 'true' &&
       ((github.event_name == 'release' && !github.event.release.draft && !github.event.release.prerelease) ||
        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' &&
+        (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
         github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 40
