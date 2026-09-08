@@ -219,6 +219,7 @@ Configure in **each** environment:
 | Variable | `COOLIFY_URL` | Direct HTTPS Coolify origin, without `/api/v1` |
 | Variable | `COOLIFY_APPLICATION_UUID` | That environment's application UUID |
 | Variable | `APP_URL` | That environment's HTTPS app origin |
+| Variable | `DEPLOY_HEALTH_TIMEOUT_SECONDS` | Optional post-deployment readiness budget in seconds (default `600`, range `1`–`1800`) |
 | Secret | `COOLIFY_TOKEN` | Server-side Coolify API token allowing application read/update and deploy |
 | Secret | `APP_TOKEN` | That environment's Nautionette access token for component health checks |
 
@@ -245,7 +246,22 @@ explicitly stage a rollback candidate first rather than silently deploying untes
 code. Do not refresh staging data as part of a rollback.
 
 Deployments are serialized, pins read back, the queued deployment is polled, its
-actual commit checked, then authenticated component health is checked. Failures
+actual commit checked, then authenticated component health is checked. After Coolify
+reports `finished`, allow up to 10 minutes by default for worker images and components
+to become ready; override with `DEPLOY_HEALTH_TIMEOUT_SECONDS` per environment.
+Checks retry every 10 seconds (each HTTP request has a 30-second timeout, so the
+last check can overrun the readiness budget by up to 30 seconds). Duplicate deliveries
+use the same health wait without redeploying; healthy duplicates remain silent.
+The job's 65-minute timeout accommodates the 30-minute Coolify deployment wait,
+the maximum 30-minute readiness budget, and overhead.
+
+Each failed health attempt logs elapsed time and specific failed checks: environment,
+authentication, missing/duplicate/unexpected components, or each known component's
+non-OK status. HTTP failures and malformed health responses are also reported and
+retried. Logs never include response bodies, component details, tokens, or arbitrary
+server-provided strings. A timeout retains the last diagnostic and is explicitly a
+post-deployment verification failure, not proof that Coolify failed to deploy.
+All environment, authentication and component checks must still pass; failures
 stay failed in GitHub, with Coolify history available for diagnosis. A lost deploy
 POST response is **not** retried blindly. Do not manually deploy or edit either
 app while the pipeline is running. No automatic rollback of databases is attempted.
