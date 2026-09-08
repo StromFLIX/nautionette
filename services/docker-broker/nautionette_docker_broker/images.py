@@ -1,4 +1,4 @@
-"""Building and reconciling the agent images.
+"""Pulling, building and reconciling the agent images.
 
 An image is tagged by the hash of the context that built it, so a changed agent
 set is simply a different image rather than something anyone has to invalidate.
@@ -6,7 +6,6 @@ set is simply a different image rather than something anyone has to invalidate.
 
 from __future__ import annotations
 
-import hashlib
 import os
 import threading
 import time
@@ -14,9 +13,10 @@ from pathlib import Path
 from typing import Any
 
 from docker.errors import DockerException, ImageNotFound
+from requests.exceptions import RequestException
 
-from . import daemon
-from .config import AGENT_IMAGES_DIR, BASE_IMAGE, IMAGE_PREFIX
+from . import daemon, image_context
+from .config import AGENT_IMAGE_REGISTRY_PREFIX, AGENT_IMAGES_DIR, BASE_IMAGE, IMAGE_PREFIX
 
 state_lock = threading.Lock()
 image_state: dict[str, Any] = {"status": "pending", "images": {}, "log": [], "error": None}
@@ -58,24 +58,12 @@ def discovered_agent_sets() -> list[str]:
     )
 
 
-def _context_hash(path: str) -> str:
-    digest = hashlib.sha256()
-    root = Path(path)
-    for file in sorted(p for p in root.rglob("*") if p.is_file()):
-        digest.update(str(file.relative_to(root)).encode())
-        digest.update(file.read_bytes())
-    return digest.hexdigest()[:12]
-
-
 def base_hash() -> str:
-    return _context_hash(os.path.join(AGENT_IMAGES_DIR, "pi-base"))
+    return image_context.base_hash(Path(AGENT_IMAGES_DIR))
 
 
 def _agent_set_hash(agent_set: str) -> str:
-    directory = os.path.join(AGENT_IMAGES_DIR, "agent-sets", agent_set)
-    if not os.path.isdir(directory):
-        return "missing"
-    return hashlib.sha256((_context_hash(directory) + base_hash()).encode()).hexdigest()[:12]
+    return image_context.agent_set_hash(Path(AGENT_IMAGES_DIR), agent_set)
 
 
 def image_tag(agent_set: str) -> str:
@@ -103,15 +91,41 @@ def _build(path: str, tag: str, *, base_image: str | None = None) -> None:
     note(f"built {tag} in {time.time() - started:.0f}s")
 
 
+def _pull(tag: str) -> bool:
+    """Acquire the exact source-tagged image, retaining stack-local aliases.
+
+    The daemon does the network IO, not an agent container. Registry credentials
+    (if needed) belong in the broker's Docker client config, never in agent env.
+    """
+    if not AGENT_IMAGE_REGISTRY_PREFIX:
+        return False
+    remote = AGENT_IMAGE_REGISTRY_PREFIX + tag.removeprefix(IMAGE_PREFIX)
+    note(f"pulling {remote}")
+    started = time.monotonic()
+    try:
+        image = daemon.client().images.pull(remote)
+        repository, _, version = tag.rpartition(":")
+        if not image.tag(repository, version):
+            raise DockerException("could not tag pulled image")
+    except (DockerException, RequestException) as exc:
+        # Registry outages, missing versions and unsupported architectures retain
+        # local recovery. Do not put arbitrary registry/auth responses in health.
+        note(f"prebuilt image unavailable ({type(exc).__name__}); building locally")
+        return False
+    note(f"pulled {tag} in {time.monotonic() - started:.0f}s")
+    return True
+
+
 def ensure_images(force: bool = False) -> None:
-    """Build missing images and restore the base alias."""
+    """Reuse local images, then try the registry, then build; restore the alias."""
     with state_lock:
         image_state["status"] = "building"
         image_state["error"] = None
     try:
         base_tag = f"{IMAGE_PREFIX}base:{base_hash()}"
         if force or not has_image(base_tag):
-            _build(os.path.join(AGENT_IMAGES_DIR, "pi-base"), base_tag)
+            if force or not _pull(base_tag):
+                _build(os.path.join(AGENT_IMAGES_DIR, "pi-base"), base_tag)
         else:
             note(f"{base_tag} already present")
         # Agent set Dockerfiles say FROM <BASE_IMAGE>, so point that alias here.
@@ -122,7 +136,8 @@ def ensure_images(force: bool = False) -> None:
         for agent_set in discovered_agent_sets():
             tag = image_tag(agent_set)
             if force or not has_image(tag):
-                _build(os.path.join(AGENT_IMAGES_DIR, "agent-sets", agent_set), tag, base_image=base_tag)
+                if force or not _pull(tag):
+                    _build(os.path.join(AGENT_IMAGES_DIR, "agent-sets", agent_set), tag, base_image=base_tag)
             else:
                 note(f"{tag} already present")
             images[agent_set] = tag

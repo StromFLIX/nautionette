@@ -623,7 +623,7 @@ stream into `delta`, `tool`, `error` and a final `result` line. Nothing else cro
 ### Execution health and recovery
 
 The broker checks Docker at startup and every `CONTAINER_RECONCILE_SECONDS` (default: 30).
-It rebuilds missing Pi base and agent-set images, restores the base-image alias, starts stopped
+It acquires missing Pi base and agent-set images, restores the base-image alias, starts stopped
 workers, restarts unhealthy workers with the configured drain timeout, and recreates deleted
 workers up to `WORKER_REPLICAS` (minimum: one). Failures are reported and retried on later passes.
 All worker operations are scoped to the broker's own Compose project.
@@ -633,6 +633,12 @@ per workflow are unnecessary. A Docker readiness probe checks a fresh worker hea
 workflow loading, and whether the loaded source files still match the shared volume. Changed files
 therefore trigger recovery even if the explicit deploy-time restart was missed. Invalid workflows
 remain degraded until their code or dependencies are fixed; recovery cannot repair workflow code.
+
+Set `AGENT_IMAGE_REGISTRY_PREFIX` to pull CI-published, source-hashed Pi images before
+falling back to a local build. Empty (the default) keeps local-only builds. See
+[the CI image rollout](docs/github-pipelines.md#faster-pi-image-startup) for package
+visibility/authentication and staging verification. Exact local images are reused
+without any registry request, and forced rebuilds still build locally.
 
 `/api/system` exposes the broker's live image status, missing images, desired/ready worker counts,
 container states, and readiness errors. An HTTP-successful but degraded broker is not shown as healthy.
