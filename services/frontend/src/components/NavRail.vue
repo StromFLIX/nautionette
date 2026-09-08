@@ -14,13 +14,23 @@
         <span v-if="item.badge" class="rail__badge">{{ item.badge }}</span>
       </RouterLink>
     </div>
+
+    <RouterLink
+      class="rail__item rail__settings" :to="`/settings/${health === 'degraded' ? 'system' : 'general'}`"
+      :title="health === 'degraded' ? 'Settings — something needs attention' : 'Settings'"
+      aria-label="Settings"
+    >
+      <span class="material-icons" aria-hidden="true">settings</span>
+      <span class="rail__label">Settings</span>
+      <span v-if="health !== 'ok'" class="dot rail__settings-dot" :class="{ 'dot--bad': health === 'degraded' }" />
+    </RouterLink>
   </nav>
 </template>
 
 <script setup>
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { draftCount } from '../store'
+import { draftCount, health } from '../store'
 
 const route = useRoute()
 const active = computed(() => route.name)
@@ -90,6 +100,18 @@ const items = computed(() => [
   color: var(--accent-hover);
 }
 
+.rail__settings {
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.rail__settings-dot {
+  position: absolute;
+  top: 6px;
+  right: 14px;
+  border: 2px solid var(--surface-rail);
+}
+
 .rail__label {
   font-size: 10px;
   font-weight: 500;
@@ -124,7 +146,8 @@ const items = computed(() => [
     border-top: 1px solid var(--border);
   }
 
-  .rail__brand {
+  .rail__brand,
+  .rail__settings {
     display: none;
   }
 
