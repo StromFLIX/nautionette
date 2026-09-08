@@ -17,6 +17,8 @@ from typing import Any
 
 from fastapi import HTTPException
 from nautionette import input_problems
+from temporalio.client import WorkflowFailureError
+from temporalio.exceptions import ApplicationError
 
 from .background import spawn
 from .clients import authoring, broker, temporal
@@ -143,6 +145,26 @@ def render_result(result: Any) -> str:
     return f"```json\n{json.dumps(result, indent=2, ensure_ascii=False)}\n```"
 
 
+def failure_summary(error: WorkflowFailureError) -> str:
+    """Keep an authored summary, or explain the cause chain without dumping payloads/stacks."""
+    cause = error.cause
+    messages: list[str] = []
+    seen: set[int] = set()
+    while cause is not None and id(cause) not in seen:
+        seen.add(id(cause))
+        if isinstance(cause, ApplicationError):
+            for detail in cause.details:
+                if isinstance(detail, dict):
+                    summary = detail.get("summary")
+                    if isinstance(summary, str) and summary.strip():
+                        return summary
+        message = getattr(cause, "message", None) or str(cause)
+        if message and message not in messages:
+            messages.append(message)
+        cause = getattr(cause, "cause", None)
+    return "\n\nCaused by: ".join(messages)
+
+
 def should_deliver(status: str, result: Any) -> bool:
     """Silence is explicit, successful-only, and never removes the run history."""
     if status != "completed":
@@ -176,7 +198,13 @@ async def deliver_to_chat(name: str, workflow_id: str, status: str, result: Any)
         if config["chat_mode"] == "same":
             db.set_workflow_settings(name, {"chat_id": chat_id})
 
-    body = render_result(result) or f"`{status}`"
+    body = render_result(result)
+    if status != "completed":
+        body = (
+            f"**Run {status.replace('_', ' ')}**\n\n"
+            + (body or "Failure details could not be retrieved. Open this run's history for diagnostics.")
+            + f"\n\nRun ID: `{workflow_id}`"
+        )
     db.add_message(
         chat_id,
         "assistant",
@@ -200,11 +228,16 @@ async def watch(name: str, workflow_id: str) -> None:
         if info["status"] in {"RUNNING", "UNKNOWN"}:
             continue
         result: Any = None
-        if info["status"] == "COMPLETED":
+        if info["status"] in {"COMPLETED", "FAILED", "TIMED_OUT", "CANCELED", "TERMINATED"}:
             try:
                 result = await temporal.result(workflow_id, timeout=10)
-            except Exception:  # noqa: BLE001
-                result = None
+            except WorkflowFailureError as exc:
+                # handle.result() raises for unsuccessful executions. Their authored
+                # summaries and nested activity causes are output too, not a success.
+                summary = failure_summary(exc)
+                result = {"summary": summary} if summary else None
+            except Exception:  # noqa: BLE001 - an unavailable result is not the workflow's failure
+                log.warning("Could not retrieve output for closed run %s", workflow_id)
         status = info["status"].lower()
         db.update_run(workflow_id, status, result)
         with contextlib.suppress(Exception):

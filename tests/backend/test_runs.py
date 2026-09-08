@@ -178,7 +178,11 @@ async def test_a_new_chat_per_run_is_a_setting(digest):
 async def test_a_run_that_produced_nothing_still_says_how_it_ended(digest):
     await runs_service.deliver_to_chat("url_digest", "run-1", "failed", None)
     chat_id = digest.db.list_chats()[0]["id"]
-    assert digest.db.list_messages(chat_id)[0]["content"] == "`failed`"
+    content = digest.db.list_messages(chat_id)[0]["content"]
+    assert "**Run failed**" in content
+    assert "Failure details could not be retrieved" in content
+    assert "run's history" in content
+    assert "Run ID: `run-1`" in content
 
 
 async def test_a_deleted_workflow_still_delivers_its_last_result(backend):
