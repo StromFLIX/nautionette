@@ -1,5 +1,5 @@
 <template>
-  <button class="pick" type="button" aria-label="Reasoning effort" :disabled="busy || (!efforts.length && !modelValue)">
+  <button class="pick" type="button" :aria-label="ariaLabel" :disabled="busy || (!efforts.length && !modelValue)">
     <span aria-hidden="true" class="material-icons pick__icon">psychology</span>
     <span class="truncate">{{ modelValue ? label(modelValue) : 'Provider default' }}</span>
     <span aria-hidden="true" class="material-icons pick__caret">expand_more</span>
@@ -23,7 +23,8 @@ import { computed } from 'vue'
 const props = defineProps({
   modelValue: { type: String, default: null },
   capabilities: { type: Object, default: null },
-  busy: { type: Boolean, default: false }
+  busy: { type: Boolean, default: false },
+  ariaLabel: { type: String, default: 'Reasoning effort' }
 })
 defineEmits(['update:modelValue'])
 const efforts = computed(() => props.capabilities?.reasoning_efforts || [])

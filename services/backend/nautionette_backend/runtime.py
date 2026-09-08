@@ -38,6 +38,10 @@ def defaults() -> dict[str, Any]:
     return {
         "default_model": settings.agent_model,
         "default_agent_set": settings.default_agent_set,
+        "default_agent_id": None,
+        "default_reasoning_effort": None,
+        "default_tools": None,
+        "default_project_ids": [],
         # 0 means "work it out from the model", which is what you want by default.
         "history_chars": 0,
         **GIT_AUTHORSHIP_DEFAULTS,

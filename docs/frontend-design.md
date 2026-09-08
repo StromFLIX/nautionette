@@ -71,6 +71,34 @@ an explicit warning instead of claiming the change was saved.
 Device preferences never update instance settings. Resetting the workspace does
 not reset the selected theme. There is no cross-device account synchronization.
 
+## Global defaults and agent configurations
+
+Instance configuration follows **global defaults → agent overrides → chat changes**.
+`agent-config.js` owns the browser-side resolution, copying, comparison and labels;
+`AgentConfigFields.vue` shares controls between General settings and the agent editor.
+Adding a configurable field requires matching backend validation/defaults and extending
+`CONFIG_FIELDS`, the shared control, settings search and both API/browser tests.
+
+Never infer inheritance from a falsy value: an omitted agent key inherits, while
+`tools: null` explicitly allows all MCP tools, `tools: []` allows none, and
+`reasoning_effort: null` requests provider default. An explicit tool list stays
+pinned, including unavailable names and lists matching the whole current catalog.
+Changing models resets effort; merely loading defaults must not reset it.
+
+`AgentProfiles.vue` manages presets, not container images. Existing agent sets remain
+under **Container environments**. `AgentPicker.vue` applies a whole preset explicitly;
+individual composer controls customize the chat, not the saved agent. Existing chats
+read their server snapshots and never automatically adopt profile edits. Send waits
+for pending chat configuration PATCHes before accepting a message.
+
+Welcome drafts follow asynchronously loaded defaults until the user overrides a
+field or selects an agent. They preserve typed text and deliberate selections during
+catalog refresh. The first send waits for successful discovery rather than guessing
+defaults. Successful settings/profile writes update the local catalog immediately,
+even if subsequent discovery fails; older in-flight responses cannot undo the save.
+Sidebar **New chat** posts an empty body so the backend resolves current defaults.
+See [Agent configuration](agent-configuration.md) for the API and deployment contract.
+
 ## Themes
 
 `themes.js` is the browser-independent schema for four presets:
@@ -124,5 +152,7 @@ Run the browser suite and build sequentially in memory-constrained containers.
 Browser coverage uses mocked APIs, including both mouse/keyboard and emulated
 touch layouts. It checks all presets, persistence, invalid imports, scoped resets,
 search/deep links, collapsed controls, narrow screens and keyboard-sized viewports.
+`agent-profiles.spec.js` also covers inheritance, default-agent selection, explicit
+empty/pinned tools, atomic switches, delayed/failed discovery and failed saves.
 Existing chat, attachment, project, scheduling and graph regressions remain in the
 suite. No live workflows are started by these tests.

@@ -89,6 +89,14 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS agent_profiles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    description TEXT NOT NULL DEFAULT '',
+    config TEXT NOT NULL DEFAULT '{}',
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS workflow_settings (
     name TEXT PRIMARY KEY,
     disabled INTEGER NOT NULL DEFAULT 0,
@@ -131,6 +139,8 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN model TEXT",
     "ALTER TABLE chats ADD COLUMN reasoning_effort TEXT",
+    "ALTER TABLE chats ADD COLUMN agent_id TEXT",
+    "ALTER TABLE chats ADD COLUMN agent_name TEXT",
     "ALTER TABLE chats ADD COLUMN tools TEXT",
     "ALTER TABLE chats ADD COLUMN internet_status TEXT NOT NULL DEFAULT 'blocked'",
     "ALTER TABLE chats ADD COLUMN internet_reason TEXT NOT NULL DEFAULT ''",
@@ -144,7 +154,16 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN title_revision INTEGER NOT NULL DEFAULT 0",
 )
 
-_EDITABLE_CHAT_COLUMNS = ("title", "agent_set", "model", "reasoning_effort", "tools", "project_ids")
+_EDITABLE_CHAT_COLUMNS = (
+    "title",
+    "agent_set",
+    "model",
+    "reasoning_effort",
+    "tools",
+    "project_ids",
+    "agent_id",
+    "agent_name",
+)
 _EDITABLE_WORKFLOW_COLUMNS = ("disabled", "chat_mode", "chat_id")
 
 WORKFLOW_DEFAULTS = {"disabled": False, "chat_mode": "same", "chat_id": None}
@@ -214,13 +233,16 @@ class Database:
         model: str | None = None,
         tools: list[str] | None = None,
         reasoning_effort: str | None = None,
+        project_ids: list[str] | None = None,
+        agent_id: str | None = None,
+        agent_name: str | None = None,
     ) -> dict[str, Any]:
         now = time.time()
         chat_id = uuid.uuid4().hex[:12]
         self.execute(
             "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort,"
-            " created_at, updated_at, title_state)"
-            " VALUES (?,?,?,?,?,?,?,?,?)",
+            " created_at, updated_at, title_state, project_ids, agent_id, agent_name)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 chat_id,
                 title,
@@ -231,6 +253,9 @@ class Database:
                 now,
                 now,
                 "provisional" if title in {"New chat", ""} else "manual",
+                json.dumps(project_ids or []),
+                agent_id,
+                agent_name,
             ),
         )
         return self.get_chat(chat_id)  # type: ignore[return-value]
@@ -701,6 +726,27 @@ class Database:
     def get_setting(self, key: str, default: Any = None) -> Any:
         row = self.one("SELECT value FROM settings WHERE key = ?", (key,))
         return json.loads(row["value"]) if row else default
+
+    def save_settings(self, values: dict[str, Any]) -> None:
+        """Publish a validated settings edit atomically; null removes an override."""
+        with self._lock, self._conn:
+            for key, value in values.items():
+                if value is None:
+                    self._conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+                else:
+                    self._conn.execute(
+                        "INSERT INTO settings (key, value) VALUES (?,?) "
+                        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                        (key, json.dumps(value)),
+                    )
+
+    def delete_agent(self, agent_id: str) -> None:
+        """Keep existing chat snapshots; fall back to global defaults for new chats."""
+        with self._lock, self._conn:
+            self._conn.execute("DELETE FROM agent_profiles WHERE id = ?", (agent_id,))
+            self._conn.execute(
+                "DELETE FROM settings WHERE key = 'default_agent_id' AND value = ?", (json.dumps(agent_id),)
+            )
 
 
 db = Database(os.path.join(settings.data_dir, "nautionette.db"))

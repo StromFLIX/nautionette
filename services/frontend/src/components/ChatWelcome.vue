@@ -7,10 +7,14 @@
         <h1 class="welcome__title">What should happen next?</h1>
         <p class="welcome__lead">An idea. A conversation. A workflow.</p>
       </div>
-      <Composer ref="composer" v-model="text" v-model:attachments="attachments" v-model:agent-set="agentSet"
-        v-model:model="model" v-model:reasoning-effort="reasoningEffort" v-model:tools="tools" v-model:project-ids="projectIds"
-        variant="welcome" :busy="busy" placeholder="Ask, build, or automate…"
-        @send="$emit('start', { text, agentSet, model, reasoningEffort, tools, projectIds, attachments })" />
+      <Composer ref="composer" v-model="text" v-model:attachments="attachments" :agent-id="config.agent_id" :agent-name="config.agent_name || ''"
+        :agent-set="config.agent_set" :model="config.model" :reasoning-effort="config.reasoning_effort" :tools="config.tools" :project-ids="config.project_ids"
+        variant="welcome" :busy="busy" :configuration-ready="store.catalogLoaded" placeholder="Ask, build, or automate…"
+        @update:agent-id="chooseAgent" @update:agent-set="override('agent_set', $event)" @update:model="override('model', $event)"
+        @update:reasoning-effort="override('reasoning_effort', $event)" @update:tools="override('tools', $event)" @update:project-ids="override('project_ids', $event)"
+        @send="$emit('start', { text, configuration: config, attachments })" />
+
+      <p v-if="!store.catalogLoaded && store.catalogError" class="caption" role="alert">{{ store.catalogError }} <button class="btn btn--sm" @click="actions.loadCatalog(true)">Retry defaults</button></p>
 
       <div v-if="preferences.starterPrompts" class="welcome__starters" aria-label="Starter prompts">
         <button v-for="prompt in prompts" :key="prompt.label" class="starter" @click="use(prompt.text)">
@@ -24,8 +28,8 @@
       <details class="welcome__details">
         <summary>Session details</summary>
         <div class="welcome__facts">
-          <div><span>Agent set</span><strong>{{ agentSet || 'default' }}</strong></div>
-          <div><span>Model</span><strong>{{ model || store.catalog.default_model || 'Not selected' }}</strong></div>
+          <div><span>Agent</span><strong>{{ config.agent_name || 'Global defaults' }} · {{ config.agent_set }}</strong></div>
+          <div><span>Model</span><strong>{{ config.model || 'Not selected' }}</strong></div>
           <div><span>Tools <button @click="actions.openSettings('mcp')">Manage</button></span><strong>{{ toolSummary }}</strong></div>
           <div><span>Context window</span><strong>{{ contextWindow ? `${contextWindow.toLocaleString()} tokens` : 'Unknown' }}</strong></div>
         </div>
@@ -47,6 +51,7 @@ import BrandMark from './BrandMark.vue'
 import { modelContextWindow } from '../context'
 import { actions, store } from '../store'
 import { preferences } from '../preferences'
+import { agentConfig, copyConfig, defaultChatConfig, resolveAgentConfig } from '../agent-config'
 
 defineProps({ busy: { type: Boolean, default: false } })
 defineEmits(['start'])
@@ -58,23 +63,25 @@ const prompts = [
 ]
 const text = ref('')
 const attachments = ref([])
-const agentSet = ref(store.catalog.default_agent_set || 'default')
-const model = ref(store.catalog.default_model || '')
-const reasoningEffort = ref(null)
-watch(model, () => { reasoningEffort.value = null })
-const tools = ref(null)
-const projectIds = ref([])
+// Follow asynchronously loaded defaults until a field (or an agent) is explicitly chosen.
+const selectedAgent = ref(undefined)
+const overrides = ref({})
+const source = computed(() => selectedAgent.value === undefined ? defaultChatConfig(store.catalog) : agentConfig(store.catalog, selectedAgent.value))
+const lastSource = ref(defaultChatConfig(store.catalog))
+watch(source, value => { if (value) lastSource.value = copyConfig(value) }, { immediate: true, deep: true })
+const config = computed(() => resolveAgentConfig(overrides.value, source.value || lastSource.value))
 const composer = ref(null)
-const contextWindow = computed(() => modelContextWindow(store.catalog, model.value))
+const contextWindow = computed(() => modelContextWindow(store.catalog, config.value.model))
 function use (prompt) { text.value = prompt; nextTick(() => composer.value?.focus()) }
+function chooseAgent (id) { selectedAgent.value = id; overrides.value = {} }
+function override (key, value) {
+  const changedModel = key === 'model' && value !== config.value.model
+  overrides.value = { ...overrides.value, [key]: value, ...(changedModel ? { reasoning_effort: null } : {}) }
+}
 const toolSummary = computed(() => {
   const total = (store.catalog.tools || []).length
-  return tools.value === null ? `${total} available` : `${tools.value.length} of ${total} enabled`
+  return config.value.tools === null ? `${total} available` : `${config.value.tools.length} of ${total} enabled`
 })
-watch(() => store.catalog, catalog => {
-  if (!model.value) model.value = catalog.default_model || ''
-  if (!agentSet.value) agentSet.value = catalog.default_agent_set || 'default'
-}, { deep: true })
 </script>
 
 <style scoped>

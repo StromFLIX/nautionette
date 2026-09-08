@@ -9,6 +9,7 @@
         </button>
       </div>
     </div>
+    <p v-if="!configurationReady" class="composer__notice caption" role="status">Loading chat defaults…</p>
     <p v-if="imageError" class="composer__notice caption" role="alert">{{ imageError }}</p>
     <p v-if="imageSupport !== true && (attachments.length || configurationOpen)" class="composer__notice caption" role="status">{{ imageNotice }}</p>
     <textarea ref="input" class="composer__input" :value="modelValue" :placeholder="placeholder" aria-label="Message"
@@ -45,16 +46,27 @@
         <span class="material-icons" aria-hidden="true">stop</span><q-tooltip>{{ stopping ? 'Stopping response' : 'Stop response' }}</q-tooltip>
       </button>
       <button class="composer__send" :class="{ 'composer__send--busy': busy }" :aria-label="running ? 'Queue message' : 'Send message'"
-        :disabled="busy || (!modelValue.trim() && !attachments.length) || (attachments.length > 0 && imageSupport === false)" @click="submit">
+        :disabled="busy || !configurationReady || (!modelValue.trim() && !attachments.length) || (attachments.length > 0 && imageSupport === false)" @click="submit">
         <span class="material-icons" aria-hidden="true">{{ busy ? 'more_horiz' : running ? 'playlist_add' : 'arrow_upward' }}</span>
         <q-tooltip>{{ running ? 'Queue message' : 'Send message' }} · {{ preferences.sendShortcut === 'enter' ? 'Enter' : '⌘ / Ctrl + Enter' }}</q-tooltip>
       </button>
     </div>
 
     <div v-show="configurationOpen" :id="configurationId" class="composer__configuration scroll-y" aria-label="Chat configuration controls">
+      <div class="composer__profile">
+        <button class="pick composer__profile-picker" type="button" aria-label="Select agent" :disabled="busy">
+          <span class="material-icons pick__icon" aria-hidden="true">smart_toy</span><span class="truncate">{{ profileLabel }}</span>
+          <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
+          <AgentPicker :model-value="agentId" @update:model-value="$emit('update:agentId', $event)" />
+        </button>
+        <span v-if="customConfiguration" class="caption dim">{{ profileDefaults ? 'Customized' : 'Agent removed' }}</span>
+        <button v-if="customConfiguration && profileDefaults" class="pick pick--icon" type="button" aria-label="Reapply agent defaults" :disabled="busy" @click="$emit('update:agentId', agentId)">
+          <span class="material-icons" aria-hidden="true">restart_alt</span><q-tooltip>Reapply this agent's current settings</q-tooltip>
+        </button>
+      </div>
       <div class="composer__options">
         <div class="composer__option">
-          <span class="composer__option-label">Agent</span>
+          <span class="composer__option-label">Environment</span>
           <button class="pick" type="button" aria-label="Select agent set" :disabled="busy">
             <span class="material-icons pick__icon" aria-hidden="true">smart_toy</span>
             <span class="truncate">{{ agentSet || 'default' }}</span>
@@ -101,6 +113,8 @@
 <script setup>
 import { computed, ref, useId } from 'vue'
 import ModelPicker from './ModelPicker.vue'
+import AgentPicker from './AgentPicker.vue'
+import { agentConfig, sameConfig } from '../agent-config'
 import ReasoningPicker from './ReasoningPicker.vue'
 import ChatImage from './ChatImage.vue'
 import { addImages, IMAGE_TYPES } from '../attachments'
@@ -113,21 +127,27 @@ import { contextMeter, modelContextWindow } from '../context'
 
 const props = defineProps({
   modelValue: { type: String, default: '' }, attachments: { type: Array, default: () => [] },
+  agentId: { type: String, default: null }, agentName: { type: String, default: '' },
   agentSet: { type: String, default: '' }, model: { type: String, default: '' },
   reasoningEffort: { type: String, default: null }, tools: { type: Array, default: null },
   projectIds: { type: Array, default: () => [] }, busy: { type: Boolean, default: false },
   running: { type: Boolean, default: false }, stopping: { type: Boolean, default: false },
   context: { type: Object, default: null }, variant: { type: String, default: 'docked' },
-  placeholder: { type: String, default: 'Message…' }
+  placeholder: { type: String, default: 'Message…' }, configurationReady: { type: Boolean, default: true }
 })
-const emit = defineEmits(['update:attachments', 'update:modelValue', 'update:agentSet', 'update:model', 'update:reasoningEffort', 'update:tools', 'update:projectIds', 'send', 'stop'])
+const emit = defineEmits(['update:attachments', 'update:modelValue', 'update:agentId', 'update:agentSet', 'update:model', 'update:reasoningEffort', 'update:tools', 'update:projectIds', 'send', 'stop'])
 const input = ref(null)
 const focused = ref(false)
 const fileInput = ref(null)
 const imageError = ref('')
 const configurationId = useId()
 const configurationOpen = computed({ get: () => preferences.composerExpanded, set: value => { preferences.composerExpanded = value } })
-const customConfiguration = computed(() => props.reasoningEffort || props.tools !== null || props.projectIds.length || (props.agentSet && props.agentSet !== (store.catalog.default_agent_set || 'default')))
+const profileDefaults = computed(() => agentConfig(store.catalog, props.agentId))
+const profileLabel = computed(() => props.agentId ? (profileDefaults.value?.agent_name || props.agentName || 'Removed agent') : 'Global defaults')
+const customConfiguration = computed(() => !sameConfig(profileDefaults.value, {
+  agent_set: props.agentSet || 'default', model: props.model || store.catalog.default_model,
+  reasoning_effort: props.reasoningEffort, tools: props.tools, project_ids: props.projectIds
+}))
 const selectedModel = computed(() => store.catalog.models?.find(m => m.id === (props.model || store.catalog.default_model)))
 const imageSupport = computed(() => selectedModel.value?.supports_images)
 const imageNotice = computed(() => {
@@ -173,7 +193,7 @@ function onKeydown (event) {
   submit()
 }
 function submit () {
-  if (props.busy || (!props.modelValue.trim() && !props.attachments.length) || (props.attachments.length && imageSupport.value === false)) return
+  if (props.busy || !props.configurationReady || (!props.modelValue.trim() && !props.attachments.length) || (props.attachments.length && imageSupport.value === false)) return
   emit('send')
   if (input.value) input.value.style.height = 'auto'
 }
@@ -229,6 +249,9 @@ defineExpose({ focus: () => input.value?.focus() })
 .composer__send:disabled::before { background: var(--surface-active); }
 .composer__send .material-icons, .composer__stop .material-icons { font-size: 20px; }
 .composer__configuration { min-height: 0; padding: 14px 16px 12px; border-top: 1px solid var(--border); }
+.composer__profile { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.composer__profile-picker { max-width: min(280px, 100%); color: var(--text); background: var(--surface-hover); }
+.composer__profile > .caption { font-size: 10px; }
 .composer__options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .composer__option { min-width: 0; }
 .composer__option-label { display: block; color: var(--text-dim); font-size: 10px; margin: 0 8px 4px; }

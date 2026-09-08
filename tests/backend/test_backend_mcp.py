@@ -23,6 +23,11 @@ async def test_backend_tools_cover_diagnostics_and_controls_without_proxy_or_aut
         "restart_workers",
         "get_model_integrations",
         "put_mcp_server",
+        "list_agents",
+        "get_agent",
+        "create_agent",
+        "update_agent",
+        "delete_agent",
     } <= names
     assert "internal_agent_call" not in names
     assert "events_stream" not in names
@@ -38,6 +43,30 @@ async def test_backend_tool_executes_the_real_api_and_preserves_validation_error
     assert decoded(result)["components"]
     result = await main.backend_mcp.call("deploy_workflow", {"name": "demo"})
     assert result.is_error is True
+
+
+async def test_saved_agents_use_the_same_config_semantics_through_mcp(backend):
+    created = await main.backend_mcp.call(
+        "create_agent", {"body": {"name": "Writer", "config": {"tools": []}}}
+    )
+    assert not created.is_error
+    agent_id = decoded(created)["id"]
+    configured = await main.backend_mcp.call("put_settings", {"body": {"default_agent_id": agent_id}})
+    assert not configured.is_error
+    listing = decoded(await main.backend_mcp.call("list_agents", {}))
+    assert listing["chat_defaults"]["agent_id"] == agent_id
+    assert listing["chat_defaults"]["tools"] == []
+    invalid = await main.backend_mcp.call(
+        "update_agent", {"agent_id": agent_id, "body": {"name": "Changed", "config": {"tools": "all"}}}
+    )
+    assert invalid.is_error
+    saved = decoded(await main.backend_mcp.call("get_agent", {"agent_id": agent_id}))
+    assert saved["name"] == "Writer" and saved["config"]["tools"] == []
+    inherited = await main.backend_mcp.call("update_agent", {"agent_id": agent_id, "body": {"config": {}}})
+    assert not inherited.is_error
+    assert decoded(inherited)["resolved"]["tools"] is None
+    assert not (await main.backend_mcp.call("delete_agent", {"agent_id": agent_id})).is_error
+    assert decoded(await main.backend_mcp.call("list_agents", {}))["default_agent_id"] is None
 
 
 async def test_schedule_tool_exposes_and_accepts_a_human_recurrence(backend):

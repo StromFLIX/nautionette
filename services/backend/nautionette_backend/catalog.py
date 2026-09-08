@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from . import agent_profiles
 from .clients import broker, gateway
 from .config import settings
 from .db import db
@@ -164,8 +165,14 @@ async def build(refresh: bool = False) -> dict[str, Any]:
             "tools": tools,
             "tool_servers": servers,
             "context": context_hints(),
+            **agent_profiles.catalog_entries(),
         }
     )
+
+
+async def model_info(model: str | None) -> dict[str, Any]:
+    available = cached_catalog() or await build()
+    return next((item for item in available.get("models", []) if item["id"] == model), {})
 
 
 async def reset_default_model(excluded: str | None = None) -> bool:
@@ -177,9 +184,6 @@ async def reset_default_model(excluded: str | None = None) -> bool:
         return False
     replacement = settings.agent_model if settings.agent_model in ids else None
     replacement = replacement or (models[0]["id"] if models else None)
-    if replacement:
-        db.set_setting("default_model", replacement)
-    else:
-        db.execute("DELETE FROM settings WHERE key = ?", ("default_model",))
+    db.save_settings({"default_model": replacement, "default_reasoning_effort": None})
     bus.publish("settings.changed", {})
     return True

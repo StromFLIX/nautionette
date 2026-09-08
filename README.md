@@ -92,6 +92,32 @@ Open Settings with **Ctrl/Command + ,** and focus its search with **/**.
 See [Frontend design system](docs/frontend-design.md) for the extension points,
 persistence model and testing guidance.
 
+## Defaults and reusable agents
+
+Configuration follows **global defaults → agent overrides → chat changes**.
+**Settings > General** sets the starting model, container environment, reasoning,
+MCP tools and writable projects. Choose **Global defaults** or a saved agent as the
+default for new chats. **Settings > Agents & models** creates, edits, duplicates and
+deletes reusable agents. Each field shows **Inherited** or offers **Use global**.
+
+Pick an agent under **Chat configuration**, customize individual fields, or use
+**Reapply agent defaults**. Applying an agent to an existing chat is explicit:
+profile edits never rewrite existing chat settings or already accepted/queued turns.
+Both the welcome composer and sidebar **New chat** use the same saved defaults.
+These instance-wide settings are separate from device appearance/workspace preferences.
+
+**All tools**, **No tools**, and a selected list are distinct. A selected list stays
+pinned even if every current tool is selected; only **All** opts into future MCP
+tools. Built-in file and shell tools remain available. Projects are writable and
+must be ready; unavailable project defaults cause an actionable error rather than
+being silently dropped. Reasoning stays tied to its model.
+
+Saved agents are configuration presets, not container images: existing **agent
+sets** remain selectable environments. Workflow activities retain their explicit
+configuration; profiles do not automatically change deployed workflows.
+See [Agent configuration](docs/agent-configuration.md) for API semantics, migration
+and deployment requirements.
+
 ## Chat delivery and recovery
 
 Web and Android use the same thin client. The backend owns accepted messages,
@@ -244,9 +270,10 @@ until the next turn.
 
 ### Reasoning effort
 
-The control beside the model picker shows only the selected model's advertised
-reasoning levels. **Provider default** (the default for existing and new chats)
-sends no effort override; it does not disable reasoning. Copilot advertises levels
+The reasoning control under **Chat configuration** shows only the selected model's
+advertised levels. **Provider default** sends no effort override; it does not
+disable reasoning. It remains the factory default, but new chats can inherit an
+explicit effort from global defaults or their selected agent. Copilot advertises levels
 in `capabilities.supports.reasoning_effort`; OpenRouter advertises them in
 `reasoning.supported_efforts`. A reasoning boolean, mandatory reasoning, or a
 `reasoning` entry in `supported_parameters` alone is not enough to invent levels.
@@ -529,7 +556,8 @@ defaults to `http://backend:8080/mcp/` and must be reachable from agentgateway.
 Tools are generated from the existing backend API schemas and dispatch through the
 same routes and validation as the app. They cover system health, recent events,
 workflow validation/deployment/settings/schedules, runs and execution history,
-worker restarts, model integrations, and MCP server configuration. For example:
+worker restarts, saved-agent configurations, model integrations, and MCP server
+configuration. For example:
 `backend_system_status`, `backend_deploy_workflow`, `backend_run_workflow`,
 `backend_read_run`, and `backend_restart_workers`. JSON request bodies are passed
 as the tool's `body` argument. Mutations emit audit events without their credentials
@@ -773,6 +801,7 @@ services/backend/nautionette_backend/
   db.py              SQLite storage, and the one connection
   events.py          the in-process fan-out behind /api/events
   runtime.py         saved settings, the history budget, the catalog cache
+  agent_profiles.py  global defaults, saved agents and configuration inheritance
   fields.py          declared form fields, and checking a payload against them
   gateway_config.py  writing to agentgateway's own config store
   catalog.py         which models and tools exist, and who serves each one
@@ -797,7 +826,7 @@ The backend answers on `${BACKEND_PORT}` and the site on `${WEBSITE_PORT}`, both
 loopback. The broker builds `pi-base` and every agent set on first start; until that finishes,
 `/api/system` reports the agent sets as not ready and says so in the UI.
 
-Model providers are managed under **Settings > Agents > Model integrations**: pick one from the
+Model providers are managed under **Settings > Agents & models > Model integrations**: pick one from the
 list, add it, test it, and remove it again. OpenRouter, GitHub Copilot, OpenAI, Anthropic, Groq,
 Mistral, DeepSeek and xAI ship as entries in one registry, and **Custom** covers any other endpoint
 that speaks the OpenAI chat completions API. Every integration becomes an agentgateway route, so

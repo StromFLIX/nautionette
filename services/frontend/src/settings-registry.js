@@ -9,8 +9,12 @@ export const SETTINGS_SECTIONS = [
     key: 'general', label: 'General', icon: 'tune', group: 'Preferences', scope: 'Instance',
     load: () => import('./components/settings/GeneralPane.vue'),
     entries: [
-      entry('default-model', 'Default model', 'Model used for new chats.', 'provider AI LLM'),
-      entry('default-agent', 'Default agent set', 'Environment used for new chats.', 'container image'),
+      entry('default-chat-agent', 'Default agent', 'Start new chats with global defaults or a saved agent.', 'profile configuration preset'),
+      entry('default-model', 'Default model', 'Model inherited by agents and new chats.', 'provider AI LLM'),
+      entry('default-agent', 'Default agent set', 'Container environment inherited by agents and new chats.', 'container image'),
+      entry('default-reasoning', 'Default reasoning', 'Reasoning effort for the default model.', 'thinking high medium low provider'),
+      entry('default-tools', 'Default tools', 'All, no, or selected MCP tools for new chats.', 'permissions capabilities access'),
+      entry('default-projects', 'Default projects', 'Writable projects selected for new chats.', 'repositories git workspace'),
       entry('history', 'History budget', 'Automatic or fixed transcript character limit.', 'context tokens trimming'),
       { ...entry('server', 'Server', 'Connect this device to an instance.', 'URL address connection endpoint'), scope: 'This device' },
       { ...entry('access-token', 'Access token', 'Authentication for this device.', 'password security credentials login'), scope: 'This device' }
@@ -34,7 +38,8 @@ export const SETTINGS_SECTIONS = [
     key: 'agents', label: 'Agents & models', icon: 'memory', group: 'Connections', scope: 'Instance',
     load: () => import('./components/settings/AgentsPane.vue'),
     entries: [
-      entry('agent-sets', 'Agent sets', 'Available environments and image readiness.', 'container docker'),
+      entry('agent-profiles', 'Saved agents', 'Create reusable configurations with model, reasoning, tools and projects.', 'profile preset defaults inherit override duplicate'),
+      entry('agent-sets', 'Agent sets', 'Available container environments and image readiness.', 'container docker runtime'),
       entry('model-integrations', 'Model integrations', 'Add, configure or test a model provider.', 'API key credentials OpenAI Anthropic OpenRouter gateway'),
       entry('available-models', 'Available models', 'Models discovered through your integrations.', 'catalog vendor provider refresh')
     ]

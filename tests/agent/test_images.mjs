@@ -73,3 +73,10 @@ test('image-only prompts have useful text and text-only model declarations stay 
   assert.equal(textOnly.spawnOptions.env.NAUTIONETTE_MODEL_REASONING, '{}')
   assert.equal(textOnly.commands.find((c) => c.type === 'prompt').images, undefined)
 })
+
+for (const tools of [undefined, null, [], ['read'], ['name,with,commas']]) {
+  test(`the wrapper transports tool selection ${JSON.stringify(tools)} without broadening it`, async () => {
+    const result = await run({ chat_id: 'chat', prompt: 'hi', tools })
+    assert.equal(result.spawnOptions.env.NAUTIONETTE_TOOLS_JSON, JSON.stringify(tools ?? null))
+  })
+}

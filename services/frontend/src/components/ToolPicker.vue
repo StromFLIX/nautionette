@@ -1,5 +1,5 @@
 <template>
-  <q-menu anchor="top left" self="bottom left" class="picker" @show="onShow">
+  <q-menu ref="menu" anchor="top left" self="bottom left" class="picker" @show="onShow" @keydown.esc.stop.prevent="menu?.hide($event)">
     <div class="picker__search">
       <span class="material-icons">search</span>
       <input v-model="query" class="picker__search-input" placeholder="Search tools" />
@@ -9,12 +9,18 @@
     </div>
 
     <div class="tools__head">
-      <span class="section-label grow">{{ enabled.size }} of {{ all.length }} enabled</span>
+      <span class="section-label grow">{{ all.filter(tool => enabled.has(tool.name)).length }} of {{ all.length }} enabled</span>
       <button class="btn btn--sm" @click="setAll(true)">All</button>
       <button class="btn btn--sm" @click="setAll(false)">None</button>
     </div>
 
     <div class="picker__scroll scroll-y">
+      <template v-if="unavailable.length">
+        <p class="picker__note caption">Unavailable selections stay pinned.</p>
+        <button v-for="name in unavailable" :key="name" class="tools__row" type="button" :aria-label="`Remove unavailable tool ${name}`" @click="setTool(name, false)">
+          <span class="material-icons tools__box" aria-hidden="true">remove_circle_outline</span><span class="grow truncate mono">{{ name }}</span>
+        </button>
+      </template>
       <template v-for="group in groups" :key="group.name">
         <div class="tools__group">
           <button class="tools__chevron" @click="toggle(group.name)">
@@ -66,12 +72,14 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:modelValue'])
 
+const menu = ref(null)
 const query = ref('')
 const opened = ref(new Set())
 
 const all = computed(() => store.catalog.tools || [])
 const enabled = computed(() =>
   new Set(props.modelValue === null ? all.value.map((tool) => tool.name) : props.modelValue))
+const unavailable = computed(() => (props.modelValue || []).filter(name => !all.value.some(tool => tool.name === name)))
 
 const groups = computed(() => {
   const needle = query.value.trim().toLowerCase()
@@ -101,10 +109,9 @@ function toggle (name) {
   opened.value = set
 }
 
-/** Everything on collapses back to null, so tools added later are picked up too. */
+/** Individual choices stay pinned, even when they cover today's entire catalog. */
 function commit (names) {
-  const next = new Set(names)
-  emit('update:modelValue', next.size === all.value.length ? null : [...next])
+  emit('update:modelValue', [...new Set(names)])
 }
 
 function setTool (name, on) {
@@ -121,7 +128,8 @@ function setGroup (group, on) {
 }
 
 function setAll (on) {
-  commit(on ? all.value.map((tool) => tool.name) : [])
+  // Only an explicit All opts into future tools. None remains [] in an empty catalog.
+  emit('update:modelValue', on ? null : [])
 }
 
 function onShow () {

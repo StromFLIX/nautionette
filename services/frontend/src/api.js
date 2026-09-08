@@ -69,6 +69,10 @@ export const api = {
   events: () => request('/api/events/recent'),
   settings: () => request('/api/settings'),
   saveSettings: (payload) => request('/api/settings', { method: 'PUT', ...json(payload) }),
+  agents: () => request('/api/agents'),
+  createAgent: (payload) => request('/api/agents', { method: 'POST', ...json(payload) }),
+  updateAgent: (id, payload) => request(`/api/agents/${encodeURIComponent(id)}`, { method: 'PATCH', ...json(payload) }),
+  deleteAgent: (id) => request(`/api/agents/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   modelIntegrations: () => request('/api/model-integrations'),
   addModelIntegration: (id, config = {}) =>
     request(`/api/model-integrations/${encodeURIComponent(id)}`, { method: 'PUT', ...json(config) }),

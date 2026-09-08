@@ -8,6 +8,10 @@ from nautionette_backend import conversations, git_authorship, runtime
 DEFAULTS = {
     "default_model": "openai/gpt-4o-mini",
     "default_agent_set": "default",
+    "default_agent_id": None,
+    "default_reasoning_effort": None,
+    "default_tools": None,
+    "default_project_ids": [],
     "history_chars": 0,
     "git_authorship_mode": "automation",
     "git_human_name": "",

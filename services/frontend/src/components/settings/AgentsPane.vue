@@ -1,8 +1,11 @@
 <template>
   <h2 class="settings__title">Agents & models</h2>
 
-  <div id="agent-sets" class="setting">
-    <div class="setting__label">Agent sets</div>
+  <AgentProfiles />
+
+  <details id="agent-sets" class="settings-disclosure">
+    <summary><span class="grow">Container environments</span><span class="caption dim">Agent sets</span></summary>
+    <div class="catalog-body">
     <div v-for="set in store.catalog.agent_sets || []" :key="set.name" class="line">
       <span class="grow truncate">{{ set.name }}</span>
       <span v-if="set.image" class="caption dim mono truncate">{{ set.image }}</span>
@@ -10,7 +13,8 @@
         {{ set.ready === false ? 'building' : 'ready' }}
       </span>
     </div>
-  </div>
+    </div>
+  </details>
 
   <div id="model-integrations" class="setting">
     <div class="row integration-head">
@@ -146,6 +150,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import DeclaredField from './DeclaredField.vue'
+import AgentProfiles from './AgentProfiles.vue'
 import { credentialLabel, draftIsValid, resetDraft } from './fields'
 import { actions, store } from '../../store'
 import { api } from '../../api'

@@ -30,6 +30,7 @@ _PREFIXES = (
     "/api/drafts",
     "/api/system",
     "/api/settings",
+    "/api/agents",
     "/api/model-integrations",
     "/api/mcp-servers",
 )

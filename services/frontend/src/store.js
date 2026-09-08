@@ -6,15 +6,19 @@ import { computed, reactive } from 'vue'
 import { api, auth, isNative, liveEvents, server } from './api'
 import { delivery } from './delivery'
 import { chatCache, chatCacheScope, warmChatCache } from './chat-cache'
+import { agentConfig, globalChatConfig, resolveAgentConfig } from './agent-config'
 import router from './router'
 
+const emptyCatalog = () => ({ agent_sets: [], agents: [], models: [], tools: [], default_model: '', default_agent_set: 'default', default_agent_id: null })
 const state = reactive({
   ready: false,
+  catalogLoaded: false,
+  catalogError: '',
   needsToken: false,
   // The app ships without a backend, so it cannot start until it is told where one is.
   needsServer: isNative && !server.url,
   system: { components: [], agent_sets: [] },
-  catalog: { agent_sets: [], models: [], tools: [], default_model: '', default_agent_set: 'default' },
+  catalog: emptyCatalog(),
   chats: [],
   projects: [],
   workflows: [],
@@ -25,6 +29,7 @@ const state = reactive({
 
 const listeners = new Set()
 let source = null
+let catalogRequest = 0
 
 function emit (event) {
   listeners.forEach((fn) => fn(event))
@@ -53,8 +58,31 @@ export const actions = {
   },
 
   async loadCatalog (refresh = false) {
-    const data = await guard(() => api.catalog(refresh))
-    if (data) state.catalog = data
+    const scope = chatCacheScope()
+    const request = ++catalogRequest
+    try {
+      const data = await guard(() => api.catalog(refresh))
+      if (scope !== chatCacheScope() || request !== catalogRequest) return false
+      if (data) { state.catalog = data; state.catalogLoaded = true; state.catalogError = ''; return true }
+      state.catalogError = 'Could not load chat defaults.'
+    } catch (error) { if (scope === chatCacheScope() && request === catalogRequest) state.catalogError = error.message }
+    return false
+  },
+
+  // Successful writes are authoritative even if subsequent discovery is offline.
+  syncAgentCatalog (patch) {
+    catalogRequest++ // An older discovery response must not undo this saved edit.
+    const catalog = { ...state.catalog, ...patch }
+    const defaults = globalChatConfig(catalog)
+    catalog.agents = (catalog.agents || []).map(agent => ({ ...agent, resolved: resolveAgentConfig(agent.config || {}, defaults) }))
+    catalog.chat_defaults = agentConfig(catalog, catalog.default_agent_id ?? null)
+    state.catalog = catalog
+  },
+
+  applyAgentSettings (settings) {
+    const defaults = globalChatConfig(settings)
+    actions.syncAgentCatalog({ global_chat_defaults: defaults, default_model: defaults.model,
+      default_agent_set: defaults.agent_set, default_agent_id: settings.default_agent_id ?? null })
   },
 
   async loadChats () {
@@ -109,6 +137,9 @@ export const actions = {
   },
 
   setServer (value) {
+    state.catalogError = ''
+    state.catalogLoaded = false
+    state.catalog = emptyCatalog()
     server.url = value
     state.needsServer = isNative && !server.url
     actions.connect()
@@ -116,6 +147,9 @@ export const actions = {
   },
 
   setToken (value) {
+    state.catalogError = ''
+    state.catalogLoaded = false
+    state.catalog = emptyCatalog()
     auth.token = value
     state.needsToken = false
     actions.connect()
@@ -141,7 +175,7 @@ export const actions = {
       if (kind.startsWith('workflow.') || kind.startsWith('promote.')) actions.loadWorkflows()
       if (kind.startsWith('chat.')) actions.loadChats()
       if (kind.startsWith('project.')) actions.loadProjects()
-      if (kind === 'model.integration.changed' || kind === 'mcp.server.changed') actions.loadCatalog(true)
+      if (['model.integration.changed', 'mcp.server.changed', 'settings.changed', 'agent.profile.changed'].includes(kind)) actions.loadCatalog(true)
       emit(event)
     })
   },

@@ -18,7 +18,7 @@ for (const theme of THEMES) {
     const toggle = page.getByRole('button', { name: 'Chat configuration', exact: true })
     await toggle.press('Space')
     await expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    for (const name of ['Select agent set', 'Reasoning effort', 'Select tools', 'Select projects']) {
+    for (const name of ['Select agent', 'Select agent set', 'Reasoning effort', 'Select tools', 'Select projects']) {
       const control = page.getByRole('button', { name, exact: true })
       await expect(control).toBeVisible()
       const box = await control.boundingBox()
@@ -58,7 +58,7 @@ test.describe('touch layouts', () => {
       await page.setViewportSize({ width, height: 320 })
       const footer = page.locator('.thread__foot')
       await expect(footer).toBeInViewport({ ratio: 1 })
-      for (const name of ['Select agent set', 'Reasoning effort', 'Select tools', 'Select projects', 'Send message']) {
+      for (const name of ['Select agent', 'Select agent set', 'Reasoning effort', 'Select tools', 'Select projects', 'Send message']) {
         const control = page.getByRole('button', { name, exact: true })
         await control.scrollIntoViewIfNeeded()
         await expect(control).toBeInViewport({ ratio: 1 })

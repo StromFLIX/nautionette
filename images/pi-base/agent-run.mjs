@@ -157,7 +157,9 @@ async function main() {
       NAUTIONETTE_REASONING_EFFORT: job.reasoning_effort ?? "",
       NAUTIONETTE_MODE: mode,
       NAUTIONETTE_INTERNET_STATUS: job.chat_id ? (job.internet_status || "blocked") : "",
-      // Empty means "every federated tool"; a list narrows the bridge.
+      // JSON preserves null (all) versus [] (none) and tool names containing commas.
+      NAUTIONETTE_TOOLS_JSON: JSON.stringify(job.tools ?? null),
+      // Compatibility for older/custom agent sets. New bridges use the lossless value above.
       NAUTIONETTE_TOOLS: Array.isArray(job.tools) ? job.tools.join(",") : "",
     },
     stdio: [interactive ? "pipe" : "ignore", "pipe", "pipe"],

@@ -44,6 +44,9 @@ jobs:
       - name: Model capability and image API guards
         run: uv run pytest tests/backend/test_catalog.py tests/backend/test_model_capabilities.py tests/backend/test_chat_images.py
 
+      - name: Agent defaults, profiles and durable chat configuration
+        run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py
+
       - name: Committed workflows still validate
         run: uv run --package nautionette-workflow-mcp python scripts/check_workflows.py
 
@@ -80,7 +83,7 @@ jobs:
           npx playwright test
           tests/chat.spec.js tests/appearance.spec.js tests/workspace.spec.js
           tests/projects.spec.js tests/settings-navigation.spec.js
-          tests/git-authorship.spec.js tests/system.spec.js
+          tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js
           --workers=1
 
   images:
@@ -138,7 +141,7 @@ jobs:
           docker run --rm --network none --user 10001:10001 \
             --env HOME=/workspace --tmpfs /workspace:rw,mode=1777 \
             --volume "$PWD:/source:ro" --entrypoint bash nautionette/pi-agent-default:dev -c \
-            'pi --version && node --test /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_image_transport.mjs'
+            'pi --version && node --test /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs'
 
       - name: Development tools work offline as the project user
         run: |

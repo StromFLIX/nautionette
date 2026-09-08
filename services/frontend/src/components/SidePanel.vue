@@ -14,7 +14,7 @@
         </button>
         <button
           v-if="section === 'chats'" class="btn btn--icon side__new" title="New chat" aria-label="New chat"
-          @click="startChat"
+          :disabled="startingChat" @click="startChat"
         >
           <span class="material-icons">add</span>
         </button>
@@ -94,6 +94,7 @@
           {{ showOlder ? `Hide ${hiddenCount} older` : `Show ${hiddenCount} older` }}
         </button>
         <p v-if="readError" class="side__error caption" role="alert">{{ readError }}</p>
+        <p v-if="startError" class="side__error caption" role="alert">{{ startError }} <RouterLink to="/settings/general">Review defaults</RouterLink></p>
         <p v-if="!filteredChats.length" class="side__empty caption">
           {{ query ? 'Nothing matches that.' : 'No chats yet.' }}
         </p>
@@ -193,6 +194,8 @@ const router = useRouter()
 const query = ref('')
 const readBusy = ref('')
 const readError = ref('')
+const startingChat = ref(false)
+const startError = ref('')
 
 const groupOptions = [
   { value: 'none', label: 'All' },
@@ -330,12 +333,16 @@ const filteredRuns = computed(() =>
   store.runs.filter((run) => matches(`${run.workflow} ${run.status} ${run.trigger}`)))
 
 async function startChat () {
-  const chat = await api.createChat({
-    agent_set: store.catalog.default_agent_set,
-    model: store.catalog.default_model
-  })
-  await actions.loadChats()
-  router.push(`/chats/${chat.id}`)
+  if (startingChat.value) return
+  startingChat.value = true
+  startError.value = ''
+  try {
+    // Let the backend resolve the complete current default agent, not just its model.
+    const chat = await api.createChat({})
+    await actions.loadChats()
+    await router.push(`/chats/${chat.id}`)
+  } catch (error) { startError.value = `Could not create chat: ${error.message}` }
+  finally { startingChat.value = false }
 }
 
 function refresh () {

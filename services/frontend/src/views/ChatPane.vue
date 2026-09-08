@@ -11,7 +11,7 @@
       <div class="grow">
         <div class="pane-head__title truncate">{{ chat?.title || 'Chat' }}</div>
         <div class="caption dim truncate">
-          {{ messages.length }} messages · {{ chat?.agent_set }}
+          {{ messages.length }} messages · {{ chat?.agent_name || chat?.agent_set }}
           <template v-if="reconnecting"> · Reconnecting...</template>
           <template v-if="chat?.promoted_to"> · → {{ chat.promoted_to }}</template>
         </div>
@@ -111,6 +111,8 @@
         v-model="draft"
         v-model:attachments="attachments"
         :busy="sendingDraft"
+        :agent-id="chat?.agent_id ?? null"
+        :agent-name="chat?.agent_name || ''"
         :agent-set="chat?.agent_set || ''"
         :model="chat?.model || store.catalog.default_model"
         :reasoning-effort="chat?.reasoning_effort ?? null"
@@ -119,6 +121,7 @@
         :running="streaming"
         :stopping="stopping"
         :context="context"
+        @update:agent-id="patch({ agent_id: $event })"
         @update:agent-set="patch({ agent_set: $event })"
         @update:model="patch({ model: $event, reasoning_effort: null })"
         @update:reasoning-effort="patch({ reasoning_effort: $event })"
@@ -149,6 +152,7 @@ import { delivery, onDelivery, pendingMessages } from '../delivery'
 import { latestContext } from '../context'
 import { cacheError, chatCache, chatCacheScope } from '../chat-cache'
 import { reducedMotion } from '../preferences'
+import { CONFIG_KEYS } from '../agent-config'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -299,11 +303,11 @@ function scrollDown (behavior = 'smooth') {
   })
 }
 
-async function start ({ text, agentSet, model, reasoningEffort = null, tools, projectIds: selectedProjects = [], attachments: images = [] }) {
+async function start ({ text, configuration, attachments: images = [] }) {
   if (starting.value || (!text.trim() && !images.length)) return
   starting.value = true
   try {
-    const created = await api.createChat({ agent_set: agentSet, model, reasoning_effort: reasoningEffort, tools, project_ids: selectedProjects })
+    const created = await api.createChat({ agent_id: configuration.agent_id, ...Object.fromEntries(CONFIG_KEYS.map(key => [key, configuration[key]])) })
     await actions.loadChats()
     await router.push(`/chats/${created.id}`)
     draft.value = text

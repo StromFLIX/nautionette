@@ -30,6 +30,7 @@ _TABLES = (
     "runs",
     "events",
     "settings",
+    "agent_profiles",
     "workflow_settings",
 )
 

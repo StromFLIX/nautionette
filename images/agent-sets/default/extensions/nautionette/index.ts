@@ -10,15 +10,14 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { modelApi } from "./model-api.ts";
 import { reasoningConfig, reasoningPayload } from "./reasoning.ts";
+import { allowedTools } from "./tool-selection.ts";
 
 const GATEWAY = (process.env.AGENTGATEWAY_URL ?? "http://agentgateway:4000").replace(/\/$/, "");
 const MODEL = process.env.AGENT_MODEL ?? "openai/gpt-4o-mini";
 const MCP_URL = process.env.MCP_URL ?? `${GATEWAY}/mcp`;
 const PROVIDER = "nautionette";
-// Empty means every tool the gateway federates; a list narrows this run to those.
-const ALLOWED = new Set(
-  (process.env.NAUTIONETTE_TOOLS ?? "").split(",").map((name) => name.trim()).filter(Boolean),
-);
+// A null selection means all tools; an empty set deliberately bridges none.
+const ALLOWED = allowedTools(process.env.NAUTIONETTE_TOOLS_JSON, process.env.NAUTIONETTE_TOOLS);
 
 type JsonRpcResult = Record<string, any>;
 
@@ -118,7 +117,7 @@ export default async function (pi: ExtensionAPI) {
     await rpc("notifications/initialized");
     const listed = await rpc("tools/list");
     const all: any[] = listed.tools ?? [];
-    const tools = ALLOWED.size ? all.filter((tool) => ALLOWED.has(tool.name)) : all;
+    const tools = ALLOWED === null ? all : all.filter((tool) => ALLOWED.has(tool.name));
 
     for (const tool of tools) {
       pi.registerTool({

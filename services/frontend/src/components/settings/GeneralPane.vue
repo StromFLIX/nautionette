@@ -1,24 +1,20 @@
 <template>
   <h2 class="settings__title">General</h2>
-  <p class="settings__intro">Defaults for new chats.</p>
+  <p class="settings__intro">A starting point for every new chat.</p>
   <p v-if="loadError" class="caption field-hint--bad" role="alert">{{ loadError }} <button class="btn btn--sm" @click="load">Retry</button></p>
 
-  <div class="general-defaults">
-    <section id="default-model" class="setting">
-      <label for="general-model" class="setting__label">Default model</label>
-      <button id="general-model" class="field field--button">
-        <span class="grow truncate">{{ form.default_model || 'Choose a model' }}</span>
-        <span class="material-icons" aria-hidden="true">expand_more</span>
-        <ModelPicker :model-value="form.default_model" @update:model-value="form.default_model = $event" />
-      </button>
-    </section>
-    <section id="default-agent" class="setting">
-      <label for="general-agent" class="setting__label">Default agent set</label>
-      <select id="general-agent" v-model="form.default_agent_set" class="field">
-        <option v-for="set in store.catalog.agent_sets || []" :key="set.name" :value="set.name">{{ set.name }}</option>
+  <section id="default-chat-agent" class="setting general-starting-agent">
+    <label for="general-starting-agent" class="setting__label">Default agent</label>
+    <div class="row">
+      <select id="general-starting-agent" v-model="form.default_agent_id" class="field grow" :disabled="saving || !loaded">
+        <option :value="null">Global defaults</option>
+        <option v-for="agent in store.catalog.agents || []" :key="agent.id" :value="agent.id">{{ agent.name }}</option>
       </select>
-    </section>
-  </div>
+      <RouterLink class="btn btn--outline" to="/settings/agents#agent-profiles">Manage agents<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink>
+    </div>
+  </section>
+  <div class="general-baseline"><h3 class="section-label">Global defaults</h3><span class="caption dim">Agents inherit these unless overridden.</span></div>
+  <AgentConfigFields v-model="config" :defaults="configDefaults" prefix="default" global :disabled="saving || !loaded" />
 
   <details id="history" class="settings-disclosure general-history">
     <summary><span class="material-icons" aria-hidden="true">history</span><span class="grow">History budget</span><span class="caption dim">{{ historyMode === 'auto' ? 'Automatic' : 'Custom' }}</span></summary>
@@ -66,7 +62,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
-import ModelPicker from '../ModelPicker.vue'
+import AgentConfigFields from './AgentConfigFields.vue'
+import { CONFIG_KEYS, globalChatConfig } from '../../agent-config'
 import { compactChars } from '../../format'
 import { actions, historyBudget, store } from '../../store'
 import { api, auth, isNative, server } from '../../api'
@@ -79,17 +76,21 @@ const saving = ref(false)
 const loaded = ref(false)
 const loadError = ref('')
 const historyMode = ref('auto')
-const form = reactive({ default_model: '', default_agent_set: '', history_chars: 0 })
+const form = reactive({ default_agent_id: null, history_chars: 0 })
+const config = ref(globalChatConfig(store.catalog))
+const configDefaults = ref(globalChatConfig(store.catalog))
 const contextHint = computed(() => {
   if (historyMode.value === 'fixed') return `${compactChars(form.history_chars || 0)} characters of history`
-  const model = (store.catalog.models || []).find(item => item.id === form.default_model)
+  const model = (store.catalog.models || []).find(item => item.id === config.value.model)
   if (!model?.context_length) return 'No window published. The instance fallback is used.'
-  return `${compactChars(model.context_length)} token window → ${compactChars(historyBudget(form.default_model))} characters`
+  return `${compactChars(model.context_length)} token window → ${compactChars(historyBudget(config.value.model))} characters`
 })
 function apply (data) {
   for (const key of Object.keys(form)) {
     if (Object.hasOwn(data.settings || {}, key)) form[key] = data.settings[key]
   }
+  config.value = globalChatConfig(data.settings || {})
+  configDefaults.value = globalChatConfig(data.defaults || {})
   historyMode.value = form.history_chars > 0 ? 'fixed' : 'auto'
 }
 function saveToken () { actions.setToken(token.value.trim()); $q.notify({ type: 'positive', message: 'Token saved' }) }
@@ -100,7 +101,9 @@ function saveServer () {
 async function persist (payload) {
   saving.value = true
   try {
-    apply(await api.saveSettings(payload))
+    const saved = await api.saveSettings(payload)
+    apply(saved)
+    actions.applyAgentSettings(saved.settings)
     await actions.loadCatalog(true)
     $q.notify({ type: 'positive', message: 'Saved' })
   } catch (error) { $q.notify({ type: 'negative', message: error.message }) }
@@ -111,9 +114,12 @@ function saveSettings () {
     $q.notify({ type: 'negative', message: 'History limit must be at least 2,000 characters.' })
     return
   }
-  return persist({ ...form, history_chars: historyMode.value === 'auto' ? 0 : form.history_chars })
+  return persist({ ...form, ...Object.fromEntries(CONFIG_KEYS.map(key => [`default_${key}`, config.value[key]])),
+    history_chars: historyMode.value === 'auto' ? 0 : form.history_chars })
 }
-function resetSettings () { return persist({ default_model: null, default_agent_set: null, history_chars: null }) }
+function resetSettings () {
+  return persist({ default_agent_id: null, history_chars: null, ...Object.fromEntries(CONFIG_KEYS.map(key => [`default_${key}`, null])) })
+}
 async function load () {
   loadError.value = ''
   try { apply(await api.settings()); loaded.value = true }
@@ -123,11 +129,13 @@ onMounted(load)
 </script>
 
 <style scoped>
-.general-defaults { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; margin: 28px 0; }
-.general-defaults .setting { margin: 0; padding: 0; border: none; }
-.general-defaults .setting__label { display: block; margin-bottom: 10px; }
-.general-defaults .field { min-height: 42px; }
-.general-defaults .material-icons { font-size: 18px; }
+.general-starting-agent .setting__label { display: block; margin-bottom: 10px; }
+.general-starting-agent .row { gap: 12px; }
+.general-starting-agent .field { min-width: 0; width: auto; min-height: 42px; }
+.general-starting-agent .btn { flex: none; }
+.general-starting-agent .material-icons { font-size: 15px; }
+.general-baseline { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 28px; }
+.general-baseline h3 { margin: 0; }
 .general-detail { padding: 8px 18px 20px; }
 .general-detail .setting__label { display: block; margin-bottom: 8px; }
 .general-detail > p { margin: 10px 0 0; }
@@ -137,7 +145,7 @@ onMounted(load)
 .general-detail .setting:first-child { margin-top: 0; }
 .settings__save { margin: 20px 0 36px; }
 @media (max-width: 600px) {
-  .general-defaults { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .general-starting-agent .row { flex-wrap: wrap; }
   .general-detail { padding-inline: 12px; }
   .settings__save { gap: 4px; }
 }

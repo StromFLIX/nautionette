@@ -28,6 +28,7 @@ export async function mockDesign (context) {
     tools: [{ name: 'mail_search', server: 'mail', description: 'Search your mail' }, { name: 'mail_read', server: 'mail', description: 'Read a message' }],
     tool_servers: [{ name: 'mail', status: 'ok' }]
   }
+  state.catalog = catalog
   await context.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
     const method = route.request().method()
