@@ -33,6 +33,9 @@
           <button class="pick-menu__item" @click="rename">
             <span class="material-icons pick__icon">edit</span>Rename
           </button>
+          <button v-close-popup class="pick-menu__item" :disabled="titleBusy || !savedMessages.length" @click="regenerateTitle">
+            <span class="material-icons pick__icon" aria-hidden="true">autorenew</span>{{ titleBusy ? 'Regenerating title…' : 'Regenerate title' }}
+          </button>
           <button class="pick-menu__item" @click="remove">
             <span class="material-icons pick__icon" style="color: var(--danger)">delete</span>Delete chat
           </button>
@@ -158,6 +161,7 @@ const reconnecting = ref(false)
 const streaming = computed(() => Boolean(activeTurn.value))
 const controlBusy = ref(false)
 const controlError = ref('')
+const titleBusy = ref(false)
 const stopping = computed(() => controlBusy.value || Boolean(activeTurn.value?.stop_requested))
 const liveSteps = computed(() => activeTurn.value?.steps || [])
 const liveStatus = computed(() => activeTurn.value?.stop_requested ? 'Stopping...' : activeTurn.value?.status || '')
@@ -397,6 +401,28 @@ async function decideInternet (allowed) {
   }
 }
 
+async function regenerateTitle () {
+  if (titleBusy.value) return
+  const id = chatId.value
+  const version = generation
+  titleBusy.value = true
+  try {
+    // Respect any settings/rename already being saved before generating a new title.
+    if (!await settingsSave || version !== generation) return
+    const updated = await api.regenerateChatTitle(id)
+    if (version === generation) {
+      // Don't replace unrelated settings that may have changed during generation.
+      chat.value = { ...chat.value, title: updated.title }
+      $q.notify({ type: 'positive', message: 'Chat title regenerated' })
+    }
+    await actions.loadChats()
+  } catch (error) {
+    if (version === generation) $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    if (version === generation) titleBusy.value = false
+  }
+}
+
 function rename () {
   $q.dialog({
     title: 'Rename chat',
@@ -422,6 +448,7 @@ watch(chatId, (id) => {
   readError.value = ''
   controlBusy.value = false
   controlError.value = ''
+  titleBusy.value = false
   approvalError.value = ''
   chat.value = null
   settingsSave = Promise.resolve(true)

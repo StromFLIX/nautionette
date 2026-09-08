@@ -45,12 +45,19 @@ async function mockChats (context, state) {
       if (upload) return route.fulfill({ contentType: upload.image.mime_type, body: upload.bytes })
       return route.fulfill({ status: 404, json: { detail: 'Image not found' } })
     }
-    const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|messages|internet|stop|queue\/resume|read-state))?$/)
+    const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|messages|internet|stop|queue\/resume|read-state|title\/regenerate))?$/)
     if (match) {
       const [, chatId, action] = match
       const data = refreshReadState(state.chats[chatId])
       if (!action && method === 'PATCH') {
         Object.assign(data.chat, route.request().postDataJSON())
+        return route.fulfill({ json: data.chat })
+      }
+      if (action === 'title/regenerate' && method === 'POST') {
+        state.titleRequests = (state.titleRequests || 0) + 1
+        if (state.titleWait) await state.titleWait
+        if (state.titleFailure) return route.fulfill({ status: 502, json: { detail: 'Could not regenerate the title; try again shortly' } })
+        data.chat.title = 'Repair chat titles'
         return route.fulfill({ json: data.chat })
       }
       if (action === 'read-state' && method === 'PATCH') {
@@ -127,6 +134,64 @@ function initial () {
     }]))
   }
 }
+
+test('regenerate title updates the header and sidebar and prevents duplicate requests', async ({ page, context }) => {
+  const state = initial()
+  state.chats.alpha.messages = [{ id: 'question', role: 'user', content: 'Please fix the chat title' }]
+  let finish
+  state.titleWait = new Promise((resolve) => { finish = resolve })
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+  await page.getByRole('button', { name: 'Regenerate title', exact: true }).click()
+  await expect.poll(() => state.titleRequests).toBe(1)
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Regenerating title…', exact: true })).toBeDisabled()
+  finish()
+  await expect(page.locator('.pane-head__title')).toHaveText('Repair chat titles')
+  await expect(page.locator('.row-item__title').filter({ hasText: 'Repair chat titles' })).toBeVisible()
+  expect(state.titleRequests).toBe(1)
+})
+
+test('regeneration errors preserve the title and allow retry', async ({ page, context }) => {
+  const state = initial()
+  state.titleFailure = true
+  state.chats.alpha.messages = [{ id: 'question', role: 'user', content: 'Fix this title' }]
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+  await page.getByRole('button', { name: 'Regenerate title', exact: true }).click()
+  await expect(page.getByText('Could not regenerate the title; try again shortly')).toBeVisible()
+  await expect(page.locator('.pane-head__title')).toHaveText('alpha')
+  state.titleFailure = false
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+  await page.getByRole('button', { name: 'Regenerate title', exact: true }).click()
+  await expect(page.locator('.pane-head__title')).toHaveText('Repair chat titles')
+})
+
+test('empty chats cannot regenerate a title', async ({ page, context }) => {
+  await mockChats(context, initial())
+  await page.goto('/chats/alpha')
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Regenerate title', exact: true })).toBeDisabled()
+})
+
+test('late regeneration does not change a different chat after navigation', async ({ page, context }) => {
+  const state = initial()
+  state.chats.alpha.messages = [{ id: 'question', role: 'user', content: 'Fix title' }]
+  let finish
+  state.titleWait = new Promise((resolve) => { finish = resolve })
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+  await page.getByRole('button', { name: 'Regenerate title', exact: true }).click()
+  await expect.poll(() => state.titleRequests).toBe(1)
+  await page.locator('.row-item__title').filter({ hasText: /^beta$/ }).click()
+  await expect(page.locator('.pane-head__title')).toHaveText('beta')
+  finish()
+  await expect.poll(() => state.chats.alpha.chat.title).toBe('Repair chat titles')
+  await expect(page.locator('.pane-head__title')).toHaveText('beta')
+})
 
 test('group controls are collapsed by default without clearing the selected view', async ({ page, context }) => {
   await mockChats(context, initial())

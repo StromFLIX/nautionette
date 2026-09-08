@@ -10,10 +10,11 @@ from typing import Any
 from . import chat_images, git_authorship, projects
 from .agent import Timeline, build_history, stream_agent
 from .background import spawn
+from .chat_titles import refine_chat_title
 from .clients import broker
 from .db import db
 from .events import bus, sse
-from .runtime import history_budget, remember_agent_result
+from .runtime import history_budget, remember_agent_result, runtime
 
 CLEANUP_FAILURE = "The old chat agent could not be cleaned up. Retry your message to retry cleanup."
 
@@ -262,6 +263,11 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
             {"tools": timeline.tools, "steps": timeline.steps, "error": failure, "interrupted": interrupted},
         )
         bus.publish("chat.answered", {"chat_id": chat_id, "ok": failure is None})
+        if failure is None:
+            spawn(
+                refine_chat_title(chat_id, job.get("model") or runtime("default_model")),
+                name=f"chat-title-refine-{chat_id}",
+            )
         await projects.revoke_credentials(job.pop("project_credentials", []))
         if not shutdown and not cleanup_failed:
             launch_next(chat_id)
