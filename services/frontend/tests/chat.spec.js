@@ -27,6 +27,11 @@ async function mockChats (context, state) {
     if (path === '/api/workflows') return route.fulfill({ json: { workflows: [] } })
     if (path === '/api/drafts') return route.fulfill({ json: { drafts: [] } })
     if (path === '/api/runs') return route.fulfill({ json: { runs: [] } })
+    const changesPath = path.match(/^\/api\/chats\/([^/]+)\/project-changes$/)
+    if (changesPath) {
+      if (state.changesFailure) return route.fulfill({ status: 503, json: { detail: 'Unavailable' } })
+      return route.fulfill({ json: { projects: state.changes?.[changesPath[1]] || [] } })
+    }
     const imagePath = path.match(/^\/api\/chats\/([^/]+)\/images(?:\/([^/]+))?$/)
     if (imagePath) {
       const [, chatId, id] = imagePath
@@ -118,6 +123,82 @@ function initial () {
     }]))
   }
 }
+
+function changeFixture () {
+  const state = initial()
+  state.chats.alpha.chat.project_ids = ['project-a', 'project-b', 'clean']
+  state.chats.alpha.active_turn = { id: 'working', steps: [] }
+  state.changes = { alpha: [
+    { id: 'project-a', full_name: 'StromFLIX/nautionette', additions: 182, deletions: 22, file_count: 3, scope: 'conversation', files: [
+      { path: 'services/frontend/src/components/ProjectChanges.vue', status: 'added', additions: 180, deletions: 0 },
+      { path: 'services/backend/nautionette_backend/routers/chats.py', status: 'modified', additions: 2, deletions: 22 },
+      { path: 'images/preview.png', status: 'untracked', additions: null, deletions: null, binary: true }
+    ] },
+    { id: 'project-b', full_name: 'StromFLIX/website', additions: 0, deletions: 8, file_count: 1, files: [
+      { path: 'src/old.css', status: 'deleted', additions: 0, deletions: 8 }
+    ] },
+    { id: 'clean', full_name: 'StromFLIX/clean', additions: 0, deletions: 0, file_count: 0, files: [] }
+  ] }
+  return state
+}
+
+for (const width of [1440, 320]) {
+  test(`project changes expand independently with relative paths and live counts at ${width}px`, async ({ page, context }) => {
+    const state = changeFixture()
+    await mockChats(context, state)
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats/alpha')
+    const bar = page.getByRole('region', { name: 'Project changes', exact: true })
+    const projects = bar.locator('details')
+    await expect(projects).toHaveCount(2)
+    await expect(projects.first().locator('summary')).toContainText('+182')
+    await expect(projects.first().locator('summary')).toContainText('−22')
+    await expect(projects.first().locator('summary')).toContainText('3 files')
+    await expect(projects.first().locator('ul')).not.toBeVisible()
+    await projects.first().locator('summary').focus()
+    await page.keyboard.press('Enter')
+    await expect(projects.first().locator('ul')).toBeVisible()
+    await expect(projects.first()).toContainText('services/frontend/src/components/ProjectChanges.vue')
+    await expect(projects.first()).toContainText('Binary')
+    await expect(projects.nth(1).locator('ul')).not.toBeVisible()
+    await projects.nth(1).locator('summary').click()
+    await expect(projects.nth(1).locator('ul')).toBeVisible()
+    state.changes.alpha[0].additions = 200
+    state.changes.alpha[0].files[0].additions = 198
+    await expect(projects.first().locator('summary')).toContainText('+200', { timeout: 10000 })
+    await expect(projects.first().locator('ul')).toBeVisible()
+    await expect(projects.first().locator('ul')).toContainText('+198')
+    const bounds = await bar.boundingBox()
+    const composer = await page.locator('.composer').boundingBox()
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(composer.y)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    await page.screenshot({ path: `test-results/project-changes-${width}.png`, fullPage: true })
+    await projects.first().locator('summary').focus()
+    await page.keyboard.press('Space')
+    await expect(projects.first().locator('ul')).not.toBeVisible()
+  })
+}
+
+test('project changes retain stale counts on failure, recover, and clear on navigation', async ({ page, context }) => {
+  const state = changeFixture()
+  await mockChats(context, state)
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/chats/alpha')
+  const bar = page.locator('.project-changes')
+  await expect(bar.locator('details')).toHaveCount(2)
+  state.changesFailure = true
+  await expect(bar).toContainText('showing last known counts', { timeout: 10000 })
+  await expect(bar.locator('details')).toHaveCount(2)
+  state.changesFailure = false
+  state.changes.alpha = []
+  await expect(bar).not.toBeVisible({ timeout: 10000 })
+  state.changes.alpha = [{ id: 'project-a', full_name: 'StromFLIX/nautionette', error: 'Changes unavailable; retry shortly' }]
+  await expect(bar).toContainText('Unavailable', { timeout: 10000 })
+  await page.goto('/chats/beta')
+  await expect(page.locator('.composer')).toBeVisible()
+  await expect(bar).not.toBeVisible()
+})
 
 for (const width of [1440, 320]) {
   test(`chat list distinguishes unread replies, progress and internet approval at ${width}px`, async ({ page, context }) => {

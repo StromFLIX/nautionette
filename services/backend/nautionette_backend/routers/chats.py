@@ -11,7 +11,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from .. import chat_images, projects
+from .. import chat_images, project_changes, projects
 from ..agent import (
     agent_job,
     build_history,
@@ -83,6 +83,11 @@ async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) 
 async def get_chat(chat_id: str) -> dict[str, Any]:
     _chat_or_404(chat_id)
     return db.chat_snapshot(chat_id)
+
+
+@router.get("/api/chats/{chat_id}/project-changes")
+def get_project_changes(chat_id: str) -> dict[str, Any]:
+    return project_changes.chat_changes(_chat_or_404(chat_id))
 
 
 @router.patch("/api/chats/{chat_id}/read-state")

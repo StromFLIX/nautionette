@@ -321,6 +321,22 @@ workspaces, not a security boundary between mutually untrusted agents: Git objec
 refs and repository configuration are shared, and committed content may be visible
 to other chats that select the same project.
 
+Selected projects with changes appear in a compact, expandable bar above the chat
+composer. Each project shows added/deleted line totals on the left and its changed-file
+count on the right. Expand it for root-relative paths, file statuses and per-file counts.
+The authenticated `/api/chats/{chat_id}/project-changes` endpoint reads only that chat's
+selected worktrees, locally and without fetching, changing the index or running external
+diff/textconv helpers. The visible chat refreshes every 3 seconds during a turn, every
+15 seconds while idle, and when returning to the tab. Failed reads are shown as unavailable,
+not clean. Ignored files are excluded; binary files and oversized untracked files have
+no numeric line count. Renames count as one file; submodule working-directory edits
+are excluded (changed submodule commit pointers are included).
+
+New worktrees keep their starting revision at `refs/nautionette/chats/<chat-id>`, so
+committed or pushed changes remain in the conversation's totals. Older worktrees without
+that baseline explicitly show **uncommitted changes** relative to their current HEAD.
+The bar is a net diff, not a history of every intermediate edit, and hides clean projects.
+
 To publish a detached commit, choose the target explicitly, for example
 `git push origin HEAD:refs/heads/main`. The agent asks when the target is unclear.
 Concurrent pushes to the same target can be rejected as non-fast-forward; fetch and

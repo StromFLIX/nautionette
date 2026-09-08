@@ -95,6 +95,7 @@ export const api = {
   chats: () => request('/api/chats'),
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
   chat: (id, signal = AbortSignal.timeout(15000)) => request(`/api/chats/${id}`, { signal }),
+  projectChanges: (id, signal) => request(`/api/chats/${encodeURIComponent(id)}/project-changes`, { signal }),
   uploadImage: (id, file) => request(`/api/chats/${id}/images?name=${encodeURIComponent(file.name)}`, {
     method: 'POST', body: file, headers: { 'Content-Type': file.type }, signal: AbortSignal.timeout(60000)
   }),

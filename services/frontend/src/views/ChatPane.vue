@@ -101,6 +101,8 @@
         </div>
         <p v-if="approvalError" class="thread__approval-error" role="alert">{{ approvalError }}</p>
       </section>
+      <ProjectChanges v-if="chat?.project_ids?.length" :key="chatId"
+        :chat-id="chatId" :project-ids="chat.project_ids" :running="streaming" />
       <Composer
         ref="composer"
         v-model="draft"
@@ -130,6 +132,7 @@ import { useQuasar } from 'quasar'
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from 'vue-router'
 import ChatWelcome from '../components/ChatWelcome.vue'
 import Composer from '../components/Composer.vue'
+import ProjectChanges from '../components/ProjectChanges.vue'
 import MessageBubble from '../components/MessageBubble.vue'
 import ChatImage from '../components/ChatImage.vue'
 import { uploadImages } from '../attachments'

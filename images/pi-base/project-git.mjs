@@ -104,6 +104,8 @@ export function prepareProjects(job, {
         revision = git('commit-tree', tree, '-m', 'Initialize project workspace')
       }
       git('worktree', 'add', '--detach', '--lock', '--reason', `Nautionette chat ${job.chat_id}`, '--', worktree, revision)
+      // A stable baseline keeps committed/pushed edits visible for the whole conversation.
+      git('update-ref', `refs/nautionette/chats/${job.chat_id}`, revision)
     }
     const alias = join(projectsRoot, id)
     if (!existsSync(alias)) symlinkSync(worktree, alias, 'dir')

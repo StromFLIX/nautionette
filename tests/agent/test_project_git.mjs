@@ -84,6 +84,9 @@ for (const empty of [false, true]) {
       prepareProjects(second, { projectsRoot: secondRoot, repositoriesRoot: metadataRoot })
       const firstPath = join(firstRoot, selected)
       const secondPath = join(secondRoot, selected)
+      const baselineRef = `refs/nautionette/chats/${first.chat_id}`
+      const baseline = git('--git-dir', metadata, 'rev-parse', baselineRef)
+      assert.equal(baseline, git('-C', firstPath, 'rev-parse', 'HEAD'))
       assert.equal(git('-C', firstPath, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD')
       assert.equal(git('-C', secondPath, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD')
       git('--git-dir', metadata, 'remote', 'set-url', 'origin', remote)
@@ -96,6 +99,8 @@ for (const empty of [false, true]) {
       writeFileSync(join(firstPath, 'unfinished.txt'), 'keep this\n')
       prepareProjects(first, { projectsRoot: firstRoot, repositoriesRoot: metadataRoot })
       assert.equal(git('-C', firstPath, 'rev-parse', 'HEAD'), firstHead)
+      assert.equal(git('--git-dir', metadata, 'rev-parse', baselineRef), baseline)
+      assert.notEqual(baseline, firstHead)
       assert.equal(readFileSync(join(firstPath, 'unfinished.txt'), 'utf8'), 'keep this\n')
       git('-C', firstPath, 'push', 'origin', 'HEAD:refs/heads/main')
       assert.equal(git('--git-dir', remote, 'show', 'main:first.txt'), 'first chat')
