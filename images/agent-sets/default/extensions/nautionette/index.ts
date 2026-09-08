@@ -8,6 +8,7 @@
  *     a tool to the gateway is enough to give the agent a new capability.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { modelApi } from "./model-api.ts";
 
 const GATEWAY = (process.env.AGENTGATEWAY_URL ?? "http://agentgateway:4000").replace(/\/$/, "");
 const MODEL = process.env.AGENT_MODEL ?? "openai/gpt-4o-mini";
@@ -64,12 +65,14 @@ function renderToolResult(result: JsonRpcResult): string {
 }
 
 export default async function (pi: ExtensionAPI) {
+  const api = await modelApi(MODEL, GATEWAY);
+  console.error(`[nautionette] model ${MODEL} uses ${api} through agentgateway`);
   pi.registerProvider(PROVIDER, {
     name: "Nautionette gateway",
     baseUrl: `${GATEWAY}/v1`,
     // agentgateway holds the real provider key; this value only has to exist.
     apiKey: "gateway",
-    api: MODEL.startsWith("copilot/") ? "openai-responses" : "openai-completions",
+    api,
     authHeader: true,
     models: [
       {

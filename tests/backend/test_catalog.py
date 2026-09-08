@@ -114,6 +114,53 @@ def test_building_the_catalog_records_each_model_window(client, backend):
     assert runtime.model_windows == {"meta/llama": 128_000}
 
 
+def test_copilot_catalog_reports_selected_api_and_effective_vision(client, backend):
+    backend.gateway.resources["llm.model"] = {
+        "nautionette-integration-copilot": {
+            "id": "nautionette-integration-copilot",
+            "name": "copilot/*",
+            "provider": "copilot",
+        }
+    }
+    backend.db.set_setting("model_integration:copilot", {})
+    backend.gateway.provider_payloads["copilot"] = {
+        "data": [
+            {
+                "id": "claude",
+                "supported_endpoints": ["/chat/completions"],
+                "capabilities": {"supports": {"vision": True}},
+            },
+            {
+                "id": "blocked",
+                "supported_endpoints": ["/v1/messages"],
+                "capabilities": {"supports": {"vision": True}},
+            },
+            {"id": "unknown", "capabilities": {"supports": {"vision": True}}},
+        ]
+    }
+    for item in backend.gateway.provider_payloads["copilot"]["data"]:
+        item["capabilities"]["type"] = "chat"
+    models = {m["id"]: m for m in client.get("/api/catalog").json()["models"]}
+    assert models["copilot/claude"]["api"] == "openai-completions"
+    assert models["copilot/claude"]["api_source"] == "advertised"
+    assert models["copilot/claude"]["supports_images"] is True
+    assert models["copilot/blocked"]["supports_images"] is False
+    assert "API route" in models["copilot/blocked"]["image_support_reason"]
+    assert models["copilot/unknown"]["supports_images"] is None
+
+
+def test_image_capabilities_are_from_the_winning_integration_only(client, stocked):
+    stocked.gateway.provider_payloads["openai"]["data"][0]["capabilities"] = {"vision": True}
+    stocked.gateway.resources["llm.model"]["override"] = {
+        "id": "override",
+        "name": "openai/gpt-4o",
+        "provider": "other",
+    }
+    models = {m["id"]: m for m in client.get("/api/catalog").json()["models"]}
+    assert models["openai/gpt-4o"]["gateway"] == "other"
+    assert models["openai/gpt-4o"]["supports_images"] is None
+
+
 # ------------------------------------------------------------------ route choice
 
 

@@ -171,9 +171,20 @@ Use **Attach images**, paste a screenshot, or drop images onto the composer. Pre
 expand, and remove attachments before sending; text is optional for image messages.
 PNG, JPEG, GIF, and WebP are supported, with at most **four images per message**,
 **5 MiB per image**, and **25 megapixels per image**. The backend checks image content
-and MIME type; SVG and other file types are rejected. Known text-only models block
-image messages; models with unknown capabilities show a warning rather than silently
-dropping images.
+and MIME type; SVG and other file types are rejected. Known text-only models and
+known-incompatible API routes disable image selection, paste, drop, and sending;
+the backend also rejects image messages (including before the catalog is cached).
+Switching models preserves an attached draft but blocks sending until the images
+are removed or a compatible model is selected. Unknown support is labelled
+**Image support unverified** and remains usable—not mislabelled as text-only.
+
+The model picker reports **Images**, **No images**, or **Images unverified**.
+`/api/catalog` exposes `api`, `api_source`, tri-state `supports_images`, and
+`image_support_reason` for the winning integration/model/API route. Capabilities
+from another integration serving the same model cannot certify that route.
+Copilot vision metadata without advertised endpoints is unverified. A provider
+capability declaration is not an end-to-end image test: HTTP 200 can still hide
+image loss, so no automatic or billable vision probes run during discovery.
 
 Images upload before a message enters the durable outbox. Upload failures keep the
 current draft for retry; successful uploads are reused. Uploading requires connectivity,
@@ -195,6 +206,27 @@ current attachments, subject to the history budget. Older omitted images are mar
 in the prompt. Large agent jobs use a private file copied into the container rather
 than exceeding Linux environment-variable limits. Deploy this feature by rebuilding
 the backend, Docker broker, frontend, and Pi images together.
+
+For Copilot, the catalog reads the model's `supported_endpoints` through agentgateway
+before choosing its wire format. Chat jobs pin that choice as `model_api`; the Pi
+wrapper passes it as `NAUTIONETTE_MODEL_API`, so execution uses the exact API whose
+capabilities were reported. Workflows and older jobs still discover the API in the
+agent. Claude and Gemini use Chat Completions; models advertising Responses (including newer GPT models) use Responses. Sending Claude
+images through the Responses compatibility path can produce a successful HTTP
+response while silently losing the images. If catalog discovery is unavailable,
+GPT-5+ falls back to Responses and other models to Chat Completions. Model/API
+selection is logged without image bytes or credentials.
+
+Regression checks: `node --test tests/agent/test_images.mjs tests/agent/test_provider.ts
+ tests/agent/test_model_api.ts tests/agent/test_image_transport.mjs` (Node 24).
+The transport check needs `pi` installed and runs real Pi RPC against a local fake
+gateway, without internet or model credentials; CI runs it inside the agent image.
+For a live smoke test, send a small solid-color PNG to Copilot Claude and a newer
+GPT model, and verify both identify the color, including on a follow-up turn.
+Deploy these capability and routing fixes together by rebuilding the backend,
+frontend, and Docker broker; the broker rebuilds the changed Pi base and
+agent-set images automatically. Existing agent containers retain their old routing
+until the next turn.
 
 ### Agent runtime limits
 

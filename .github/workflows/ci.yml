@@ -41,6 +41,9 @@ jobs:
       - name: Deployment and snapshot safety tests
         run: uv run pytest tests/test_coolify_release.py tests/test_staging_refresh.py
 
+      - name: Model capability and image API guards
+        run: uv run pytest tests/backend/test_catalog.py tests/backend/test_model_capabilities.py tests/backend/test_chat_images.py
+
       - name: Committed workflows still validate
         run: uv run --package nautionette-workflow-mcp python scripts/check_workflows.py
 
@@ -65,6 +68,12 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Install test browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Chat and image attachment controls
+        run: npx playwright test tests/chat.spec.js --workers=1
 
   images:
     name: Image (${{ matrix.name }})
@@ -107,6 +116,13 @@ jobs:
 
       - name: agent set default
         run: docker build -t nautionette/pi-agent-default:dev images/agent-sets/default
+
+      - name: Image transport uses each model's supported API (offline)
+        run: |
+          docker run --rm --network none --user 10001:10001 \
+            --env HOME=/workspace --tmpfs /workspace:rw,mode=1777 \
+            --volume "$PWD:/source:ro" --entrypoint bash nautionette/pi-agent-default:dev -c \
+            'pi --version && node --test /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_image_transport.mjs'
 
       - name: Development tools work offline as the project user
         run: |

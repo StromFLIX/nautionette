@@ -87,6 +87,7 @@ async def discover_models(instance: str) -> list[dict[str, Any]]:
                 "instance": instance,
                 "context_length": window,
                 "supports_images": image_support(item),
+                "supported_endpoints": item.get("supported_endpoints"),
             }
         )
     return models

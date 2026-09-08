@@ -22,6 +22,7 @@
             {{ option.id === modelValue ? 'radio_button_checked' : 'radio_button_unchecked' }}
           </span>
           <span class="grow truncate">{{ option.name }}</span>
+          <span class="picker__meta" :title="capabilityTitle(option)">{{ imageLabel(option) }}</span>
           <span v-if="option.alias" class="picker__meta">latest</span>
         </button>
       </template>
@@ -50,6 +51,7 @@
               {{ option.id === modelValue ? 'radio_button_checked' : 'radio_button_unchecked' }}
             </span>
             <span class="grow truncate">{{ option.short }}</span>
+            <span class="picker__meta" :title="capabilityTitle(option)">{{ imageLabel(option) }}</span>
             <span v-if="option.alias" class="picker__meta">latest</span>
             <span v-else-if="option.context_length" class="picker__meta">{{ contextLabel(option) }}</span>
           </button>
@@ -136,6 +138,14 @@ function label (provider, list) {
   const branded = list.find((model) => (model.name || '').includes(': '))
   if (branded) return branded.name.split(': ')[0]
   return provider.replace(/[-_]/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function imageLabel (model) {
+  return model.supports_images === true ? 'Images' : model.supports_images === false ? 'No images' : 'Images unverified'
+}
+
+function capabilityTitle (model) {
+  return [model.api, model.image_support_reason || imageLabel(model)].filter(Boolean).join(' · ')
 }
 
 function contextLabel (model) {

@@ -11,7 +11,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from .. import chat_images, project_changes, projects
+from .. import catalog, chat_images, project_changes, projects
 from ..agent import (
     agent_job,
     build_history,
@@ -185,9 +185,13 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     if not text and not attachment_ids:
         raise HTTPException(status_code=400, detail="text or an image is required")
     model_id = chat.get("model") or runtime("default_model")
-    model_info = next((m for m in (cached_catalog() or {}).get("models", []) if m["id"] == model_id), {})
+    # Direct API clients must receive the same capability checks as the UI, even
+    # after a backend restart before anyone has opened the model picker.
+    available = cached_catalog() or await catalog.build()
+    model_info = next((m for m in available.get("models", []) if m["id"] == model_id), {})
     if attachment_ids and model_info.get("supports_images") is False:
-        raise HTTPException(422, "This model is text-only. Choose a vision-capable model to send images.")
+        reason = model_info.get("image_support_reason") or "This model is text-only."
+        raise HTTPException(422, f"{reason} Choose an image-capable model/API route to send images.")
 
     history = build_history(db.list_messages(chat_id), max_chars=history_budget(chat.get("model")))
     message_id = payload.get("message_id") or uuid.uuid4().hex
@@ -239,6 +243,7 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
         project_ids=project_ids,
         attachments=user_message["meta"].get("attachments", []),
         supports_images=model_info.get("supports_images"),
+        model_api=model_info.get("api"),
     )
     if created and project_ids:
         selected_projects = [

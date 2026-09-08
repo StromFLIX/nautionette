@@ -10,8 +10,8 @@
       </div>
     </div>
     <p v-if="imageError" class="composer__notice caption" role="alert">{{ imageError }}</p>
-    <p v-if="attachments.length && imageSupport !== true" class="composer__notice caption" role="status">
-      {{ imageSupport === false ? 'This model is text-only. Choose a vision-capable model or remove the images.' : 'Image support is unknown for this model. A vision-capable model is required.' }}
+    <p v-if="imageSupport !== true" class="composer__notice caption" role="status">
+      {{ imageNotice }}
     </p>
     <textarea
       ref="input"
@@ -27,10 +27,10 @@
     />
 
     <div class="composer__image-picker">
-      <input ref="fileInput" type="file" :accept="IMAGE_TYPES.join(',')" multiple hidden @change="chooseFiles" />
-      <button class="pick" type="button" :disabled="busy" aria-label="Attach images" @click="fileInput?.click()">
+      <input ref="fileInput" type="file" :accept="IMAGE_TYPES.join(',')" :disabled="busy || imageSupport === false" multiple hidden @change="chooseFiles" />
+      <button class="pick" type="button" :disabled="busy || imageSupport === false" :title="imageNotice" aria-label="Attach images" @click="fileInput?.click()">
         <span class="material-icons pick__icon">add_photo_alternate</span>Attach images
-        <q-tooltip>Paste, drop or select images · up to 4, 5 MiB each</q-tooltip>
+        <q-tooltip>{{ imageSupport === true ? 'Paste, drop or select images · up to 4, 5 MiB each' : imageNotice }}</q-tooltip>
       </button>
     </div>
     <div class="composer__bar">
@@ -136,10 +136,16 @@ const input = ref(null)
 const focused = ref(false)
 const fileInput = ref(null)
 const imageError = ref('')
-const imageSupport = computed(() => store.catalog.models?.find((m) => m.id === (props.model || store.catalog.default_model))?.supports_images)
+const selectedModel = computed(() => store.catalog.models?.find((m) => m.id === (props.model || store.catalog.default_model)))
+const imageSupport = computed(() => selectedModel.value?.supports_images)
+const imageNotice = computed(() => {
+  if (imageSupport.value === true) return selectedModel.value?.image_support_reason || 'Image input supported.'
+  if (imageSupport.value === false) return `${selectedModel.value?.image_support_reason || 'Image input is unavailable for this model/API route.'} Choose another model${props.attachments.length ? ' or remove the images' : ''}.`
+  return 'Image support unverified for this model/API route. Images may not be understood.'
+})
 
 function attach (files) {
-  if (props.busy) return
+  if (props.busy || imageSupport.value === false) return
   try {
     emit('update:attachments', addImages(props.attachments, files))
     imageError.value = ''
@@ -303,7 +309,9 @@ defineExpose({ focus: () => input.value?.focus() })
   transition: background var(--transition), color var(--transition);
 }
 
-.pick:hover {
+.pick:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.pick:hover:not(:disabled) {
   background: var(--surface-active);
   color: var(--text);
 }
