@@ -196,6 +196,24 @@ in the prompt. Large agent jobs use a private file copied into the container rat
 than exceeding Linux environment-variable limits. Deploy this feature by rebuilding
 the backend, Docker broker, frontend, and Pi images together.
 
+For Copilot, the agent reads the model's `supported_endpoints` through agentgateway
+before choosing its wire format. Claude and Gemini use Chat Completions; models
+advertising Responses (including newer GPT models) use Responses. Sending Claude
+images through the Responses compatibility path can produce a successful HTTP
+response while silently losing the images. If catalog discovery is unavailable,
+GPT-5+ falls back to Responses and other models to Chat Completions. Model/API
+selection is logged without image bytes or credentials.
+
+Regression checks: `node --test tests/agent/test_images.mjs tests/agent/test_provider.ts
+ tests/agent/test_model_api.ts tests/agent/test_image_transport.mjs` (Node 24).
+The transport check needs `pi` installed and runs real Pi RPC against a local fake
+gateway, without internet or model credentials; CI runs it inside the agent image.
+For a live smoke test, send a small solid-color PNG to Copilot Claude and a newer
+GPT model, and verify both identify the color, including on a follow-up turn.
+Deploy this routing fix by rebuilding the Docker broker; it rebuilds the changed
+agent-set image automatically. Existing agent containers retain their old routing
+until the next turn.
+
 ### Agent runtime limits
 
 Chat turns default to a one-hour wall-clock limit (`AGENT_RUN_TIMEOUT_SECONDS=3600`),
