@@ -133,6 +133,8 @@ for (const width of [1440, 320]) {
     const beta = page.locator('a[href="/chats/beta"]')
     await expect(alpha).toContainText('In progress')
     await expect(alpha).toHaveClass(/row-item--running/)
+    await expect(alpha).toHaveCSS('box-shadow', 'none')
+    await expect(alpha).toHaveCSS('border-left-width', '0px')
     await expect(beta).toContainText('Internet approval needed')
     await expect(beta).not.toHaveClass(/row-item--running/)
     await expect(beta.getByLabel('Unread messages')).toBeVisible()

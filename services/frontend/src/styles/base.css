@@ -592,10 +592,6 @@ pre.code {
   color: #b9cdf5;
 }
 
-.row-item--running {
-  box-shadow: inset 2px 0 var(--accent);
-}
-
 .row-item__activity {
   display: inline-flex;
   align-items: center;
