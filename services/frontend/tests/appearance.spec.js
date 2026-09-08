@@ -30,8 +30,12 @@ for (const theme of THEMES) {
     await expect(page.getByPlaceholder('Search models')).toBeVisible()
     await expect(page.locator('.q-menu')).toHaveCSS('background-color', rgb(tokens['surface-overlay']))
     await page.keyboard.press('Escape')
-    await page.mouse.move(0, 0)
     await expect(page.locator('.q-menu')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Select model', exact: true })).toBeFocused()
+    // Escape restores keyboard focus, which can show the model button's tooltip.
+    // Leave both hover and focus before asserting an unobstructed screenshot.
+    await page.mouse.move(0, 0)
+    await page.getByRole('textbox', { name: 'Message', exact: true }).focus()
     await expect(page.getByRole('tooltip')).toHaveCount(0)
     await page.screenshot({ path: `/tmp/nautionette-theme-${theme.id}-chat.png` })
     expect(state.writes).toEqual([])

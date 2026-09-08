@@ -91,6 +91,30 @@ test('long tooltips fit inside a narrow viewport and dismiss with Escape', async
   await expect(tooltip).toHaveCount(0)
 })
 
+test('model picker restores keyboard focus and clears its tooltip when focus moves away', async ({ page, context }) => {
+  await mockDesign(context)
+  await page.goto('/chats/alpha')
+  const input = page.getByRole('textbox', { name: 'Message', exact: true })
+  const model = page.getByRole('button', { name: 'Select model', exact: true })
+  const tooltip = page.getByRole('tooltip').filter({ hasText: /^Model for this chat$/ })
+  await input.focus()
+  await page.keyboard.press('Tab') // Attach images
+  await page.keyboard.press('Tab') // Select model, without hovering it
+  await expect(model).toBeFocused()
+  await expect(tooltip).toBeVisible()
+  await page.keyboard.press('Enter')
+  await expect(page.getByPlaceholder('Search models')).toBeFocused()
+  await expect(tooltip).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.q-menu')).toHaveCount(0)
+  await expect(model).toBeFocused()
+  await expect(tooltip).toBeVisible()
+  await input.focus()
+  await expect(page.getByRole('tooltip')).toHaveCount(0)
+  await input.fill('Keep typing after closing the picker')
+  await expect(input).toHaveValue('Keep typing after closing the picker')
+})
+
 test('keyboard settings shortcut and workspace reset preserve the selected theme', async ({ page, context }) => {
   const state = await mockDesign(context)
   await page.goto('/chats/alpha')
