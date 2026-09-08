@@ -56,7 +56,8 @@ import NavRail from './components/NavRail.vue'
 import SidePanel from './components/SidePanel.vue'
 import { actions, store } from './store'
 import { auth, isNative, server } from './api'
-import { preferences } from './preferences'
+import { currentTokens, preferences } from './preferences'
+import { syncSystemBars } from './system-bars'
 
 const DEFAULT_WIDTH = 320
 const route = useRoute()
@@ -70,6 +71,13 @@ const serverUrl = ref(server.url)
 const hasSelection = computed(() => Boolean(route.params.id || route.params.name))
 // Settings replaces the list, but keeps the desktop navigation in reach.
 const fullPage = computed(() => route.name === 'settings')
+const mobileMedia = window.matchMedia('(max-width: 900px)')
+const mobile = ref(mobileMedia.matches)
+const updateMobile = event => { mobile.value = event.matches }
+
+watch([() => preferences.theme, currentTokens, hasSelection, fullPage, mobile],
+  ([theme, tokens, detail, full, narrow]) => syncSystemBars(theme, tokens, narrow && !detail && !full),
+  { immediate: true, flush: 'post' })
 
 let stopDrag = () => {}
 function startDrag (event) {
@@ -120,11 +128,13 @@ function connect () {
 watch(() => store.needsToken || store.needsServer, (needed) => { if (needed) gate.value = true })
 
 onMounted(() => {
+  mobileMedia.addEventListener('change', updateMobile)
   actions.connect()
   actions.refreshAll()
   window.addEventListener('keydown', shortcuts)
 })
 onUnmounted(() => {
+  mobileMedia.removeEventListener('change', updateMobile)
   actions.disconnect()
   stopDrag()
   window.removeEventListener('keydown', shortcuts)

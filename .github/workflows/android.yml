@@ -48,12 +48,9 @@ jobs:
       - name: Build the web bundle
         run: npm run build
 
-      # The native project is generated, not committed: it is a pure function of
-      # capacitor.config.json, so there is nothing to drift or to review.
+      # Generate Gradle files, then install the versioned native system-bar bridge.
       - name: Generate the Android project
-        run: |
-          npx cap add android
-          npx cap sync android
+        run: npm run android:add
 
       - name: Assemble
         working-directory: services/frontend/android

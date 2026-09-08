@@ -8,7 +8,9 @@
     "test": "node --test src/*.test.js",
     "test:e2e": "playwright test",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "android:add": "cap add android && npm run android:sync",
+    "android:sync": "cap sync android && node scripts/sync-android.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
