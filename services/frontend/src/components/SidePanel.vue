@@ -26,8 +26,9 @@
         <RouterLink
           class="btn btn--icon side__cog" :to="`/settings/${health === 'degraded' ? 'system' : 'general'}`"
           :title="health === 'degraded' ? 'Settings — something needs attention' : 'Settings'"
+          aria-label="Settings"
         >
-          <span class="material-icons">settings</span>
+          <span class="material-icons" aria-hidden="true">settings</span>
           <span v-if="health !== 'ok'" class="dot side__cog-dot" :class="{ 'dot--bad': health === 'degraded' }" />
         </RouterLink>
       </div>
@@ -376,8 +377,16 @@ function refresh () {
 }
 
 .side__cog {
+  display: none;
   position: relative;
   color: var(--text-muted);
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
+  .side__cog {
+    display: inline-flex;
+  }
 }
 
 .side__cog-dot {

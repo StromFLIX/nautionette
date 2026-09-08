@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
+import runpy
 import tarfile
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -97,6 +99,7 @@ def docker(monkeypatch: pytest.MonkeyPatch) -> FakeDocker:
     monkeypatch.setattr(workers, "WORKER_REPLICAS", 1)
     monkeypatch.setattr(daemon, "client", lambda: fake)
     monkeypatch.setattr(images, "image_state", {"status": "pending", "images": {}, "log": [], "error": None})
+    monkeypatch.setattr(images, "AGENT_IMAGE_REGISTRY_PREFIX", "")
     return fake
 
 
@@ -129,6 +132,22 @@ def test_an_image_is_tagged_by_the_hash_of_what_built_it(agent_images):
     assert first == images.image_tag("default")
     (agent_images / "agent-sets" / "default" / "Dockerfile").write_text("FROM base\nRUN echo new\n")
     assert images.image_tag("default") != first
+
+
+def test_source_fingerprints_preserve_existing_broker_tags(agent_images):
+    base = hashlib.sha256(b"DockerfileFROM scratch\n").hexdigest()[:12]
+    agent = hashlib.sha256(b"DockerfileFROM base\n").hexdigest()[:12]
+    assert images.base_hash() == base
+    assert images.image_tag("default").endswith(hashlib.sha256((agent + base).encode()).hexdigest()[:12])
+
+
+def test_ci_outputs_exactly_the_brokers_source_fingerprints(repo_root, monkeypatch, capsys):
+    monkeypatch.chdir(repo_root)
+    monkeypatch.setattr(images, "AGENT_IMAGES_DIR", str(repo_root / "images"))
+    script = repo_root / "services/docker-broker/nautionette_docker_broker/image_context.py"
+    runpy.run_path(str(script), run_name="__main__")
+    outputs = dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines())
+    assert outputs == {"base": images.base_hash(), "default": images._agent_set_hash("default")}
 
 
 def test_a_change_to_the_base_retags_every_agent_set(agent_images):
@@ -183,6 +202,127 @@ def test_a_pruned_base_alias_is_restored_without_rebuilding(agent_images, docker
     images.reconcile()
     assert config.BASE_IMAGE in docker.tags
     assert docker.built == []
+
+
+@pytest.fixture
+def registry(docker, monkeypatch):
+    remote_tags = []
+    monkeypatch.setattr(images, "AGENT_IMAGE_REGISTRY_PREFIX", "ghcr.io/example/app/pi-")
+
+    def pull(remote):
+        remote_tags.append(remote)
+
+        def tag(repository, version):
+            docker.tags.add(f"{repository}:{version}")
+            return True
+
+        return SimpleNamespace(tag=tag)
+
+    monkeypatch.setattr(docker.images, "pull", pull, raising=False)
+    return remote_tags
+
+
+def test_prebuilt_images_are_pulled_by_source_hash_and_reused(agent_images, docker, registry):
+    images.ensure_images()
+    assert images.snapshot()["status"] == "ready"
+    assert registry == [
+        f"ghcr.io/example/app/pi-base:{images.base_hash()}",
+        f"ghcr.io/example/app/pi-agent-default:{images._agent_set_hash('default')}",
+    ]
+    assert config.BASE_IMAGE in docker.tags
+    assert docker.built == []
+    images.ensure_images()
+    assert len(registry) == 2  # Local images never need a registry round-trip.
+
+
+def test_registry_retags_into_the_staging_namespace(agent_images, docker, registry, monkeypatch):
+    monkeypatch.setattr(images, "IMAGE_PREFIX", "staging/pi-")
+    monkeypatch.setattr(images, "BASE_IMAGE", "staging/pi-base:dev")
+    images.ensure_images()
+    assert images.snapshot()["status"] == "ready"
+    assert all(tag.startswith("staging/pi-") for tag in docker.tags)
+    assert all(tag.startswith("ghcr.io/example/app/pi-") for tag in registry)
+
+
+def test_pruned_image_is_pulled_again_without_rebuilding(agent_images, docker, registry):
+    images.ensure_images()
+    docker.tags.remove(images.image_tag("default"))
+    images.ensure_images()
+    assert images.snapshot()["status"] == "ready"
+    assert len(registry) == 3
+    assert docker.built == []
+
+
+def test_changed_context_pulls_new_version_not_stale_local_image(agent_images, docker, registry):
+    images.ensure_images()
+    old_tag = images.image_tag("default")
+    (agent_images / "agent-sets" / "default" / "Dockerfile").write_text("FROM base\nRUN echo changed\n")
+    images.ensure_images()
+    assert images.image_tag("default") != old_tag
+    assert registry[-1].endswith(images._agent_set_hash("default"))
+    assert len(registry) == 3  # Unchanged base was reused.
+    assert docker.built == []
+
+
+@pytest.mark.parametrize("failure", ["unavailable", "tag-failed", "timeout"])
+def test_registry_failure_falls_back_to_local_build(agent_images, docker, registry, monkeypatch, failure):
+    from docker.errors import DockerException
+    from requests.exceptions import ReadTimeout
+
+    def pull(_remote):
+        if failure == "timeout":
+            raise ReadTimeout("registry request timed out")
+        if failure == "unavailable":
+            raise DockerException("private registry response with credentials")
+        return SimpleNamespace(tag=lambda *_args: False)
+
+    monkeypatch.setattr(docker.images, "pull", pull)
+    images.ensure_images()
+    assert images.snapshot()["status"] == "ready"
+    assert len(docker.built) == 2
+    assert "credentials" not in " ".join(images.snapshot()["log"])
+
+
+def test_registry_and_build_failure_still_fails_health(agent_images, docker, registry, monkeypatch):
+    from docker.errors import DockerException
+
+    def fail(*_args, **_kwargs):
+        raise DockerException("offline")
+
+    monkeypatch.setattr(docker.images, "pull", fail)
+    monkeypatch.setattr(docker.images, "build", fail)
+    images.ensure_images()
+    assert images.snapshot()["status"] == "failed"
+    assert images.snapshot()["error"] == "offline"
+
+
+def test_force_rebuild_bypasses_registry(agent_images, docker, registry):
+    images.ensure_images(force=True)
+    assert len(docker.built) == 2
+    assert registry == []
+
+
+def test_pulled_base_is_used_by_hash_for_local_agent_build(agent_images, docker, registry, monkeypatch):
+    from docker.errors import ImageNotFound
+
+    real_pull = docker.images.pull
+    real_build = docker.images.build
+    build_args = []
+
+    def pull(remote):
+        if "agent-default:" in remote:
+            raise ImageNotFound(remote)
+        return real_pull(remote)
+
+    def build(**kwargs):
+        build_args.append(kwargs["buildargs"])
+        return real_build(**kwargs)
+
+    monkeypatch.setattr(docker.images, "pull", pull)
+    monkeypatch.setattr(docker.images, "build", build)
+    images.ensure_images()
+    assert images.snapshot()["status"] == "ready"
+    assert build_args == [{"BASE_IMAGE": f"{config.IMAGE_PREFIX}base:{images.base_hash()}"}]
 
 
 # --------------------------------------------------------------------- health

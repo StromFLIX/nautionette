@@ -143,6 +143,60 @@ release for an older commit is rejected instead of silently deploying untested c
 Rollback requires deliberately staging/testing that candidate first; never restore
 production databases automatically during a code rollback.
 
+### Faster Pi image startup
+
+CI now builds the Pi base and default agent set as one BuildKit graph with
+persistent GitHub Actions layer caches (`images/agent-images.hcl`). The expensive
+Chromium/OS installation is separate from the Pi npm package, so a Pi version
+bump does not download/install Chromium again. Runtime JS and extensions remain
+in the final, cheap layers.
+
+After the offline image tests pass, **main push/manual CI only** publishes:
+
+- `ghcr.io/stromflix/nautionette/pi-base:<base-context-hash>`
+- `ghcr.io/stromflix/nautionette/pi-agent-default:<agent-and-base-context-hash>`
+
+The publish step uses the job's scoped `GITHUB_TOKEN` (`packages: write`); PRs do
+not log in or publish. Publication must succeed before CI can trigger Deploy.
+Fingerprints use the same stdlib module as the broker, not the commit SHA or
+`latest`: backend/frontend-only changes reuse the same agent images. These are
+source-context tags, not OCI digest pins; protect package write access. Only the
+runner's native Linux/amd64 platform is published for now. Other platforms fall
+back to a native local build. Adding an agent set requires adding its Bake target,
+offline tests and publication step alongside the existing default set.
+
+**One-time rollout:**
+
+1. Merge the changes and wait for a successful main CI image publication. Ensure
+   repository/organization policy permits this job's `packages: write` permission.
+2. For this public repository's non-secret runtime images, make the two GHCR
+   packages public in their package settings if anonymous pulls are desired.
+   New GHCR packages are private by default. Do not make packages public if you
+   have added private code/configuration to the image contexts. Alternatively,
+   keep them private and supply read-only registry auth via a read-only Docker
+   `config.json` mount in the **broker** (the Python Docker client's config, not
+   only a login on the deployment host). Never put registry credentials in agent
+   environment variables or the Compose file.
+3. Set `AGENT_IMAGE_REGISTRY_PREFIX=ghcr.io/stromflix/nautionette/pi-` on staging,
+   redeploy and verify `/api/system` reports `image_status: ready`. Broker logs
+   should say `pulling` / `pulled`, or `already present`, not `building`.
+4. After staging verification, configure the same registry prefix in production
+   and promote the tested commit normally. Keep each stack's `IMAGE_PREFIX` and
+   `BASE_IMAGE` namespaced as before.
+
+The prefix defaults to empty to preserve offline/local installs. With it enabled,
+startup uses **local exact tag → pull exact source tag → local build on failure**.
+Registry failures are visible in the broker logs. A forced `/images/rebuild`
+intentionally bypasses the registry. Source build contexts remain in the broker
+for recovery after pruning or a registry outage. Missing/pruned images are still
+unhealthy until actually ready; this does not weaken the deployment health gate.
+
+The first cold CI build remains expensive. Subsequent CI builds reuse cached
+layers; deployments download missing layers rather than running apt/npm/browser
+installation. This reduces the post-startup degraded window, but is not a promise
+of zero downtime: Coolify's Compose build, worker draining and Temporal startup
+still take time. Verify a cold-pull staging deployment before measuring the gain.
+
 ## 3. Refresh staging data explicitly
 
 **Actions → Refresh staging data → Run workflow → branch main**:

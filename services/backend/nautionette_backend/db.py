@@ -139,6 +139,9 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN last_read_message_id TEXT",
     "ALTER TABLE chats ADD COLUMN marked_unread INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN read_revision INTEGER NOT NULL DEFAULT 0",
+    # Legacy titles have no provenance: protect them rather than guessing which were manual.
+    "ALTER TABLE chats ADD COLUMN title_state TEXT NOT NULL DEFAULT 'manual'",
+    "ALTER TABLE chats ADD COLUMN title_revision INTEGER NOT NULL DEFAULT 0",
 )
 
 _EDITABLE_CHAT_COLUMNS = ("title", "agent_set", "model", "reasoning_effort", "tools", "project_ids")
@@ -215,9 +218,19 @@ class Database:
         now = time.time()
         chat_id = uuid.uuid4().hex[:12]
         self.execute(
-            "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort, created_at, updated_at)"
-            " VALUES (?,?,?,?,?,?,?,?)",
-            (chat_id, title, agent_set, model, _dump_tools(tools), reasoning_effort, now, now),
+            "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort, created_at, updated_at, title_state)"
+            " VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                chat_id,
+                title,
+                agent_set,
+                model,
+                _dump_tools(tools),
+                reasoning_effort,
+                now,
+                now,
+                "provisional" if title in {"New chat", ""} else "manual",
+            ),
         )
         return self.get_chat(chat_id)  # type: ignore[return-value]
 
@@ -230,6 +243,9 @@ class Database:
         if allowed:
             # Column names come from the tuple above, never from the caller.
             assignments = ", ".join(f"{key} = ?" for key in allowed)
+            if "title" in allowed:
+                # Even renaming to the same text invalidates an in-flight title request.
+                assignments += ", title_state = 'manual', title_revision = title_revision + 1"
             self.execute(
                 f"UPDATE chats SET {assignments} WHERE id = ?",  # noqa: S608
                 (*allowed.values(), chat_id),

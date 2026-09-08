@@ -19,7 +19,7 @@ from ..agent import (
     summarise_for_title,
 )
 from ..background import spawn
-from ..chat_titles import rewrite_chat_title
+from ..chat_titles import rewrite_chat_title, title_context, title_messages
 from ..clients import broker
 from ..config import settings
 from ..conversations import chat_snapshots, launch_next, run_turn, turn_events
@@ -70,6 +70,8 @@ async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, A
         tools=payload.get("tools"),
         reasoning_effort=effort,
     )
+    if payload.get("title"):
+        chat = db.update_chat(chat["id"], {"title": chat["title"]}) or chat
     if project_ids:
         chat = db.update_chat(chat["id"], {"project_ids": project_ids}) or chat
     bus.publish("chat.created", {"chat_id": chat["id"], "title": chat["title"]})
@@ -101,6 +103,27 @@ async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) 
     chat = db.update_chat(chat_id, fields)
     bus.publish("chat.updated", {"chat_id": chat_id})
     return chat  # type: ignore[return-value]
+
+
+@router.post("/api/chats/{chat_id}/title/regenerate")
+async def regenerate_title(chat_id: str) -> dict[str, Any]:
+    chat = _chat_or_404(chat_id)
+    messages = title_messages(chat_id)
+    if not messages:
+        raise HTTPException(400, "This chat has no conversation to generate a title from")
+    try:
+        changed = await rewrite_chat_title(
+            chat_id,
+            title_context(messages),
+            chat.get("model") or runtime("default_model"),
+            chat["title"],
+            explicit=True,
+        )
+    except Exception as exc:
+        raise HTTPException(502, "Could not regenerate the title; try again shortly") from exc
+    if not changed:
+        raise HTTPException(409, "The title changed while generating; your newer title was kept")
+    return _chat_or_404(chat_id)
 
 
 @router.get("/api/chats/{chat_id}")
@@ -241,13 +264,17 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="This chat is still answering; retry shortly.") from exc
-    if created and chat["title"] in {"New chat", ""} and not history:
+    if created and chat["title_state"] == "provisional" and chat["title"] in {"New chat", ""} and not history:
         preview = summarise_for_title(text or "Image attachment")
-        db.execute("UPDATE chats SET title = ? WHERE id = ?", (preview, chat_id))
-        spawn(
-            rewrite_chat_title(chat_id, text or "Image attachment", model_id, preview),
-            name=f"chat-title-{chat_id}",
-        )
+        changed = db.execute(
+            "UPDATE chats SET title = ? WHERE id = ? AND title_revision = ? AND title_state = 'provisional'",
+            (preview, chat_id, chat["title_revision"]),
+        ).rowcount
+        if changed:
+            spawn(
+                rewrite_chat_title(chat_id, (text or "Image attachment")[:12000], model_id, preview),
+                name=f"chat-title-{chat_id}",
+            )
 
     job = agent_job(
         prompt=text,

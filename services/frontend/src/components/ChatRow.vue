@@ -9,7 +9,13 @@
         'row-item--unread': chat.unread
       }"
     >
-      <div class="avatar" :style="avatarStyle(chat.id)">{{ initials(chat.title) }}</div>
+      <div class="avatar" :style="avatarStyle(chat.id)">
+        {{ initials(chat.title) }}
+        <svg v-if="chat.answering && !needsInternet" class="avatar__spinner" viewBox="0 0 46 46" aria-hidden="true" focusable="false">
+          <circle class="avatar__spinner-track" cx="23" cy="23" r="22" />
+          <circle class="avatar__spinner-arc" cx="23" cy="23" r="22" pathLength="100" />
+        </svg>
+      </div>
       <div class="grow">
         <div class="row">
           <span class="row-item__title grow truncate">{{ chat.title }}</span>

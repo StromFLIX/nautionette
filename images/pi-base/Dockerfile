@@ -20,12 +20,15 @@ RUN uv python install --default 3.13 \
 # Match services/frontend/package-lock.json. Preinstall both Chromium and its OS
 # libraries/fonts so browser tests need no privileged apt install at runtime.
 ARG PLAYWRIGHT_VERSION=1.63.0
-RUN npm install -g --ignore-scripts \
-      @earendil-works/pi-coding-agent@0.84.4 playwright@${PLAYWRIGHT_VERSION} \
+RUN npm install -g --ignore-scripts playwright@${PLAYWRIGHT_VERSION} \
   && playwright install --with-deps chromium \
   && chmod -R a+rX /opt/python /opt/playwright-browsers \
   && npm cache clean --force \
   && rm -rf /var/lib/apt/lists/*
+
+# Pi updates must not invalidate the much larger Chromium/OS dependency layer.
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.4 \
+  && npm cache clean --force
 
 # Model traffic goes to agentgateway's OpenAI-compatible endpoint, so no
 # provider key ever enters this container.
