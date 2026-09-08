@@ -6,6 +6,8 @@ import os
 
 AGENT_IMAGES_DIR = os.environ.get("AGENT_IMAGES_DIR", "/agent-images")
 IMAGE_PREFIX = os.environ.get("IMAGE_PREFIX", "nautionette/pi-")
+# Opt in after publishing the CI images and enabling registry read access.
+AGENT_IMAGE_REGISTRY_PREFIX = os.environ.get("AGENT_IMAGE_REGISTRY_PREFIX", "").strip()
 BASE_IMAGE = os.environ.get("BASE_IMAGE", "nautionette/pi-base:dev")
 TARGET_NETWORK = os.environ.get("TARGET_NETWORK", "nautionette-internal")
 AGENT_NETWORK = os.environ.get("AGENT_NETWORK", "nautionette-agents")

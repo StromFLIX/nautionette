@@ -4,6 +4,14 @@
       <div class="row">
         <h1 class="side__title grow">{{ heading }}</h1>
         <button
+          v-if="section === 'chats'" type="button" class="btn btn--sm"
+          :aria-expanded="showGroupControls" aria-controls="chat-group-controls"
+          @click="showGroupControls = !showGroupControls"
+        >
+          Group
+          <span class="material-icons" aria-hidden="true">{{ showGroupControls ? 'expand_less' : 'expand_more' }}</span>
+        </button>
+        <button
           v-if="section === 'chats'" class="btn btn--icon" title="New chat"
           @click="startChat"
         >
@@ -18,8 +26,9 @@
         <RouterLink
           class="btn btn--icon side__cog" :to="`/settings/${health === 'degraded' ? 'system' : 'general'}`"
           :title="health === 'degraded' ? 'Settings — something needs attention' : 'Settings'"
+          aria-label="Settings"
         >
-          <span class="material-icons">settings</span>
+          <span class="material-icons" aria-hidden="true">settings</span>
           <span v-if="health !== 'ok'" class="dot side__cog-dot" :class="{ 'dot--bad': health === 'degraded' }" />
         </RouterLink>
       </div>
@@ -30,7 +39,7 @@
           <span class="material-icons" style="font-size: 16px">close</span>
         </button>
       </div>
-      <div v-if="section === 'chats'" class="side__controls">
+      <div v-if="section === 'chats'" v-show="showGroupControls" id="chat-group-controls" class="side__controls">
         <div class="side__control">
           <span class="side__control-label">Group</span>
           <div class="seg" role="group" aria-label="Group chats by">
@@ -211,6 +220,7 @@ function storedRange () {
   return activeOptions.some((opt) => opt.value === saved) ? saved : 24 * 60
 }
 
+const showGroupControls = ref(false)
 const groupBy = ref(storedGroupBy())
 const activeMinutes = ref(storedRange())
 const showOlder = ref(false)
@@ -367,8 +377,16 @@ function refresh () {
 }
 
 .side__cog {
+  display: none;
   position: relative;
   color: var(--text-muted);
+  text-decoration: none;
+}
+
+@media (max-width: 900px) {
+  .side__cog {
+    display: inline-flex;
+  }
 }
 
 .side__cog-dot {

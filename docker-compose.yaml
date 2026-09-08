@@ -102,6 +102,7 @@ services:
       WORKFLOWS_VOLUME: ${BROKER_WORKFLOWS_VOLUME:-${STACK_NAMESPACE:-nautionette}-workflows}
       IMAGE_PREFIX: ${STACK_NAMESPACE:-nautionette}/pi-
       BASE_IMAGE: ${STACK_NAMESPACE:-nautionette}/pi-base:dev
+      AGENT_IMAGE_REGISTRY_PREFIX: ${AGENT_IMAGE_REGISTRY_PREFIX:-}
       WORKER_SERVICE_LABEL: com.docker.compose.service=worker
       WORKER_IMAGE: ${STACK_NAMESPACE:-nautionette}/worker:dev
       WORKER_REPLICAS: ${WORKER_REPLICAS:-1}
@@ -257,7 +258,8 @@ services:
     <<: *logging
 
   # ------------------------------------- agent images: built here, never run here
-  # The broker builds these at startup and runs one container per agent call.
+  # The broker pulls prebuilt versions when configured, or builds locally, and
+  # runs one container per agent call.
   #   docker compose --profile images build
 
   pi-base:
