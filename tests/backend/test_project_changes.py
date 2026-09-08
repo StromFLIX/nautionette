@@ -174,6 +174,77 @@ def test_renamed_files_count_once_with_relative_paths(client, workspace):
     assert result["files"][0]["status"] == "renamed"
 
 
+@pytest.fixture
+def published_workspace(workspace, tmp_path):
+    create, git = workspace
+    chat, project_id, path = create()
+    checkout = projects.checkout(project_id)
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "init", "--bare", str(remote))
+    git(checkout, "remote", "add", "origin", str(remote))
+    git(checkout, "push", "origin", "HEAD:refs/heads/main")
+    name = (path / ".git").read_text().strip().split("/")[-1]
+
+    def run(*args):
+        return git(path, f"--git-dir={checkout / '.git/worktrees' / name}", f"--work-tree={path}", *args)
+
+    return chat, path, run, git, checkout
+
+
+@pytest.mark.parametrize("branch", ["main", "feature/chat-changes"])
+def test_push_clears_committed_changes_but_keeps_dirty_files(client, published_workspace, branch):
+    chat, path, git, _, _ = published_workspace
+    endpoint = f"/api/chats/{chat['id']}/project-changes"
+    (path / "base.txt").write_text("published\n")
+    git("add", ".")
+    git("commit", "-m", "Publish this")
+    assert client.get(endpoint).json()["projects"][0]["file_count"] == 1
+    git("push", "origin", f"HEAD:refs/heads/{branch}")
+    clean = client.get(endpoint).json()["projects"][0]
+    assert clean["error"] is None
+    assert clean["file_count"] == clean["additions"] == clean["deletions"] == 0
+    (path / "base.txt").write_text("published\nnot yet staged\n")
+    (path / "staged.txt").write_text("staged\n")
+    git("add", "staged.txt")
+    (path / "new.txt").write_text("untracked\n")
+    pending = client.get(endpoint).json()["projects"][0]
+    assert (pending["file_count"], pending["additions"], pending["deletions"]) == (3, 3, 0)
+
+
+def test_partial_push_only_removes_published_changes(client, published_workspace):
+    chat, path, git, _, _ = published_workspace
+    endpoint = f"/api/chats/{chat['id']}/project-changes"
+    (path / "published.txt").write_text("published\n")
+    git("add", ".")
+    git("commit", "-m", "First")
+    (path / "pending.txt").write_text("pending\n")
+    git("add", ".")
+    git("commit", "-m", "Second")
+    git("push", "origin", "HEAD~1:refs/heads/main")
+    pending = client.get(endpoint).json()["projects"][0]
+    assert pending["error"] is None
+    assert [file["path"] for file in pending["files"]] == ["pending.txt"]
+    git("push", "origin", "HEAD:refs/heads/main")
+    assert client.get(endpoint).json()["projects"][0]["file_count"] == 0
+
+
+@pytest.mark.parametrize("diverged", [False, True])
+def test_remote_ahead_or_diverged_does_not_appear_as_chat_changes(client, published_workspace, diverged):
+    chat, path, git, repository_git, checkout = published_workspace
+    endpoint = f"/api/chats/{chat['id']}/project-changes"
+    (checkout / "other-chat.txt").write_text("unrelated\n")
+    repository_git(checkout, "add", ".")
+    repository_git(checkout, "commit", "-m", "Other work")
+    repository_git(checkout, "push", "origin", "HEAD:refs/heads/main")
+    if diverged:
+        (path / "my-change.txt").write_text("pending\n")
+        git("add", ".")
+        git("commit", "-m", "My work")
+    pending = client.get(endpoint).json()["projects"][0]
+    assert pending["error"] is None
+    assert [file["path"] for file in pending["files"]] == (["my-change.txt"] if diverged else [])
+
+
 def test_git_failure_is_not_reported_as_clean(client, workspace, monkeypatch):
     create, _ = workspace
     chat, _, _ = create()
