@@ -1,0 +1,13 @@
+[
+  {"model": "copilot/claude-sonnet-5", "endpoints": ["/chat/completions"], "api": "openai-completions", "images": true},
+  {"model": "copilot/gpt-5", "endpoints": ["/v1/chat/completions"], "api": "openai-completions", "images": true},
+  {"model": "copilot/claude-sonnet-5", "endpoints": ["/v1/responses"], "api": "openai-responses", "images": true},
+  {"model": "copilot/gpt-6-astra", "endpoints": ["/responses", "/chat/completions"], "api": "openai-responses", "images": true},
+  {"model": "copilot/claude-sonnet-5", "endpoints": ["/v1/messages"], "api": "openai-completions", "images": false},
+  {"model": "copilot/gpt-5", "endpoints": ["/v1/messages"], "api": "openai-responses", "images": false},
+  {"model": "copilot/claude-sonnet-5", "endpoints": null, "api": "openai-completions", "images": null},
+  {"model": "copilot/gpt-5.4-mini", "endpoints": [], "api": "openai-responses", "images": null},
+  {"model": "copilot/gemini-3.5-flash", "endpoints": null, "api": "openai-completions", "images": null},
+  {"model": "openai/gpt-4o", "endpoints": null, "api": "openai-completions", "images": true},
+  {"model": "anthropic/claude-sonnet-4", "endpoints": null, "api": "openai-completions", "images": true}
+]

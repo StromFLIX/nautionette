@@ -152,6 +152,7 @@ async function main() {
       ...projectEnvironment(job),
       AGENT_MODEL: model,
       NAUTIONETTE_MODEL_IMAGES: job.supports_images === false ? "false" : "true",
+      NAUTIONETTE_MODEL_API: job.model_api || "",
       NAUTIONETTE_MODE: mode,
       NAUTIONETTE_INTERNET_STATUS: job.chat_id ? (job.internet_status || "blocked") : "",
       // Empty means "every federated tool"; a list narrows the bridge.

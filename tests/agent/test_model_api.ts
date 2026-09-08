@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
+
+const cases = JSON.parse(readFileSync(new URL('./model_api_cases.json', import.meta.url), 'utf8'));
 import { fallbackModelApi, modelApi } from "../../images/agent-sets/default/extensions/nautionette/model-api.ts";
 
 for (const [model, expected] of [
@@ -59,6 +62,34 @@ for (const failure of ["http", "network", "json", "timeout"]) {
     assert.equal(await modelApi("copilot/gpt-6-astra", "http://gateway"), "openai-responses");
     assert.equal(warnings.length, 2);
     assert.ok(warnings.every((message) => !message.includes("sensitive")));
+  });
+}
+
+for (const entry of cases) {
+  test(`shared backend/agent API policy: ${JSON.stringify(entry)}`, async (t) => {
+    t.mock.method(globalThis, "fetch", async () => Response.json({ data: [
+      { id: entry.model.slice(8), supported_endpoints: entry.endpoints }
+    ] }));
+    if (entry.images === false) {
+      await assert.rejects(modelApi(entry.model, "http://gateway"), /No supported OpenAI-compatible API/);
+    } else {
+      assert.equal(await modelApi(entry.model, "http://gateway"), entry.api);
+    }
+  });
+}
+
+for (const api of ['openai-completions', 'openai-responses', 'invalid']) {
+  test(`backend selection is pinned, not rediscovered: ${api}`, async (t) => {
+    t.mock.method(globalThis, 'fetch', () => { throw new Error('must not fetch'); });
+    const previous = process.env.NAUTIONETTE_MODEL_API;
+    try {
+      process.env.NAUTIONETTE_MODEL_API = api;
+      if (api === 'invalid') await assert.rejects(modelApi('copilot/gpt-5', 'http://gateway'), /Invalid selected/);
+      else assert.equal(await modelApi('copilot/gpt-5', 'http://gateway'), api);
+    } finally {
+      if (previous === undefined) delete process.env.NAUTIONETTE_MODEL_API;
+      else process.env.NAUTIONETTE_MODEL_API = previous;
+    }
   });
 }
 

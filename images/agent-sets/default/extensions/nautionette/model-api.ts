@@ -10,6 +10,13 @@ export function fallbackModelApi(model: string): ModelApi {
 }
 
 export async function modelApi(model: string, gateway: string): Promise<ModelApi> {
+  // Chat jobs pin the API whose capabilities the backend checked. Workflows and
+  // older jobs still discover it below. Never silently substitute a different API.
+  const selected = process.env.NAUTIONETTE_MODEL_API;
+  if (selected) {
+    if (selected === "openai-completions" || selected === "openai-responses") return selected;
+    throw new Error("Invalid selected model API");
+  }
   if (!model.startsWith("copilot/")) return "openai-completions";
 
   let endpoints: unknown;

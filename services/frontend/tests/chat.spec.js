@@ -44,6 +44,10 @@ async function mockChats (context, state) {
     if (match) {
       const [, chatId, action] = match
       const data = refreshReadState(state.chats[chatId])
+      if (!action && method === 'PATCH') {
+        Object.assign(data.chat, route.request().postDataJSON())
+        return route.fulfill({ json: data.chat })
+      }
       if (action === 'read-state' && method === 'PATCH') {
         if (state.readFailure) return route.fulfill({ status: 503, json: { detail: 'Read status unavailable' } })
         const payload = route.request().postDataJSON()
@@ -273,7 +277,7 @@ test('cached chats survive offline navigation and reload while replies queue beh
   await expect(page.locator('.thread__body')).toContainText('Last known progress')
   await page.locator('textarea').fill('Continue after reconnect')
   await page.locator('.composer__send').click()
-  await expect(page.getByRole('status')).toContainText('Sending')
+  await expect(page.locator('.msg__delivery')).toContainText('Sending')
   await page.reload()
   await expect(page.locator('.thread__body')).toContainText('Saved alpha answer')
   await expect(page.locator('.msg--user')).toContainText('Continue after reconnect')
@@ -315,7 +319,7 @@ test('an uncached offline chat shows a connection state and accepts queued messa
   state.disconnected = true
   await mockChats(context, state)
   await page.goto('/chats/alpha')
-  await expect(page.getByRole('status')).toContainText('Waiting for connection')
+  await expect(page.locator('.thread__body').getByRole('status')).toContainText('Waiting for connection')
   await page.locator('textarea').fill('Queue without history')
   await page.locator('.composer__send').click()
   await expect(page.locator('.msg--user')).toContainText('Queue without history')
@@ -369,16 +373,16 @@ test('offline messages show Sending, survive reload, and retry with the original
   await page.goto('/chats/alpha')
   await page.locator('textarea').fill('send after reconnect')
   await page.locator('.composer__send').click()
-  await expect(page.getByRole('status')).toContainText('Sending')
+  await expect(page.locator('.msg__delivery')).toContainText('Sending')
   await expect.poll(() => state.attempts.length).toBeGreaterThan(0)
   const messageId = state.attempts[0]
   await page.screenshot({ path: '/tmp/nautionette-chat-sending-mobile.png' })
-  const status = await page.getByRole('status').boundingBox()
+  const status = await page.locator('.msg__delivery').boundingBox()
   expect(status.x).toBeGreaterThanOrEqual(0)
   expect(status.x + status.width).toBeLessThanOrEqual(320)
   await page.reload()
   await expect(page.locator('.msg--user')).toContainText('send after reconnect')
-  await expect(page.getByRole('status')).toContainText('Sending')
+  await expect(page.locator('.msg__delivery')).toContainText('Sending')
   state.offline = false
   await expect(page.locator('.msg--assistant')).toContainText('Working on send after reconnect', { timeout: 10000 })
   await expect(page.locator('.msg--user')).toHaveCount(1)
@@ -395,7 +399,7 @@ test('rejected messages expose retry and discard controls', async ({ page, conte
   await page.goto('/chats/alpha')
   await page.locator('textarea').fill('retry me')
   await page.locator('.composer__send').click()
-  await expect(page.getByRole('status')).toContainText('Not sent')
+  await expect(page.locator('.msg__delivery')).toContainText('Not sent')
   await expect(page.getByRole('button', { name: 'Discard message' })).toBeVisible()
   state.reject = false
   await page.getByRole('button', { name: 'Retry message' }).click()
@@ -544,9 +548,9 @@ for (const width of [1440, 320]) {
   })
 }
 
-test('paste and drop images, remove previews, and block known text-only models', async ({ page, context }) => {
+test('paste and drop supported images, remove previews, and validate formats', async ({ page, context }) => {
   const state = initial()
-  state.models = [{ id: 'test/model', supports_images: false }]
+  state.models = [{ id: 'test/model', supports_images: true }]
   await mockChats(context, state)
   await page.goto('/chats/alpha')
   for (const type of ['paste', 'drop']) {
@@ -560,8 +564,7 @@ test('paste and drop images, remove previews, and block known text-only models',
     }, { type, bytes: [...png] })
   }
   await expect(page.locator('.composer img')).toHaveCount(2)
-  await expect(page.locator('.composer')).toContainText('This model is text-only')
-  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled()
   await page.getByRole('button', { name: 'Remove paste.png' }).click()
   await page.getByRole('button', { name: 'Remove drop.png' }).click()
   await page.locator('textarea').fill('Text still works')
@@ -569,6 +572,72 @@ test('paste and drop images, remove previews, and block known text-only models',
   await page.locator('input[type=file]').setInputFiles({ name: 'script.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') })
   await expect(page.locator('.composer [role=alert]')).toContainText('PNG, JPEG, GIF or WebP')
   expect(state.uploads).toEqual([])
+})
+
+for (const reason of ['The provider marks this model as text-only.', 'No compatible image API route.']) {
+  test(`unsupported images block file selection, paste and drop: ${reason}`, async ({ page, context }) => {
+    const state = initial()
+    state.models = [{ id: 'test/model', supports_images: false, image_support_reason: reason }]
+    await mockChats(context, state)
+    await page.goto('/chats/alpha')
+    await expect(page.getByRole('button', { name: 'Attach images' })).toBeDisabled()
+    await expect(page.locator('input[type=file]')).toBeDisabled()
+    await expect(page.locator('.composer [role=status]')).toContainText(reason)
+    for (const type of ['paste', 'drop', 'change']) {
+      await page.locator(type === 'change' ? 'input[type=file]' : 'textarea').evaluate((el, { type, bytes }) => {
+        const transfer = new DataTransfer()
+        transfer.items.add(new File([new Uint8Array(bytes)], 'blocked.png', { type: 'image/png' }))
+        if (type === 'change') {
+          el.files = transfer.files
+          el.dispatchEvent(new Event('change', { bubbles: true }))
+        } else {
+          el.dispatchEvent(type === 'paste'
+            ? new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true })
+            : new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }))
+        }
+      }, { type, bytes: [...png] })
+    }
+    await expect(page.locator('.composer img')).toHaveCount(0)
+    await page.locator('textarea').fill('Text still works')
+    await page.getByRole('button', { name: 'Send message', exact: true }).click()
+    await expect(page.locator('.msg--user')).toContainText('Text still works')
+    expect(state.uploads).toEqual([])
+  })
+}
+
+test('unknown image support is labelled unverified and remains usable', async ({ page, context }) => {
+  const state = initial()
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await expect(page.locator('.composer [role=status]')).toContainText('Image support unverified')
+  await expect(page.getByRole('button', { name: 'Attach images' })).toBeEnabled()
+  await page.locator('input[type=file]').setInputFiles(imageFile)
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(page.locator('.msg--user img')).toBeVisible()
+})
+
+test('switching to an unsupported route preserves drafts but blocks sending images', async ({ page, context }) => {
+  const state = initial()
+  state.models = [
+    { id: 'test/model', name: 'Vision', supports_images: true },
+    { id: 'test/blocked', name: 'Blocked route', supports_images: false, api: 'openai-completions', image_support_reason: 'No compatible image API route.' }
+  ]
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await page.locator('input[type=file]').setInputFiles(imageFile)
+  await page.locator('textarea').fill('Keep this draft')
+  await page.locator('.composer .pick').filter({ hasText: 'memory' }).click()
+  await page.getByPlaceholder('Search models').fill('Blocked route')
+  await expect(page.locator('.picker__row').filter({ hasText: 'Blocked route' })).toContainText('No images')
+  await page.getByPlaceholder('Search models').press('Enter')
+  await page.locator('textarea').click()
+  await expect(page.locator('.composer img')).toHaveCount(1)
+  await expect(page.locator('textarea')).toHaveValue('Keep this draft')
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled()
+  await page.locator('textarea').press('Enter')
+  expect(state.payloads).toEqual([])
+  await page.getByRole('button', { name: 'Remove screenshot.png' }).click()
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled()
 })
 
 test('failed image uploads preserve the draft and queued images retain metadata across retries', async ({ page, context }) => {

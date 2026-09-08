@@ -147,7 +147,10 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         for message in job["history"]:
             attachments = message.pop("attachments", [])
             if attachments and job.get("supports_images") is False:
-                message["content"] += f"\n[{len(attachments)} image(s) omitted for this text-only model]"
+                message["content"] += (
+                    f"\n[{len(attachments)} image(s) omitted: "
+                    "image input unavailable for this model/API route]"
+                )
             elif attachments:
                 message["images"] = chat_images.load_images(chat_id, attachments)
         chat = db.get_chat(chat_id)

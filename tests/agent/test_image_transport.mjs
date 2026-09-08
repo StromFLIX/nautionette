@@ -16,17 +16,21 @@ const images = [
   { type: 'image', mimeType: 'image/gif', data: 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }
 ]
 
-for (const [model, endpoint] of [
+for (const [model, endpoint, pinnedApi] of [
   ['copilot/claude-sonnet-5', '/chat/completions'],
-  ['copilot/gpt-6-astra', '/responses']
+  ['copilot/gpt-6-astra', '/responses'],
+  ['copilot/gpt-5', '/chat/completions', 'openai-completions'],
+  ['copilot/claude-sonnet-5', '/responses', 'openai-responses']
 ]) {
-  test(`real Pi preserves images on the advertised ${model} endpoint`, { skip: !piAvailable, timeout: 30000 }, async () => {
+  test(`real Pi preserves images on the ${pinnedApi ? 'pinned' : 'advertised'} ${model} endpoint`, { skip: !piAvailable, timeout: 30000 }, async () => {
     const requests = []
+    let catalogRequests = 0
     const server = createServer(async (req, res) => {
       let raw = ''
       for await (const chunk of req) raw += chunk
       const body = raw ? JSON.parse(raw) : {}
       if (req.url.endsWith('/models')) {
+        catalogRequests++
         res.setHeader('content-type', 'application/json')
         res.end(JSON.stringify({ data: [{ id: model.slice(8), supported_endpoints: [endpoint] }] }))
         return
@@ -69,7 +73,7 @@ for (const [model, endpoint] of [
       ], {
         cwd: dir,
         env: { ...process.env, PI_CODING_AGENT_DIR: dir, PI_OFFLINE: '1', PI_TELEMETRY: '0',
-          AGENTGATEWAY_URL: gateway, MCP_URL: `${gateway}/mcp`, AGENT_MODEL: model, NAUTIONETTE_MODEL_IMAGES: 'true' },
+          AGENTGATEWAY_URL: gateway, MCP_URL: `${gateway}/mcp`, AGENT_MODEL: model, NAUTIONETTE_MODEL_IMAGES: 'true', NAUTIONETTE_MODEL_API: pinnedApi || '' },
         stdio: ['pipe', 'pipe', 'pipe']
       })
       let stderr = '', buffer = '', answer = ''
@@ -97,6 +101,7 @@ for (const [model, endpoint] of [
       await settled
       assert.equal(answer, 'Seen')
       assert.equal(requests.length, 1)
+      assert.equal(catalogRequests, pinnedApi ? 0 : 1)
       assert.equal(requests[0].path, `/v1${endpoint}`)
       const body = requests[0].body
       assert.equal(body.model, model)

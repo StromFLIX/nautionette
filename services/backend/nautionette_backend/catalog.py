@@ -20,6 +20,7 @@ from .events import bus
 from .gateway_config import attempt
 from .integrations import configured_instances, discover_models, ensure_defaults, instance_label
 from .integrations.registry import RESOURCE_PREFIX
+from .model_capabilities import model_capabilities
 from .runtime import cache_catalog, cached_catalog, context_hints, model_windows, runtime
 
 EMPTY_CONFIG: dict[str, Any] = {
@@ -54,6 +55,11 @@ async def model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
     listed = await attempt(gateway.models(), [])
     instances = configured_instances(config)
     discoveries = await asyncio.gather(*(attempt(discover_models(instance), []) for instance in instances))
+    # Metadata from a losing integration must not certify the winning route.
+    by_instance = {
+        instance: {m["id"]: m for m in models}
+        for instance, models in zip(instances, discoveries, strict=True)
+    }
     merged: dict[str, dict[str, Any]] = {}
     for model in [*({"id": item["id"]} for item in listed), *(m for d in discoveries for m in d)]:
         merged.setdefault(model["id"], {}).update(model)
@@ -75,7 +81,7 @@ async def model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
                 "gateway": (instance_label(serving) if serving else str(route.get("provider") or "gateway")),
                 "integration": serving or None,
                 "context_length": model.get("context_length"),
-                "supports_images": model.get("supports_images"),
+                **model_capabilities(model["id"], by_instance.get(serving, {}).get(model["id"], {})),
                 "alias": alias,
             }
         )

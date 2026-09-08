@@ -134,6 +134,54 @@ def test_text_only_model_rejects_images_without_losing_upload(client, backend):
     )
 
 
+def test_cold_catalog_still_rejects_known_unsupported_route(client, backend, monkeypatch):
+    from nautionette_backend import catalog
+
+    runtime.forget_catalog()
+
+    async def build():
+        return {
+            "models": [
+                {
+                    "id": "vision/bad-route",
+                    "supports_images": False,
+                    "image_support_reason": "No compatible image API route.",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(catalog, "build", build)
+    chat_id = client.post("/api/chats", json={"model": "vision/bad-route"}).json()["id"]
+    image = chat_images.store_image(chat_id, picture(), "image/png", "image")
+    result = client.post(f"/api/chats/{chat_id}/messages", json={"attachment_ids": [image["id"]]})
+    assert result.status_code == 422
+    assert "API route" in result.text and "text-only" not in result.text
+    assert backend.db.list_messages(chat_id) == []
+    assert (
+        backend.db.one("SELECT message_id FROM chat_images WHERE id = ?", (image["id"],))["message_id"]
+        is None
+    )
+
+
+@pytest.mark.parametrize("support", [True, None])
+async def test_image_job_pins_catalog_api_and_allows_unknown_capabilities(backend, support):
+    runtime.cache_catalog(
+        {"models": [{"id": "copilot/gpt-5", "supports_images": support, "api": "openai-completions"}]}
+    )
+    async with chat_client() as client:
+        chat_id = (await client.post("/api/chats", json={"model": "copilot/gpt-5", "title": "Image"})).json()[
+            "id"
+        ]
+        image = chat_images.store_image(chat_id, picture(), "image/png", "image")
+        response = await client.post(f"/api/chats/{chat_id}/messages", json={"attachment_ids": [image["id"]]})
+        assert response.status_code == 202
+        await finish_background()
+        job = backend.broker.jobs[-1]
+        assert job["model_api"] == "openai-completions"
+        assert job["supports_images"] is support
+        assert job["images"]
+
+
 async def test_queued_image_waits_for_own_turn_and_survives_history(backend, monkeypatch):
     started, finish = asyncio.Event(), asyncio.Event()
     jobs, commands = [], []
@@ -187,7 +235,7 @@ async def test_switch_to_text_only_model_omits_history_images(backend):
         assert response.status_code == 202
         await finish_background()
         history = backend.broker.jobs[-1]["history"]
-        assert "omitted for this text-only model" in history[0]["content"]
+        assert "image input unavailable for this model/API route" in history[0]["content"]
         assert not any(message.get("images") for message in history)
 
 
