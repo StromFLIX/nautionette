@@ -133,16 +133,71 @@ class Coolify:
 
 def healthy(target: str) -> None:
     url = https_url(required("APP_URL"))
-    state = request(url + "/api/system", required("APP_TOKEN"))
+    try:
+        state = request(url + "/api/system", required("APP_TOKEN"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise RuntimeError("Health endpoint returned invalid JSON") from None
+    except TimeoutError:
+        raise RuntimeError("Health endpoint request timed out") from None
+    if not isinstance(state, dict):
+        raise RuntimeError("Health endpoint returned a non-object response")
+
+    # Only log fixed field names and allowlisted values. Component detail and
+    # arbitrary response text can contain credentials, URLs or configuration.
+    problems = []
+    if state.get("environment") != target:
+        problems.append("environment does not match deployment target")
+    if state.get("auth_enabled") is not True:
+        problems.append("auth_enabled is not true")
     expected = {"temporal", "broker", "agentgateway", "workflow-mcp"}
-    components = state.get("components", [])
-    if (
-        state.get("environment") != target
-        or state.get("auth_enabled") is not True
-        or {item.get("name") for item in components} != expected
-        or any(item.get("status") != "ok" for item in components)
-    ):
-        raise RuntimeError("Deployment has not passed authenticated environment/component health checks")
+    components = state.get("components")
+    if not isinstance(components, list) or any(not isinstance(item, dict) for item in components):
+        problems.append("components is not a list of objects")
+    else:
+        if any(item.get("name") not in tuple(expected) for item in components):
+            problems.append("unexpected component name")
+        for name in sorted(expected):
+            matches = [item for item in components if item.get("name") == name]
+            if not matches:
+                problems.append(f"{name}: missing")
+            elif len(matches) != 1:
+                problems.append(f"{name}: duplicate entries")
+            elif matches[0].get("status") != "ok":
+                status = matches[0].get("status")
+                label = status if status in ("down", "degraded") else "missing or unrecognized status"
+                problems.append(f"{name}: {label}")
+    if problems:
+        raise RuntimeError("Health checks failed: " + "; ".join(problems))
+
+
+def health_timeout() -> int:
+    value = os.environ.get("DEPLOY_HEALTH_TIMEOUT_SECONDS", "").strip() or "600"
+    if not value.isascii() or not value.isdecimal() or not 1 <= int(value) <= 1800:
+        raise ValueError("DEPLOY_HEALTH_TIMEOUT_SECONDS must be an integer between 1 and 1800")
+    return int(value)
+
+
+def wait_for_health(target: str, timeout: int) -> None:
+    started = time.monotonic()
+    deadline = started + timeout
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            healthy(target)
+            return
+        except RuntimeError as exc:
+            now = time.monotonic()
+            print(
+                f"Health verification ({target}), attempt {attempt}, {now - started:.0f}s elapsed: {exc}",
+                flush=True,
+            )
+            if now >= deadline:
+                raise RuntimeError(
+                    f"Post-deployment health verification timed out after {now - started:.0f}s "
+                    f"(budget {timeout}s). Last check: {exc}"
+                ) from None
+            time.sleep(min(10, deadline - now))
 
 
 def deploy(target: str, commit: str) -> str | None:
@@ -151,8 +206,9 @@ def deploy(target: str, commit: str) -> str | None:
     # Preflight health configuration before making changes.
     https_url(required("APP_URL"))
     required("APP_TOKEN")
+    timeout = health_timeout()
     if api.deployed(app, commit):
-        healthy(target)
+        wait_for_health(target, timeout)
         return None
     staging = identifier(required("COOLIFY_STAGING_APPLICATION_UUID")) if target == "production" else app
     if str(api.call(f"/applications/{staging}").get("description") or "").startswith("[nautionette-refresh:"):
@@ -198,15 +254,12 @@ def deploy(target: str, commit: str) -> str | None:
     else:
         raise RuntimeError("Deployment timed out; it may still be active in Coolify")
     # Worker images can still be initializing after Compose reports finished.
-    for attempt in range(30):
-        try:
-            healthy(target)
-            return deployment
-        except RuntimeError:
-            if attempt == 29:
-                raise
-            time.sleep(10)
-    return None
+    print(
+        f"Coolify deployment {deployment} finished; verifying {target} health (budget {timeout}s).",
+        flush=True,
+    )
+    wait_for_health(target, timeout)
+    return deployment
 
 
 def main() -> None:

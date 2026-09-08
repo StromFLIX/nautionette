@@ -568,6 +568,10 @@ pre.code {
   display: flex;
   align-items: center;
   gap: 10px;
+  /* Width comes from the container, never from the row's own text. */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 8px 10px;
   border-radius: var(--radius-md);
   color: inherit;
@@ -586,10 +590,6 @@ pre.code {
 
 .row-item--active .row-item__sub {
   color: #b9cdf5;
-}
-
-.row-item--running {
-  box-shadow: inset 2px 0 var(--accent);
 }
 
 .row-item__activity {

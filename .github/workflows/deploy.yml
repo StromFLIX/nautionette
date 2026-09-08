@@ -27,7 +27,8 @@ jobs:
         (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
         github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # 30m Coolify deployment + up to 30m health grace + checkout/API overhead.
+    timeout-minutes: 65
     environment: ${{ github.event_name == 'release' && 'production' || 'staging' }}
     steps:
       # Never execute the control script from a PR artifact or release tag.
@@ -44,4 +45,5 @@ jobs:
           COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
           APP_URL: ${{ vars.APP_URL }}
           APP_TOKEN: ${{ secrets.APP_TOKEN }}
+          DEPLOY_HEALTH_TIMEOUT_SECONDS: ${{ vars.DEPLOY_HEALTH_TIMEOUT_SECONDS }}
         run: python3 scripts/coolify_release.py

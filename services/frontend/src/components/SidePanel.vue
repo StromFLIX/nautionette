@@ -31,23 +31,25 @@
         </button>
       </div>
       <div v-if="section === 'chats'" class="side__controls">
-        <div class="seg" role="group" aria-label="Group chats by">
-          <button
-            v-for="opt in groupOptions" :key="opt.value" type="button"
-            class="seg__btn" :class="{ 'seg__btn--active': groupBy === opt.value }"
-            @click="groupBy = opt.value"
-          >
-            {{ opt.label }}
-          </button>
+        <div class="side__control">
+          <span class="side__control-label">Group</span>
+          <div class="seg" role="group" aria-label="Group chats by">
+            <button
+              v-for="opt in groupOptions" :key="opt.value" type="button"
+              class="seg__btn" :class="{ 'seg__btn--active': groupBy === opt.value }"
+              :aria-pressed="groupBy === opt.value" @click="groupBy = opt.value"
+            >{{ opt.label }}</button>
+          </div>
         </div>
-        <div class="seg" role="group" aria-label="Active within">
-          <button
-            v-for="opt in activeOptions" :key="opt.value" type="button"
-            class="seg__btn" :class="{ 'seg__btn--active': activeMinutes === opt.value }"
-            @click="activeMinutes = opt.value"
-          >
-            {{ opt.label }}
-          </button>
+        <div class="side__control">
+          <span class="side__control-label">Active</span>
+          <div class="seg" role="group" aria-label="Show chats active within">
+            <button
+              v-for="opt in activeOptions" :key="opt.value" type="button"
+              class="seg__btn" :class="{ 'seg__btn--active': activeMinutes === opt.value }"
+              :aria-pressed="activeMinutes === opt.value" :title="opt.title" @click="activeMinutes = opt.value"
+            >{{ opt.label }}</button>
+          </div>
         </div>
       </div>
     </header>
@@ -57,27 +59,37 @@
       <template v-if="section === 'chats'">
         <div v-for="group in chatGroups" :key="group.key" class="side__chat-group">
           <div v-if="group.key !== '__all__'" class="side__group section-label">
-            {{ group.label }}
-            <span class="side__group-count">{{ group.active.length + group.inactive.length }}</span>
+            <span class="truncate">{{ group.label }}</span>
+            <span class="side__group-count">{{ group.visible.length + (showOlder ? group.older.length : 0) }}</span>
           </div>
 
-          <div v-for="chat in group.active" :key="chat.id" class="chat-list-item">
-            <ChatRow :chat="chat" :active-route-id="route.params.id" @toggle-unread="setUnread" :read-busy="readBusy" />
-          </div>
+          <ChatRow
+            v-for="chat in group.visible" :key="chat.id"
+            :chat="chat" :active-route-id="route.params.id" :read-busy="readBusy" @toggle-unread="setUnread"
+          />
 
-          <details v-if="group.inactive.length" class="side__inactive" :open="isExpanded(group.key)" @toggle="onToggle(group.key, $event)">
-            <summary class="side__inactive-summary">
-              <span class="material-icons" aria-hidden="true">expand_more</span>
-              Inactive ({{ group.inactive.length }})
-            </summary>
-            <div v-for="chat in group.inactive" :key="chat.id" class="chat-list-item">
-              <ChatRow :chat="chat" :active-route-id="route.params.id" @toggle-unread="setUnread" :read-busy="readBusy" />
-            </div>
-          </details>
+          <template v-if="showOlder">
+            <ChatRow
+              v-for="chat in group.older" :key="chat.id"
+              :chat="chat" :active-route-id="route.params.id" :read-busy="readBusy" @toggle-unread="setUnread"
+            />
+          </template>
         </div>
+
+        <button
+          v-if="hiddenCount" type="button" class="side__more"
+          @click="showOlder = !showOlder"
+        >
+          <span class="material-icons" aria-hidden="true">{{ showOlder ? 'expand_less' : 'expand_more' }}</span>
+          {{ showOlder ? `Hide ${hiddenCount} older` : `Show ${hiddenCount} older` }}
+        </button>
         <p v-if="readError" class="side__error caption" role="alert">{{ readError }}</p>
         <p v-if="!filteredChats.length" class="side__empty caption">
           {{ query ? 'Nothing matches that.' : 'No chats yet.' }}
+        </p>
+        <p v-else-if="!visibleCount && !showOlder" class="side__empty caption">
+          Nothing active in the last {{ activeLabel }}.
+          <button type="button" class="side__empty-link" @click="showOlder = true">Show older chats</button>
         </p>
       </template>
 
@@ -158,7 +170,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RUN_TONE, avatarStyle, scheduleTime, shortTime } from '../format'
 import { actions, health, store } from '../store'
@@ -170,10 +182,8 @@ const router = useRouter()
 const query = ref('')
 const readBusy = ref('')
 const readError = ref('')
-const groupBy = ref('none')
-const activeMinutes = ref(30)
-const expanded = ref(new Set())
-const needsInternet = (chat) => ['pending', 'deciding'].includes(chat.internet_status)
+const GROUP_KEY = 'nautionette.chatGroupBy'
+const RANGE_KEY = 'nautionette.chatActiveMinutes'
 
 const groupOptions = [
   { value: 'none', label: 'All' },
@@ -182,30 +192,45 @@ const groupOptions = [
   { value: 'internet', label: 'Internet' }
 ]
 
+// A real ladder of ranges instead of three flavours of "a few minutes".
 const activeOptions = [
-  { value: 10, label: '10m' },
-  { value: 30, label: '30m' },
-  { value: 60, label: '60m' },
-  { value: 1440, label: '24h' },
-  { value: 0, label: 'None' }
+  { value: 60, label: '1h', title: 'Active in the last hour' },
+  { value: 24 * 60, label: '24h', title: 'Active in the last 24 hours' },
+  { value: 7 * 24 * 60, label: '7d', title: 'Active in the last 7 days' },
+  { value: 30 * 24 * 60, label: '30d', title: 'Active in the last 30 days' },
+  { value: 0, label: 'All', title: 'No time limit' }
 ]
 
-function isExpanded (key) {
-  return expanded.value.has(key)
+function storedGroupBy () {
+  const saved = localStorage.getItem(GROUP_KEY)
+  return groupOptions.some((opt) => opt.value === saved) ? saved : 'none'
 }
 
-function onToggle (key, event) {
-  const next = new Set(expanded.value)
-  if (event.target.open) next.add(key)
-  else next.delete(key)
-  expanded.value = next
+function storedRange () {
+  const saved = Number(localStorage.getItem(RANGE_KEY))
+  return activeOptions.some((opt) => opt.value === saved) ? saved : 24 * 60
 }
 
+const groupBy = ref(storedGroupBy())
+const activeMinutes = ref(storedRange())
+const showOlder = ref(false)
+const needsInternet = (chat) => ['pending', 'deciding'].includes(chat.internet_status)
+
+watch(groupBy, (value) => localStorage.setItem(GROUP_KEY, value))
+watch(activeMinutes, (value) => {
+  localStorage.setItem(RANGE_KEY, String(value))
+  showOlder.value = false
+})
+
+const activeLabel = computed(() =>
+  ({ 60: 'hour', 1440: '24 hours', 10080: '7 days', 43200: '30 days' }[activeMinutes.value] || 'selected range'))
+
+/** In range means: still needs me, or touched inside the chosen window. */
 function isChatActive (chat) {
   if (chat.unread || chat.answering || needsInternet(chat)) return true
-  if (!activeMinutes.value) return false
+  if (!activeMinutes.value) return true
   if (!chat.updated_at) return false
-  return (Date.now() / 1000 - chat.updated_at) <= activeMinutes.value * 60
+  return (now.value / 1000 - chat.updated_at) <= activeMinutes.value * 60
 }
 
 function projectLabel (id) {
@@ -237,18 +262,38 @@ function groupsFor (chat) {
   return [['__all__', 'Chats']]
 }
 
+const byRecency = (a, b) => (b.updated_at || 0) - (a.updated_at || 0)
+
 const chatGroups = computed(() => {
   const byKey = new Map()
   for (const chat of filteredChats.value) {
     for (const [key, label] of groupsFor(chat)) {
-      if (!byKey.has(key)) byKey.set(key, { key, label: label || 'Unknown', active: [], inactive: [] })
+      if (!byKey.has(key)) byKey.set(key, { key, label: label || 'Unknown', visible: [], older: [] })
       const group = byKey.get(key)
-      if (isChatActive(chat)) group.active.push(chat)
-      else group.inactive.push(chat)
+      if (isChatActive(chat)) group.visible.push(chat)
+      else group.older.push(chat)
     }
   }
-  return [...byKey.values()].sort((a, b) => (a.key === '__all__' ? -1 : b.key === '__all__' ? 1 : String(a.label).localeCompare(String(b.label))))
+  const groups = [...byKey.values()]
+    .map((group) => ({
+      ...group,
+      visible: group.visible.sort(byRecency),
+      older: group.older.sort(byRecency),
+      // Rank by what is actually shown; the newest chat wins the top slot.
+      recency: Math.max(
+        ...(showOlder.value ? [...group.visible, ...group.older] : group.visible).map((chat) => chat.updated_at || 0),
+        -1
+      )
+    }))
+    .filter((group) => group.visible.length || (showOlder.value && group.older.length))
+  // Newest activity first; a catch-all bucket never outranks a named one.
+  const rank = (group) => (group.key === '__none__' ? 1 : 0)
+  return groups.sort((a, b) => rank(a) - rank(b) || b.recency - a.recency || String(a.label).localeCompare(String(b.label)))
 })
+
+const visibleCount = computed(() => chatGroups.value.reduce((total, group) => total + group.visible.length, 0))
+const hiddenCount = computed(() =>
+  filteredChats.value.length - filteredChats.value.filter((chat) => isChatActive(chat)).length)
 
 async function setUnread (chat, unread) {
   readBusy.value = chat.id
@@ -272,6 +317,12 @@ const matches = (haystack) => haystack.toLowerCase().includes(query.value.trim()
 
 const filteredChats = computed(() =>
   store.chats.filter((chat) => matches(`${chat.title} ${chat.last_message?.preview || ''}`)))
+
+// Relative windows have to age on their own, or a chat stays "active" forever.
+const now = ref(Date.now())
+let ticker = null
+onMounted(() => { ticker = setInterval(() => { now.value = Date.now() }, 30000) })
+onUnmounted(() => clearInterval(ticker))
 
 const filteredWorkflows = computed(() =>
   store.workflows.filter((workflow) => matches(`${workflow.name} ${workflow.title || ''} ${workflow.description || ''}`)))
@@ -364,87 +415,140 @@ function refresh () {
 }
 
 .side__controls {
-  display: flex;
+  display: grid;
   gap: 6px;
   padding: 8px 2px 0;
 }
 
+.side__control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.side__control-label {
+  flex: none;
+  width: 46px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .seg {
   display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  padding: 3px;
+  flex: 1;
+  min-width: 0;
+  padding: 2px;
   border-radius: var(--radius-pill);
   background: var(--surface-input);
   border: 1px solid var(--border);
 }
 
 .seg__btn {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
-  padding: 4px 8px;
+  padding: 4px 6px;
   border-radius: var(--radius-pill);
   border: none;
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 550;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
   transition: background var(--transition), color var(--transition);
-  white-space: nowrap;
 }
 
 .seg__btn:hover {
   color: var(--text);
+  background: var(--surface-hover);
 }
 
-.seg__btn--active {
+.seg__btn--active,
+.seg__btn--active:hover {
   background: var(--accent);
-  color: var(--accent-contrast, #fff);
+  color: var(--accent-text);
+}
+
+.seg__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.side__more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.side__more:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.side__more .material-icons {
+  font-size: 16px;
+}
+
+.side__empty-link {
+  display: block;
+  margin: 6px auto 0;
+  border: none;
+  background: none;
+  color: var(--accent-hover);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .side__chat-group + .side__chat-group {
   margin-top: 6px;
 }
 
-.side__inactive {
-  margin-top: 2px;
-}
-
-.side__inactive-summary {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 600;
-  list-style: none;
-}
-
-.side__inactive-summary::-webkit-details-marker {
-  display: none;
-}
-
-.side__inactive-summary .material-icons {
-  font-size: 16px;
-  transition: transform var(--transition);
-}
-
-.side__inactive[open] .side__inactive-summary .material-icons {
-  transform: rotate(180deg);
-}
-
 .side__list {
   padding: 6px;
+  /* Rows follow the panel width; long titles truncate instead of stretching. */
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.side__list > * {
+  max-width: 100%;
+}
+
+.side__chat-group {
+  min-width: 0;
 }
 
 .side__group {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  padding: 12px 10px 6px;
+  padding: 14px 10px 6px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-panel);
 }
 
 .side__group-count {
@@ -457,22 +561,6 @@ function refresh () {
   padding: 24px 14px;
   color: var(--text-dim);
   text-align: center;
-}
-
-.chat-list-item {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.chat-list-item > .row-item {
-  flex: 1;
-  min-width: 0;
-}
-
-.chat-list-item__menu {
-  flex: none;
-  color: var(--text-muted);
 }
 
 .side__error {
