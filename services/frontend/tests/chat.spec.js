@@ -790,3 +790,65 @@ test('an image can start a new chat from the welcome composer', async ({ page, c
   await expect(page.locator('.msg--user img')).toBeVisible()
   expect(state.uploads[0].chatId).toBe('created')
 })
+
+function reasoningModels () {
+  return [
+    { id: 'test/model', name: 'Astra', reasoning_efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+    { id: 'test/flash', name: 'Flash', reasoning_efforts: ['low', 'medium', 'high'] },
+    { id: 'test/unknown', name: 'Unknown', reasoning_efforts: [] }
+  ]
+}
+
+for (const width of [1440, 320]) {
+  test(`reasoning choices are model-specific and persisted per chat at ${width}px`, async ({ page, context }) => {
+    const state = initial()
+    state.models = reasoningModels()
+    await mockChats(context, state)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats/alpha')
+    const picker = page.getByRole('button', { name: 'Reasoning effort', exact: true })
+    await expect(picker).toContainText('default')
+    await picker.click()
+    await expect(page.getByRole('menuitemradio').locator('.grow')).toHaveText(['Provider default', 'Low', 'Medium', 'High', 'Extra high', 'Max'])
+    await page.getByRole('menuitemradio', { name: 'Max', exact: true }).click()
+    await expect.poll(() => state.chats.alpha.chat.reasoning_effort).toBe('max')
+    await expect(picker).toContainText('Max')
+    await page.reload()
+    await expect(picker).toContainText('Max')
+    await page.goto('/chats/beta')
+    await expect(picker).toContainText('default')
+    await page.goto('/chats/alpha')
+    await expect(picker).toContainText('Max')
+    await page.locator('.composer .pick').filter({ hasText: 'memory' }).click()
+    await page.getByPlaceholder('Search models').fill('Flash')
+    await page.getByPlaceholder('Search models').press('Enter')
+    await expect(picker).toContainText('default')
+    await expect.poll(() => state.chats.alpha.chat.reasoning_effort).toBe(null)
+    await picker.click()
+    await expect(page.getByRole('menuitemradio').locator('.grow')).toHaveText(['Provider default', 'Low', 'Medium', 'High'])
+    await page.getByRole('menuitemradio', { name: 'High', exact: true }).click()
+    await expect(picker).toContainText('High')
+    await picker.click()
+    await page.getByRole('menuitemradio', { name: 'Provider default', exact: true }).click()
+    await expect.poll(() => state.chats.alpha.chat.reasoning_effort).toBe(null)
+    await page.locator('.composer .pick').filter({ hasText: 'memory' }).click()
+    await page.getByPlaceholder('Search models').fill('Unknown')
+    await page.getByPlaceholder('Search models').press('Enter')
+    await expect(picker).toBeDisabled()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  })
+}
+
+test('welcome composer includes reasoning selection in chat creation', async ({ page, context }) => {
+  const state = initial()
+  state.models = reasoningModels()
+  await mockChats(context, state)
+  await page.goto('/chats')
+  await page.getByRole('button', { name: 'Reasoning effort', exact: true }).click()
+  await page.getByRole('menuitemradio', { name: 'Extra high', exact: true }).click()
+  await page.locator('textarea').fill('Think carefully')
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(page).toHaveURL(/\/chats\/created$/)
+  expect(state.chats.created.chat.reasoning_effort).toBe('xhigh')
+  await expect(page.getByRole('button', { name: 'Reasoning effort', exact: true })).toContainText('Extra high')
+})

@@ -228,6 +228,41 @@ frontend, and Docker broker; the broker rebuilds the changed Pi base and
 agent-set images automatically. Existing agent containers retain their old routing
 until the next turn.
 
+### Reasoning effort
+
+The control beside the model picker shows only the selected model's advertised
+reasoning levels. **Provider default** (the default for existing and new chats)
+sends no effort override; it does not disable reasoning. Copilot advertises levels
+in `capabilities.supports.reasoning_effort`; OpenRouter advertises them in
+`reasoning.supported_efforts`. A reasoning boolean, mandatory reasoning, or a
+`reasoning` entry in `supported_parameters` alone is not enough to invent levels.
+Models without an advertised list, or without a compatible API route, have no
+selectable levels. Higher levels may increase latency and cost.
+
+`/api/catalog` exposes `supports_reasoning`, `reasoning_efforts`, and
+`reasoning_format` for the winning integration. Create/patch a chat with
+`reasoning_effort: null` for provider default, or one of that model's exact values
+(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, as advertised).
+The selection persists per chat. Switching models resets it to provider default
+unless the API caller supplies a new valid selection. Invalid or stale selections
+return HTTP 422 before a message is accepted.
+
+Each accepted turn pins its effort, model and capability list in the durable job.
+Queued messages with a different effort wait for a new agent instead of steering
+an already-running request. Pi receives `NAUTIONETTE_MODEL_REASONING` and
+`NAUTIONETTE_REASONING_EFFORT`; the extension enables reasoning capabilities and
+applies the exact effort immediately before the provider request. Responses and
+OpenRouter use `reasoning.effort`; other Chat Completions routes use
+`reasoning_effort`. This avoids Pi clamping `max`/`xhigh` or treating provider
+default as `none`. Default jobs and workflows without a selection send no override.
+
+Rebuild the backend, frontend, and Docker broker together; the broker rebuilds the
+changed Pi base and agent-set images. New turns use the updated runtime.
+Regression checks include `tests/backend/test_reasoning.py`,
+`node --test tests/agent/test_reasoning.ts tests/agent/test_image_transport.mjs`,
+and `npm run test:e2e -- tests/chat.spec.js --grep reasoning` in `services/frontend`.
+The transport tests run real Pi against a local fake gateway, not billable models.
+
 ### Agent runtime limits
 
 Chat turns default to a one-hour wall-clock limit (`AGENT_RUN_TIMEOUT_SECONDS=3600`),

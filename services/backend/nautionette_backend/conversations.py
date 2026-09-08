@@ -90,7 +90,14 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
                         break
                     if any(
                         candidate.get(key) != job.get(key)
-                        for key in ("agent_set", "model", "tools", "project_ids")
+                        for key in (
+                            "agent_set",
+                            "model",
+                            "reasoning_effort",
+                            "model_reasoning",
+                            "tools",
+                            "project_ids",
+                        )
                     ):
                         break
                     if pending["id"] in sent:

@@ -9,6 +9,7 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { modelApi } from "./model-api.ts";
+import { reasoningConfig, reasoningPayload } from "./reasoning.ts";
 
 const GATEWAY = (process.env.AGENTGATEWAY_URL ?? "http://agentgateway:4000").replace(/\/$/, "");
 const MODEL = process.env.AGENT_MODEL ?? "openai/gpt-4o-mini";
@@ -66,6 +67,7 @@ function renderToolResult(result: JsonRpcResult): string {
 
 export default async function (pi: ExtensionAPI) {
   const api = await modelApi(MODEL, GATEWAY);
+  const reasoning = reasoningConfig();
   console.error(`[nautionette] model ${MODEL} uses ${api} through agentgateway`);
   pi.registerProvider(PROVIDER, {
     name: "Nautionette gateway",
@@ -78,7 +80,13 @@ export default async function (pi: ExtensionAPI) {
       {
         id: MODEL,
         name: `${MODEL} (via agentgateway)`,
-        reasoning: false,
+        reasoning: reasoning.reasoning,
+        thinkingLevelMap: reasoning.thinkingLevelMap,
+        compat: {
+          supportsDeveloperRole: false,
+          supportsReasoningEffort: reasoning.reasoning,
+          thinkingFormat: reasoning.format,
+        },
         // Unknown catalogs must not cause Pi to silently strip image blocks.
         input: process.env.NAUTIONETTE_MODEL_IMAGES === "false" ? ["text"] : ["text", "image"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -91,6 +99,12 @@ export default async function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
     const model = ctx.modelRegistry.find(PROVIDER, MODEL);
     if (model) await pi.setModel(model);
+    pi.setThinkingLevel(reasoning.level);
+  });
+
+  pi.on("before_provider_request", (event, ctx) => {
+    if (ctx.model?.provider !== PROVIDER || ctx.model.id !== MODEL) return;
+    return reasoningPayload(event.payload as Record<string, any>, api, reasoning);
   });
 
   // Tools are discovered, not hard-coded: federate a new MCP server behind the

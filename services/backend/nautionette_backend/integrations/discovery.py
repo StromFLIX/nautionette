@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from ..clients import gateway, model_catalog
+from ..reasoning import reasoning_metadata
 from .registry import (
     INTEGRATION_TYPES,
     integration_context,
@@ -88,6 +89,7 @@ async def discover_models(instance: str) -> list[dict[str, Any]]:
                 "context_length": window,
                 "supports_images": image_support(item),
                 "supported_endpoints": item.get("supported_endpoints"),
+                **reasoning_metadata(item, type_id),
             }
         )
     return models

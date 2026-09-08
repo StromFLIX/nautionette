@@ -110,13 +110,15 @@
         :busy="sendingDraft"
         :agent-set="chat?.agent_set || ''"
         :model="chat?.model || store.catalog.default_model"
+        :reasoning-effort="chat?.reasoning_effort ?? null"
         :tools="chat?.tools ?? null"
         :project-ids="chat?.project_ids || []"
         :running="streaming"
         :stopping="stopping"
         :context="context"
         @update:agent-set="patch({ agent_set: $event })"
-        @update:model="patch({ model: $event })"
+        @update:model="patch({ model: $event, reasoning_effort: null })"
+        @update:reasoning-effort="patch({ reasoning_effort: $event })"
         @update:tools="patch({ tools: $event })"
         @update:project-ids="patch({ project_ids: $event })"
         @send="send"
@@ -292,11 +294,11 @@ function scrollDown (behavior = 'smooth') {
   })
 }
 
-async function start ({ text, agentSet, model, tools, projectIds: selectedProjects = [], attachments: images = [] }) {
+async function start ({ text, agentSet, model, reasoningEffort = null, tools, projectIds: selectedProjects = [], attachments: images = [] }) {
   if (starting.value || (!text.trim() && !images.length)) return
   starting.value = true
   try {
-    const created = await api.createChat({ agent_set: agentSet, model, tools, project_ids: selectedProjects })
+    const created = await api.createChat({ agent_set: agentSet, model, reasoning_effort: reasoningEffort, tools, project_ids: selectedProjects })
     await actions.loadChats()
     await router.push(`/chats/${created.id}`)
     draft.value = text

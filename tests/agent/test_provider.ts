@@ -16,6 +16,9 @@ for (const [model, api, images] of [
     const originalModel = process.env.AGENT_MODEL;
     const originalImages = process.env.NAUTIONETTE_MODEL_IMAGES;
     const originalFetch = globalThis.fetch;
+    const capabilityKeys = ['NAUTIONETTE_MODEL_API', 'NAUTIONETTE_MODEL_REASONING', 'NAUTIONETTE_REASONING_EFFORT'];
+    const originalCapabilities = Object.fromEntries(capabilityKeys.map((key) => [key, process.env[key]]));
+    for (const key of capabilityKeys) delete process.env[key];
     process.env.AGENT_MODEL = model;
     if (images === undefined) delete process.env.NAUTIONETTE_MODEL_IMAGES;
     else process.env.NAUTIONETTE_MODEL_IMAGES = images;
@@ -48,6 +51,10 @@ for (const [model, api, images] of [
       assert.equal(registration.apiKey, "gateway");
     } finally {
       globalThis.fetch = originalFetch;
+      for (const [key, value] of Object.entries(originalCapabilities)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
       if (originalModel === undefined) delete process.env.AGENT_MODEL;
       else process.env.AGENT_MODEL = originalModel;
       if (originalImages === undefined) delete process.env.NAUTIONETTE_MODEL_IMAGES;

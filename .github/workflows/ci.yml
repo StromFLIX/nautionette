@@ -122,7 +122,7 @@ jobs:
           docker run --rm --network none --user 10001:10001 \
             --env HOME=/workspace --tmpfs /workspace:rw,mode=1777 \
             --volume "$PWD:/source:ro" --entrypoint bash nautionette/pi-agent-default:dev -c \
-            'pi --version && node --test /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_image_transport.mjs'
+            'pi --version && node --test /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_image_transport.mjs'
 
       - name: Development tools work offline as the project user
         run: |

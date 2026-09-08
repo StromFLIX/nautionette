@@ -25,6 +25,7 @@ from ..config import settings
 from ..conversations import chat_snapshots, launch_next, run_turn, turn_events
 from ..db import db
 from ..events import bus
+from ..reasoning import validate_effort
 from ..runtime import cached_catalog, history_budget, runtime
 from ..security import require_user
 from .system import SSE_HEADERS
@@ -39,6 +40,18 @@ def _chat_or_404(chat_id: str) -> dict[str, Any]:
     return chat
 
 
+async def _model_info(model: str | None) -> dict[str, Any]:
+    available = cached_catalog() or await catalog.build()
+    return next((m for m in available.get("models", []) if m["id"] == model), {})
+
+
+def _effort(value: Any, model: dict[str, Any]) -> str | None:
+    try:
+        return validate_effort(value, model)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.get("/api/chats")
 async def list_chats() -> dict[str, Any]:
     return {"chats": db.list_chats()}
@@ -47,11 +60,15 @@ async def list_chats() -> dict[str, Any]:
 @router.post("/api/chats")
 async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     project_ids = projects.selection(payload.get("project_ids", []))
+    model = payload.get("model") or runtime("default_model")
+    effort = payload.get("reasoning_effort")
+    effort = _effort(effort, await _model_info(model)) if effort is not None else None
     chat = db.create_chat(
         title=(payload.get("title") or "New chat").strip()[:120],
         agent_set=payload.get("agent_set") or runtime("default_agent_set"),
-        model=payload.get("model") or runtime("default_model"),
+        model=model,
         tools=payload.get("tools"),
+        reasoning_effort=effort,
     )
     if project_ids:
         chat = db.update_chat(chat["id"], {"project_ids": project_ids}) or chat
@@ -61,7 +78,7 @@ async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, A
 
 @router.patch("/api/chats/{chat_id}")
 async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
-    _chat_or_404(chat_id)
+    current = _chat_or_404(chat_id)
     fields: dict[str, Any] = {}
     if "title" in payload:
         fields["title"] = (payload.get("title") or "Untitled").strip()[:120]
@@ -69,6 +86,13 @@ async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) 
         fields["agent_set"] = payload.get("agent_set") or runtime("default_agent_set")
     if "model" in payload:
         fields["model"] = payload.get("model") or None
+    if "reasoning_effort" in payload:
+        value = payload["reasoning_effort"]
+        model = fields.get("model", current.get("model")) or runtime("default_model")
+        fields["reasoning_effort"] = _effort(value, await _model_info(model)) if value is not None else None
+    elif "model" in fields and fields["model"] != current.get("model"):
+        # A selection belongs to its model. Never carry a stale level to another route.
+        fields["reasoning_effort"] = None
     if "tools" in payload:
         selected = payload.get("tools")
         fields["tools"] = [str(name) for name in selected] if isinstance(selected, list) else None
@@ -187,8 +211,8 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     model_id = chat.get("model") or runtime("default_model")
     # Direct API clients must receive the same capability checks as the UI, even
     # after a backend restart before anyone has opened the model picker.
-    available = cached_catalog() or await catalog.build()
-    model_info = next((m for m in available.get("models", []) if m["id"] == model_id), {})
+    model_info = await _model_info(model_id)
+    effort = _effort(chat.get("reasoning_effort"), model_info)
     if attachment_ids and model_info.get("supports_images") is False:
         reason = model_info.get("image_support_reason") or "This model is text-only."
         raise HTTPException(422, f"{reason} Choose an image-capable model/API route to send images.")
@@ -230,7 +254,7 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
         mode="interactive",
         history=history,
         agent_set=chat["agent_set"],
-        model=chat.get("model"),
+        model=model_id,
         tools=chat.get("tools"),
         run_id=f"chat-{chat_id}",
         timeout_seconds=settings.agent_run_timeout_seconds,
@@ -244,6 +268,12 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
         attachments=user_message["meta"].get("attachments", []),
         supports_images=model_info.get("supports_images"),
         model_api=model_info.get("api"),
+        reasoning_effort=effort,
+        model_reasoning={
+            "supported": model_info.get("supports_reasoning"),
+            "efforts": model_info.get("reasoning_efforts", []),
+            "format": model_info.get("reasoning_format", "openai"),
+        },
     )
     if created and project_ids:
         selected_projects = [

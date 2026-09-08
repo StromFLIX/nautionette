@@ -130,6 +130,7 @@ _MIGRATIONS = (
     "ALTER TABLE chat_turns ADD COLUMN stop_requested INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN model TEXT",
+    "ALTER TABLE chats ADD COLUMN reasoning_effort TEXT",
     "ALTER TABLE chats ADD COLUMN tools TEXT",
     "ALTER TABLE chats ADD COLUMN internet_status TEXT NOT NULL DEFAULT 'blocked'",
     "ALTER TABLE chats ADD COLUMN internet_reason TEXT NOT NULL DEFAULT ''",
@@ -140,7 +141,7 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN read_revision INTEGER NOT NULL DEFAULT 0",
 )
 
-_EDITABLE_CHAT_COLUMNS = ("title", "agent_set", "model", "tools", "project_ids")
+_EDITABLE_CHAT_COLUMNS = ("title", "agent_set", "model", "reasoning_effort", "tools", "project_ids")
 _EDITABLE_WORKFLOW_COLUMNS = ("disabled", "chat_mode", "chat_id")
 
 WORKFLOW_DEFAULTS = {"disabled": False, "chat_mode": "same", "chat_id": None}
@@ -209,13 +210,14 @@ class Database:
         agent_set: str,
         model: str | None = None,
         tools: list[str] | None = None,
+        reasoning_effort: str | None = None,
     ) -> dict[str, Any]:
         now = time.time()
         chat_id = uuid.uuid4().hex[:12]
         self.execute(
-            "INSERT INTO chats (id, title, agent_set, model, tools, created_at, updated_at)"
-            " VALUES (?,?,?,?,?,?,?)",
-            (chat_id, title, agent_set, model, _dump_tools(tools), now, now),
+            "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort, created_at, updated_at)"
+            " VALUES (?,?,?,?,?,?,?,?)",
+            (chat_id, title, agent_set, model, _dump_tools(tools), reasoning_effort, now, now),
         )
         return self.get_chat(chat_id)  # type: ignore[return-value]
 

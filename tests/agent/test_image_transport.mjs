@@ -16,13 +16,27 @@ const images = [
   { type: 'image', mimeType: 'image/gif', data: 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }
 ]
 
-for (const [model, endpoint, pinnedApi] of [
+const reasoning = { supported: true, efforts: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'], format: 'openai' }
+
+for (const [model, endpoint, pinnedApi, effort = null, metadata = {}] of [
   ['copilot/claude-sonnet-5', '/chat/completions'],
   ['copilot/gpt-6-astra', '/responses'],
   ['copilot/gpt-5', '/chat/completions', 'openai-completions'],
-  ['copilot/claude-sonnet-5', '/responses', 'openai-responses']
+  ['copilot/claude-sonnet-5', '/responses', 'openai-responses'],
+  ...['low', 'high', 'xhigh', 'max', null].map((effort) => [
+    'copilot/gpt-6-astra', '/responses', 'openai-responses', effort,
+    { ...reasoning, efforts: ['low', 'medium', 'high', 'xhigh', 'max'] }
+  ]),
+  ...['high', 'max', null].map((effort) => [
+    'copilot/claude-sonnet-5', '/chat/completions', 'openai-completions', effort, reasoning
+  ]),
+  ...['minimal', 'none', 'max', null].map((effort) => [
+    'openai/reasoner', '/chat/completions', 'openai-completions', effort, { ...reasoning, format: 'openrouter' }
+  ]),
+  ['openai/reasoner', '/responses', 'openai-responses', 'none', reasoning],
+  ['custom/reasoner', '/chat/completions', 'openai-completions', 'none', reasoning]
 ]) {
-  test(`real Pi preserves images on the ${pinnedApi ? 'pinned' : 'advertised'} ${model} endpoint`, { skip: !piAvailable, timeout: 30000 }, async () => {
+  test(`real Pi preserves images and effort=${effort} on the ${pinnedApi ? 'pinned' : 'advertised'} ${model} endpoint`, { skip: !piAvailable, timeout: 30000 }, async () => {
     const requests = []
     let catalogRequests = 0
     const server = createServer(async (req, res) => {
@@ -73,7 +87,9 @@ for (const [model, endpoint, pinnedApi] of [
       ], {
         cwd: dir,
         env: { ...process.env, PI_CODING_AGENT_DIR: dir, PI_OFFLINE: '1', PI_TELEMETRY: '0',
-          AGENTGATEWAY_URL: gateway, MCP_URL: `${gateway}/mcp`, AGENT_MODEL: model, NAUTIONETTE_MODEL_IMAGES: 'true', NAUTIONETTE_MODEL_API: pinnedApi || '' },
+          AGENTGATEWAY_URL: gateway, MCP_URL: `${gateway}/mcp`, AGENT_MODEL: model,
+          NAUTIONETTE_MODEL_IMAGES: 'true', NAUTIONETTE_MODEL_API: pinnedApi || '',
+          NAUTIONETTE_MODEL_REASONING: JSON.stringify(metadata), NAUTIONETTE_REASONING_EFFORT: effort || '' },
         stdio: ['pipe', 'pipe', 'pipe']
       })
       let stderr = '', buffer = '', answer = ''
@@ -105,6 +121,16 @@ for (const [model, endpoint, pinnedApi] of [
       assert.equal(requests[0].path, `/v1${endpoint}`)
       const body = requests[0].body
       assert.equal(body.model, model)
+      if (effort === null) {
+        assert.equal(body.reasoning, undefined, 'Provider default must not mean none/disabled')
+        assert.equal(body.reasoning_effort, undefined)
+      } else if (endpoint === '/responses' || metadata.format === 'openrouter') {
+        assert.equal(body.reasoning?.effort, effort, 'Exact effort must reach the wire without clamping')
+        assert.equal(body.reasoning_effort, undefined)
+      } else {
+        assert.equal(body.reasoning_effort, effort)
+        assert.equal(body.reasoning, undefined)
+      }
       const user = (body.messages || body.input).find((message) => message.role === 'user')
       const urls = user.content.filter((part) => ['image_url', 'input_image'].includes(part.type))
         .map((part) => typeof part.image_url === 'string' ? part.image_url : part.image_url.url)

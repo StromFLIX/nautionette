@@ -51,4 +51,7 @@ def model_capabilities(model_id: str, metadata: dict[str, Any]) -> dict[str, Any
         "api_source": "advertised" if advertised and route_support else "fallback",
         "supports_images": support,
         "image_support_reason": reason,
+        "supports_reasoning": False if route_support is False else metadata.get("supports_reasoning"),
+        "reasoning_efforts": [] if route_support is False else metadata.get("reasoning_efforts", []),
+        "reasoning_format": metadata.get("reasoning_format", "openai"),
     }

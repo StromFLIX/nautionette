@@ -43,13 +43,18 @@ const image = (data) => ({ type: 'image', mimeType: 'image/png', data })
 test('historical and current images reach Pi RPC in labelled order, never argv or JOB.json', async () => {
   const result = await run({ chat_id: 'chat', prompt: 'Compare these', model: 'vision',
     history: [{ role: 'user', content: 'Before', images: [image('older')] }, { role: 'assistant', content: 'Reply' }],
-    images: [image('newer'), image('last')], model_api: 'openai-completions' })
+    images: [image('newer'), image('last')], model_api: 'openai-completions', reasoning_effort: 'max',
+    model_reasoning: { supported: true, efforts: ['low', 'max'], format: 'openrouter' } })
   const command = result.commands.find((c) => c.type === 'prompt')
   assert.deepEqual(command.images, [image('older'), image('newer'), image('last')])
   assert.match(command.message, /User: Before\n\[Attached image 1\]/)
   assert.match(command.message, /Compare these\n\[Attached image 2\]\n\[Attached image 3\]/)
   assert.equal(result.spawnOptions.env.NAUTIONETTE_MODEL_IMAGES, 'true')
   assert.equal(result.spawnOptions.env.NAUTIONETTE_MODEL_API, 'openai-completions')
+  assert.equal(result.spawnOptions.env.NAUTIONETTE_REASONING_EFFORT, 'max')
+  assert.deepEqual(JSON.parse(result.spawnOptions.env.NAUTIONETTE_MODEL_REASONING), {
+    supported: true, efforts: ['low', 'max'], format: 'openrouter'
+  })
   assert.equal(result.spawnArgs.includes('older'), false)
   const stored = JSON.parse(result.writes.find(([path]) => path.endsWith('JOB.json'))[1])
   assert.equal(stored.images, undefined)
@@ -64,5 +69,7 @@ test('image-only prompts have useful text and text-only model declarations stay 
   const textOnly = await run({ chat_id: 'chat', prompt: 'hello', supports_images: false })
   assert.equal(textOnly.spawnOptions.env.NAUTIONETTE_MODEL_IMAGES, 'false')
   assert.equal(textOnly.spawnOptions.env.NAUTIONETTE_MODEL_API, '')
+  assert.equal(textOnly.spawnOptions.env.NAUTIONETTE_REASONING_EFFORT, '')
+  assert.equal(textOnly.spawnOptions.env.NAUTIONETTE_MODEL_REASONING, '{}')
   assert.equal(textOnly.commands.find((c) => c.type === 'prompt').images, undefined)
 })

@@ -60,6 +60,9 @@
         <q-tooltip>Model used for this chat</q-tooltip>
       </button>
 
+      <ReasoningPicker :model-value="reasoningEffort" :capabilities="selectedModel" :busy="busy"
+        @update:model-value="$emit('update:reasoningEffort', $event)" />
+
       <button class="pick" :class="{ 'pick--quiet': !toolCount }">
         <span class="material-icons pick__icon">handyman</span>
         <span>{{ toolLabel }}</span>
@@ -107,6 +110,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import ModelPicker from './ModelPicker.vue'
+import ReasoningPicker from './ReasoningPicker.vue'
 import ChatImage from './ChatImage.vue'
 import { addImages, IMAGE_TYPES } from '../attachments'
 import { api } from '../api'
@@ -120,6 +124,7 @@ const props = defineProps({
   attachments: { type: Array, default: () => [] },
   agentSet: { type: String, default: '' },
   model: { type: String, default: '' },
+  reasoningEffort: { type: String, default: null },
   tools: { type: Array, default: null },
   projectIds: { type: Array, default: () => [] },
   busy: { type: Boolean, default: false },
@@ -130,7 +135,7 @@ const props = defineProps({
   placeholder: { type: String, default: 'Message…' }
 })
 
-const emit = defineEmits(['update:attachments', 'update:modelValue', 'update:agentSet', 'update:model', 'update:tools', 'update:projectIds', 'send', 'stop'])
+const emit = defineEmits(['update:attachments', 'update:modelValue', 'update:agentSet', 'update:model', 'update:reasoningEffort', 'update:tools', 'update:projectIds', 'send', 'stop'])
 
 const input = ref(null)
 const focused = ref(false)
