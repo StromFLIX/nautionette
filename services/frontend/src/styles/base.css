@@ -642,24 +642,41 @@ pre.code {
   position: relative;
 }
 
-.row-item--running .avatar::after {
-  content: '';
+.avatar__spinner {
   position: absolute;
   inset: -3px;
-  border: 2px solid var(--accent-soft);
-  border-top-color: var(--accent-hover);
-  border-right-color: var(--accent-hover);
-  border-radius: inherit;
+  width: calc(100% + 6px);
+  height: calc(100% + 6px);
+  fill: none;
+  stroke-width: 2;
   pointer-events: none;
-  animation: chat-activity-orbit 1.8s linear infinite;
+  animation: chat-activity-orbit 2s linear infinite;
+}
+
+.avatar__spinner-track {
+  stroke: var(--accent-soft);
+}
+
+.avatar__spinner-arc {
+  stroke: var(--accent-hover);
+  stroke-linecap: round;
+  stroke-dasharray: 25 75;
+  animation: chat-activity-sweep 1.5s ease-in-out infinite;
 }
 
 @keyframes chat-activity-orbit {
   to { transform: rotate(360deg); }
 }
 
+@keyframes chat-activity-sweep {
+  0% { stroke-dasharray: 5 95; stroke-dashoffset: 0; }
+  50% { stroke-dasharray: 70 30; stroke-dashoffset: -20; }
+  100% { stroke-dasharray: 5 95; stroke-dashoffset: -100; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .row-item--running .avatar::after {
+  .avatar__spinner,
+  .avatar__spinner-arc {
     animation: none;
   }
 }
