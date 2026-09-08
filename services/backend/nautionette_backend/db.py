@@ -218,7 +218,8 @@ class Database:
         now = time.time()
         chat_id = uuid.uuid4().hex[:12]
         self.execute(
-            "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort, created_at, updated_at, title_state)"
+            "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort,"
+            " created_at, updated_at, title_state)"
             " VALUES (?,?,?,?,?,?,?,?,?)",
             (
                 chat_id,
