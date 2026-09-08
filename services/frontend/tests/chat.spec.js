@@ -128,6 +128,39 @@ function initial () {
   }
 }
 
+test('group controls are collapsed by default without clearing the selected view', async ({ page, context }) => {
+  await mockChats(context, initial())
+  await page.goto('/chats/alpha')
+  const toggle = page.getByRole('button', { name: 'Group', exact: true })
+  const grouping = page.getByRole('group', { name: 'Group chats by', exact: true })
+  const activity = page.getByRole('group', { name: 'Show chats active within', exact: true })
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(grouping).toBeHidden()
+  await expect(activity).toBeHidden()
+
+  await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+  await expect(grouping).toBeVisible()
+  await expect(activity).toBeVisible()
+  await grouping.getByRole('button', { name: 'Model', exact: true }).click()
+  await activity.getByRole('button', { name: '7d', exact: true }).click()
+  await toggle.click()
+  await expect(grouping).toBeHidden()
+  await expect(activity).toBeHidden()
+  await expect(page.locator('.side__group').filter({ hasText: 'test/model' })).toBeVisible()
+
+  await page.reload()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(grouping).toBeHidden()
+  await expect(activity).toBeHidden()
+  await expect(page.locator('.side__group').filter({ hasText: 'test/model' })).toBeVisible()
+  await toggle.click()
+  await expect(grouping.getByRole('button', { name: 'Model', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(activity.getByRole('button', { name: '7d', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await grouping.getByRole('button', { name: 'All', exact: true }).click()
+  await expect(activity).toBeVisible()
+})
+
 function changeFixture () {
   const state = initial()
   state.chats.alpha.chat.project_ids = ['project-a', 'project-b', 'clean']
