@@ -1,7 +1,7 @@
 <template>
   <h2 class="settings__title">MCP servers</h2>
 
-  <div class="setting">
+  <div id="mcp-servers" class="setting">
     <div class="row integration-head">
       <div class="setting__label grow">Servers</div>
       <button class="btn btn--sm btn--outline" :disabled="loading" @click="refresh">
@@ -14,8 +14,7 @@
       </button>
     </div>
     <p class="caption dim">
-      Every server is federated onto one endpoint in agentgateway. Its tools arrive
-      prefixed with the server name and show up in the tool picker straight away.
+      Connected tools are available in every chat.
     </p>
 
     <div v-if="adding" class="integration-add">
@@ -26,8 +25,7 @@
         :disabled="Boolean(editing) && field.key === 'name'"
       />
       <p class="caption dim">
-        The server is contacted before it is saved, because one target that cannot
-        answer takes the whole endpoint down with it.
+        Connection is checked before saving to protect the shared tool endpoint.
       </p>
       <div class="row integration-actions">
         <button class="btn btn--sm" @click="cancelAdd">Cancel</button>
@@ -50,11 +48,14 @@
           {{ server.tool_count }} tools
         </span>
       </div>
-      <div class="integration-meta caption dim">
-        <span class="mono truncate">{{ server.url }}</span>
-        <span>{{ credentialLabel(server.credential) }}</span>
-        <span v-if="!server.managed">from the gateway config file</span>
-      </div>
+      <details class="integration-details">
+        <summary>Connection details</summary>
+        <div class="integration-meta caption dim">
+          <span class="mono truncate">{{ server.url }}</span>
+          <span>{{ credentialLabel(server.credential) }}</span>
+          <span v-if="!server.managed">from the gateway config file</span>
+        </div>
+      </details>
       <div v-if="tests[server.name]" class="line">
         <span class="dot" :class="tests[server.name].ok ? 'dot--ok' : 'dot--bad'" />
         <span class="caption grow">{{ tests[server.name].message }}</span>
@@ -77,20 +78,21 @@
     </div>
   </div>
 
-  <div class="setting">
-    <div class="setting__label">Tools on offer</div>
-    <p v-if="!toolGroups.length" class="caption dim">No MCP server answered.</p>
-    <template v-for="group in toolGroups" :key="group.name">
-      <div class="line">
+  <div id="tool-catalog" class="setting">
+    <div class="setting__label">Tool catalog</div>
+    <input v-model="toolQuery" class="field" type="search" placeholder="Search tools…" aria-label="Search tool catalog" />
+    <p v-if="!toolGroups.length" class="caption dim integration-empty">{{ toolQuery ? 'No matching tools.' : 'No MCP server answered.' }}</p>
+    <details v-for="group in toolGroups" :key="group.name" class="settings-disclosure model-catalog" :open="Boolean(toolQuery)">
+      <summary>
         <span class="grow truncate">{{ group.name }}</span>
         <span v-if="group.host" class="caption dim mono truncate">{{ group.host }}</span>
         <span class="chip chip--success">{{ group.tools.length }} tools</span>
-      </div>
+      </summary>
       <div v-for="tool in group.tools" :key="tool.name" class="line line--stacked line--nested">
         <span class="mono">{{ tool.name }}</span>
         <span v-if="tool.description" class="caption dim">{{ tool.description }}</span>
       </div>
-    </template>
+    </details>
   </div>
 </template>
 
@@ -111,17 +113,21 @@ const loading = ref(false)
 const adding = ref(false)
 const editing = ref('')
 const busy = ref('')
+const toolQuery = ref('')
 
 const draftValid = computed(() => draftIsValid(state.fields, draft))
 
 const editingCredential = computed(() =>
   state.servers.find((item) => item.name === editing.value)?.credential || null)
 
-const toolGroups = computed(() =>
-  (store.catalog.tool_servers || []).map((server) => ({
+const toolGroups = computed(() => {
+  const query = toolQuery.value.trim().toLowerCase()
+  return (store.catalog.tool_servers || []).map(server => ({
     ...server,
-    tools: (store.catalog.tools || []).filter((tool) => tool.server === server.name)
-  })))
+    tools: (store.catalog.tools || []).filter(tool => tool.server === server.name &&
+      `${server.name} ${tool.name} ${tool.description || ''}`.toLowerCase().includes(query))
+  })).filter(server => !query || server.tools.length)
+})
 
 async function load () {
   loading.value = true

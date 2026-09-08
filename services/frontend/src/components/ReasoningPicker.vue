@@ -1,7 +1,7 @@
 <template>
   <button class="pick" type="button" aria-label="Reasoning effort" :disabled="busy || (!efforts.length && !modelValue)">
     <span aria-hidden="true" class="material-icons pick__icon">psychology</span>
-    <span class="truncate">{{ modelValue ? label(modelValue) : 'Reasoning: default' }}</span>
+    <span class="truncate">{{ modelValue ? label(modelValue) : 'Provider default' }}</span>
     <span aria-hidden="true" class="material-icons pick__caret">expand_more</span>
     <q-menu anchor="top left" self="bottom left" class="pick-menu">
       <div class="pick-menu__label section-label">Reasoning effort</div>

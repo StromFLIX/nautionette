@@ -84,4 +84,10 @@ const needsInternet = computed(() => ['pending', 'deciding'].includes(props.chat
   flex: 0 0 auto;
   color: var(--text-muted);
 }
+
+@media (hover: hover) {
+  .chat-list-item__menu { opacity: 0; transition: opacity var(--transition); }
+  .chat-list-item:hover .chat-list-item__menu,
+  .chat-list-item:focus-within .chat-list-item__menu { opacity: 1; }
+}
 </style>

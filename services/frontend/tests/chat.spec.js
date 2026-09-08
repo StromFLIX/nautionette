@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { openChatConfiguration } from './helpers'
 
 function refreshReadState (data) {
   const lastRead = data.messages.findIndex((message) => message.id === data.chat.last_read_message_id)
@@ -770,6 +771,8 @@ for (const reason of ['The provider marks this model as text-only.', 'No compati
     await page.goto('/chats/alpha')
     await expect(page.getByRole('button', { name: 'Attach images' })).toBeDisabled()
     await expect(page.locator('input[type=file]')).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Attach images' })).toHaveAttribute('title', new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    await openChatConfiguration(page)
     await expect(page.locator('.composer [role=status]')).toContainText(reason)
     for (const type of ['paste', 'drop', 'change']) {
       await page.locator(type === 'change' ? 'input[type=file]' : 'textarea').evaluate((el, { type, bytes }) => {
@@ -797,9 +800,10 @@ test('unknown image support is labelled unverified and remains usable', async ({
   const state = initial()
   await mockChats(context, state)
   await page.goto('/chats/alpha')
-  await expect(page.locator('.composer [role=status]')).toContainText('Image support unverified')
   await expect(page.getByRole('button', { name: 'Attach images' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Attach images' })).toHaveAttribute('title', /Image support unverified/)
   await page.locator('input[type=file]').setInputFiles(imageFile)
+  await expect(page.locator('.composer [role=status]')).toContainText('Image support unverified')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect(page.locator('.msg--user img')).toBeVisible()
 })
@@ -880,6 +884,7 @@ for (const width of [1440, 320]) {
     await mockChats(context, state)
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/chats/alpha')
+    await openChatConfiguration(page)
     const picker = page.getByRole('button', { name: 'Reasoning effort', exact: true })
     await expect(picker).toContainText('default')
     await picker.click()
@@ -918,6 +923,7 @@ test('welcome composer includes reasoning selection in chat creation', async ({ 
   state.models = reasoningModels()
   await mockChats(context, state)
   await page.goto('/chats')
+  await openChatConfiguration(page)
   await page.getByRole('button', { name: 'Reasoning effort', exact: true }).click()
   await page.getByRole('menuitemradio', { name: 'Extra high', exact: true }).click()
   await page.locator('textarea').fill('Think carefully')

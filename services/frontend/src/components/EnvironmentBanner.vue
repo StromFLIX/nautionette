@@ -26,11 +26,11 @@ onMounted(async () => {
 .environment-banner {
   flex: 0 0 auto;
   padding: 8px 12px;
-  background: #ffcf5c;
-  color: #302000;
+  background: var(--warning);
+  color: var(--warning-text);
   text-align: center;
   font-size: 13px;
   line-height: 1.4;
-  border-bottom: 2px solid #986500;
+  border-bottom: 2px solid var(--warning-text);
 }
 </style>

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { openChatConfiguration } from './helpers'
 
 const firstId = 'a'.repeat(32)
 const secondId = 'b'.repeat(32)
@@ -112,6 +113,7 @@ for (const width of [1440, 320]) {
     state.projects.push({ id: secondId, repository_id: 456, full_name: 'team/another-repository-with-a-long-name', status: 'ready', path: `/projects/${secondId}` })
     await page.goto('/chats')
     if (width === 320) await page.getByTitle('New chat', { exact: true }).click()
+    await openChatConfiguration(page)
     await page.getByRole('button', { name: 'Select projects', exact: true }).click()
     await page.getByRole('checkbox', { name: 'team/nautionette', exact: true }).check()
     await page.getByRole('checkbox', { name: 'team/another-repository-with-a-long-name' }).check()
@@ -151,6 +153,7 @@ test('project selection is saved before sending and follows server snapshots', a
   const state = await mockProjects(context)
   state.projects = [{ id: firstId, full_name: repository.full_name, status: 'ready' }]
   await page.goto('/chats/alpha')
+  await openChatConfiguration(page)
   await page.getByRole('button', { name: 'Select projects', exact: true }).click()
   await page.getByRole('checkbox', { name: repository.full_name, exact: true }).check()
   await expect.poll(() => state.chat.project_ids).toEqual([firstId])
@@ -183,6 +186,7 @@ for (const fail of [false, true]) {
       return route.fallback()
     })
     await page.goto('/chats/alpha')
+    await openChatConfiguration(page)
     await page.getByRole('button', { name: 'Select projects', exact: true }).click()
     await page.getByRole('checkbox', { name: repository.full_name, exact: true }).check()
     await expect.poll(() => saving).toBe(true)
@@ -210,11 +214,16 @@ test('unavailable selected projects can be removed without being silently replac
   const state = await mockProjects(context)
   state.chat.project_ids = [firstId]
   await page.goto('/chats/alpha')
+  await openChatConfiguration(page)
   await page.getByRole('button', { name: 'Select projects', exact: true }).click()
   await expect(page.getByRole('checkbox')).toBeChecked()
   await expect(page.getByText('unavailable', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Clear project selection' }).click()
+  const clear = page.getByRole('button', { name: 'Clear project selection' })
+  await clear.hover()
+  await expect(page.getByRole('tooltip').filter({ hasText: /^Clear selection$/ })).toBeVisible()
+  await clear.click()
   await page.keyboard.press('Escape')
+  await expect(page.locator('.project-picker')).toBeHidden()
   await page.locator('.composer__input').fill('No project needed')
   await page.locator('.composer__send').click()
   await expect.poll(() => state.sent.length).toBe(1)

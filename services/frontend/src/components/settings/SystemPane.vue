@@ -41,7 +41,10 @@
           </div>
           <span class="system-health__badge" :data-tone="tone(component)">{{ statusLabel(component) }}</span>
         </header>
-        <HealthDetails v-if="component.detail !== undefined && component.detail !== null && component.detail !== ''" :value="component.detail" />
+        <details v-if="component.detail !== undefined && component.detail !== null && component.detail !== ''" class="system-service__diagnostics" :open="tone(component) !== 'success'">
+          <summary>Diagnostics</summary>
+          <HealthDetails :value="component.detail" />
+        </details>
         <p v-else class="caption dim">No diagnostics reported.</p>
       </article>
     </section>
@@ -56,7 +59,7 @@
       </div>
     </section>
 
-    <details class="system-health__raw">
+    <details id="system-raw" class="system-health__raw">
       <summary>Raw system response</summary>
       <pre>{{ JSON.stringify(store.system, null, 2) }}</pre>
     </details>
@@ -141,6 +144,7 @@ onMounted(refresh)
 .system-health h3 { display: flex; gap: 8px; margin: 0 0 12px; font-size: 13px; line-height: 1.4; font-weight: 650; letter-spacing: 0; }
 .system-service { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-panel); padding: 16px; margin-top: 10px; min-width: 0; }
 .system-service__header { margin-bottom: 14px; flex-wrap: wrap; }
+.system-service__diagnostics > summary { color: var(--text-dim); font-size: 11px; cursor: pointer; margin-bottom: 12px; }
 .system-service__icon { color: var(--text-muted); font-size: 21px; }
 .system-service__name { flex: 1; min-width: 120px; overflow-wrap: anywhere; }
 .system-service h4 { margin: 0 0 3px; font-size: 14px; line-height: 1.4; font-weight: 600; letter-spacing: 0; }

@@ -1,9 +1,6 @@
 <template>
   <h2 class="settings__title">Git authorship</h2>
-  <p class="caption dim">
-    Defaults for new commits in all selected repositories, starting with the next agent call.
-    Existing commits and GitHub push permissions are unchanged.
-  </p>
+  <p class="settings__intro">Attribution for new commits. Existing history and permissions stay unchanged.</p>
 
   <form v-if="loaded" @submit.prevent="save(false)">
     <div class="setting">
@@ -44,7 +41,7 @@
       </p>
     </div>
 
-    <div class="setting">
+    <div id="commit-preview" class="setting">
       <div class="setting__label">Commit preview</div>
       <pre class="git-preview">{{ preview }}</pre>
     </div>

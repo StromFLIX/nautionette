@@ -1,53 +1,58 @@
-/* Design tokens. Every colour, radius and shadow in the app comes from here. */
-
+/* Orbit is the no-JS / first-paint fallback. themes.js owns editable tokens. */
 :root {
   color-scheme: dark;
+  --surface-app: #101517;
+  --surface-rail: #0c1113;
+  --surface-panel: #151c1f;
+  --surface-raised: #1b2529;
+  --surface-overlay: #202b30;
+  --surface-input: #192226;
+  --surface-code: #0d1214;
+  --surface-hover: #e5edee0b;
+  --surface-active: #e5edee14;
+  --border: #e5edee17;
+  --border-strong: #e5edee2b;
+  --text: #e5edee;
+  --text-muted: #a3b3b8;
+  --text-dim: #84989f;
+  --text-faint: var(--border);
+  --accent: #79dfc5;
+  --accent-hover: #8ce2cc;
+  --accent-press: #6cc7b0;
+  --accent-soft: #79dfc51f;
+  --accent-text: #101517;
+  --success: #81d6a3;
+  --success-soft: #81d6a31f;
+  --warning: #edc17c;
+  --warning-soft: #edc17c1f;
+  --warning-text: #101517;
+  --danger: #ff939c;
+  --danger-soft: #ff939c1f;
+  --bubble-out: #203330;
+  --bubble-text: var(--text);
+  --bubble-in: var(--surface-panel);
+  --syntax-comment: #899da4;
+  --syntax-keyword: #c4a7e7;
+  --syntax-string: #a3d9ac;
+  --syntax-number: #edbd8d;
+  --syntax-function: #8acde8;
+  --syntax-variable: #dae5e9;
+  --syntax-builtin: #edd39a;
+  --syntax-meta: #eaa5b5;
+  --flow-activity: #7ed6cd;
+  --flow-signal: #d9ace4;
 
-  /* Surfaces, from the back of the window to the front of a popover. */
-  --surface-app: #0e1014;
-  --surface-rail: #131620;
-  --surface-panel: #15181f;
-  --surface-raised: #1a1e27;
-  --surface-overlay: #1e222c;
-  --surface-input: #1c202a;
-  --surface-hover: rgba(255, 255, 255, 0.045);
-  --surface-active: rgba(255, 255, 255, 0.08);
-
-  --border: rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.13);
-
-  --text: #e9ecf2;
-  --text-muted: #98a1b3;
-  --text-faint: #69718333;
-  --text-dim: #697183;
-
-  /* One accent, used for the things a click acts on. */
-  --accent: #4f8cff;
-  --accent-hover: #6b9dff;
-  --accent-press: #3d78e6;
-  --accent-soft: rgba(79, 140, 255, 0.14);
-  --accent-text: #ffffff;
-
-  --success: #3fb950;
-  --success-soft: rgba(63, 185, 80, 0.14);
-  --warning: #d9a441;
-  --warning-soft: rgba(217, 164, 65, 0.14);
-  --danger: #f0616d;
-  --danger-soft: rgba(240, 97, 109, 0.14);
-
-  --bubble-out: linear-gradient(140deg, #3f6fd8, #4f8cff);
-  --bubble-in: #1c212c;
-
-  --radius-xs: 6px;
+  --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
   --radius-pill: 999px;
-
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36);
-  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5);
+  --octagon: polygon(29.3% 0, 70.7% 0, 100% 29.3%, 100% 70.7%, 70.7% 100%, 29.3% 100%, 0 70.7%, 0 29.3%);
+  --shadow-color: 0 0 0;
+  --shadow-sm: 0 2px 4px rgb(var(--shadow-color) / 0.12);
+  --shadow-md: 0 8px 28px rgb(var(--shadow-color) / 0.2);
+  --shadow-lg: 0 24px 70px rgb(var(--shadow-color) / 0.28);
 
   --space-1: 4px;
   --space-2: 8px;
@@ -55,20 +60,23 @@
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+  --chat-font-size: 15px;
+  --code-font-size: 12.5px;
+  --content-width: 880px;
+  --rail-width: 72px;
+  --side-width: 320px;
+  --header-height: 64px;
+  --mobile-nav-height: 62px;
+  --list-padding: 11px;
 
-  --font: 'Inter var', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui,
-    'Helvetica Neue', sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Code', Menlo, monospace;
-
-  --rail-width: 68px;
-  --side-width: 336px;
-  --header-height: 56px;
-  --mobile-nav-height: 58px;
-
-  /* Set from JS when the on-screen keyboard covers the viewport instead of resizing it. */
+  /* Native keyboards sometimes overlay rather than resize the viewport. */
   --keyboard-inset: 0px;
   --app-height: calc(100dvh - var(--keyboard-inset));
-
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  --transition: 140ms var(--ease);
+  --transition: 160ms var(--ease);
 }
+
+:root[data-color-scheme='light'] { --shadow-color: 53 64 79; }
+:root[data-density='compact'] { --list-padding: 6px; }

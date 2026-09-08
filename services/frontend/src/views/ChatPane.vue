@@ -3,7 +3,7 @@
 
   <div v-else class="thread stack grow">
     <header class="pane-head">
-      <button class="btn btn--icon pane-head__back" @click="backTo('/chats')">
+      <button class="btn btn--icon pane-head__back" aria-label="Back to chats" @click="backTo('/chats')">
         <span class="material-icons">arrow_back</span>
         <span v-if="draftCount" class="pane-head__badge">{{ draftCount }}</span>
       </button>
@@ -84,7 +84,7 @@
       </div>
     </div>
 
-    <div class="thread__foot">
+    <div class="thread__foot scroll-y">
       <p v-if="cacheError" class="caption" role="alert">{{ cacheError }}</p>
       <p v-if="controlError" class="caption" role="alert">{{ controlError }}</p>
       <p v-if="readError" class="caption" role="alert">{{ readError }}</p>
@@ -148,6 +148,7 @@ import { api, chatStream } from '../api'
 import { delivery, onDelivery, pendingMessages } from '../delivery'
 import { latestContext } from '../context'
 import { cacheError, chatCache, chatCacheScope } from '../chat-cache'
+import { reducedMotion } from '../preferences'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -294,7 +295,7 @@ function connectChat () {
 function scrollDown (behavior = 'smooth') {
   nextTick(() => {
     const el = scroller.value
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior })
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'instant' : behavior })
   })
 }
 
@@ -518,9 +519,9 @@ onUnmounted(() => {
 .thread__inner {
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
   min-height: 100%;
-  max-width: 900px;
+  max-width: calc(var(--content-width) + 48px);
   margin: 0 auto;
   padding: 0 24px;
 }
@@ -553,18 +554,19 @@ onUnmounted(() => {
 }
 
 .thread__foot {
-  padding: 10px 24px 14px;
-  border-top: 1px solid var(--border);
+  /* Keep the header and every control reachable when the keyboard reduces the viewport. */
+  min-height: 0;
+  padding: 12px 24px 20px;
   background: var(--surface-app);
 }
 
 .thread__foot > :deep(.composer) {
-  max-width: 900px;
+  max-width: var(--content-width);
   margin: 0 auto;
 }
 
 .thread__approval {
-  max-width: 900px;
+  max-width: var(--content-width);
   margin: 0 auto 10px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border);
@@ -613,8 +615,8 @@ onUnmounted(() => {
   flex: none;
   width: 34px;
   height: 34px;
-  border-radius: 50%;
-  color: #fff;
+  clip-path: var(--octagon);
+  color: var(--accent);
   font-size: 12px;
   font-weight: 650;
 }
@@ -634,7 +636,7 @@ onUnmounted(() => {
   padding: 0 4px;
   border-radius: var(--radius-pill);
   background: var(--warning);
-  color: #16181d;
+  color: var(--warning-text);
   font-size: 10px;
   font-weight: 700;
   line-height: 15px;

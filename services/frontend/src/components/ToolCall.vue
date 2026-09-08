@@ -57,7 +57,7 @@ const result = computed(() => prettyJson(props.step.result))
   margin: 6px 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.18);
+  background: var(--surface-panel);
   overflow: hidden;
 }
 
@@ -168,10 +168,10 @@ const result = computed(() => prettyJson(props.step.result))
   max-height: 300px;
   padding: 8px 10px;
   border-radius: var(--radius-xs);
-  background: rgba(0, 0, 0, 0.32);
+  background: var(--surface-code);
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--code-font-size);
   line-height: 1.5;
   white-space: pre-wrap;
   overflow: auto;

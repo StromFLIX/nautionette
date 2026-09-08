@@ -2,7 +2,7 @@
   <h2 class="settings__title">Projects</h2>
   <p v-if="error" class="projects-error" role="alert">{{ error }}</p>
   <p v-if="route.query.github === 'pending'" class="caption" role="status">Waiting for organization approval.</p>
-  <div class="setting">
+  <div id="github-app" class="setting">
     <div class="row project-heading">
       <div class="setting__label grow">GitHub App</div>
       <span v-if="app.configured" class="chip chip--success">Connected</span>
@@ -36,7 +36,7 @@
     </form>
   </div>
 
-  <div class="setting">
+  <div id="repositories" class="setting">
     <div class="row project-heading">
       <div class="setting__label grow">Repositories</div>
       <span class="caption mono dim">/projects</span>
@@ -63,15 +63,16 @@
     </div>
   </div>
 
-  <div v-if="app.configured" class="setting">
+  <div id="available-repositories" class="setting">
     <div class="row project-heading">
       <div class="setting__label grow">Available repositories</div>
-      <button class="btn btn--icon btn--sm" aria-label="Refresh GitHub repositories" :disabled="repositoryLoading" @click="loadRepositories(1)">
+      <button v-if="app.configured" class="btn btn--icon btn--sm" aria-label="Refresh GitHub repositories" :disabled="repositoryLoading" @click="loadRepositories(1)">
         <span class="material-icons">refresh</span><q-tooltip>Refresh repositories</q-tooltip>
       </button>
     </div>
-    <input v-model="query" class="field project-search" aria-label="Search GitHub repositories" placeholder="Search repositories" />
-    <p v-if="repositoryLoading" class="caption dim" role="status">Loading repositories...</p>
+    <input v-if="app.configured" v-model="query" class="field project-search" aria-label="Search GitHub repositories" placeholder="Search repositories" />
+    <p v-if="!app.configured" class="caption dim">Connect GitHub to browse available repositories.</p>
+    <p v-else-if="repositoryLoading" class="caption dim" role="status">Loading repositories...</p>
     <p v-else-if="!filtered.length" class="caption dim">No matching repositories on this page.</p>
     <div v-for="repository in filtered" :key="repository.id" class="project-row">
       <span class="material-icons project-row__icon">{{ repository.private ? 'lock' : 'code' }}</span>

@@ -1,5 +1,6 @@
 <template>
-  <q-menu ref="menu" anchor="top right" self="bottom right" class="project-picker" @show="load">
+  <q-menu ref="menu" anchor="top right" self="bottom right" class="project-picker" @show="load"
+    @keydown.esc.stop.prevent="menu?.hide($event)">
     <div class="project-picker__head">
       <input v-model="query" class="field grow" aria-label="Search projects" placeholder="Search projects" />
       <button class="btn btn--icon btn--sm" aria-label="Clear project selection" @click="$emit('update:modelValue', [])">

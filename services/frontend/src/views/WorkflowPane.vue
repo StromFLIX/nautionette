@@ -1,13 +1,12 @@
 <template>
-  <div v-if="!name" class="empty">
-    <span class="material-icons" style="font-size: 40px">account_tree</span>
-    <div class="pane-head__title">Workflows</div>
-  </div>
+  <EmptyState v-if="!name" icon="account_tree" :title="store.workflows.length ? 'Choose a workflow' : 'An idea, on repeat'"
+    :description="store.workflows.length ? 'Select a workflow to explore its steps and schedule.' : 'Start with a conversation. Turn it into something that runs for you.'"
+    to="/chats" action="Open chats" />
 
   <!-- a draft waiting for a human -->
   <div v-else-if="draft" class="stack grow">
     <header class="pane-head draft-head">
-      <button class="btn btn--icon pane-head__back" @click="backTo('/workflows')">
+      <button class="btn btn--icon pane-head__back" aria-label="Back to workflows" @click="backTo('/workflows')">
         <span class="material-icons">arrow_back</span>
       </button>
       <div class="grow">
@@ -67,7 +66,7 @@
   <!-- a published workflow -->
   <div v-else-if="workflow" class="stack grow">
     <header class="pane-head">
-      <button class="btn btn--icon pane-head__back" @click="backTo('/workflows')">
+      <button class="btn btn--icon pane-head__back" aria-label="Back to workflows" @click="backTo('/workflows')">
         <span class="material-icons">arrow_back</span>
       </button>
       <div class="avatar-sq" :style="avatarStyle(workflow.name)">
@@ -87,8 +86,8 @@
           ? `Next ${scheduleTime(workflow.schedule.next_run, workflow.schedule.timezone)}`
           : workflow.schedule.description }}
       </span>
-      <button class="btn btn--icon">
-        <span class="material-icons">more_vert</span>
+      <button class="btn btn--icon" aria-label="Workflow actions">
+        <span class="material-icons" aria-hidden="true">more_vert</span>
         <q-menu anchor="bottom right" self="top right" class="pick-menu">
           <button class="pick-menu__item" @click="toggleDisabled">
             <span class="material-icons pick__icon">{{ disabled ? 'play_circle' : 'pause_circle' }}</span>
@@ -101,7 +100,7 @@
       </button>
     </header>
 
-    <nav class="tabs">
+    <nav class="tabs" aria-label="Workflow views">
       <button
         v-for="item in tabs" :key="item" class="tab"
         :class="{ 'tab--active': tab === item }" @click="tab = item"
@@ -147,7 +146,7 @@
           </div>
           <div class="row" style="margin-top: 14px">
             <button class="btn btn--primary" :disabled="running || disabled" @click="run">
-              <span class="material-icons" style="font-size: 17px">play_arrow</span>
+              <span class="material-icons" style="font-size: 17px" aria-hidden="true">play_arrow</span>
               {{ running ? 'Starting…' : 'Run now' }}
             </button>
           </div>
@@ -229,7 +228,7 @@
               class="btn btn--primary" :disabled="disabled || scheduling || !scheduleReady"
               @click="schedule"
             >
-              <span class="material-icons" style="font-size: 17px">event_repeat</span>
+              <span class="material-icons" style="font-size: 17px" aria-hidden="true">event_repeat</span>
               {{ scheduling ? 'Saving…' : workflow.schedule ? 'Update schedule' : 'Save schedule' }}
             </button>
             <button v-if="workflow.schedule" class="btn btn--danger" :disabled="scheduling" @click="unschedule">
@@ -286,6 +285,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { useRoute, useRouter } from 'vue-router'
 import CodeViewer from '../components/CodeViewer.vue'
+import EmptyState from '../components/EmptyState.vue'
 import TriggerSnippet from '../components/TriggerSnippet.vue'
 import WorkflowGraph from '../components/WorkflowGraph.vue'
 import ExecutionFlow from '../components/ExecutionFlow.vue'
@@ -304,7 +304,10 @@ const chatModes = [
   { value: 'same', label: 'One chat' },
   { value: 'new', label: 'A chat per run' }
 ]
-const tab = ref('Flow')
+const tab = computed({
+  get: () => [...tabs, 'Code diff'].includes(route.query.tab) ? route.query.tab : 'Flow',
+  set: value => router.replace({ query: { ...route.query, tab: value === 'Flow' ? undefined : value } })
+})
 const selectedRun = ref('')
 const draftMode = ref('changes')
 const loadError = ref('')
@@ -377,7 +380,6 @@ async function load () {
   draft.value = null
   validation.value = null
   loadError.value = ''
-  tab.value = 'Flow'
   selectedRun.value = ''
   draftMode.value = 'changes'
   if (!name.value) return
@@ -704,8 +706,8 @@ onMounted(load)
   flex: none;
   width: 34px;
   height: 34px;
-  border-radius: var(--radius-sm);
-  color: #fff;
+  clip-path: var(--octagon);
+  color: var(--accent);
 }
 
 .avatar-sq .material-icons {

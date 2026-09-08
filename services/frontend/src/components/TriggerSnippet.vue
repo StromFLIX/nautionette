@@ -82,7 +82,7 @@ async function copy () {
 .trigger {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: #0b0d12;
+  background: var(--surface-code);
   overflow: hidden;
 }
 

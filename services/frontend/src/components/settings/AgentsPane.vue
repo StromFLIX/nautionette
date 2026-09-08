@@ -1,7 +1,7 @@
 <template>
-  <h2 class="settings__title">Agents and models</h2>
+  <h2 class="settings__title">Agents & models</h2>
 
-  <div class="setting">
+  <div id="agent-sets" class="setting">
     <div class="setting__label">Agent sets</div>
     <div v-for="set in store.catalog.agent_sets || []" :key="set.name" class="line">
       <span class="grow truncate">{{ set.name }}</span>
@@ -12,7 +12,7 @@
     </div>
   </div>
 
-  <div class="setting">
+  <div id="model-integrations" class="setting">
     <div class="row integration-head">
       <div class="setting__label grow">Model integrations</div>
       <button class="btn btn--sm btn--outline" :disabled="loading" @click="refresh">
@@ -26,8 +26,7 @@
       </button>
     </div>
     <p class="caption dim">
-      Provider routes live in agentgateway. Their models are discovered automatically and
-      labeled by both integration and model vendor in every picker.
+      Connect a provider. Models appear in every picker automatically.
     </p>
 
     <div v-if="adding" class="integration-add">
@@ -86,11 +85,14 @@
           {{ item.discovery.ok ? `${item.model_count} models` : 'needs attention' }}
         </span>
       </div>
-      <p class="caption dim">{{ item.description }}</p>
-      <div class="integration-meta caption dim">
-        <span>route <code class="mono">{{ item.model_match }}</code></span>
-        <span>{{ credentialLabel(item.credential) }}</span>
-      </div>
+      <details class="integration-details">
+        <summary>Routing & credentials</summary>
+        <p class="caption dim">{{ item.description }}</p>
+        <div class="integration-meta caption dim">
+          <span>route <code class="mono">{{ item.model_match }}</code></span>
+          <span>{{ credentialLabel(item.credential) }}</span>
+        </div>
+      </details>
       <p v-if="!item.discovery.ok" class="caption integration-warning">
         {{ item.discovery.message }}
       </p>
@@ -123,8 +125,9 @@
     </div>
   </div>
 
-  <div class="setting">
-    <div class="setting__label">Models reachable through the gateway</div>
+  <details id="available-models" class="settings-disclosure model-catalog">
+    <summary><span class="grow">Model catalog</span><span class="caption dim">{{ store.catalog.models?.length || 0 }} models</span></summary>
+    <div class="catalog-body">
     <template v-for="gateway in modelGroups" :key="gateway.name">
       <p class="caption dim" style="margin-top: 10px">
         via <code class="mono">{{ gateway.name }}</code> · {{ gateway.total }} models
@@ -135,7 +138,8 @@
         <span class="caption dim">{{ provider.count }}</span>
       </div>
     </template>
-  </div>
+    </div>
+  </details>
 </template>
 
 <script setup>

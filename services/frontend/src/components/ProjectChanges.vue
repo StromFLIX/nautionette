@@ -93,7 +93,7 @@ watch([() => props.chatId, () => props.projectIds.join(','), () => props.running
 <style scoped>
 .project-changes {
   margin: 0 auto 8px;
-  max-width: 900px;
+  max-width: var(--content-width);
   max-height: 40dvh;
   overflow-y: auto;
   overscroll-behavior: contain;

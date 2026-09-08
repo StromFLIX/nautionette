@@ -1,22 +1,23 @@
 <template>
-  <nav class="rail">
+  <nav class="rail" aria-label="Main navigation">
     <RouterLink to="/chats" class="rail__brand" aria-label="Nautionette">
-      <img src="/favicon.svg" width="26" height="26" alt="" />
+      <BrandMark />
     </RouterLink>
 
     <div class="rail__nav">
       <RouterLink
         v-for="item in items" :key="item.name" :to="item.to" class="rail__item"
-        :class="{ 'rail__item--active': active === item.name }"
+        :class="{ 'rail__item--active': active === item.name }" :aria-current="active === item.name ? 'page' : undefined"
       >
-        <span class="material-icons">{{ item.icon }}</span>
+        <span class="material-icons" aria-hidden="true">{{ item.icon }}</span>
         <span class="rail__label">{{ item.label }}</span>
         <span v-if="item.badge" class="rail__badge">{{ item.badge }}</span>
       </RouterLink>
     </div>
 
     <RouterLink
-      class="rail__item rail__settings" :to="`/settings/${health === 'degraded' ? 'system' : 'general'}`"
+      class="rail__item rail__settings" :class="{ 'rail__item--active': active === 'settings' }"
+      :aria-current="active === 'settings' ? 'page' : undefined" :to="`/settings/${health === 'degraded' ? 'system' : 'general'}`"
       :title="health === 'degraded' ? 'Settings — something needs attention' : 'Settings'"
       aria-label="Settings"
     >
@@ -31,13 +32,14 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { draftCount, health } from '../store'
+import BrandMark from './BrandMark.vue'
 
 const route = useRoute()
 const active = computed(() => route.name)
 
 const items = computed(() => [
-  { name: 'chats', label: 'Chats', icon: 'chat_bubble', to: '/chats' },
-  { name: 'workflows', label: 'Flows', icon: 'account_tree', to: '/workflows', badge: draftCount.value || 0 },
+  { name: 'chats', label: 'Chats', icon: 'chat_bubble_outline', to: '/chats' },
+  { name: 'workflows', label: 'Workflows', icon: 'account_tree', to: '/workflows', badge: draftCount.value || 0 },
   { name: 'runs', label: 'Runs', icon: 'history', to: '/runs' }
 ])
 </script>
@@ -47,8 +49,8 @@ const items = computed(() => [
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 10px 0;
+  gap: 8px;
+  padding: 16px 0 10px;
   background: var(--surface-rail);
   border-right: 1px solid var(--border);
 }
@@ -58,7 +60,7 @@ const items = computed(() => [
   place-items: center;
   width: 40px;
   height: 40px;
-  margin-bottom: 10px;
+  margin-bottom: 18px;
   border-radius: var(--radius-md);
   opacity: 0.9;
 }
@@ -77,9 +79,9 @@ const items = computed(() => [
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  width: 54px;
-  height: 50px;
+  gap: 5px;
+  width: calc(100% - 12px);
+  height: 56px;
   border: none;
   border-radius: var(--radius-md);
   background: transparent;
@@ -98,6 +100,16 @@ const items = computed(() => [
 .rail__item--active {
   background: var(--accent-soft);
   color: var(--accent-hover);
+}
+
+.rail__item--active::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  width: 2px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
 }
 
 .rail__settings {
@@ -127,7 +139,7 @@ const items = computed(() => [
   padding: 0 4px;
   border-radius: var(--radius-pill);
   background: var(--warning);
-  color: #16181d;
+  color: var(--warning-text);
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
@@ -173,5 +185,7 @@ const items = computed(() => [
   .rail__badge {
     right: max(8px, calc(50% - 24px));
   }
+
+  .rail__item--active::before { display: none; }
 }
 </style>

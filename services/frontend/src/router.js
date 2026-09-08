@@ -23,7 +23,7 @@ const UNDER = { chats: '/chats', workflows: '/workflows', runs: '/runs', setting
  * before the first render.
  */
 export async function seedHistory () {
-  const entry = router.resolve(window.location.pathname + window.location.search)
+  const entry = router.resolve(window.location.pathname + window.location.search + window.location.hash)
   const list = UNDER[entry.name]
   if (!list || entry.path === list) return
   await router.replace(list)

@@ -78,6 +78,20 @@ Five rules the diagram encodes:
 | **Temporal** | Orchestrator and workers. Durable runs, retries, schedules and history, stored in PostgreSQL. A workflow step can call MCP tools, invoke Pi, or run plain Python. |
 | **Shared volume** | Where workflow files live. What an agent writes is what a worker loads. Run artifacts land on their own volume, until there is an object store. |
 
+## Workspace customization
+
+The workspace uses a shared design system with subtle octagonal identity and
+searchable, grouped settings. **Settings > Appearance** offers Orbit, Nebula,
+Daylight and Sand, with editable colors, fonts, spacing and layout tokens, plus
+validated theme import/export. **Settings > Workspace** controls density, sidebar
+width, composer behavior, code wrapping and graph orientation. These preferences
+save on this device; instance settings and per-workflow configuration stay separate.
+
+Agents, reasoning, tools and projects remain available behind **Chat configuration**.
+Open Settings with **Ctrl/Command + ,** and focus its search with **/**.
+See [Frontend design system](docs/frontend-design.md) for the extension points,
+persistence model and testing guidance.
+
 ## Chat delivery and recovery
 
 Web and Android use the same thin client. The backend owns accepted messages,
@@ -596,7 +610,7 @@ Frontend verification (from the repository root):
 npm --prefix services/frontend ci
 npm --prefix services/frontend test
 services/frontend/node_modules/.bin/playwright install chromium
-npm --prefix services/frontend run test:e2e
+npm --prefix services/frontend run test:e2e -- --workers=1
 npm --prefix services/frontend run build
 ```
 

@@ -1,5 +1,5 @@
 <template>
-  <div class="viewer">
+  <div class="viewer" :class="{ 'viewer--wrap': preferences.codeWrap }">
     <nav v-if="files.length > 1" class="viewer__files">
       <button
         v-for="file in files" :key="file.name" class="viewer__file"
@@ -32,6 +32,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { highlight } from '../highlight'
+import { preferences } from '../preferences'
 
 const props = defineProps({
   files: { type: Array, default: () => [] }
@@ -61,7 +62,7 @@ watch(() => props.files, (files) => {
   display: flex;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: #0b0d12;
+  background: var(--surface-code);
   overflow: hidden;
 }
 
@@ -131,12 +132,13 @@ watch(() => props.files, (files) => {
   margin: 0;
   padding: 10px 0;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--code-font-size);
   line-height: 1.65;
 }
 
 .viewer__line {
   display: flex;
+  font-size: inherit;
 }
 
 .viewer__gutter {
@@ -144,12 +146,25 @@ watch(() => props.files, (files) => {
   width: 44px;
   padding-right: 14px;
   text-align: right;
-  color: #3d4557;
+  color: var(--text-dim);
   user-select: none;
 }
 
 .viewer__text {
   white-space: pre;
+  min-width: 0;
   padding-right: 16px;
+}
+
+.viewer--wrap .viewer__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .viewer { flex-direction: column; }
+  .viewer__files { flex-direction: row; width: auto; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  .viewer__file { flex: none; max-width: 240px; }
+  .viewer__gutter { width: 32px; padding-right: 8px; }
 }
 </style>

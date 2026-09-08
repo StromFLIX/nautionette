@@ -18,14 +18,14 @@
       </div>
       <div v-if="error" class="bubble__error caption">{{ error }}</div>
       <div v-if="role === 'assistant' && responseText.trim()" class="bubble__actions">
-        <button type="button" class="btn btn--sm" @click="copy(responseText, 'Response')">
-          <span class="material-icons" aria-hidden="true">content_copy</span>Copy response
+        <button type="button" class="btn btn--icon btn--sm" aria-label="Copy response" @click="copy(responseText, 'Response')">
+          <span class="material-icons" aria-hidden="true">content_copy</span><q-tooltip>Copy response</q-tooltip>
         </button>
       </div>
       <div class="bubble__copy-status caption" aria-live="polite" aria-atomic="true">{{ copyStatus }}</div>
     </div>
-    <span v-if="time || deliveryState" class="msg__time caption">
-      {{ time }}
+    <span v-if="(time && preferences.showTimestamps) || deliveryState" class="msg__time caption">
+      {{ preferences.showTimestamps ? time : '' }}
       <span v-if="deliveryState === 'sending'" class="msg__delivery" role="status">
         <span class="material-icons" aria-hidden="true">schedule</span>Sending
       </span>
@@ -50,6 +50,7 @@ import ChatImage from './ChatImage.vue'
 import { renderMarkdown } from '../markdown'
 import { copyText } from '../clipboard'
 import { RUN_TONE, shortTime } from '../format'
+import { preferences } from '../preferences'
 
 const props = defineProps({
   role: { type: String, default: 'assistant' },
@@ -130,7 +131,7 @@ const time = computed(() => shortTime(props.createdAt))
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: var(--space-5);
 }
 
 .msg--user {
@@ -138,8 +139,9 @@ const time = computed(() => shortTime(props.createdAt))
 }
 
 .bubble {
-  max-width: min(680px, 78%);
-  padding: 9px 13px;
+  max-width: 86%;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--chat-font-size);
   border-radius: var(--radius-lg);
   overflow-wrap: anywhere;
 }
@@ -147,10 +149,12 @@ const time = computed(() => shortTime(props.createdAt))
 .msg--user .bubble {
   background: var(--bubble-out);
   border-bottom-right-radius: var(--radius-xs);
-  color: #fff;
+  color: var(--bubble-text);
 }
 
 .msg--assistant .bubble {
+  width: 100%;
+  max-width: calc(100% - 60px);
   padding: 9px 0;
   background: transparent;
   border: 0;
@@ -158,7 +162,7 @@ const time = computed(() => shortTime(props.createdAt))
 }
 
 .bubble--wide {
-  max-width: min(760px, 92%);
+  max-width: 92%;
 }
 
 .bubble__run {
@@ -285,21 +289,22 @@ const time = computed(() => shortTime(props.createdAt))
 .bubble__body h3,
 .bubble__body h4 {
   margin: 12px 0 6px;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: calc(var(--chat-font-size) * 1.12);
+  font-weight: 600;
 }
 
 .bubble__body code {
   padding: 1px 5px;
   border-radius: var(--radius-xs);
-  background: rgba(0, 0, 0, 0.28);
+  background: var(--surface-active);
 }
 
 .bubble__body pre {
   margin: 8px 0;
   padding: 11px 13px;
   border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.32);
+  background: var(--surface-code);
+  color: var(--text);
   overflow-x: auto;
 }
 
@@ -315,8 +320,10 @@ const time = computed(() => shortTime(props.createdAt))
 
 .bubble__body .code-block {
   margin: 8px 0;
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.32);
+  background: var(--surface-code);
+  color: var(--text);
   overflow: hidden;
 }
 
@@ -392,5 +399,12 @@ const time = computed(() => shortTime(props.createdAt))
     right: auto;
     left: 0;
   }
+
+  .msg--assistant .bubble { max-width: 100%; }
+}
+
+@media (hover: hover) {
+  .bubble__actions { opacity: 0; transition: opacity var(--transition); }
+  .msg:hover .bubble__actions, .msg:focus-within .bubble__actions { opacity: 1; }
 }
 </style>

@@ -1,12 +1,9 @@
 <template>
-  <div v-if="!id" class="empty">
-    <span class="material-icons" style="font-size: 40px">history</span>
-    <div class="pane-head__title">Runs</div>
-  </div>
+  <EmptyState v-if="!id" icon="history" title="Every run, in view" description="Select a run to inspect its timeline and results." to="/workflows" action="Open workflows" />
 
   <div v-else-if="detail" class="stack grow">
     <header class="pane-head">
-      <button class="btn btn--icon pane-head__back" @click="backTo('/runs')">
+      <button class="btn btn--icon pane-head__back" aria-label="Back to runs" @click="backTo('/runs')">
         <span class="material-icons">arrow_back</span>
       </button>
       <div class="grow">
@@ -52,10 +49,10 @@
         <pre class="code" style="margin-top: 8px">{{ pretty(run?.result ?? temporal?.result) }}</pre>
       </section>
 
-      <section class="block">
-        <div class="section-label">Temporal</div>
+      <details class="block run-diagnostics">
+        <summary>Temporal details</summary>
         <pre class="code" style="margin-top: 8px">{{ pretty(temporal) }}</pre>
-      </section>
+      </details>
     </div>
   </div>
 
@@ -74,6 +71,7 @@ import { backTo } from '../router'
 import { actions, onLiveEvent } from '../store'
 import { api } from '../api'
 import ExecutionFlow from '../components/ExecutionFlow.vue'
+import EmptyState from '../components/EmptyState.vue'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -139,6 +137,8 @@ onUnmounted(() => off())
   max-width: 860px;
   margin-bottom: 24px;
 }
+
+.run-diagnostics > summary { font-size: 12px; color: var(--text-muted); cursor: pointer; }
 
 .facts {
   display: grid;

@@ -1,12 +1,12 @@
 /** Small formatting helpers shared by the list and the detail panes. */
 
-const HUES = [210, 265, 330, 12, 40, 150, 190]
+const AVATAR_COLORS = ['accent', 'flow-activity', 'syntax-keyword', 'flow-signal', 'warning', 'success', 'syntax-function']
 
 export function avatarStyle (seed = '') {
   let hash = 0
   for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
-  const hue = HUES[hash % HUES.length]
-  return { background: `linear-gradient(140deg, hsl(${hue} 62% 52%), hsl(${(hue + 28) % 360} 58% 42%))` }
+  const color = `var(--${AVATAR_COLORS[hash % AVATAR_COLORS.length]})`
+  return { background: `color-mix(in srgb, ${color} 13%, var(--surface-panel))`, color }
 }
 
 export function initials (text = '?') {

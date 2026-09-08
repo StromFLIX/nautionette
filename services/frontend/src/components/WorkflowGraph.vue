@@ -144,6 +144,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'v
 import { VueFlow, Handle, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { duration, layoutGraph } from '../flow'
+import { preferences, reducedMotion } from '../preferences'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 
@@ -151,7 +152,7 @@ const props = defineProps({ graph: { type: Object, default: null }, livePaused: 
 const flowId = useId()
 const { fitView, setViewport, zoomIn, zoomOut, viewport, dimensions } = useVueFlow({ id: flowId })
 const container = ref(null)
-const direction = ref('TB')
+const direction = ref(preferences.flowDirection)
 const expanded = ref(false)
 const selectedId = ref(null)
 const searching = ref(false)
@@ -222,7 +223,7 @@ async function focus (id) {
     x: canvas.width / 2 - (node.absolutePosition.x + node.width / 2) * zoom,
     y: visibleHeight / 2 - (node.absolutePosition.y + node.height / 2) * zoom,
     zoom
-  }, { duration: 200 })
+  }, { duration: reducedMotion() ? 0 : 200 })
 }
 
 function initialize () {
@@ -263,6 +264,7 @@ function escape (event) {
 
 watch(() => props.graph?.mode, () => { initialized = false; selectedId.value = null; nextTick(initialize) })
 watch(searching, (value) => { if (!value) search.value = '' })
+watch(() => preferences.flowDirection, async value => { direction.value = value; await fitAll() })
 onMounted(() => {
   clock = setInterval(() => { now.value = Date.now() }, 1000)
   document.addEventListener('keydown', escape)
@@ -271,7 +273,7 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 </script>
 
 <style scoped>
-.flow { --flow-activity: #5ec7b7; --flow-signal: #d89cce; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface-app); }
+.flow { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface-app); }
 .flow--expanded { position: fixed; inset: 0; height: var(--app-height); z-index: 5000; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 .flow__toolbar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface-panel); }
 .flow__source { min-width: 0; flex: 1; }
@@ -287,7 +289,7 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow :deep(.vue-flow__node) { border: none; border-radius: 8px; width: 264px; padding: 0; background: transparent; box-shadow: none; }
 .flow :deep(.vue-flow__node:focus-visible) { outline: 2px solid var(--accent); outline-offset: 4px; }
 .flow :deep(.vue-flow__edge-path) { transition: stroke 160ms; }
-.flow-node { --node-color: var(--text-muted); display: flex; flex-direction: column; width: 100%; height: 100%; padding: 12px 14px 10px; border: 1px solid var(--border-strong); border-left: 3px solid var(--node-color); border-radius: 8px; background: var(--surface-panel); color: var(--text); box-shadow: var(--shadow-md); cursor: pointer; transition: border-color 140ms, box-shadow 140ms; text-align: left; }
+.flow-node { --node-color: var(--text-muted); display: flex; flex-direction: column; width: 100%; height: 100%; padding: 12px 14px 10px; border: 1px solid var(--border-strong); border-left: 3px solid var(--node-color); border-radius: var(--radius-sm); background: var(--surface-panel); color: var(--text); box-shadow: var(--shadow-sm); cursor: pointer; transition: border-color 140ms, box-shadow 140ms; text-align: left; }
 .flow-loop { --node-color: var(--warning); width: 100%; height: 100%; border: 1px dashed color-mix(in srgb, var(--warning) 65%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--warning) 3%, transparent); cursor: pointer; }
 .flow-loop__header { height: 106px; padding: 14px 18px; border-bottom: 1px dashed color-mix(in srgb, var(--warning) 35%, var(--border)); background: color-mix(in srgb, var(--warning) 7%, var(--surface-app)); border-radius: 8px 8px 0 0; }
 .flow-loop__name { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 14px; line-height: 21px; font-weight: 600; margin-top: 8px; }

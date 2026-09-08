@@ -2,15 +2,16 @@
   <div class="app-frame">
     <EnvironmentBanner />
   <div class="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage }">
+    <NavRail class="shell__rail" />
     <template v-if="!fullPage">
-      <NavRail class="shell__rail" />
-
       <aside class="shell__side" :style="{ width: `${sideWidth}px` }">
         <SidePanel />
         <div
           class="shell__grip"
           :class="{ 'shell__grip--active': dragging }"
-          @pointerdown="startDrag"
+          role="separator" aria-label="Resize sidebar" aria-orientation="vertical"
+          :aria-valuenow="sideWidth" :aria-valuemin="260" :aria-valuemax="560" tabindex="0"
+          @pointerdown="startDrag" @keydown="resizeKeys"
           @dblclick="resetWidth"
         />
       </aside>
@@ -49,47 +50,65 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import EnvironmentBanner from './components/EnvironmentBanner.vue'
 import NavRail from './components/NavRail.vue'
 import SidePanel from './components/SidePanel.vue'
 import { actions, store } from './store'
 import { auth, isNative, server } from './api'
+import { preferences } from './preferences'
 
-const WIDTH_KEY = 'nautionette.sideWidth'
-const DEFAULT_WIDTH = 336
-
+const DEFAULT_WIDTH = 320
 const route = useRoute()
-const sideWidth = ref(Number(localStorage.getItem(WIDTH_KEY)) || DEFAULT_WIDTH)
+const router = useRouter()
+const sideWidth = computed({ get: () => preferences.sideWidth, set: value => { preferences.sideWidth = value } })
 const dragging = ref(false)
 const gate = ref(store.needsServer)
 const token = ref(auth.token)
 const serverUrl = ref(server.url)
 
 const hasSelection = computed(() => Boolean(route.params.id || route.params.name))
-// Settings is a page of its own, not a layer over the lists.
+// Settings replaces the list, but keeps the desktop navigation in reach.
 const fullPage = computed(() => route.name === 'settings')
 
+let stopDrag = () => {}
 function startDrag (event) {
+  if (event.button !== 0) return
+  event.preventDefault()
+  stopDrag()
   dragging.value = true
   const origin = event.clientX
   const start = sideWidth.value
   const move = (moveEvent) => {
-    sideWidth.value = Math.min(560, Math.max(260, start + moveEvent.clientX - origin))
+    sideWidth.value = Math.round(Math.min(560, Math.max(260, start + moveEvent.clientX - origin)))
   }
-  const stop = () => {
+  stopDrag = () => {
     dragging.value = false
-    localStorage.setItem(WIDTH_KEY, String(sideWidth.value))
     window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', stop)
+    window.removeEventListener('pointerup', stopDrag)
+    window.removeEventListener('pointercancel', stopDrag)
   }
   window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', stop)
+  window.addEventListener('pointerup', stopDrag)
+  window.addEventListener('pointercancel', stopDrag)
 }
 
 function resetWidth () {
   sideWidth.value = DEFAULT_WIDTH
-  localStorage.setItem(WIDTH_KEY, String(DEFAULT_WIDTH))
+}
+
+function resizeKeys (event) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home'].includes(event.key)) return
+  event.preventDefault()
+  if (event.key === 'Home') resetWidth()
+  else sideWidth.value = Math.min(560, Math.max(260, sideWidth.value + (event.key === 'ArrowRight' ? 10 : -10)))
+}
+
+function shortcuts (event) {
+  if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key === ',') {
+    event.preventDefault()
+    router.push('/settings/general')
+  }
 }
 
 function connect () {
@@ -103,8 +122,13 @@ watch(() => store.needsToken || store.needsServer, (needed) => { if (needed) gat
 onMounted(() => {
   actions.connect()
   actions.refreshAll()
+  window.addEventListener('keydown', shortcuts)
 })
-onUnmounted(() => actions.disconnect())
+onUnmounted(() => {
+  actions.disconnect()
+  stopDrag()
+  window.removeEventListener('keydown', shortcuts)
+})
 </script>
 
 <style scoped>
@@ -118,7 +142,7 @@ onUnmounted(() => actions.disconnect())
 .shell {
   flex: 1;
   display: grid;
-  grid-template-columns: var(--rail-width) auto 1fr;
+  grid-template-columns: var(--rail-width) auto minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-width: 0;
@@ -127,7 +151,7 @@ onUnmounted(() => actions.disconnect())
 }
 
 .shell--full {
-  grid-template-columns: 1fr;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
 }
 
 .shell__side {
@@ -198,8 +222,11 @@ onUnmounted(() => actions.disconnect())
   }
 
   .shell--full {
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
   }
+
+  .shell--full .shell__rail { display: none; }
 
   .shell__side {
     grid-row: 1;

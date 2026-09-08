@@ -4,15 +4,16 @@
       <div class="row">
         <h1 class="side__title grow">{{ heading }}</h1>
         <button
-          v-if="section === 'chats'" type="button" class="btn btn--sm"
+          v-if="section === 'chats'" type="button" class="btn btn--icon"
+          :class="{ 'side__filter--active': groupBy !== 'none' || activeMinutes }"
+          aria-label="Group" title="Group and filter chats"
           :aria-expanded="showGroupControls" aria-controls="chat-group-controls"
           @click="showGroupControls = !showGroupControls"
         >
-          Group
-          <span class="material-icons" aria-hidden="true">{{ showGroupControls ? 'expand_less' : 'expand_more' }}</span>
+          <span class="material-icons" aria-hidden="true">tune</span>
         </button>
         <button
-          v-if="section === 'chats'" class="btn btn--icon" title="New chat"
+          v-if="section === 'chats'" class="btn btn--icon side__new" title="New chat" aria-label="New chat"
           @click="startChat"
         >
           <span class="material-icons">add</span>
@@ -34,8 +35,8 @@
       </div>
       <div class="side__search">
         <span class="material-icons">search</span>
-        <input v-model="query" class="side__search-input" :placeholder="`Search ${heading.toLowerCase()}`" />
-        <button v-if="query" class="btn btn--icon btn--sm" @click="query = ''">
+        <input v-model="query" class="side__search-input" :placeholder="`Search ${heading.toLowerCase()}`" :aria-label="`Search ${heading.toLowerCase()}`" />
+        <button v-if="query" class="btn btn--icon btn--sm" aria-label="Clear search" @click="query = ''">
           <span class="material-icons" style="font-size: 16px">close</span>
         </button>
       </div>
@@ -185,14 +186,13 @@ import { RUN_TONE, avatarStyle, scheduleTime, shortTime } from '../format'
 import { actions, health, store } from '../store'
 import { api } from '../api'
 import ChatRow from './ChatRow.vue'
+import { preferences } from '../preferences'
 
 const route = useRoute()
 const router = useRouter()
 const query = ref('')
 const readBusy = ref('')
 const readError = ref('')
-const GROUP_KEY = 'nautionette.chatGroupBy'
-const RANGE_KEY = 'nautionette.chatActiveMinutes'
 
 const groupOptions = [
   { value: 'none', label: 'All' },
@@ -210,27 +210,13 @@ const activeOptions = [
   { value: 0, label: 'All', title: 'No time limit' }
 ]
 
-function storedGroupBy () {
-  const saved = localStorage.getItem(GROUP_KEY)
-  return groupOptions.some((opt) => opt.value === saved) ? saved : 'none'
-}
-
-function storedRange () {
-  const saved = Number(localStorage.getItem(RANGE_KEY))
-  return activeOptions.some((opt) => opt.value === saved) ? saved : 24 * 60
-}
-
 const showGroupControls = ref(false)
-const groupBy = ref(storedGroupBy())
-const activeMinutes = ref(storedRange())
+const groupBy = computed({ get: () => preferences.chatGroupBy, set: value => { preferences.chatGroupBy = value } })
+const activeMinutes = computed({ get: () => preferences.chatActiveMinutes, set: value => { preferences.chatActiveMinutes = value } })
 const showOlder = ref(false)
 const needsInternet = (chat) => ['pending', 'deciding'].includes(chat.internet_status)
 
-watch(groupBy, (value) => localStorage.setItem(GROUP_KEY, value))
-watch(activeMinutes, (value) => {
-  localStorage.setItem(RANGE_KEY, String(value))
-  showOlder.value = false
-})
+watch(activeMinutes, () => { showOlder.value = false })
 
 const activeLabel = computed(() =>
   ({ 60: 'hour', 1440: '24 hours', 10080: '7 days', 43200: '30 days' }[activeMinutes.value] || 'selected range'))
@@ -364,16 +350,21 @@ function refresh () {
 }
 
 .side__head {
-  padding: 10px 12px 8px;
+  padding: 16px 14px 14px;
   border-bottom: 1px solid var(--border);
 }
 
 .side__title {
-  margin: 0 0 8px;
-  font-size: 17px;
+  margin: 0;
+  font-size: 18px;
   font-weight: 650;
   line-height: 1.3;
   letter-spacing: -0.01em;
+}
+
+.side__new, .side__filter--active {
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .side__cog {
@@ -401,8 +392,9 @@ function refresh () {
   align-items: center;
   gap: 6px;
   padding: 0 6px 0 10px;
-  height: 34px;
-  border-radius: var(--radius-pill);
+  height: 36px;
+  margin-top: 16px;
+  border-radius: var(--radius-sm);
   background: var(--surface-input);
   border: 1px solid transparent;
   transition: border-color var(--transition);
@@ -544,7 +536,7 @@ function refresh () {
 }
 
 .side__list {
-  padding: 6px;
+  padding: 10px 8px;
   /* Rows follow the panel width; long titles truncate instead of stretching. */
   min-width: 0;
   overflow-x: hidden;

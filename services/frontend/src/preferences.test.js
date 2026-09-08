@@ -1,0 +1,73 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { WORKSPACE_SETTINGS, preferenceDefaults, sanitizePreferences, validPreference, workspaceDefaults } from './preferences-schema.js'
+import { THEME_TOKENS } from './themes.js'
+import { SETTINGS_SECTIONS, searchSettings } from './settings-registry.js'
+
+test('workspace defaults are complete, independent and valid', () => {
+  const defaults = preferenceDefaults()
+  assert.equal(defaults.theme, 'orbit')
+  assert.equal(defaults.composerExpanded, false)
+  assert.equal(defaults.motion, 'system')
+  assert.deepEqual(Object.keys(workspaceDefaults()).sort(), WORKSPACE_SETTINGS.map(field => field.key).sort())
+  for (const field of WORKSPACE_SETTINGS) assert.ok(validPreference(field.key, defaults[field.key]), field.key)
+  defaults.overrides.orbit = { accent: '#000000' }
+  assert.deepEqual(preferenceDefaults().overrides, {})
+})
+
+test('stored preferences isolate overrides by theme and drop invalid or unknown fields', () => {
+  const result = sanitizePreferences({
+    theme: 'daylight', overrides: { orbit: { accent: '#123456' }, daylight: { font: 'monospace', 'rail-width': 1 }, unknown: { accent: '#abcdef' } },
+    density: 'compact', sideWidth: 480, motion: 'reduced', showTimestamps: false, flowDirection: 'LR',
+    composerExpanded: 'yes', codeWrap: 1, sendShortcut: 'javascript:alert(1)', chatActiveMinutes: '60', credentials: 'private'
+  })
+  assert.equal(result.theme, 'daylight')
+  assert.deepEqual(result.overrides, { orbit: { accent: '#123456' }, daylight: { font: 'monospace' } })
+  assert.equal(result.sideWidth, 480)
+  assert.equal(result.density, 'compact')
+  assert.equal(result.showTimestamps, false)
+  assert.equal(result.flowDirection, 'LR')
+  assert.equal(result.composerExpanded, false)
+  assert.equal(result.sendShortcut, 'enter')
+  assert.equal(result.chatActiveMinutes, 0)
+  assert.equal(result.credentials, undefined)
+  for (const value of [null, false, [], 'bad']) assert.deepEqual(sanitizePreferences(value), preferenceDefaults())
+  assert.equal(validPreference('sideWidth', 100000), false)
+  assert.equal(validPreference('sideWidth', NaN), false)
+  assert.equal(validPreference('unknown', true), false)
+})
+
+test('all preference controls and theme tokens contribute searchable settings', () => {
+  assert.equal(new Set(SETTINGS_SECTIONS.map(section => section.key)).size, SETTINGS_SECTIONS.length)
+  for (const section of SETTINGS_SECTIONS) {
+    assert.equal(typeof section.load, 'function')
+    assert.ok(section.scope && section.group && section.entries.length)
+  }
+  const workspace = SETTINGS_SECTIONS.find(section => section.key === 'workspace')
+  assert.deepEqual(workspace.entries.map(entry => entry.id), WORKSPACE_SETTINGS.map(field => field.key))
+  const appearance = SETTINGS_SECTIONS.find(section => section.key === 'appearance')
+  for (const token of THEME_TOKENS) assert.ok(appearance.entries.some(entry => entry.id === `token-${token.key}`))
+})
+
+test('settings search is normalized, spans categories and preserves device/instance scope', () => {
+  assert.equal(searchSettings('  ').length, 0)
+  assert.equal(searchSettings('no-such-setting-xyz').length, 0)
+  assert.ok(searchSettings('DARK light').some(entry => entry.id === 'themes'))
+  assert.ok(searchSettings('mcp endpoint').some(entry => entry.id === 'mcp-servers'))
+  assert.ok(searchSettings('--syntax-comment').some(entry => entry.id === 'token-syntax-comment'))
+  assert.ok(searchSettings('font').every(entry => entry.section.key === 'appearance'))
+  assert.ok(searchSettings('timezone').some(entry => entry.scope === 'Per workflow'))
+  const connection = searchSettings('access token').find(entry => entry.id === 'access-token')
+  assert.equal(connection.scope, 'This device')
+  assert.equal(connection.section.key, 'general')
+})
+
+test('new settings contributions work without hard-coded search or navigation logic', () => {
+  const sections = [...SETTINGS_SECTIONS, { key: 'future', label: 'Future connection', group: 'Connections', scope: 'Instance', entries: [
+    { id: 'future-api', label: 'Atlas connection', description: 'New integration', keywords: 'API', scope: 'This device' }
+  ] }]
+  const [result] = searchSettings('Atlas API', sections)
+  assert.equal(result.id, 'future-api')
+  assert.equal(result.section.key, 'future')
+  assert.equal(result.scope, 'This device')
+})
