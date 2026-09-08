@@ -88,7 +88,7 @@ def _summary(project_id: str, chat_id: str, deadline: float) -> dict[str, Any]:
     root = projects.PROJECTS_DIR
     directory = _inside(root / ".sessions" / project_id / chat_id, root)
     pointer = _inside(directory / ".git", root)
-    empty = {"files": [], "additions": 0, "deletions": 0, "file_count": 0, "scope": "conversation"}
+    empty = {"files": [], "additions": 0, "deletions": 0, "file_count": 0, "scope": "pending"}
     if not pointer.exists():
         return empty
     common = _inside(projects.checkout(project_id) / ".git", root)
@@ -110,8 +110,27 @@ def _summary(project_id: str, chat_id: str, deadline: float) -> dict[str, Any]:
         raise ValueError("Worktree belongs to another chat")
     reference = f"refs/nautionette/chats/{chat_id}"
     found = _git(directory, metadata, deadline, "for-each-ref", "--format=%(objectname)", reference).strip()
-    base = found.decode("ascii") if found else "HEAD"
-    scope = "conversation" if found else "uncommitted"
+    # Push updates remote-tracking refs even for detached HEAD worktrees. Find the
+    # nearest published first-parent ancestor, capped at the attachment revision.
+    # Do not diff against a remote tip: it may contain unrelated work or be ahead
+    # of this chat. No fetch is needed (or permitted by this read-only endpoint).
+    unpublished = _git(
+        directory,
+        metadata,
+        deadline,
+        "rev-list",
+        "--first-parent",
+        "--boundary",
+        "HEAD",
+        "--not",
+        "--remotes",
+        *([found.decode("ascii")] if found else []),
+    ).splitlines()
+    boundary = next((line[1:].decode("ascii") for line in unpublished if line.startswith(b"-")), None)
+    base = boundary or (found.decode("ascii") if found else "HEAD")
+    if not unpublished:  # HEAD itself is already published (or is the attachment).
+        base = "HEAD"
+    scope = "pending" if found or boundary or not unpublished else "uncommitted"
     output = _git(
         directory,
         metadata,
