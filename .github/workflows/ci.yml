@@ -78,13 +78,13 @@ jobs:
       - name: Install test browser
         run: npx playwright install --with-deps chromium
 
-      - name: Chat, settings and theme controls
+      - name: Chat, settings, extensions and theme controls
         run: >-
           npx playwright test
           tests/chat.spec.js tests/appearance.spec.js tests/workspace.spec.js
           tests/projects.spec.js tests/settings-navigation.spec.js
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js
-          --workers=1
+          tests/packages.spec.js --workers=1
 
   images:
     name: Image (${{ matrix.name }})

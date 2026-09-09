@@ -52,12 +52,19 @@ for (const width of [1440, 901, 320]) {
     await page.goto('/settings/general')
     const categories = [
       ['Appearance', 'Appearance'], ['Workspace', 'Workspace'], ['Agents & models', 'Agents & models'],
-      ['MCP servers', 'MCP servers'], ['Projects', 'Projects'], ['Git authorship', 'Git authorship'],
+      ['Extension library', 'Extension library'], ['MCP servers', 'MCP servers'], ['Projects', 'Projects'], ['Git authorship', 'Git authorship'],
       ['Automation', 'Automation'], ['System', 'System health'], ['Activity', 'Activity'], ['General', 'General']
     ]
     for (const [name, heading] of categories) {
-      if (width <= 760) await page.getByLabel('Settings category').selectOption({ label: name })
-      else await page.getByRole('navigation', { name: 'Settings categories' }).getByRole('link', { name, exact: true }).click()
+      if (width <= 760) {
+        const category = page.getByRole('button', { name: 'Settings category', exact: true })
+        await category.click()
+        await expect(category).toHaveAttribute('aria-expanded', 'true')
+        await page.locator('.q-menu').getByRole('button', { name, exact: true }).click()
+        await expect(page.locator('.q-menu')).toHaveCount(0)
+        await expect(category).toContainText(name)
+        await expect(category).toHaveAttribute('aria-expanded', 'false')
+      } else await page.getByRole('navigation', { name: 'Settings categories' }).getByRole('link', { name, exact: true }).click()
       await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible()
       expect(await page.locator('.settings__body').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
     }
@@ -73,12 +80,15 @@ for (const width of [1440, 320]) {
     const state = await mockDesign(context)
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/settings/general')
-    await page.getByLabel('Default agent set').selectOption('research')
+    const agentSet = page.getByLabel('Default agent set', { exact: true })
+    await agentSet.click()
+    await page.locator('.q-menu').getByRole('button', { name: 'research', exact: true }).click()
+    await expect(page.locator('.q-menu')).toHaveCount(0)
     const search = page.getByRole('searchbox', { name: 'Search settings' })
     await search.fill('transcript')
     await expect(page.getByRole('region', { name: 'Settings search results' })).toContainText('History budget')
     await search.press('Escape')
-    await expect(page.getByLabel('Default agent set')).toHaveValue('research')
+    await expect(agentSet).toContainText('research')
     await page.locator('h1').click()
     await page.keyboard.press('/')
     await expect(search).toBeFocused()
