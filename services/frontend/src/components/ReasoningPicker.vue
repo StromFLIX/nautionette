@@ -32,7 +32,7 @@ const label = (effort) => ({ none: 'None', minimal: 'Minimal', low: 'Low', mediu
 </script>
 
 <style scoped>
-.pick__icon, .pick__caret { font-size: 15px; }
+.pick__icon, .pick__caret { font-size: 0.9375rem; }
 .pick__caret { opacity: 0.6; }
 @media (max-width: 380px) { .pick__caret { display: none; } }
 </style>

@@ -14,9 +14,9 @@ defineProps({ icon: String, title: String, description: String, to: String, acti
 <style scoped>
 .workspace-empty { min-height: 0; flex: 1; gap: 12px; }
 .workspace-empty__glyph { display: grid; place-items: center; width: 72px; height: 72px; clip-path: var(--octagon); background: var(--accent-soft); color: var(--accent); margin-bottom: 12px; }
-.workspace-empty__glyph .material-icons { font-size: 30px; }
-.workspace-empty h1 { color: var(--text); font-size: 23px; font-weight: 500; letter-spacing: -0.03em; }
-.workspace-empty p { margin: 0 0 14px; max-width: 320px; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
+.workspace-empty__glyph .material-icons { font-size: 1.875rem; }
+.workspace-empty h1 { color: var(--text); font-size: 1.4375rem; font-weight: 500; letter-spacing: -0.03em; }
+.workspace-empty p { margin: 0 0 14px; max-width: 320px; color: var(--text-muted); font-size: 0.8125rem; line-height: 1.7; }
 .workspace-empty .btn { text-decoration: none; }
-.workspace-empty .btn .material-icons { font-size: 16px; }
+.workspace-empty .btn .material-icons { font-size: 1rem; }
 </style>

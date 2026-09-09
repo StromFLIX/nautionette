@@ -25,8 +25,8 @@ import { avatarStyle } from '../../format'
 <style scoped>
 .automation-row { display: flex; align-items: center; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); }
 .automation-row:hover { background: var(--surface-hover); }
-.automation-row strong { font-size: 13px; overflow-wrap: anywhere; }
+.automation-row strong { font-size: 0.8125rem; overflow-wrap: anywhere; }
 .automation-row p { margin: 4px 0 0; }
 .automation-empty { padding: 24px 0; }
-.btn .material-icons { font-size: 16px; }
+.btn .material-icons { font-size: 1rem; }
 </style>

@@ -83,9 +83,11 @@ Five rules the diagram encodes:
 The workspace uses a shared design system with subtle octagonal identity and
 searchable, grouped settings. **Settings > Appearance** offers Orbit, Nebula,
 Daylight and Sand, with editable colors, fonts, spacing and layout tokens, plus
-validated theme import/export. **Settings > Workspace** controls density, sidebar
-width, composer behavior, code wrapping and graph orientation. These preferences
-save on this device; instance settings and per-workflow configuration stay separate.
+validated theme import/export. **Settings > Workspace** controls interface size,
+density, sidebar width, composer behavior, code wrapping and graph orientation.
+The interface defaults to **125%**, including on phones; choose 100%, 110%, 125% or
+150% without browser zoom. These preferences save on this device; instance settings
+and per-workflow configuration stay separate.
 
 Agents, reasoning, tools and projects remain available behind **Chat configuration**.
 Open Settings with **Ctrl/Command + ,** and focus its search with **/**.

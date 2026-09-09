@@ -187,9 +187,9 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
 
 <style scoped>
 .project-heading { gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.project-heading .material-icons, .project-actions .material-icons, .project-row .btn .material-icons { font-size: 16px; }
+.project-heading .material-icons, .project-actions .material-icons, .project-row .btn .material-icons { font-size: 1rem; }
 .project-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.project-form label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 13px; }
+.project-form label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 0.8125rem; }
 .project-form input { min-width: 0; max-width: 100%; }
 .project-form__wide { grid-column: 1 / -1; }
 .project-actions { gap: 8px; flex-wrap: wrap; }
@@ -197,8 +197,8 @@ onUnmounted(() => { disposed = true; clearTimeout(timer) })
 .project-connection { display: grid; gap: 6px; margin-bottom: 14px; overflow-wrap: anywhere; }
 .project-row { display: flex; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .project-row > .grow { min-width: 0; }
-.project-row__icon { flex: none; font-size: 20px; color: var(--text-dim); }
-.project-name { display: block; overflow-wrap: anywhere; font-size: 13px; }
+.project-row__icon { flex: none; font-size: 1.25rem; color: var(--text-dim); }
+.project-name { display: block; overflow-wrap: anywhere; font-size: 0.8125rem; }
 .project-path { display: block; overflow-wrap: anywhere; margin-top: 4px; }
 .projects-error { color: var(--danger); overflow-wrap: anywhere; }
 .project-search { width: 100%; }

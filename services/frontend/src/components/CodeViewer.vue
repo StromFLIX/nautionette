@@ -15,7 +15,7 @@
         <span class="mono dim grow truncate">{{ current.name }}</span>
         <span class="caption dim">{{ lines.length }} lines</span>
         <button class="btn btn--icon btn--sm" title="Copy" @click="copy">
-          <span class="material-icons" style="font-size: 15px">{{ copied ? 'check' : 'content_copy' }}</span>
+          <span class="material-icons" style="font-size: 0.9375rem">{{ copied ? 'check' : 'content_copy' }}</span>
         </button>
       </div>
       <div class="viewer__scroll scroll-y">
@@ -87,7 +87,7 @@ watch(() => props.files, (files) => {
   background: none;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   text-align: left;
   cursor: pointer;
 }
@@ -103,7 +103,7 @@ watch(() => props.files, (files) => {
 }
 
 .viewer__file .material-icons {
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .viewer__body {
@@ -120,7 +120,7 @@ watch(() => props.files, (files) => {
   padding: 5px 6px 5px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surface-panel);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .viewer__scroll {

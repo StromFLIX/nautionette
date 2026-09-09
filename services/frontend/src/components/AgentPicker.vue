@@ -45,12 +45,12 @@ const choices = computed(() => {
 .agent-picker__choice { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 10px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .agent-picker__choice:hover { background: var(--surface-hover); }
 .agent-picker__choice > .grow { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
-.agent-picker__choice strong { font-size: 13px; font-weight: 600; }
-.agent-picker__icon { font-size: 19px; color: var(--text-muted); }
-.agent-picker__check { font-size: 16px; color: var(--accent); }
+.agent-picker__choice strong { font-size: 0.8125rem; font-weight: 600; }
+.agent-picker__icon { font-size: 1.1875rem; color: var(--text-muted); }
+.agent-picker__check { font-size: 1rem; color: var(--accent); }
 .agent-picker__choice .chip { flex: none; }
 .agent-picker__foot { padding: 8px; border-top: 1px solid var(--border); }
 .agent-picker__foot p { margin: 4px 6px 8px; }
-.agent-picker__foot .material-icons { font-size: 14px; }
+.agent-picker__foot .material-icons { font-size: 0.875rem; }
 .agent-picker__note { padding: 12px; margin: 0; }
 </style>

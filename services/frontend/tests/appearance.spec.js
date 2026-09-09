@@ -146,7 +146,7 @@ test('theme files import atomically, export only styling and support transparent
   const imported = { version: 1, theme: 'nebula', overrides: { accent: '#663399', 'chat-font-size': 18, font: 'monospace' } }
   await file.setInputFiles({ name: 'theme.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(imported)) })
   await expect(page.getByText('Theme imported.', { exact: true })).toBeVisible()
-  await expect(page.locator('html')).toHaveCSS('--chat-font-size', '18px')
+  await expect(page.locator('html')).toHaveCSS('--chat-font-size', '1.125rem')
   const before = await stored(page)
   await file.setInputFiles({ name: 'unsafe.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ ...imported, overrides: { accent: '#111111', font: 'serif; opacity:0' } })) })
   await expect(page.getByRole('alert')).toContainText('Invalid theme token')

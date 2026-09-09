@@ -75,7 +75,7 @@ const result = computed(() => prettyJson(props.step.result))
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   text-align: left;
   cursor: pointer;
 }
@@ -86,13 +86,13 @@ const result = computed(() => prettyJson(props.step.result))
 
 .tool__chevron {
   flex: none;
-  font-size: 17px;
+  font-size: 1.0625rem;
   color: var(--text-dim);
 }
 
 .tool__icon {
   flex: none;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--accent-hover);
 }
 
@@ -112,7 +112,7 @@ const result = computed(() => prettyJson(props.step.result))
   min-width: 0;
   color: var(--text-dim);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: 0.71875rem;
 }
 
 .tool__server {
@@ -121,12 +121,12 @@ const result = computed(() => prettyJson(props.step.result))
   border-radius: var(--radius-pill);
   background: var(--surface-active);
   color: var(--text-dim);
-  font-size: 10.5px;
+  font-size: 0.65625rem;
 }
 
 .tool__failed {
   flex: none;
-  font-size: 15px;
+  font-size: 0.9375rem;
   color: var(--danger);
 }
 

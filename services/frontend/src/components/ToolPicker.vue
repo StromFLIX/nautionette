@@ -4,7 +4,7 @@
       <span class="material-icons">search</span>
       <input v-model="query" class="picker__search-input" placeholder="Search tools" />
       <button v-if="query" class="btn btn--icon btn--sm" @click="query = ''">
-        <span class="material-icons" style="font-size: 15px">close</span>
+        <span class="material-icons" style="font-size: 0.9375rem">close</span>
       </button>
     </div>
 
@@ -148,7 +148,7 @@ function onShow () {
 }
 
 .picker__search .material-icons {
-  font-size: 16px;
+  font-size: 1rem;
   color: var(--text-dim);
 }
 
@@ -161,7 +161,7 @@ function onShow () {
   outline: none;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .picker__search-input::placeholder {
@@ -202,7 +202,7 @@ function onShow () {
   background: none;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
   text-align: left;
   cursor: pointer;
 }
@@ -222,12 +222,12 @@ function onShow () {
 }
 
 .tools__name {
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .tools__box {
   flex: none;
-  font-size: 17px;
+  font-size: 1.0625rem;
   color: var(--text-dim);
 }
 

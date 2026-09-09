@@ -45,9 +45,9 @@ onUnmounted(() => { clearTimeout(timer); controller?.abort(); generation++ })
 </script>
 <style scoped>
 .package-search { margin-top: 20px; }
-.package-search h3 { font-size: 14px; }
+.package-search h3 { font-size: 0.875rem; }
 .package-search__item { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); padding: 12px 0; overflow-wrap: anywhere; }
-.package-search__item strong { font-size: 13px; }
+.package-search__item strong { font-size: 0.8125rem; }
 .package-search__item .grow { min-width: 0; }
 .package-search__item p { margin: 5px 0; }
 </style>

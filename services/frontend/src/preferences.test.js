@@ -7,12 +7,27 @@ import { SETTINGS_SECTIONS, searchSettings } from './settings-registry.js'
 test('workspace defaults are complete, independent and valid', () => {
   const defaults = preferenceDefaults()
   assert.equal(defaults.theme, 'orbit')
+  assert.equal(defaults.interfaceSize, 125)
   assert.equal(defaults.composerExpanded, false)
   assert.equal(defaults.motion, 'system')
   assert.deepEqual(Object.keys(workspaceDefaults()).sort(), WORKSPACE_SETTINGS.map(field => field.key).sort())
   for (const field of WORKSPACE_SETTINGS) assert.ok(validPreference(field.key, defaults[field.key]), field.key)
   defaults.overrides.orbit = { accent: '#000000' }
   assert.deepEqual(preferenceDefaults().overrides, {})
+})
+
+test('interface size migrates old preferences and accepts only supported sizes', () => {
+  assert.equal(sanitizePreferences({ theme: 'sand', sideWidth: 400 }).interfaceSize, 125)
+  for (const size of [100, 110, 125, 150]) {
+    assert.equal(validPreference('interfaceSize', size), true)
+    assert.equal(sanitizePreferences({ interfaceSize: size }).interfaceSize, size)
+  }
+  for (const size of [0, -1, 500, NaN, Infinity, '125', null, true]) {
+    assert.equal(validPreference('interfaceSize', size), false)
+    assert.equal(sanitizePreferences({ interfaceSize: size }).interfaceSize, 125)
+  }
+  assert.equal(workspaceDefaults().interfaceSize, 125)
+  assert.ok(searchSettings('browser zoom').some(entry => entry.id === 'interfaceSize'))
 })
 
 test('stored preferences isolate overrides by theme and drop invalid or unknown fields', () => {

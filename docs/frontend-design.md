@@ -71,6 +71,24 @@ an explicit warning instead of claiming the change was saved.
 Device preferences never update instance settings. Resetting the workspace does
 not reset the selected theme. There is no cross-device account synchronization.
 
+### Interface size
+
+The default is **125%** on desktop, mobile web and native WebViews. Workspace's
+**Interface size** control offers 100%, 110%, 125% and 150%, saved per device.
+Missing values in existing preferences adopt 125%; explicit choices are retained.
+Browser zoom remains independent and pinch zoom is not disabled.
+
+Use `rem` for typography and shared control sizes (16px at 100% is `1rem`).
+`startPreferences()` sets the root font percentage before mounting; `tokens.css`
+has the same 125% first-paint fallback. Theme sizes remain numeric pixels at 100%
+in storage and exports, but `cssTokens()` emits relative lengths, preserving old
+themes while scaling text, spacing and controls together. Keep viewport sizes,
+safe-area/keyboard insets, breakpoints, borders and pointer coordinates in CSS
+pixels. Sidebar width remains the explicitly chosen pixel width. Graph layout
+scales its node bounds and spacing alongside typography to avoid clipping labels.
+Do not use CSS `zoom`, transforms or a changed viewport scale: those can break
+menu positioning and keyboard geometry.
+
 ## Global defaults and agent configurations
 
 Instance configuration follows **global defaults → agent overrides → chat changes**.
@@ -152,6 +170,8 @@ Run the browser suite and build sequentially in memory-constrained containers.
 Browser coverage uses mocked APIs, including both mouse/keyboard and emulated
 touch layouts. It checks all presets, persistence, invalid imports, scoped resets,
 search/deep links, collapsed controls, narrow screens and keyboard-sized viewports.
+`interface-size.spec.js` checks the 125% default, live sizing/persistence/reset,
+menu/dialog bounds, and 150% touch controls with the on-screen keyboard.
 `agent-profiles.spec.js` also covers inheritance, default-agent selection, explicit
 empty/pinned tools, atomic switches, delayed/failed discovery and failed saves.
 Existing chat, attachment, project, scheduling and graph regressions remain in the

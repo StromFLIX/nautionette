@@ -7,7 +7,7 @@
         placeholder="Search models" @keydown.enter="chooseFirst"
       />
       <button v-if="query" class="btn btn--icon btn--sm" @click="query = ''">
-        <span class="material-icons" style="font-size: 15px">close</span>
+        <span class="material-icons" style="font-size: 0.9375rem">close</span>
       </button>
     </div>
 
@@ -29,7 +29,7 @@
 
       <template v-for="gateway in groups" :key="gateway.name">
         <div class="picker__label section-label">
-          <span class="material-icons" style="font-size: 13px">cloud</span>
+          <span class="material-icons" style="font-size: 0.8125rem">cloud</span>
           via {{ gateway.name }}
         </div>
 
@@ -195,7 +195,7 @@ function onShow () {
 }
 
 .picker__search .material-icons {
-  font-size: 16px;
+  font-size: 1rem;
   color: var(--text-dim);
 }
 
@@ -208,7 +208,7 @@ function onShow () {
   outline: none;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .picker__search-input::placeholder {

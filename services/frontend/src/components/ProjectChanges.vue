@@ -95,7 +95,7 @@ watch([() => props.chatId, () => props.projectIds.join(','), () => props.running
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface-panel);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .project-changes__project + .project-changes__project { border-top: 1px solid var(--border); }
 summary {
@@ -111,17 +111,17 @@ summary {
 summary::-webkit-details-marker { display: none; }
 summary:hover { background: var(--surface-hover); }
 summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 8px; }
-.project-changes__stats { display: inline-flex; gap: 8px; flex-shrink: 0; font-variant-numeric: tabular-nums; font-family: var(--font-mono, monospace); font-size: 11px; }
+.project-changes__stats { display: inline-flex; gap: 8px; flex-shrink: 0; font-variant-numeric: tabular-nums; font-family: var(--font-mono, monospace); font-size: 0.6875rem; }
 .project-changes__added { color: var(--success); }
 .project-changes__deleted { color: var(--danger); }
 .project-changes__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
 .project-changes__count { flex-shrink: 0; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-.project-changes__arrow { font-size: 17px; color: var(--text-muted); transition: transform 160ms ease; }
+.project-changes__arrow { font-size: 1.0625rem; color: var(--text-muted); transition: transform 160ms ease; }
 [open] > summary .project-changes__arrow { transform: rotate(180deg); }
 .project-changes__panel { border-top: 1px solid var(--border); }
-.project-changes__scope { margin: 9px 12px; color: var(--text-muted); font-size: 10px; }
+.project-changes__scope { margin: 9px 12px; color: var(--text-muted); font-size: 0.625rem; }
 .project-changes__files { list-style: none; margin: 0; padding: 0 6px 6px; max-height: min(260px, 30dvh); overflow-y: auto; overscroll-behavior: contain; }
-.project-changes__notice, .project-changes__unavailable { color: var(--warning); font-size: 11px; }
+.project-changes__notice, .project-changes__unavailable { color: var(--warning); font-size: 0.6875rem; }
 .project-changes__notice { margin: 8px 12px; }
 @media (max-width: 480px) {
   summary { gap: 8px; padding: 8px; }

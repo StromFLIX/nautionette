@@ -80,6 +80,29 @@ test('nested loops enclose their entire body in both directions', () => {
   }
 })
 
+test('interface size scales node bounds, spacing and nested loop headers together', () => {
+  const source = graph([
+    { id: 'loop', kind: 'loop' },
+    { id: 'call', kind: 'activity', parent_id: 'loop', details: [{ label: 'Tool', value: 'fetch' }] }
+  ])
+  for (const direction of ['TB', 'LR']) {
+    const base = layoutGraph(source, direction)
+    for (const scale of [1.25, 1.5]) {
+      const larger = layoutGraph(source, direction, scale)
+      for (const [index, node] of larger.nodes.entries()) {
+        assert.equal(node.width, base.nodes[index].width * scale)
+        assert.equal(node.height, base.nodes[index].height * scale)
+        assert.equal(node.absolutePosition.x, base.nodes[index].absolutePosition.x * scale)
+        assert.equal(node.absolutePosition.y, base.nodes[index].absolutePosition.y * scale)
+        assert.equal(node.style.height, `${node.height}px`)
+      }
+      const [parent, child] = larger.nodes
+      assert.ok(child.position.y >= 106 * scale)
+      assert.ok(child.position.y + child.height <= parent.height)
+    }
+  }
+})
+
 test('comparison remaps parents of new and removed loop members', () => {
   const before = graph([{ id: 'loop', kind: 'loop', label: 'items' }, { id: 'old', kind: 'activity', label: 'old', parent_id: 'loop' }])
   const after = graph([{ id: 'group', kind: 'loop', label: 'items' }, { id: 'new', kind: 'activity', label: 'new', parent_id: 'group' }])

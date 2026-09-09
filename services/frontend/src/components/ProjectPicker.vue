@@ -79,12 +79,12 @@ watch([filtered, loading, error], async () => {
 .project-picker__head input { min-width: 0; width: 100%; }
 .project-picker__foot { border-top: 1px solid var(--border); }
 .project-picker__foot .caption, .project-picker__foot .btn { white-space: nowrap; }
-.project-picker__foot .material-icons { font-size: 16px; }
+.project-picker__foot .material-icons { font-size: 1rem; }
 .project-picker__list { max-height: min(320px, 40dvh); }
 .project-picker__note { margin: 0; padding: 12px; }
 .project-choice { display: flex; align-items: center; gap: 10px; padding: 10px; cursor: pointer; }
 .project-choice:hover { background: var(--surface-hover); }
 .project-choice input { flex: none; accent-color: var(--accent); width: 16px; height: 16px; }
-.project-choice__name { display: block; overflow-wrap: anywhere; font-size: 13px; }
+.project-choice__name { display: block; overflow-wrap: anywhere; font-size: 0.8125rem; }
 .project-choice .grow { min-width: 0; }
 </style>

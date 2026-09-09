@@ -38,7 +38,7 @@ export function compareGraphs (before, after) {
   return { ...after, mode: 'changes', nodes, edges, warnings: [...new Set([...(before?.warnings || []), ...(after.warnings || [])])] }
 }
 
-export function layoutGraph (graph, direction = 'TB') {
+export function layoutGraph (graph, direction = 'TB', scale = 1) {
   if (!graph) return { nodes: [], edges: [] }
   const byId = new Map(graph.nodes.map((node) => [node.id, node]))
   const children = new Map()
@@ -57,13 +57,13 @@ export function layoutGraph (graph, direction = 'TB') {
   function arrange (parent = null) {
     const members = children.get(parent) || []
     const layout = new dagre.graphlib.Graph({ multigraph: true })
-      .setGraph({ rankdir: direction, nodesep: 36, ranksep: 64, marginx: 28, marginy: 28 })
+      .setGraph({ rankdir: direction, nodesep: 36 * scale, ranksep: 64 * scale, marginx: 28 * scale, marginy: 28 * scale })
       .setDefaultEdgeLabel(() => ({}))
     for (const node of members) {
       const body = node.kind === 'loop' ? arrange(node.id) : null
       const size = body
-        ? { width: Math.max(336, body.width), height: Math.max(190, body.height + 106) }
-        : { width: 264, height: node.details?.length ? 176 : 112 }
+        ? { width: Math.max(336 * scale, body.width), height: Math.max(190 * scale, body.height + 106 * scale) }
+        : { width: 264 * scale, height: (node.details?.length ? 176 : 112) * scale }
       sizes.set(node.id, size)
       layout.setNode(node.id, size)
     }
@@ -73,12 +73,12 @@ export function layoutGraph (graph, direction = 'TB') {
       const target = ancestor(edge.target, parent)
       if (source && target && source !== target) layout.setEdge(source, target, {}, edge.id)
     }
-    if (!members.length) return { width: 336, height: 84 }
+    if (!members.length) return { width: 336 * scale, height: 84 * scale }
     dagre.layout(layout)
     for (const node of members) {
       const point = layout.node(node.id)
       const size = sizes.get(node.id)
-      positions.set(node.id, { x: point.x - size.width / 2, y: point.y - size.height / 2 + (parent ? 106 : 0) })
+      positions.set(node.id, { x: point.x - size.width / 2, y: point.y - size.height / 2 + (parent ? 106 * scale : 0) })
     }
     return layout.graph()
   }

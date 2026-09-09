@@ -134,7 +134,7 @@ onMounted(load)
 .general-starting-agent .row { gap: 12px; }
 .general-starting-agent .field { min-width: 0; width: auto; min-height: 42px; }
 .general-starting-agent .btn { flex: none; }
-.general-starting-agent .material-icons { font-size: 15px; }
+.general-starting-agent .material-icons { font-size: 0.9375rem; }
 .general-baseline { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 28px; }
 .general-baseline h3 { margin: 0; }
 .general-detail { padding: 8px 18px 20px; }

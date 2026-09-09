@@ -36,16 +36,16 @@ summary { display: flex; align-items: center; gap: 5px; padding: 6px; cursor: po
 summary::-webkit-details-marker { display: none; }
 summary:hover, .project-changes__file:hover { background: var(--surface-hover); }
 summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.change-tree__arrow, .change-tree__folder { font-size: 14px; color: var(--text-muted); }
+.change-tree__arrow, .change-tree__folder { font-size: 0.875rem; color: var(--text-muted); }
 [open] > summary > .change-tree__arrow { transform: rotate(90deg); }
 .project-changes__file { display: flex; align-items: baseline; gap: 9px; padding: 6px; border-radius: 5px; }
-.project-changes__status { flex: 0 0 12px; color: var(--text-muted); font: 10px var(--font-mono, monospace); }
+.project-changes__status { flex: 0 0 12px; color: var(--text-muted); font: 0.625rem var(--font-mono, monospace); }
 .project-changes__status--added, .project-changes__status--untracked { color: var(--success); }
 .project-changes__status--deleted { color: var(--danger); }
-.project-changes__path { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; color: var(--text); font: 11px/1.5 var(--font-mono, monospace); }
+.project-changes__path { flex: 1; min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; color: var(--text); font: 0.6875rem/1.5 var(--font-mono, monospace); }
 .project-changes__previous { color: var(--text-dim); }
-.project-changes__file-note { color: var(--text-muted); font-size: 10px; flex-shrink: 0; }
-.project-changes__stats { display: inline-flex; gap: 8px; flex-shrink: 0; font-variant-numeric: tabular-nums; font-family: var(--font-mono, monospace); font-size: 11px; }
+.project-changes__file-note { color: var(--text-muted); font-size: 0.625rem; flex-shrink: 0; }
+.project-changes__stats { display: inline-flex; gap: 8px; flex-shrink: 0; font-variant-numeric: tabular-nums; font-family: var(--font-mono, monospace); font-size: 0.6875rem; }
 .project-changes__added { color: var(--success); }
 .project-changes__deleted { color: var(--danger); }
 @media (max-width: 480px) { .project-changes__stats { gap: 5px; } }

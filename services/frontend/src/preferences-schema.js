@@ -2,6 +2,7 @@ import { THEMES, sanitizeOverrides } from './themes.js'
 
 export const PREFERENCES_KEY = 'nautionette.preferences.v1'
 export const WORKSPACE_SETTINGS = [
+  { key: 'interfaceSize', group: 'Layout', label: 'Interface size', description: 'Scale text and controls on this device, including phones, without browser zoom.', type: 'select', value: 125, options: [[100, '100%'], [110, '110%'], [125, '125% (default)'], [150, '150%']] },
   { key: 'density', group: 'Layout', label: 'Density', description: 'Spacing in navigation and lists.', type: 'select', value: 'comfortable', options: [['comfortable', 'Comfortable'], ['compact', 'Compact']] },
   { key: 'sideWidth', group: 'Layout', label: 'Sidebar width', description: 'You can also drag the sidebar edge.', type: 'number', value: 320, min: 260, max: 560, step: 10, unit: 'px' },
   { key: 'motion', group: 'Layout', label: 'Motion', description: 'System accessibility preferences are always respected.', type: 'select', value: 'system', options: [['system', 'Follow system'], ['reduced', 'Reduce motion']] },

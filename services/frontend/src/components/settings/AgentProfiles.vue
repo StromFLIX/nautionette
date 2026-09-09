@@ -136,20 +136,20 @@ function remove (agent) {
 .profiles__head h3 { margin: 0; }
 .profiles__head p { margin: 6px 0 0; }
 .profiles__head > .btn { flex: none; }
-.profiles__head .material-icons { font-size: 16px; }
+.profiles__head .material-icons { font-size: 1rem; }
 .profiles__list { display: grid; gap: 10px; }
 .profile-card { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); }
-.profile-card__mark { display: grid; place-items: center; width: 34px; height: 34px; flex: none; clip-path: var(--octagon); background: var(--accent-soft); color: var(--accent); font-size: 17px; }
+.profile-card__mark { display: grid; place-items: center; width: 34px; height: 34px; flex: none; clip-path: var(--octagon); background: var(--accent-soft); color: var(--accent); font-size: 1.0625rem; }
 .profile-card__info { display: grid; gap: 4px; min-width: 100px; flex-basis: 45%; overflow-wrap: anywhere; }
-.profile-card__info strong { font-size: 13px; font-weight: 600; }
+.profile-card__info strong { font-size: 0.8125rem; font-weight: 600; }
 .profile-card__open { border: 0; padding: 0; text-align: left; background: none; color: var(--text); cursor: pointer; font: inherit; }
 .profile-card__open:hover strong { color: var(--accent); }
 .profile-card__actions { display: flex; gap: 2px; margin-left: auto; }
-.profile-card__actions .material-icons { font-size: 17px; }
+.profile-card__actions .material-icons { font-size: 1.0625rem; }
 .profile-editor { padding: 18px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface-panel); }
 .profile-editor__head { margin-bottom: 16px; }
-.profile-editor__label { display: block; margin: 16px 0 8px; font-size: 12px; }
-.profile-editor__label .dim { margin-left: 6px; font-size: 11px; }
+.profile-editor__label { display: block; margin: 16px 0 8px; font-size: 0.75rem; }
+.profile-editor__label .dim { margin-left: 6px; font-size: 0.6875rem; }
 .profile-editor__actions { flex-wrap: wrap; gap: 6px; padding-top: 18px; border-top: 1px solid var(--border); }
 @media (max-width: 640px) {
   .profile-card { padding: 12px; }

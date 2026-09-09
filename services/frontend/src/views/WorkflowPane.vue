@@ -81,7 +81,7 @@
         v-else-if="workflow.schedule" class="chip chip--accent"
         :title="`${workflow.schedule.description} · ${workflow.schedule.timezone}`"
       >
-        <span class="material-icons" style="font-size: 13px">schedule</span>
+        <span class="material-icons" style="font-size: 0.8125rem">schedule</span>
         {{ workflow.schedule.next_run
           ? `Next ${scheduleTime(workflow.schedule.next_run, workflow.schedule.timezone)}`
           : workflow.schedule.description }}
@@ -146,7 +146,7 @@
           </div>
           <div class="row" style="margin-top: 14px">
             <button class="btn btn--primary" :disabled="running || disabled" @click="run">
-              <span class="material-icons" style="font-size: 17px" aria-hidden="true">play_arrow</span>
+              <span class="material-icons" style="font-size: 1.0625rem" aria-hidden="true">play_arrow</span>
               {{ running ? 'Starting…' : 'Run now' }}
             </button>
           </div>
@@ -220,7 +220,7 @@
               v-if="scheduleFrequency === 'custom'" class="btn btn--primary"
               :disabled="disabled || scheduling" @click="beginScheduleReplacement"
             >
-              <span class="material-icons" style="font-size: 17px">edit_calendar</span>
+              <span class="material-icons" style="font-size: 1.0625rem">edit_calendar</span>
               Replace schedule
             </button>
             <button
@@ -228,11 +228,11 @@
               class="btn btn--primary" :disabled="disabled || scheduling || !scheduleReady"
               @click="schedule"
             >
-              <span class="material-icons" style="font-size: 17px" aria-hidden="true">event_repeat</span>
+              <span class="material-icons" style="font-size: 1.0625rem" aria-hidden="true">event_repeat</span>
               {{ scheduling ? 'Saving…' : workflow.schedule ? 'Update schedule' : 'Save schedule' }}
             </button>
             <button v-if="workflow.schedule" class="btn btn--danger" :disabled="scheduling" @click="unschedule">
-              <span class="material-icons" style="font-size: 17px">event_busy</span>
+              <span class="material-icons" style="font-size: 1.0625rem">event_busy</span>
               Remove schedule
             </button>
           </div>
@@ -529,7 +529,7 @@ onMounted(load)
   min-width: 0;
   height: 32px;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-overflow: ellipsis;
 }
 
@@ -564,11 +564,11 @@ onMounted(load)
   border-radius: var(--radius-md);
   background: var(--warning-soft);
   color: var(--warning);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .notice .material-icons {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .segmented {
@@ -587,7 +587,7 @@ onMounted(load)
   background: none;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   cursor: pointer;
 }
 
@@ -607,7 +607,7 @@ onMounted(load)
 .field-row__label {
   display: block;
   margin-bottom: 5px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 500;
   color: var(--text-muted);
 }
@@ -628,7 +628,7 @@ onMounted(load)
 
 .schedule-current__icon {
   color: var(--accent);
-  font-size: 20px;
+  font-size: 1.25rem;
 }
 
 .schedule-current__rule,
@@ -656,7 +656,7 @@ onMounted(load)
   flex-direction: column;
   gap: 5px;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 500;
 }
 
@@ -673,7 +673,7 @@ onMounted(load)
 
 .schedule-days__label {
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 0.78125rem;
   font-weight: 500;
 }
 
@@ -711,7 +711,7 @@ onMounted(load)
 }
 
 .avatar-sq .material-icons {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .pane-head__back {
@@ -764,7 +764,7 @@ onMounted(load)
 
   .pane-head .btn--primary::after {
     content: '✓';
-    font-size: 16px;
+    font-size: 1rem;
   }
 
   .run-row {

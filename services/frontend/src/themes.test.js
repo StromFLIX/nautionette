@@ -9,7 +9,7 @@ for (const theme of THEMES) {
     assert.equal(Object.keys(resolved).length, THEME_TOKENS.length)
     for (const token of THEME_TOKENS) {
       assert.ok(validToken(token.key, resolved[token.key]), `${theme.id}: ${token.key}`)
-      assert.equal(css[`--${token.key}`], `${resolved[token.key]}${token.unit || ''}`)
+      assert.equal(css[`--${token.key}`], token.unit === 'px' ? `${resolved[token.key] / 16}rem` : String(resolved[token.key]))
     }
     for (const foreground of ['text', 'text-muted', 'text-dim']) {
       for (const background of ['surface-app', 'surface-panel', 'surface-rail', 'surface-input']) {
@@ -35,7 +35,9 @@ test('custom accents and surfaces derive related tokens without overwriting expl
   assert.notEqual(custom['accent-soft'], base['accent-soft'])
   assert.notEqual(custom['bubble-out'], base['bubble-out'])
   assert.notEqual(custom.border, base.border)
-  assert.equal(cssTokens('orbit', input)['--chat-font-size'], '18px')
+  assert.equal(cssTokens('orbit', input)['--chat-font-size'], '1.125rem')
+  assert.equal(cssTokens('orbit')['--code-font-size'], '0.78125rem')
+  assert.equal(cssTokens('orbit')['--header-height'], '4rem')
   assert.deepEqual(resolveTheme('not-a-theme'), base)
   assert.equal(THEMES[0].colors.accent, '#79dfc5')
 })

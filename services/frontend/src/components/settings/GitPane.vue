@@ -108,6 +108,6 @@ onMounted(async () => {
   border-radius: 8px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 </style>

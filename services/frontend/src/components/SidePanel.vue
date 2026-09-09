@@ -37,7 +37,7 @@
         <span class="material-icons">search</span>
         <input v-model="query" class="side__search-input" :placeholder="`Search ${heading.toLowerCase()}`" :aria-label="`Search ${heading.toLowerCase()}`" />
         <button v-if="query" class="btn btn--icon btn--sm" aria-label="Clear search" @click="query = ''">
-          <span class="material-icons" style="font-size: 16px">close</span>
+          <span class="material-icons" style="font-size: 1rem">close</span>
         </button>
       </div>
       <div v-if="section === 'chats'" v-show="showGroupControls" id="chat-group-controls" class="side__controls">
@@ -363,7 +363,7 @@ function refresh () {
 
 .side__title {
   margin: 0;
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 650;
   line-height: 1.3;
   letter-spacing: -0.01em;
@@ -412,7 +412,7 @@ function refresh () {
 }
 
 .side__search .material-icons {
-  font-size: 17px;
+  font-size: 1.0625rem;
   color: var(--text-dim);
 }
 
@@ -424,7 +424,7 @@ function refresh () {
   outline: none;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .side__search-input::placeholder {
@@ -448,7 +448,7 @@ function refresh () {
   flex: none;
   width: 46px;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -473,7 +473,7 @@ function refresh () {
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 0.71875rem;
   font-weight: 600;
   line-height: 1.6;
   text-align: center;
@@ -513,7 +513,7 @@ function refresh () {
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -524,7 +524,7 @@ function refresh () {
 }
 
 .side__more .material-icons {
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .side__empty-link {
@@ -534,7 +534,7 @@ function refresh () {
   background: none;
   color: var(--accent-hover);
   font: inherit;
-  font-size: 12px;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 
@@ -571,7 +571,7 @@ function refresh () {
 .side__group-count {
   color: var(--text-dim);
   font-weight: 500;
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .side__empty {

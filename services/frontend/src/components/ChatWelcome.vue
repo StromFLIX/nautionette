@@ -90,23 +90,23 @@ const toolSummary = computed(() => {
 .welcome__inner { width: 100%; max-width: 740px; }
 .welcome__intro { text-align: center; margin-bottom: 32px; }
 .welcome__mark { width: 72px; height: 72px; margin: 0 auto 22px; }
-.welcome__eyebrow { display: block; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.22em; font-size: 10px; font-weight: 600; color: var(--accent); }
-.welcome__title { margin: 0; font-size: clamp(25px, 2.5vw, 36px); font-weight: 500; line-height: 1.2; letter-spacing: -0.045em; }
-.welcome__lead { margin: 14px 0 0; color: var(--text-muted); font-size: 13px; }
+.welcome__eyebrow { display: block; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.22em; font-size: 0.625rem; font-weight: 600; color: var(--accent); }
+.welcome__title { margin: 0; font-size: clamp(1.5625rem, 2.5vw, 2.25rem); font-weight: 500; line-height: 1.2; letter-spacing: -0.045em; }
+.welcome__lead { margin: 14px 0 0; color: var(--text-muted); font-size: 0.8125rem; }
 .welcome__starters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
-.starter { display: flex; align-items: center; gap: 8px; padding: 13px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); color: var(--text-muted); font: inherit; font-size: 11.5px; text-align: left; cursor: pointer; transition: border-color var(--transition), color var(--transition), background var(--transition); }
+.starter { display: flex; align-items: center; gap: 8px; padding: 13px 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); color: var(--text-muted); font: inherit; font-size: 0.71875rem; text-align: left; cursor: pointer; transition: border-color var(--transition), color var(--transition), background var(--transition); }
 .starter:hover { border-color: var(--border-strong); background: var(--surface-raised); color: var(--text); }
-.starter__icon { flex: none; font-size: 18px; color: var(--text-dim); }
-.starter__arrow { flex: none; font-size: 12px; opacity: 0.5; }
-.welcome__details { margin-top: 26px; color: var(--text-dim); font-size: 11px; }
+.starter__icon { flex: none; font-size: 1.125rem; color: var(--text-dim); }
+.starter__arrow { flex: none; font-size: 0.75rem; opacity: 0.5; }
+.welcome__details { margin-top: 26px; color: var(--text-dim); font-size: 0.6875rem; }
 .welcome__details > summary { width: fit-content; margin: 0 auto; cursor: pointer; }
 .welcome__facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 32px; padding: 24px 0; }
 .welcome__facts > div { min-width: 0; }
 .welcome__facts span { display: flex; align-items: center; gap: 12px; margin-bottom: 5px; }
-.welcome__facts strong { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); overflow-wrap: anywhere; }
+.welcome__facts strong { display: block; font-size: 0.75rem; font-weight: 500; color: var(--text-muted); overflow-wrap: anywhere; }
 .welcome__facts button { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
-.welcome__warn { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 24px; padding: 12px 14px; border: 1px solid var(--warning-soft); border-radius: var(--radius-md); background: var(--warning-soft); color: var(--warning); font-size: 12px; }
-.welcome__warn .material-icons { font-size: 17px; }
+.welcome__warn { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 24px; padding: 12px 14px; border: 1px solid var(--warning-soft); border-radius: var(--radius-md); background: var(--warning-soft); color: var(--warning); font-size: 0.75rem; }
+.welcome__warn .material-icons { font-size: 1.0625rem; }
 @media (max-width: 1200px) { .welcome__starters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 900px) { .welcome { padding: 32px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); } }
 </style>

@@ -158,7 +158,9 @@ export function resolveTheme (id, input = {}) {
 
 export function cssTokens (id, overrides) {
   return Object.fromEntries(Object.entries(resolveTheme(id, overrides)).map(([key, value]) =>
-    [`--${key}`, `${value}${tokenByKey.get(key)?.unit || ''}`]))
+    // Stored/exported sizes remain pixels at 100%, preserving existing themes.
+    // Relative CSS sizes follow the device's interface size and browser settings.
+    [`--${key}`, tokenByKey.get(key)?.unit === 'px' ? `${value / 16}rem` : String(value)]))
 }
 
 export function exportTheme (theme, overrides) {

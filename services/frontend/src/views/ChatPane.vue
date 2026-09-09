@@ -21,7 +21,7 @@
         <q-tooltip>Internet allowed for this chat</q-tooltip>
       </span>
       <RouterLink v-if="chat?.promoted_to" class="btn btn--outline btn--sm" :to="`/workflows/${chat.promoted_to}`">
-        <span class="material-icons" style="font-size: 15px">account_tree</span>
+        <span class="material-icons" style="font-size: 0.9375rem">account_tree</span>
         {{ chat.promoted_to }}
       </RouterLink>
       <button class="btn btn--icon" aria-label="Chat options">
@@ -563,7 +563,7 @@ onUnmounted(() => {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 8px 0;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .thread__foot {
@@ -586,7 +586,7 @@ onUnmounted(() => {
 }
 
 .thread__approval-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 650;
 }
 
@@ -595,7 +595,7 @@ onUnmounted(() => {
   overflow-y: auto;
   overflow-wrap: anywhere;
   margin: 4px 0 10px;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--text-muted);
 }
 
@@ -606,19 +606,19 @@ onUnmounted(() => {
 }
 
 .thread__approval-actions .material-icons {
-  font-size: 16px;
+  font-size: 1rem;
 }
 
 .thread__approval-error {
   margin: 8px 0 0;
   color: var(--danger);
-  font-size: 12px;
+  font-size: 0.75rem;
   overflow-wrap: anywhere;
 }
 
 .internet-indicator {
   flex: none;
-  font-size: 18px;
+  font-size: 1.125rem;
   color: var(--success);
 }
 
@@ -630,7 +630,7 @@ onUnmounted(() => {
   height: 34px;
   clip-path: var(--octagon);
   color: var(--accent);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 650;
 }
 
@@ -650,9 +650,9 @@ onUnmounted(() => {
   border-radius: var(--radius-pill);
   background: var(--warning);
   color: var(--warning-text);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
-  line-height: 15px;
+  line-height: 0.9375rem;
   text-align: center;
 }
 
@@ -690,7 +690,7 @@ onUnmounted(() => {
   }
 
   .pane-head > .btn--outline .material-icons {
-    font-size: 17px !important;
+    font-size: 1.0625rem !important;
   }
 
   .thread__inner {

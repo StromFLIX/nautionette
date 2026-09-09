@@ -138,7 +138,7 @@ onUnmounted(() => off())
   margin-bottom: 24px;
 }
 
-.run-diagnostics > summary { font-size: 12px; color: var(--text-muted); cursor: pointer; }
+.run-diagnostics > summary { font-size: 0.75rem; color: var(--text-muted); cursor: pointer; }
 
 .facts {
   display: grid;
@@ -151,7 +151,7 @@ onUnmounted(() => off())
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface-panel);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .fact-cell .section-label {

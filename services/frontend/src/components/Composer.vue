@@ -225,6 +225,8 @@ defineExpose({ focus: () => input.value?.focus() })
 /* On short viewports the draft and advanced controls scroll, not the primary actions. */
 .composer--docked { display: flex; flex-direction: column; max-height: 100%; }
 .composer--docked .composer__input { flex: 0 1 auto; min-height: calc(var(--chat-font-size) * 1.6 + 28px); }
+/* Leave room for a complete control plus the border in the scrollable area. */
+.composer--docked .composer__configuration { min-height: calc(max(2rem, 44px) + 1px); }
 .composer--focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .composer--welcome { border-radius: var(--radius-xl); box-shadow: var(--shadow-md); }
 .composer--running { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft), 0 0 20px var(--accent-soft); }
@@ -248,39 +250,39 @@ defineExpose({ focus: () => input.value?.focus() })
 .composer__input::placeholder { color: var(--text-dim); }
 .composer--welcome .composer__input { padding: 22px 22px 12px; }
 .composer__bar { display: flex; flex: none; align-items: center; gap: 6px; min-width: 0; padding: 8px 12px 12px; }
-.pick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 250px; height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: background var(--transition), color var(--transition); }
+.pick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 250px; min-height: 2rem; padding: 0.25rem 0.5rem; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font: inherit; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: background var(--transition), color var(--transition); }
 .pick:disabled { opacity: 0.5; cursor: not-allowed; }
 .pick:hover:not(:disabled) { background: var(--surface-active); color: var(--text); }
 .pick--quiet { color: var(--text-dim); }
-.pick--icon { position: relative; flex: none; justify-content: center; width: 34px; padding: 0; }
-.pick--icon > .material-icons { font-size: 19px; }
+.pick--icon { position: relative; flex: none; justify-content: center; width: 2.125rem; padding: 0; }
+.pick--icon > .material-icons { font-size: 1.1875rem; }
 .pick--active { background: var(--accent-soft); color: var(--accent); }
-.pick__icon, .pick__caret { flex: none; font-size: 16px; }
+.pick__icon, .pick__caret { flex: none; font-size: 1rem; }
 .pick__caret { margin-left: auto; opacity: 0.6; }
 .composer__configured { position: absolute; top: 1px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 .composer__context { flex: none; padding: 10px 6px; }
 .meter { width: 38px; height: 3px; border-radius: var(--radius-pill); background: var(--surface-active); overflow: hidden; }
 .meter__fill { height: 100%; background: var(--accent); transition: width 200ms var(--ease); }
 .meter__fill--hot { background: var(--warning); }
-.composer__send, .composer__stop { position: relative; display: grid; place-items: center; flex: none; width: 36px; height: 36px; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--accent-text); cursor: pointer; }
+.composer__send, .composer__stop { position: relative; display: grid; place-items: center; flex: none; width: 2.25rem; height: 2.25rem; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--accent-text); cursor: pointer; }
 .composer__send::before { content: ''; position: absolute; inset: 0; background: var(--accent); clip-path: var(--octagon); transition: background var(--transition); }
 .composer__send:not(:disabled):hover::before { background: var(--accent-hover); }
 .composer__send > .material-icons { position: relative; }
 .composer__stop { background: var(--danger-soft); color: var(--danger); }
 .composer__send:disabled, .composer__stop:disabled { color: var(--text-dim); cursor: default; }
 .composer__send:disabled::before { background: var(--surface-active); }
-.composer__send .material-icons, .composer__stop .material-icons { font-size: 20px; }
+.composer__send .material-icons, .composer__stop .material-icons { font-size: 1.25rem; }
 .composer__configuration { min-height: 0; padding: 14px 16px 12px; border-top: 1px solid var(--border); }
 .composer__profile { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
 .composer__profile-picker { max-width: min(280px, 100%); color: var(--text); background: var(--surface-hover); }
-.composer__profile > .caption { font-size: 10px; }
+.composer__profile > .caption { font-size: 0.625rem; }
 .composer__options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .composer__option { min-width: 0; }
-.composer__option-label { display: block; color: var(--text-dim); font-size: 10px; margin: 0 8px 4px; }
+.composer__option-label { display: block; color: var(--text-dim); font-size: 0.625rem; margin: 0 8px 4px; }
 .composer__option > .pick { width: 100%; max-width: none; background: var(--surface-hover); }
-.composer__configuration-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 8px 0; color: var(--text-dim); font-size: 10px; }
+.composer__configuration-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 8px 0; color: var(--text-dim); font-size: 0.625rem; }
 .composer__configuration-foot a { display: flex; align-items: center; gap: 4px; color: var(--text-muted); text-decoration: none; }
-.composer__configuration-foot .material-icons { font-size: 12px; }
+.composer__configuration-foot .material-icons { font-size: 0.75rem; }
 @media (max-width: 1100px) { .composer__options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) {
   .composer__context { display: none; }
@@ -296,8 +298,8 @@ defineExpose({ focus: () => input.value?.focus() })
   .composer__send, .composer__stop, .pick--icon { width: 32px; }
 }
 @media (pointer: coarse) {
-  .pick, .composer__send, .composer__stop { min-height: 40px; }
-  .pick--icon, .composer__send, .composer__stop { min-width: 36px; }
+  .pick, .composer__send, .composer__stop { min-height: 44px; }
+  .pick--icon, .composer__send, .composer__stop { min-width: 44px; }
 }
 </style>
 
@@ -305,7 +307,7 @@ defineExpose({ focus: () => input.value?.focus() })
 @property --composer-orbit-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 .pick-menu { min-width: 240px; max-width: min(340px, calc(100vw - 24px)); }
 .pick-menu__label { padding: 8px 10px 6px; }
-.pick-menu__item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: var(--radius-sm); background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.pick-menu__item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: none; border-radius: var(--radius-sm); background: none; color: var(--text); font: inherit; font-size: 0.8125rem; text-align: left; cursor: pointer; }
 .pick-menu__item:hover { background: var(--surface-hover); }
-.pick-menu__check { font-size: 16px; color: var(--accent-hover); }
+.pick-menu__check { font-size: 1rem; color: var(--accent-hover); }
 </style>

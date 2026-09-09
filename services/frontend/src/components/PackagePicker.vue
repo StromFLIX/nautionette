@@ -91,7 +91,7 @@ onUnmounted(() => { generation++ })
 .package-picker__head { border-bottom: 1px solid var(--border); }
 .package-picker__head input { min-width: 0; width: 100%; }
 .package-picker__foot { border-top: 1px solid var(--border); flex-wrap: wrap; }
-.package-picker__foot .material-icons { font-size: 16px; }
+.package-picker__foot .material-icons { font-size: 1rem; }
 .package-picker__list { max-height: min(320px, 40dvh); }
 .package-picker__note { margin: 0; padding: 12px; }
 .package-choice { padding: 12px; }
@@ -99,6 +99,6 @@ onUnmounted(() => { generation++ })
 .package-choice > button { margin: 8px 0 0 26px; }
 .package-choice:hover { background: var(--surface-hover); }
 .package-choice input { flex: none; accent-color: var(--accent); width: 16px; height: 16px; }
-.package-choice__name { display: block; overflow-wrap: anywhere; font-size: 13px; }
+.package-choice__name { display: block; overflow-wrap: anywhere; font-size: 0.8125rem; }
 .package-choice .grow { min-width: 0; }
 </style>

@@ -45,9 +45,9 @@ onUnmounted(() => { generation++ })
 <style scoped>
 .agent-packages { margin: 24px 0; }
 .agent-packages > .field { margin-top: 12px; width: 100%; }
-.agent-packages__overrides { margin-top: 16px; font-size: 12px; }
+.agent-packages__overrides { margin-top: 16px; font-size: 0.75rem; }
 .agent-packages__overrides > p { margin: 12px 0; }
 .agent-packages__overrides summary { cursor: pointer; }
 .agent-packages__card { margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow-wrap: anywhere; }
-.agent-packages__card strong { font-size: 12px; }
+.agent-packages__card strong { font-size: 0.75rem; }
 </style>

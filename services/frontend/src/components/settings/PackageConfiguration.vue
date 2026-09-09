@@ -72,17 +72,17 @@ async function save () {
 </script>
 <style scoped>
 .package-config { margin-top: 12px; }
-.package-config summary { cursor: pointer; font-size: 12px; }
+.package-config summary { cursor: pointer; font-size: 0.75rem; }
 .package-config p { margin: 12px 0; overflow-wrap: anywhere; }
-.package-config label { display: block; margin: 12px 0 6px; font-size: 12px; }
+.package-config label { display: block; margin: 12px 0 6px; font-size: 0.75rem; }
 .package-config__types { display: flex; flex-wrap: wrap; gap: 12px; }
 .package-config__types input { accent-color: var(--accent); }
 .package-config__group { margin: 20px 0; }
-.package-config__group strong { font-size: 12px; }
+.package-config__group strong { font-size: 0.75rem; }
 .package-config__group .row { flex-wrap: wrap; gap: 8px; }
 .package-config__entry { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 8px; margin: 10px 0; align-items: start; }
 .package-config__entry .field { min-width: 0; width: 100%; }
-.package-config__json { width: 100%; font-family: monospace; font-size: 12px; }
+.package-config__json { width: 100%; font-family: monospace; font-size: 0.75rem; }
 .package-config__advanced { margin: 20px 0; }
 @media (max-width: 640px) {
   .package-config__entry { grid-template-columns: minmax(0, 1fr) auto; }

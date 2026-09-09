@@ -39,7 +39,7 @@
   <details id="theme-editor" class="settings-disclosure appearance__editor">
     <summary><span class="material-icons" aria-hidden="true">tune</span><span class="grow">Customize every detail</span><span class="caption dim">{{ THEME_TOKENS.length }} tokens</span></summary>
     <div class="appearance__editor-body">
-      <p class="caption muted">Hex colors support transparency. Fonts use locally installed families.</p>
+      <p class="caption muted">Hex colors support transparency. Fonts use locally installed families. Sizes are in pixels at 100% interface size.</p>
       <div class="appearance__token-search">
         <input v-model="tokenQuery" class="field" type="search" placeholder="Filter tokens…" aria-label="Filter theme tokens" />
         <label class="caption muted row"><input v-model="modifiedOnly" type="checkbox" />Modified only</label>
@@ -188,10 +188,10 @@ function download () {
 .theme-card__main b { height: 3px; width: 85%; background: var(--preview-text); opacity: 0.2; border-radius: 2px; }
 .theme-card__main b + b { width: 58%; }
 .theme-card__main em { height: 15%; border: 1px solid var(--preview-border); border-radius: 3px; margin-top: auto; }
-.theme-card__caption { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 10px 6px 2px; font-size: 13px; }
-.theme-card__caption .material-icons { font-size: 16px; color: var(--accent); }
-.theme-card__mode { font-size: 10px; color: var(--text-dim); text-transform: capitalize; }
-.theme-card__description { display: block; padding: 0 6px; color: var(--text-muted); font-size: 10px; line-height: 1.6; }
+.theme-card__caption { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 10px 6px 2px; font-size: 0.8125rem; }
+.theme-card__caption .material-icons { font-size: 1rem; color: var(--accent); }
+.theme-card__mode { font-size: 0.625rem; color: var(--text-dim); text-transform: capitalize; }
+.theme-card__description { display: block; padding: 0 6px; color: var(--text-muted); font-size: 0.625rem; line-height: 1.6; }
 .appearance__quick { display: grid; grid-template-columns: 1fr 1.2fr; gap: 28px; align-items: center; margin: 28px 0; }
 .appearance__accent .setting__label { display: block; margin-bottom: 12px; }
 .color-swatch { flex: none; appearance: none; width: 32px; height: 34px; padding: 3px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-input); cursor: pointer; }
@@ -199,14 +199,14 @@ function download () {
 .color-swatch::-webkit-color-swatch { border: 0; border-radius: var(--radius-xs); }
 .color-swatch::-moz-color-swatch { border: 0; border-radius: var(--radius-xs); }
 .color-swatch--large { width: 40px; height: 40px; }
-.appearance__sample { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; background: var(--surface-panel); font-size: 12px; }
+.appearance__sample { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; background: var(--surface-panel); font-size: 0.75rem; }
 .appearance__sample .brand-mark { width: 26px; height: 26px; }
 .appearance__sample-message { width: fit-content; margin: 16px 0 16px auto; padding: 8px 12px; border-radius: var(--radius-md); background: var(--bubble-out); color: var(--bubble-text); }
 .appearance__sample-keyword { color: var(--syntax-keyword); }
 .appearance__sample-string { color: var(--syntax-string); }
-.appearance__sample code { font-size: 11px; overflow-wrap: anywhere; }
+.appearance__sample code { font-size: 0.6875rem; overflow-wrap: anywhere; }
 .appearance__sample-action { display: grid; place-items: center; width: 26px; height: 26px; background: var(--accent); color: var(--accent-text); clip-path: var(--octagon); }
-.appearance__sample-action .material-icons { font-size: 16px; }
+.appearance__sample-action .material-icons { font-size: 1rem; }
 .appearance__editor-body { padding: 6px 16px 16px; }
 .appearance__token-search { display: flex; align-items: center; gap: 20px; margin: 16px 0; }
 .appearance__token-search > input { flex: 1; }
@@ -215,17 +215,17 @@ function download () {
 .token-group > summary { padding-inline: 0; }
 .token-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding: 12px 0 20px; }
 .token-field { min-width: 0; }
-.token-field > label { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px; }
-.token-field .field { flex: 1; width: 100%; font: 11px var(--font-mono); }
+.token-field > label { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 0.75rem; }
+.token-field .field { flex: 1; width: 100%; font: 0.6875rem var(--font-mono); }
 .token-field .btn { flex: none; }
-.token-field__key { display: block; margin-top: 5px; font-size: 10px; color: var(--text-dim); }
+.token-field__key { display: block; margin-top: 5px; font-size: 0.625rem; color: var(--text-dim); }
 .token-field__modified { display: inline-block; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; }
 .appearance__transfer { margin-top: 24px; }
 .appearance__transfer > .row { flex-wrap: wrap; }
-.appearance__transfer .material-icons { font-size: 16px; }
+.appearance__transfer .material-icons { font-size: 1rem; }
 .appearance__transfer p { margin: 12px 0 0; }
 .appearance__contrast { display: flex; align-items: center; gap: 6px; color: var(--warning); }
-.appearance__contrast .material-icons { font-size: 15px; }
+.appearance__contrast .material-icons { font-size: 0.9375rem; }
 @media (max-width: 1200px) { .theme-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .appearance__quick { grid-template-columns: minmax(0, 1fr); gap: 20px; } }
 @media (max-width: 600px) {
   .theme-grid { gap: 10px; }

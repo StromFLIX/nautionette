@@ -46,7 +46,7 @@ function display (value) {
 </script>
 
 <style scoped>
-.health-details { margin: 0; font-size: 12px; min-width: 0; }
+.health-details { margin: 0; font-size: 0.75rem; min-width: 0; }
 .health-details__field { display: grid; grid-template-columns: minmax(90px, 30%) minmax(0, 1fr); gap: 12px; padding: 5px 0; }
 .health-details__field > dt { color: var(--text-muted); overflow-wrap: anywhere; }
 .health-details__field > dd { margin: 0; min-width: 0; }
@@ -55,7 +55,7 @@ function display (value) {
 .health-details__field--group > dt { font-weight: 600; padding-bottom: 6px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
 .health-details__list { margin: 0; padding-left: 16px; }
 .health-details__list > li { padding: 3px 0; }
-.health-details__value { font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.health-details__value { font-size: 0.75rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .health-details__empty { color: var(--text-muted); }
 @media (max-width: 420px) {
   .health-details__field { grid-template-columns: minmax(72px, 36%) minmax(0, 1fr); gap: 8px; }

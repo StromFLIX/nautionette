@@ -90,11 +90,11 @@ function inherit (key) {
 .config-field__head { display: flex; align-items: center; gap: 8px; min-height: 26px; margin-bottom: 8px; }
 .config-field__head .setting__label { margin: 0; }
 .config-field .field { width: 100%; min-height: 42px; }
-.config-field .material-icons { font-size: 18px; }
+.config-field .material-icons { font-size: 1.125rem; }
 .config-field > p { margin: 8px 0 0; }
-.config-field__inherit { display: inline-flex; align-items: center; gap: 2px; flex: none; border: none; background: none; color: var(--accent); font: inherit; font-size: 11px; padding: 4px 2px; cursor: pointer; }
-.config-field__inherit .material-icons { font-size: 15px; }
-.config-field__source { font-size: 10px; }
+.config-field__inherit { display: inline-flex; align-items: center; gap: 2px; flex: none; border: none; background: none; color: var(--accent); font: inherit; font-size: 0.6875rem; padding: 4px 2px; cursor: pointer; }
+.config-field__inherit .material-icons { font-size: 0.9375rem; }
+.config-field__source { font-size: 0.625rem; }
 .config-field__reasoning :deep(.truncate) { flex: 1; text-align: left; }
 @media (max-width: 640px) { .config-fields { grid-template-columns: minmax(0, 1fr); gap: 20px; } }
 </style>

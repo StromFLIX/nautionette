@@ -29,7 +29,7 @@ onMounted(async () => {
   background: var(--warning);
   color: var(--warning-text);
   text-align: center;
-  font-size: 13px;
+  font-size: 0.8125rem;
   line-height: 1.4;
   border-bottom: 2px solid var(--warning-text);
 }

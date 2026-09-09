@@ -97,7 +97,7 @@ async function copy () {
 
 .trigger__tabs .tab {
   padding: 8px 10px;
-  font-size: 12.5px;
+  font-size: 0.78125rem;
 }
 
 .trigger__code {

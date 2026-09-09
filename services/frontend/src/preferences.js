@@ -50,6 +50,7 @@ function apply () {
   const root = document.documentElement
   const theme = themeById(preferences.theme)
   for (const [key, value] of Object.entries(cssTokens(theme.id, currentOverrides.value))) root.style.setProperty(key, value)
+  root.style.fontSize = `${preferences.interfaceSize}%`
   root.style.colorScheme = theme.mode
   root.dataset.theme = theme.id
   root.dataset.colorScheme = theme.mode

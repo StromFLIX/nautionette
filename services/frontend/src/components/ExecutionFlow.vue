@@ -75,6 +75,6 @@ onUnmounted(() => {
 
 <style scoped>
 .execution-flow { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
-.execution-flow__error { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 12px; background: var(--warning-soft); color: var(--warning); overflow-wrap: anywhere; }
-.execution-flow__error > .material-icons { font-size: 18px; }
+.execution-flow__error { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 0.75rem; background: var(--warning-soft); color: var(--warning); overflow-wrap: anywhere; }
+.execution-flow__error > .material-icons { font-size: 1.125rem; }
 </style>

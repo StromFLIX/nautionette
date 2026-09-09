@@ -174,7 +174,7 @@ const time = computed(() => shortTime(props.createdAt))
   border-radius: var(--radius-sm);
   background: var(--surface-active);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-decoration: none;
 }
 
@@ -183,7 +183,7 @@ const time = computed(() => shortTime(props.createdAt))
 }
 
 .bubble__run .material-icons {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: var(--accent-hover);
 }
 
@@ -191,7 +191,7 @@ const time = computed(() => shortTime(props.createdAt))
   flex: none;
   padding-bottom: 3px;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 
 .msg__delivery {
@@ -203,7 +203,7 @@ const time = computed(() => shortTime(props.createdAt))
 
 .msg__delivery .material-icons,
 .msg__sent {
-  font-size: 13px;
+  font-size: 0.8125rem;
   vertical-align: middle;
 }
 
@@ -228,7 +228,7 @@ const time = computed(() => shortTime(props.createdAt))
 }
 
 .bubble__actions .material-icons {
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 
 .bubble__copy-status:not(:empty) {
@@ -249,7 +249,7 @@ const time = computed(() => shortTime(props.createdAt))
 }
 
 .bubble__spinner {
-  font-size: 14px;
+  font-size: 0.875rem;
   animation: bubble-spin 1.4s linear infinite;
 }
 
@@ -361,7 +361,7 @@ const time = computed(() => shortTime(props.createdAt))
   width: 100%;
   margin: 8px 0;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .bubble__body th,

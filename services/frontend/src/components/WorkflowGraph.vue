@@ -160,7 +160,7 @@ const search = ref('')
 const now = ref(Date.now())
 let clock
 let initialized = false
-const positioned = computed(() => layoutGraph(props.graph, direction.value))
+const positioned = computed(() => layoutGraph(props.graph, direction.value, preferences.interfaceSize / 100))
 const nodes = computed(() => positioned.value.nodes.map((node) => ({ ...node, ariaLabel: `${node.data.label}, ${node.data.status || node.data.kind}` })))
 const edges = computed(() => positioned.value.edges.map((edge) => {
   const target = props.graph.nodes.find((node) => node.id === edge.target)
@@ -170,7 +170,7 @@ const edges = computed(() => positioned.value.edges.map((edge) => {
     animated: ['running', 'retrying'].includes(target?.status),
     style: { stroke: color, strokeWidth: 1.5, strokeDasharray: edge.change === 'removed' ? '5 5' : undefined },
     markerEnd: { type: 'arrowclosed', color, width: 14, height: 14 },
-    labelStyle: { fill: 'var(--text-muted)', fontSize: 11 },
+    labelStyle: { fill: 'var(--text-muted)', fontSize: '0.6875rem' },
     labelBgStyle: { fill: 'var(--surface-app)' }, labelBgPadding: [6, 4]
   }
 }))
@@ -231,13 +231,13 @@ function initialize () {
   initialized = true
   const root = nodes.value[0]
   const active = nodes.value.find((node) => node.id === activeNode.value?.id)
-  const zoom = Math.max(0.1, Math.min(1, (dimensions.value.width - 48) / 264, (dimensions.value.height - 60) / (active?.height || root.height)))
+  const zoom = Math.max(0.1, Math.min(1, (dimensions.value.width - 48) / (active?.width || root.width), (dimensions.value.height - 60) / (active?.height || root.height)))
   if (active && props.graph?.mode === 'execution') {
     const top = Math.min(36 - root.absolutePosition.y * zoom, dimensions.value.height - 24 - (active.absolutePosition.y + active.height) * zoom)
     setViewport({ x: dimensions.value.width / 2 - (active.absolutePosition.x + active.width / 2) * zoom, y: top, zoom })
     return
   }
-  setViewport({ x: dimensions.value.width / 2 - (root.position.x + 132) * zoom, y: 36 - root.position.y * zoom, zoom })
+  setViewport({ x: dimensions.value.width / 2 - (root.position.x + root.width / 2) * zoom, y: 36 - root.position.y * zoom, zoom })
 }
 
 async function fitAll () {
@@ -277,10 +277,10 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow--expanded { position: fixed; inset: 0; height: var(--app-height); z-index: 5000; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 .flow__toolbar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface-panel); }
 .flow__source { min-width: 0; flex: 1; }
-.flow__eyebrow { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0; }
+.flow__eyebrow { font-size: 0.6875rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0; }
 .flow__tools { display: flex; gap: 2px; flex: none; }
 .flow .btn--icon { width: 34px; height: 34px; }
-.flow .btn .material-icons { font-size: 20px; }
+.flow .btn .material-icons { font-size: 1.25rem; }
 .flow__pressed { color: var(--accent); background: var(--accent-soft); }
 .flow__workspace { display: flex; flex: 1; min-height: 0; position: relative; }
 .flow__canvas { position: relative; flex: 1; min-width: 0; min-height: 180px; }
@@ -289,10 +289,10 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow :deep(.vue-flow__node) { border: none; border-radius: 8px; width: 264px; padding: 0; background: transparent; box-shadow: none; }
 .flow :deep(.vue-flow__node:focus-visible) { outline: 2px solid var(--accent); outline-offset: 4px; }
 .flow :deep(.vue-flow__edge-path) { transition: stroke 160ms; }
-.flow-node { --node-color: var(--text-muted); display: flex; flex-direction: column; width: 100%; height: 100%; padding: 12px 14px 10px; border: 1px solid var(--border-strong); border-left: 3px solid var(--node-color); border-radius: var(--radius-sm); background: var(--surface-panel); color: var(--text); box-shadow: var(--shadow-sm); cursor: pointer; transition: border-color 140ms, box-shadow 140ms; text-align: left; }
+.flow-node { --node-color: var(--text-muted); display: flex; flex-direction: column; width: 100%; height: 100%; padding: 0.75rem 0.875rem 0.625rem; border: 1px solid var(--border-strong); border-left: 3px solid var(--node-color); border-radius: var(--radius-sm); background: var(--surface-panel); color: var(--text); box-shadow: var(--shadow-sm); cursor: pointer; transition: border-color 140ms, box-shadow 140ms; text-align: left; }
 .flow-loop { --node-color: var(--warning); width: 100%; height: 100%; border: 1px dashed color-mix(in srgb, var(--warning) 65%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--warning) 3%, transparent); cursor: pointer; }
-.flow-loop__header { height: 106px; padding: 14px 18px; border-bottom: 1px dashed color-mix(in srgb, var(--warning) 35%, var(--border)); background: color-mix(in srgb, var(--warning) 7%, var(--surface-app)); border-radius: 8px 8px 0 0; }
-.flow-loop__name { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 14px; line-height: 21px; font-weight: 600; margin-top: 8px; }
+.flow-loop__header { height: 6.625rem; padding: 0.875rem 1.125rem; border-bottom: 1px dashed color-mix(in srgb, var(--warning) 35%, var(--border)); background: color-mix(in srgb, var(--warning) 7%, var(--surface-app)); border-radius: 8px 8px 0 0; }
+.flow-loop__name { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 0.875rem; line-height: 1.3125rem; font-weight: 600; margin-top: 8px; }
 .flow-loop--selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .flow-loop--added { border-color: var(--success); }
 .flow-loop--removed { border-color: var(--danger); }
@@ -308,52 +308,52 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow-node--changed, .flow-node--retrying { border-color: var(--warning); }
 .flow-node:hover, .flow-node--selected { box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md); border-color: var(--accent-hover); }
 .flow-node--dimmed { opacity: 0.3; }
-.flow-node__top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 10px; line-height: 16px; }
+.flow-node__top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 0.625rem; line-height: 1rem; }
 .flow-node__kind { display: flex; align-items: center; gap: 4px; color: var(--node-color); text-transform: uppercase; font-weight: 600; }
-.flow-node__kind .material-icons { font-size: 15px; }
+.flow-node__kind .material-icons { font-size: 0.9375rem; }
 .flow-node__status { display: flex; align-items: center; gap: 4px; color: var(--text-muted); }
 .flow-node__status i, .flow__live i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .flow-node--running .flow-node__status { color: var(--accent-hover); }
 .flow-node--running .flow-node__status i, .flow__live--running i { animation: flow-pulse 1.8s ease-in-out infinite; }
 .flow-node--completed .flow-node__status { color: var(--success); }
 .flow-node--failed .flow-node__status, .flow-node--timed_out .flow-node__status { color: var(--danger); }
-.flow-node__inspect { font-size: 14px; color: var(--text-dim); }
-.flow-node__name { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; line-height: 19px; height: 38px; margin: 6px 0; }
-.flow-node__details { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 8px; margin: 0 0 8px; font-size: 11px; line-height: 16px; }
+.flow-node__inspect { font-size: 0.875rem; color: var(--text-dim); }
+.flow-node__name { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 0.875rem; font-weight: 600; line-height: 1.1875rem; height: 2.375rem; margin: 6px 0; }
+.flow-node__details { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 8px; margin: 0 0 8px; font-size: 0.6875rem; line-height: 1rem; }
 .flow-node__details dt { color: var(--text-dim); }
 .flow-node__details dd { margin: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-muted); }
 .flow-node__expression { font-family: monospace; }
-.flow-node__bottom { display: flex; justify-content: space-between; gap: 8px; margin-top: auto; color: var(--text-dim); font-size: 10px; line-height: 15px; }
+.flow-node__bottom { display: flex; justify-content: space-between; gap: 8px; margin-top: auto; color: var(--text-dim); font-size: 0.625rem; line-height: 0.9375rem; }
 .flow-node__bottom span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .flow-node__bottom span:last-child { flex: none; }
 .flow__zoom { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-raised); box-shadow: var(--shadow-md); }
-.flow__scale { width: 42px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.flow__scale { width: 42px; text-align: center; font-size: 0.6875rem; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 .flow__separator { width: 1px; height: 18px; background: var(--border-strong); margin: 0 4px; }
 .flow__active-control { color: var(--accent-hover); }
-.flow__footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex: none; min-height: 34px; padding: 7px 16px; border-top: 1px solid var(--border); font-size: 10px; color: var(--text-dim); }
+.flow__footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex: none; min-height: 34px; padding: 7px 16px; border-top: 1px solid var(--border); font-size: 0.625rem; color: var(--text-dim); }
 .flow__live { display: flex; align-items: center; gap: 6px; text-transform: capitalize; }
 .flow__live--running { color: var(--accent-hover); }
 .flow__completed { color: var(--text-dim); margin-left: 8px; }
-.flow__warning { display: flex; align-items: flex-start; gap: 7px; padding: 7px 16px; color: var(--warning); background: var(--warning-soft); font-size: 11px; overflow-wrap: anywhere; }
-.flow__warning .material-icons { font-size: 15px; flex: none; }
+.flow__warning { display: flex; align-items: flex-start; gap: 7px; padding: 7px 16px; color: var(--warning); background: var(--warning-soft); font-size: 0.6875rem; overflow-wrap: anywhere; }
+.flow__warning .material-icons { font-size: 0.9375rem; flex: none; }
 .flow__search { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
-.flow__search > .material-icons { font-size: 18px; color: var(--text-dim); }
+.flow__search > .material-icons { font-size: 1.125rem; color: var(--text-dim); }
 .flow__search input { flex: 1; min-width: 0; }
 .flow__changes { display: flex; gap: 16px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
-.flow__change { font-size: 11px; }
+.flow__change { font-size: 0.6875rem; }
 .flow__change--added { color: var(--success); }
 .flow__change--changed { color: var(--warning); }
 .flow__change--removed { color: var(--danger); }
 .flow__inspector { width: 310px; max-width: 45%; flex: none; padding: 14px 18px 24px; border-left: 1px solid var(--border-strong); background: var(--surface-panel); }
 .flow__inspector-head { display: flex; justify-content: space-between; align-items: center; }
-.flow__inspector h2 { font-size: 16px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; margin: 6px 0 12px; }
-.flow__facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px 12px; font-size: 11px; margin: 16px 0; }
+.flow__inspector h2 { font-size: 1rem; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; margin: 6px 0 12px; }
+.flow__facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px 12px; font-size: 0.6875rem; margin: 16px 0; }
 .flow__facts dt { color: var(--text-dim); }
 .flow__facts dd { margin: 0; overflow-wrap: anywhere; }
-.flow__expression-label { display: block; font-size: 10px; color: var(--text-dim); margin-top: 3px; }
+.flow__expression-label { display: block; font-size: 0.625rem; color: var(--text-dim); margin-top: 3px; }
 .flow__payload { margin-top: 20px; }
-.flow__payload h3 { color: var(--text-muted); font-size: 11px; font-weight: 600; margin-bottom: 8px; }
-.flow__payload pre { margin: 0; font-size: 11px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-muted); }
+.flow__payload h3 { color: var(--text-muted); font-size: 0.6875rem; font-weight: 600; margin-bottom: 8px; }
+.flow__payload pre { margin: 0; font-size: 0.6875rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-muted); }
 .flow__payload .flow__error { color: var(--danger); }
 .flow__empty { position: absolute; top: 40%; width: 100%; text-align: center; color: var(--text-dim); }
 @keyframes flow-pulse { 50% { opacity: 0.3; } }
@@ -364,7 +364,7 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
   .flow__inspector { position: absolute; bottom: 0; left: 0; right: 0; width: 100%; max-width: none; max-height: 54%; border-left: none; border-top: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); z-index: 6; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
   .flow__inspector-head { position: sticky; top: -14px; background: var(--surface-panel); z-index: 1; }
   .flow__footer { padding: 7px 12px; }
-  .flow__warning { font-size: 10px; padding: 5px 12px; }
+  .flow__warning { font-size: 0.625rem; padding: 5px 12px; }
   .flow__zoom { bottom: 12px; }
 }
 </style>

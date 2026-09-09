@@ -81,7 +81,7 @@ const items = computed(() => [
   justify-content: center;
   gap: 5px;
   width: calc(100% - 12px);
-  height: 56px;
+  min-height: 3.5rem;
   border: none;
   border-radius: var(--radius-md);
   background: transparent;
@@ -125,7 +125,7 @@ const items = computed(() => [
 }
 
 .rail__label {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 500;
   letter-spacing: 0.01em;
 }
@@ -134,15 +134,15 @@ const items = computed(() => [
   position: absolute;
   top: 4px;
   right: 8px;
-  min-width: 16px;
-  height: 16px;
+  min-width: 1rem;
+  height: 1rem;
   padding: 0 4px;
   border-radius: var(--radius-pill);
   background: var(--warning);
   color: var(--warning-text);
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 700;
-  line-height: 16px;
+  line-height: 1rem;
   text-align: center;
 }
 
@@ -178,7 +178,7 @@ const items = computed(() => [
     flex: 1 1 0;
     width: auto;
     min-width: 0;
-    height: 50px;
+    min-height: 3.125rem;
     border-radius: var(--radius-sm);
   }
 
