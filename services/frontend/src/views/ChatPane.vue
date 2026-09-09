@@ -118,6 +118,8 @@
         :reasoning-effort="chat?.reasoning_effort ?? null"
         :tools="chat?.tools ?? null"
         :project-ids="chat?.project_ids || []"
+        :packages="chat?.packages || []"
+        :commands="chat?.package_commands || []"
         :running="streaming"
         :stopping="stopping"
         :context="context"

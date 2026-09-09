@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import Body, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
-from . import agent_run, daemon, images, monitor, workers
+from . import agent_run, daemon, images, monitor, packages, workers
 from .config import INTERNAL_TOKEN
 
 
@@ -86,6 +86,21 @@ def agent(
 ) -> StreamingResponse:
     _check_internal(x_internal_token)
     return StreamingResponse(agent_run.run(job), media_type="application/x-ndjson")
+
+
+@app.post("/packages/install")
+def install_package(
+    payload: dict[str, Any] = Body(...), x_internal_token: str | None = Header(default=None)
+) -> dict[str, Any]:
+    _check_internal(x_internal_token)
+    try:
+        return packages.install(
+            payload.get("installation_id"), payload.get("source"), payload.get("allow_scripts", False)
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(503, "Package installer unavailable or timed out; retry") from exc
 
 
 @app.post("/worker/restart")

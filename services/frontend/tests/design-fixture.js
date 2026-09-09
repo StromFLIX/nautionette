@@ -37,6 +37,8 @@ export async function mockDesign (context) {
     if (path === '/api/events/recent') return reply({ events: [{ kind: 'workflow.completed', at: now, workflow: 'digest' }] })
     if (path === '/api/system') return reply({ version: 'test', components: [{ name: 'temporal', status: 'ok', detail: 'temporal:7233' }], agent_sets: catalog.agent_sets, model_key_present: true, auth_enabled: true })
     if (path === '/api/catalog') return reply(catalog)
+    if (path === '/api/pi-packages/search') return reply({ packages: [], next_offset: null })
+    if (path === '/api/pi-packages/installations') return reply({ installations: [] })
     if (path === '/api/settings') {
       if (method === 'PUT') { const payload = route.request().postDataJSON(); state.writes.push(payload); Object.assign(settings, payload) }
       return reply({ settings, defaults: settings })

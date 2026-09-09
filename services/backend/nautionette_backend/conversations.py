@@ -98,6 +98,7 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
                             "model_reasoning",
                             "tools",
                             "project_ids",
+                            "packages",
                         )
                     ):
                         break
@@ -188,7 +189,28 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
             if not db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
                 return
             kind = event.get("type")
-            if kind == "input_consumed":
+            if kind == "commands":
+                current = db.get_chat(chat_id)
+                if (
+                    current
+                    and current.get("packages", []) == job.get("packages", [])
+                    and current["agent_set"] == job["agent_set"]
+                ):
+                    commands = [
+                        {
+                            "name": command["name"][:100],
+                            "description": str(command.get("description", ""))[:500],
+                            "source": command["source"],
+                        }
+                        for command in (event.get("commands") or [])[:200]
+                        if isinstance(command, dict)
+                        and isinstance(command.get("name"), str)
+                        and command.get("source") in {"extension", "skill", "prompt"}
+                    ]
+                    db.execute(
+                        "UPDATE chats SET package_commands = ? WHERE id = ?", (json.dumps(commands), chat_id)
+                    )
+            elif kind == "input_consumed":
                 if db.consume_chat_input(
                     turn_id,
                     event.get("id", ""),
@@ -220,7 +242,11 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
             elif kind == "result":
                 remember_agent_result(bool(event.get("ok")))
                 if not event.get("ok") and not failure:
-                    failure = event.get("message") or "The agent did not complete successfully."
+                    failure = (
+                        event.get("message")
+                        or event.get("error")
+                        or "The agent did not complete successfully."
+                    )
                 # The result summarizes the entire container run, not this
                 # segment. Do not replay an already-saved pre-steering answer.
                 if not received_text and event.get("text"):

@@ -8,7 +8,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
-COPY libs/nautionette/pyproject.toml libs/nautionette/
+COPY libs/nautionette/ libs/nautionette/
 COPY services/backend/pyproject.toml services/backend/
 COPY services/workflow-mcp/pyproject.toml services/workflow-mcp/
 COPY services/worker/pyproject.toml services/worker/

@@ -5,9 +5,13 @@ description = "Fixed verbs over the Docker socket: run one agent container, rest
 requires-python = ">=3.13"
 dependencies = [
     "docker>=7.1",
+    "nautionette",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
 ]
+
+[tool.uv.sources]
+nautionette = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

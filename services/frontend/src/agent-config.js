@@ -6,7 +6,8 @@ export const CONFIG_FIELDS = [
   { key: 'tools', id: 'tools', label: 'Tools' },
   { key: 'project_ids', id: 'projects', label: 'Projects' }
 ]
-export const CONFIG_KEYS = CONFIG_FIELDS.map(field => field.key)
+export const DEFAULT_CONFIG_KEYS = CONFIG_FIELDS.map(field => field.key)
+export const CONFIG_KEYS = [...DEFAULT_CONFIG_KEYS, 'packages']
 const copy = value => Array.isArray(value) ? [...value] : value
 export const copyConfig = config => Object.fromEntries(Object.entries(config).map(([key, value]) => [key, copy(value)]))
 
@@ -14,7 +15,7 @@ export function globalChatConfig (catalog) {
   return copyConfig(catalog.global_chat_defaults || {
     model: catalog.default_model || '', agent_set: catalog.default_agent_set || 'default',
     reasoning_effort: catalog.default_reasoning_effort ?? null,
-    tools: catalog.default_tools ?? null, project_ids: catalog.default_project_ids || []
+    tools: catalog.default_tools ?? null, project_ids: catalog.default_project_ids || [], packages: []
   })
 }
 
@@ -40,7 +41,8 @@ export function defaultChatConfig (catalog) {
 export function sameConfig (left, right) {
   if (!left || !right) return false
   return CONFIG_KEYS.every(key => {
-    const a = left[key], b = right[key]
+    const a = key === 'packages' ? left[key] || [] : left[key], b = key === 'packages' ? right[key] || [] : right[key]
+    if (key === 'packages') return JSON.stringify(a) === JSON.stringify(b)
     if (Array.isArray(a) && Array.isArray(b)) return JSON.stringify([...a].sort()) === JSON.stringify([...b].sort())
     return a === b
   })

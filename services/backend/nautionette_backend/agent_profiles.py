@@ -13,16 +13,16 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from . import projects
+from . import pi_packages, projects
 from .db import db
 from .runtime import runtime
 
-CONFIG_KEYS = ("agent_set", "model", "reasoning_effort", "tools", "project_ids")
-SETTING_KEYS = {key: f"default_{key}" for key in CONFIG_KEYS}
+CONFIG_KEYS = ("agent_set", "model", "reasoning_effort", "tools", "project_ids", "packages")
+SETTING_KEYS = {key: f"default_{key}" for key in CONFIG_KEYS if key != "packages"}
 
 
 def global_config() -> dict[str, Any]:
-    return {key: runtime(setting) for key, setting in SETTING_KEYS.items()}
+    return {**{key: runtime(setting) for key, setting in SETTING_KEYS.items()}, "packages": []}
 
 
 def resolve(config: dict[str, Any], base: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -39,7 +39,7 @@ def normalize(config: Any) -> dict[str, Any]:
     """Validate explicit choices without turning empty selections into defaults."""
     if not isinstance(config, dict) or config.keys() - set(CONFIG_KEYS):
         raise HTTPException(
-            422, "config must contain only agent_set, model, reasoning_effort, tools, project_ids"
+            422, "config must contain only agent_set, model, reasoning_effort, tools, project_ids, packages"
         )
     result = dict(config)
     if "agent_set" in result:
@@ -64,6 +64,8 @@ def normalize(config: Any) -> dict[str, Any]:
             result["tools"] = sorted(set(value))
     if "project_ids" in result:
         result["project_ids"] = projects.selection(result["project_ids"])
+    if "packages" in result:
+        result["packages"] = pi_packages.selection(result["packages"])
     return result
 
 

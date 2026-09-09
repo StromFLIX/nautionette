@@ -12,7 +12,7 @@
     <div class="settings__searchbar">
       <div class="settings__search">
         <span class="material-icons" aria-hidden="true">search</span>
-        <input ref="searchInput" v-model="query" type="search" placeholder="Search settings…" aria-label="Search settings"
+        <input ref="searchInput" v-model="query" type="search" placeholder="Search settings and Pi packages…" aria-label="Search settings"
           autocomplete="off" spellcheck="false" @keydown.esc.prevent="clearSearch" />
         <span v-if="searching" class="settings__result-count" role="status">{{ results.length }} found</span>
         <button v-if="query" class="btn btn--icon" aria-label="Clear settings search" @click="clearSearch">
@@ -61,6 +61,7 @@
               <span class="settings__scope">{{ item.scope }}</span>
               <span class="material-icons settings__result-arrow" aria-hidden="true">arrow_forward</span>
             </RouterLink>
+            <PackageSearch v-if="query.trim().length >= 2" :query="query" @select="choosePackage" />
           </section>
           <!-- Search never discards the current pane's in-progress form. -->
           <div v-show="!searching">
@@ -78,6 +79,7 @@ import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, 
 import { useRoute, useRouter } from 'vue-router'
 import { health, store } from '../store'
 import { SETTINGS_GROUPS, SETTINGS_SECTIONS, searchSettings } from '../settings-registry'
+import PackageSearch from '../components/settings/PackageSearch.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -97,6 +99,7 @@ function back () {
   if (/^\/(chats|workflows|runs)(\/|$)/.test(window.history.state?.back || '')) router.back()
   else router.push('/chats')
 }
+function choosePackage (source) { query.value = ''; router.replace({ path: '/settings/packages', query: { source } }) }
 function clearSearch () { query.value = ''; searchInput.value?.focus() }
 function openSection (key) { query.value = ''; router.replace(`/settings/${key}`) }
 function shortcuts (event) {

@@ -14,6 +14,7 @@ Agents inherit only global defaults, never another agent.
 | `reasoning_effort` | `default_reasoning_effort` | Advertised effort, or `null` for provider default |
 | `tools` | `default_tools` | `null` for all MCP tools; `[]` for none; an explicit list for a pinned selection |
 | `project_ids` | `default_project_ids` | Ready, writable projects; `[]` for none |
+| `packages` | None (always `[]`) | Ordered immutable Pi package/configuration revision IDs, selected in Settings |
 
 An omitted **agent config** key inherits. Explicit null is valid only for tools
 and reasoning; it is not an inheritance marker. To restore inheritance, remove the
@@ -33,6 +34,10 @@ saved and removable; only explicit **All** enables future MCP tools. This is MCP
 selection, not a sandbox: built-in file/shell tools remain available, and tool
 filtering does not replace gateway authorization. Project access and internet
 approval remain separate controls.
+
+See [Managed Pi packages](pi-packages.md) for Settings-based installation,
+resource selection, write-only configuration, runtime compatibility and backup
+requirements. Package changes do not need per-agent image builds.
 
 ## API
 

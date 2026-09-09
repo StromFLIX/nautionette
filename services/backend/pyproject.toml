@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "The only entrypoint: auth, chats, workflows, triggers, streaming"
 requires-python = ">=3.13"
 dependencies = [
+  "cryptography>=46.0.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "httpx>=0.28",

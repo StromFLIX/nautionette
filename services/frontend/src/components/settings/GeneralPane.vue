@@ -63,7 +63,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import AgentConfigFields from './AgentConfigFields.vue'
-import { CONFIG_KEYS, globalChatConfig } from '../../agent-config'
+import { DEFAULT_CONFIG_KEYS as CONFIG_KEYS, globalChatConfig } from '../../agent-config'
 import { compactChars } from '../../format'
 import { actions, historyBudget, store } from '../../store'
 import { api, auth, isNative, server } from '../../api'

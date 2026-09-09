@@ -42,6 +42,8 @@ COPY agent-run.mjs /usr/local/lib/nautionette/agent-run.mjs
 COPY project-git.mjs /usr/local/lib/nautionette/project-git.mjs
 COPY context-usage.mjs /usr/local/lib/nautionette/context-usage.mjs
 COPY chat-control.mjs /usr/local/lib/nautionette/chat-control.mjs
+COPY package-install.mjs /usr/local/lib/nautionette/package-install.mjs
+COPY package-runtime.mjs /usr/local/lib/nautionette/package-runtime.mjs
 COPY internet.ts /root/.pi/agent/extensions/nautionette-internet.ts
 RUN printf '#!/bin/sh\nexec node /usr/local/lib/nautionette/agent-run.mjs "$@"\n' \
       > /usr/local/bin/agent-run \

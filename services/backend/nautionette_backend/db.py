@@ -97,6 +97,22 @@ CREATE TABLE IF NOT EXISTS agent_profiles (
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pi_package_installations (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    allow_scripts INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    error TEXT NOT NULL DEFAULT '',
+    metadata TEXT NOT NULL DEFAULT '{}',
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pi_package_revisions (
+    id TEXT PRIMARY KEY,
+    installation_id TEXT NOT NULL REFERENCES pi_package_installations(id),
+    filters TEXT NOT NULL DEFAULT '{}',
+    configuration TEXT NOT NULL DEFAULT '{}',
+    created_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS workflow_settings (
     name TEXT PRIMARY KEY,
     disabled INTEGER NOT NULL DEFAULT 0,
@@ -141,6 +157,8 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN reasoning_effort TEXT",
     "ALTER TABLE chats ADD COLUMN agent_id TEXT",
     "ALTER TABLE chats ADD COLUMN agent_name TEXT",
+    "ALTER TABLE chats ADD COLUMN packages TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE chats ADD COLUMN package_commands TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE chats ADD COLUMN tools TEXT",
     "ALTER TABLE chats ADD COLUMN internet_status TEXT NOT NULL DEFAULT 'blocked'",
     "ALTER TABLE chats ADD COLUMN internet_reason TEXT NOT NULL DEFAULT ''",
@@ -163,6 +181,7 @@ _EDITABLE_CHAT_COLUMNS = (
     "project_ids",
     "agent_id",
     "agent_name",
+    "packages",
 )
 _EDITABLE_WORKFLOW_COLUMNS = ("disabled", "chat_mode", "chat_id")
 
@@ -236,13 +255,14 @@ class Database:
         project_ids: list[str] | None = None,
         agent_id: str | None = None,
         agent_name: str | None = None,
+        packages: list[str] | None = None,
     ) -> dict[str, Any]:
         now = time.time()
         chat_id = uuid.uuid4().hex[:12]
         self.execute(
             "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort,"
-            " created_at, updated_at, title_state, project_ids, agent_id, agent_name)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            " created_at, updated_at, title_state, project_ids, agent_id, agent_name, packages)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 chat_id,
                 title,
@@ -256,6 +276,7 @@ class Database:
                 json.dumps(project_ids or []),
                 agent_id,
                 agent_name,
+                json.dumps(packages or []),
             ),
         )
         return self.get_chat(chat_id)  # type: ignore[return-value]
@@ -264,11 +285,14 @@ class Database:
         allowed = {k: v for k, v in fields.items() if k in _EDITABLE_CHAT_COLUMNS}
         if "tools" in allowed:
             allowed["tools"] = _dump_tools(allowed["tools"])
-        if "project_ids" in allowed:
-            allowed["project_ids"] = json.dumps(allowed["project_ids"])
+        for key in ("project_ids", "packages"):
+            if key in allowed:
+                allowed[key] = json.dumps(allowed[key])
         if allowed:
             # Column names come from the tuple above, never from the caller.
             assignments = ", ".join(f"{key} = ?" for key in allowed)
+            if "packages" in allowed or "agent_set" in allowed:
+                assignments += ", package_commands = '[]'"
             if "title" in allowed:
                 # Even renaming to the same text invalidates an in-flight title request.
                 assignments += ", title_state = 'manual', title_revision = title_revision + 1"
@@ -287,6 +311,8 @@ class Database:
             row["unread"] = bool(row["unread"])
             row["tools"] = json.loads(row["tools"]) if row.get("tools") else None
             row["project_ids"] = json.loads(row["project_ids"])
+            row["packages"] = json.loads(row["packages"])
+            row["package_commands"] = json.loads(row["package_commands"])
         return row
 
     def list_chats(self, limit: int = 200) -> list[dict[str, Any]]:
@@ -319,6 +345,8 @@ class Database:
                 if isinstance(row.get("project_ids"), str)
                 else (row.get("project_ids") or [])
             )
+            row["packages"] = json.loads(row["packages"])
+            row["package_commands"] = json.loads(row["package_commands"])
             row["message_count"] = summary["n"] if summary else 0
             row["last_message"] = (
                 {"role": summary["role"], "preview": " ".join(summary["content"].split())[:120]}

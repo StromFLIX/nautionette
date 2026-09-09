@@ -19,10 +19,11 @@
       <label class="profile-editor__label" for="profile-description">Description <span class="dim">optional</span></label>
       <input id="profile-description" v-model="draft.description" class="field" maxlength="500" :disabled="busy" placeholder="What this agent is for" />
       <AgentConfigFields v-model="draft.config" :defaults="globalConfig" inheritable :disabled="busy" />
+      <AgentPackages :key="draft.id" :model-value="draft.config.packages || []" :disabled="busy" @update:model-value="draft.config.packages = $event" @busy="packageBusy = $event" />
       <div class="row profile-editor__actions">
         <span class="caption dim grow">Existing chats stay unchanged.</span>
         <button class="btn" type="button" :disabled="busy" @click="close">Cancel</button>
-        <button class="btn btn--primary" type="submit" :disabled="busy || !draft.name.trim()">{{ busy ? 'Saving…' : 'Save agent' }}</button>
+        <button class="btn btn--primary" type="submit" :disabled="busy || packageBusy || !draft.name.trim()">{{ busy ? 'Saving…' : 'Save agent' }}</button>
       </div>
     </form>
 
@@ -57,13 +58,14 @@
 import { computed, nextTick, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import AgentConfigFields from './AgentConfigFields.vue'
+import AgentPackages from './AgentPackages.vue'
 import { api } from '../../api'
 import { actions, store } from '../../store'
 import { copyConfig, globalChatConfig, resolveAgentConfig, toolLabel, projectLabel } from '../../agent-config'
 
 const $q = useQuasar()
 const editing = ref(false)
-const busy = ref(false)
+const busy = ref(false), packageBusy = ref(false)
 const error = ref('')
 const nameInput = ref(null)
 const draft = reactive({ id: null, name: '', description: '', config: {} })
@@ -72,9 +74,10 @@ const defaultId = computed(() => store.catalog.default_agent_id ?? null)
 const globalConfig = computed(() => globalChatConfig(store.catalog))
 function summary (config) {
   const model = store.catalog.models?.find(item => item.id === config.model)?.name || config.model?.split('/').pop() || 'No model'
-  return `${model} · ${toolLabel(config.tools)} · ${projectLabel(config.project_ids)}`
+  return `${model} · ${toolLabel(config.tools)} · ${projectLabel(config.project_ids)}${config.packages?.length ? ` · ${config.packages.length} packages` : ''}`
 }
 function open (agent = null, duplicate = false) {
+  if (packageBusy.value) return
   error.value = ''
   Object.assign(draft, {
     id: duplicate ? null : agent?.id ?? null,
@@ -84,9 +87,9 @@ function open (agent = null, duplicate = false) {
   editing.value = true
   nextTick(() => nameInput.value?.focus())
 }
-function close () { editing.value = false; error.value = '' }
+function close () { if (!packageBusy.value) { editing.value = false; error.value = '' } }
 async function save () {
-  if (busy.value || !draft.name.trim()) return
+  if (busy.value || packageBusy.value || !draft.name.trim()) return
   busy.value = true
   error.value = ''
   try {

@@ -8,6 +8,8 @@
  * Nothing is remembered between runs: the container starts, works and exits.
  */
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { preparePackages } from "./package-runtime.mjs";
 import { cpSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { prepareProjects, projectEnvironment } from "./project-git.mjs";
 import { contextUsage } from "./context-usage.mjs";
@@ -39,15 +41,6 @@ function renderPrompt(job) {
   const parts = [];
   let imageNumber = 0;
   const references = (images = []) => images.map(() => `[Attached image ${++imageNumber}]`).join("\n");
-  if (job.history?.length) {
-    parts.push("Conversation so far:");
-    for (const message of job.history) {
-      const who = message.role === "assistant" ? "Assistant" : "User";
-      parts.push(`${who}: ${message.content}`);
-      if (message.images?.length) parts.push(references(message.images));
-    }
-    parts.push("---");
-  }
   parts.push(job.prompt || (job.images?.length ? "Please examine the attached image(s)." : ""));
   if (job.images?.length) parts.push(references(job.images));
   if (job.output_schema) {
@@ -59,6 +52,30 @@ function renderPrompt(job) {
     );
   }
   return parts.join("\n");
+}
+
+function seedHistory(job, workspace, model) {
+  if (!job.history?.length) return null;
+  // A private, per-call session, not persistent extension state. Historical
+  // messages retain their roles; the current /command stays at input offset 0.
+  const timestamp = new Date().toISOString();
+  const entries = [{ type: "session", version: 3, id: randomUUID(), timestamp, cwd: workspace }];
+  let parentId = null;
+  for (const message of job.history) {
+    const id = randomUUID().replaceAll("-", "").slice(0, 8);
+    const content = [{ type: "text", text: message.content || "" }, ...(message.images || [])];
+    const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
+    entries.push({ type: "message", id, parentId, timestamp, message: {
+      role: message.role, content, timestamp: Date.now(),
+      ...(message.role === "assistant" ? { provider: "nautionette", model,
+        api: job.model_api || "openai-completions", stopReason: "stop", usage } : {})
+    } });
+    parentId = id;
+  }
+  const file = "/tmp/nautionette-history.jsonl";
+  writeFileSync(file, entries.map(entry => JSON.stringify(entry)).join("\n") + "\n", { mode: 0o600 });
+  return file;
 }
 
 function extractJson(text) {
@@ -132,16 +149,18 @@ async function main() {
   if (existsSync("/workspace-defaults")) {
     cpSync("/workspace-defaults", workspace, { recursive: true });
   }
-  writeFileSync(`${workspace}/JOB.json`, JSON.stringify({ ...job, history: undefined, images: undefined, project_credentials: undefined }, null, 2));
+  writeFileSync(`${workspace}/JOB.json`, JSON.stringify({ ...job, history: undefined, images: undefined, project_credentials: undefined, package_runtime: undefined }, null, 2));
   if (job.project_ids?.length) {
     emit({ type: "status", state: "projects", message: "Preparing this chat's project worktrees" });
     prepareProjects(job);
   }
 
+  const packageEnvironment = preparePackages();
+  const historyFile = seedHistory(job, workspace, model);
   const prompt = renderPrompt(job);
   const interactive = Boolean(job.chat_id);
-  const args = ["--mode", interactive ? "rpc" : "json", "--no-session", "--provider", "nautionette",
-                "--model", model, "--approve"];
+  const args = ["--mode", interactive ? "rpc" : "json", ...(historyFile ? ["--session", historyFile] : ["--no-session"]),
+                "--provider", "nautionette", "--model", model, "--approve"];
   if (job.system_prompt) args.push("--append-system-prompt", job.system_prompt);
   if (!interactive) args.push("--", prompt);
 
@@ -150,6 +169,7 @@ async function main() {
     env: {
       ...process.env,
       ...projectEnvironment(job),
+      ...packageEnvironment,
       AGENT_MODEL: model,
       NAUTIONETTE_MODEL_IMAGES: job.supports_images === false ? "false" : "true",
       NAUTIONETTE_MODEL_API: job.model_api || "",
@@ -175,6 +195,7 @@ async function main() {
   let stderr = "";
   let buffer = "";
   let runError = "";
+  let initialIsExtension = false;
   let context = null;
   let usage = null;
   const result = (event) => emit({ type: "result", ...event, context, usage });
@@ -206,10 +227,39 @@ async function main() {
   function translate(event) {
     control?.receive(event);
     switch (event.type) {
-      case "response":
-        if (event.id === "initial" && !event.success) {
-          runError = event.error || "Pi rejected the initial prompt";
+      case "extension_ui_request":
+        if (["select", "confirm", "input", "editor"].includes(event.method)) {
+          send({ type: "extension_ui_response", id: event.id, cancelled: true });
+          runError = "This package requested an unsupported dialog. Configure it in Settings → Agents → Pi packages.";
           emit({ type: "error", message: runError });
+          child.kill();
+        } else if (event.method === "notify") {
+          emit({ type: "status", state: "package", message: String(event.message || "").slice(0, 500) });
+        }
+        break;
+      case "extension_error":
+        runError = "A Pi extension failed. Review its configuration and RPC compatibility in Settings.";
+        emit({ type: "error", message: runError });
+        child.kill();
+        break;
+      case "response":
+        if (event.id === "commands" && event.success) {
+          const commands = event.data?.commands || [];
+          initialIsExtension = commands.some(command => command.source === "extension" && `/${command.name}` === prompt.split(/\s/)[0]);
+          emit({ type: "commands", commands });
+        }
+        if (event.id === "initial") {
+          if (!event.success) {
+            runError = event.error || "Pi rejected the initial prompt";
+            emit({ type: "error", message: runError });
+            child.kill();
+          } else if (initialIsExtension) {
+            // Commands that only notify or change state never emit agent_settled.
+            send({ id: "command-completion", type: "get_state" });
+          }
+        }
+        if (event.id === "command-completion" && event.success && !event.data?.isStreaming && !event.data?.isCompacting && !event.data?.pendingMessageCount) {
+          if (!finalText && !runError) finalText = "Extension command completed.";
           child.kill();
         }
         break;
@@ -245,8 +295,9 @@ async function main() {
           usage = context ? message.usage : null;
           emit({ type: "usage", context });
           if (message.stopReason === "error" && message.errorMessage) {
+            // A retry can recover this request. Only the final result may mark
+            // the turn failed; emitting a terminal error here would poison it.
             runError = explain(message.errorMessage);
-            emit({ type: "error", message: runError });
           }
           const text = (message.content ?? [])
             .filter((part) => part.type === "text")
@@ -256,8 +307,13 @@ async function main() {
         }
         break;
       }
+      case "auto_retry_end":
+        if (event.success) runError = "";
+        break;
       case "agent_end":
         emit({ type: "agent_end" });
+        break;
+      case "agent_settled":
         if (interactive) child.kill();
         break;
       default:
@@ -275,7 +331,8 @@ async function main() {
   });
   if (interactive) {
     send({ type: "set_steering_mode", mode: "one-at-a-time" });
-    const images = [...(job.history || []).flatMap((message) => message.images || []), ...(job.images || [])];
+    send({ id: "commands", type: "get_commands" });
+    const images = job.images || [];
     send({ id: "initial", type: "prompt", message: prompt, ...(images.length ? { images } : {}) });
   }
   const code = await completion;
@@ -284,7 +341,7 @@ async function main() {
 
   const text = (finalText || streamed).trim();
 
-  if (!text && (runError || code !== 0)) {
+  if (runError || (!text && code !== 0)) {
     result({
       ok: false,
       text: "",

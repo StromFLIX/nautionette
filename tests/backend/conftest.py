@@ -31,6 +31,8 @@ _TABLES = (
     "events",
     "settings",
     "agent_profiles",
+    "pi_package_revisions",
+    "pi_package_installations",
     "workflow_settings",
 )
 

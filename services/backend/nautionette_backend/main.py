@@ -15,7 +15,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import mcp_servers, runs
+from . import mcp_servers, pi_packages, runs
 from .backend_mcp import BackendMCP
 from .background import drain, spawn
 from .clients.http import close_shared
@@ -44,6 +44,7 @@ async def lifespan(_: FastAPI):
     Path(settings.artifacts_dir).mkdir(parents=True, exist_ok=True)
     seed_workflows()
     recover_interrupted()
+    pi_packages.recover_installations()
     spawn(recover_chat_agents(), name="chat-agent-recovery")
     # agentgateway may still be starting, so this retries in the background
     # rather than holding the port closed.

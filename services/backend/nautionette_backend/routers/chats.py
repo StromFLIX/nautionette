@@ -291,6 +291,7 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
         internet_allowed=chat["internet_status"] == "allowed",
         internet_status=chat["internet_status"],
         project_ids=project_ids,
+        packages=chat.get("packages", []),
         attachments=user_message["meta"].get("attachments", []),
         supports_images=model_info.get("supports_images"),
         model_api=model_info.get("api"),

@@ -57,7 +57,10 @@ def test_global_defaults_round_trip_as_native_types_and_reach_every_new_chat(cli
     assert all(saved[key] == value for key, value in values.items())
     loaded = client.get("/api/settings").json()["settings"]
     assert loaded == saved
-    expected = {key: values[setting] for key, setting in agent_profiles.SETTING_KEYS.items()}
+    expected = {
+        **{key: values[setting] for key, setting in agent_profiles.SETTING_KEYS.items()},
+        "packages": [],
+    }
     available = client.get("/api/catalog").json()
     assert available["global_chat_defaults"] == expected
     assert available["chat_defaults"] == {**expected, "agent_id": None, "agent_name": None}
@@ -99,6 +102,7 @@ def test_agents_inherit_by_omission_and_explicit_choices_override_each_field(cli
         "tools": [],
         "project_ids": [],
         "reasoning_effort": None,
+        "packages": [],
     }
     save_defaults(client, default_agent_id=agent["id"])
     first = new_chat(client)

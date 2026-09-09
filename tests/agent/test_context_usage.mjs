@@ -33,6 +33,8 @@ async function runAgent (events, job = {}) {
     Buffer, console, contextUsage,
     mkdirSync () {}, writeFileSync () {}, existsSync () { return false },
     projectEnvironment () { return {} },
+    preparePackages () {}, randomUUID () { return 'test-session'; },
+    setTimeout, clearTimeout,
     process: {
       env: { AGENT_JOB: Buffer.from(JSON.stringify({ model: 'test/model', prompt: 'test', ...job })).toString('base64') },
       stdout: { write (line) { output.push(JSON.parse(line)) } }

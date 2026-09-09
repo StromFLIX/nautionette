@@ -51,6 +51,16 @@ class BrokerClient:
                 except json.JSONDecodeError:
                     yield {"type": "log", "text": line}
 
+    async def install_package(self, installation_id: str, source: str, allow_scripts: bool) -> dict[str, Any]:
+        response = await shared().post(
+            f"{self.base_url}/packages/install",
+            headers=internal_headers(),
+            json={"installation_id": installation_id, "source": source, "allow_scripts": allow_scripts},
+            timeout=360,
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def restart_worker(self) -> dict[str, Any]:
         response = await shared().post(
             f"{self.base_url}/worker/restart", headers=internal_headers(), timeout=120

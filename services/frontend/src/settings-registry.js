@@ -45,6 +45,11 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
+    key: 'packages', label: 'Pi packages', icon: 'inventory_2', group: 'Connections', scope: 'Per agent',
+    load: () => import('./components/settings/PackagesPane.vue'),
+    entries: [entry('pi-packages', 'Pi packages', 'Install and configure extensions, skills and prompts per agent.', 'npm git search resources secrets environment configuration install update rollback')]
+  },
+  {
     key: 'mcp', label: 'MCP servers', icon: 'extension', group: 'Connections', scope: 'Instance',
     load: () => import('./components/settings/McpPane.vue'),
     entries: [

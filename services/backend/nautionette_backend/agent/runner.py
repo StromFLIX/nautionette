@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
+from .. import pi_packages
 from ..clients import broker
 from ..config import settings
 from .prompts import CHAT_SYSTEM_PROMPT
@@ -127,7 +128,12 @@ def agent_job(
 
 
 async def stream_agent(job: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
-    async for event in broker.run_agent(job, timeout=job.get("timeout_seconds", 900) + 30):
+    # Resolve private configuration only in the outgoing call, never in persisted
+    # jobs/history, profile snapshots or public API responses.
+    outgoing = dict(job)
+    if job.get("packages"):
+        outgoing["package_runtime"] = pi_packages.for_run(job["packages"])
+    async for event in broker.run_agent(outgoing, timeout=job.get("timeout_seconds", 900) + 30):
         yield event
 
 

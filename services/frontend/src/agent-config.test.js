@@ -6,7 +6,7 @@ const defaults = { model: 'test/reasoner', agent_set: 'default', reasoning_effor
 
 test('old catalogs still produce complete, independent global defaults', () => {
   assert.deepEqual(globalChatConfig({ default_model: 'test/model' }), {
-    model: 'test/model', agent_set: 'default', reasoning_effort: null, tools: null, project_ids: []
+    model: 'test/model', agent_set: 'default', reasoning_effort: null, tools: null, project_ids: [], packages: []
   })
   const config = globalChatConfig({ global_chat_defaults: defaults })
   config.tools.push('write'); config.project_ids.length = 0
@@ -51,6 +51,9 @@ test('custom configuration comparison ignores order, never null versus empty sel
   assert.equal(sameConfig(defaults, { ...defaults, project_ids: [] }), false)
   assert.equal(sameConfig(defaults, { ...defaults, reasoning_effort: null }), false)
   assert.equal(sameConfig(defaults, null), false)
+  assert.equal(sameConfig(defaults, { ...defaults, packages: [] }), true)
+  assert.equal(sameConfig({ ...defaults, packages: ['v1'] }, { ...defaults, packages: ['v2'] }), false)
+  assert.equal(sameConfig({ ...defaults, packages: ['a', 'b'] }, { ...defaults, packages: ['b', 'a'] }), false)
 })
 
 test('selection labels distinguish all, none, and pinned tools and projects', () => {

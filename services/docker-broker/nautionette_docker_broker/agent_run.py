@@ -12,8 +12,9 @@ from collections.abc import Iterator
 from typing import Any
 
 from docker.errors import NotFound
+from nautionette.pi_packages import configuration, filters, revision_id
 
-from . import chat_agents, daemon, images, projects
+from . import chat_agents, daemon, images, packages, projects
 from .config import (
     AGENT_EGRESS_NETWORK,
     AGENT_ENVIRONMENT,
@@ -164,11 +165,13 @@ def _environment(job: dict[str, Any]) -> dict[str, str]:
     return environment
 
 
-def _copy_job(container: Any, job: dict[str, Any]) -> None:
-    raw = json.dumps(job, default=str).encode("utf-8")
+def _copy_job(
+    container: Any, job: dict[str, Any], filename: str = "nautionette-job.json", payload: Any = None
+) -> None:
+    raw = json.dumps(job if payload is None else payload, default=str).encode("utf-8")
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode="w") as tar:
-        entry = tarfile.TarInfo("nautionette-job.json")
+        entry = tarfile.TarInfo(filename)
         entry.size = len(raw)
         entry.mode = 0o600
         entry.uid = entry.gid = 10001 if job.get("project_ids") else 0
@@ -289,6 +292,20 @@ def _run(
         claimed_projects = project_ids
         if job.get("chat_id") and not daemon.client().networks.get(AGENT_NETWORK).attrs.get("Internal"):
             raise RuntimeError("Chat agents require an internal Docker network with egress disabled")
+        package_runtime = job.get("package_runtime", [])
+        if not isinstance(package_runtime, list) or len(package_runtime) > 20:
+            raise ValueError("Invalid package runtime configuration")
+        for item in package_runtime:
+            revision_id(item["installation_id"])
+            configuration(item["configuration"])
+            filters(item["filters"])
+            root = item["root"]
+            if not isinstance(root, str) or not root or root.startswith("/") or ".." in root.split("/"):
+                raise ValueError("Invalid package artifact root")
+        package_mounts = packages.mounts([item["installation_id"] for item in package_runtime])
+        # Private configuration travels through a mode-0600 file, not Docker env,
+        # JOB.json, CLI arguments or the persisted turn. The runner unlinks it.
+        job = {key: value for key, value in job.items() if key != "package_runtime"}
         environment = _environment(job)
         container = daemon.client().containers.create(
             tag,
@@ -296,7 +313,7 @@ def _run(
             environment=environment,
             network=AGENT_NETWORK if job.get("chat_id") else TARGET_NETWORK,
             volumes={WORKFLOWS_VOLUME: {"bind": "/workflows", "mode": "ro"}},
-            mounts=project_mounts,
+            mounts=[*project_mounts, *package_mounts],
             tmpfs=(
                 {
                     "/workspace": "size=256m,exec,uid=10001,gid=10001",
@@ -320,6 +337,8 @@ def _run(
         )
         if "AGENT_JOB_FILE" in environment:
             _copy_job(container, job)
+        if package_runtime:
+            _copy_job(container, job, "nautionette-packages.json", package_runtime)
         if job.get("chat_id") and job.get("internet_allowed") is True:
             daemon.client().networks.get(AGENT_EGRESS_NETWORK).connect(container)
         with _controls_lock:

@@ -12,6 +12,11 @@
     <p v-if="!configurationReady" class="composer__notice caption" role="status">Loading chat defaults…</p>
     <p v-if="imageError" class="composer__notice caption" role="alert">{{ imageError }}</p>
     <p v-if="imageSupport !== true && (attachments.length || configurationOpen)" class="composer__notice caption" role="status">{{ imageNotice }}</p>
+    <div v-if="commandSuggestions.length" class="composer__commands" aria-label="Pi command suggestions">
+      <button v-for="command in commandSuggestions" :key="command.name" class="pick-menu__item" type="button" :disabled="busy" @click="chooseCommand(command.name)">
+        <strong>/{{ command.name }}</strong><span class="caption dim truncate">{{ command.description }}</span>
+      </button>
+    </div>
     <textarea ref="input" class="composer__input" :value="modelValue" :placeholder="placeholder" aria-label="Message"
       :rows="variant === 'welcome' ? 3 : 1" :disabled="busy" @input="onInput"
       @focus="focused = true" @blur="focused = false" @keydown="onKeydown" />
@@ -105,6 +110,7 @@
           </button>
         </div>
       </div>
+      <p v-if="packages.length" class="caption dim">{{ packages.length }} pinned Pi package(s). <RouterLink to="/settings/packages">Configure packages in Settings</RouterLink>. Type / for commands discovered on this chat's last run.</p>
       <div class="composer__configuration-foot"><span>{{ meter.label }}</span><RouterLink to="/settings/workspace">Workspace preferences<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink></div>
     </div>
   </div>
@@ -130,6 +136,7 @@ const props = defineProps({
   agentId: { type: String, default: null }, agentName: { type: String, default: '' },
   agentSet: { type: String, default: '' }, model: { type: String, default: '' },
   reasoningEffort: { type: String, default: null }, tools: { type: Array, default: null },
+  packages: { type: Array, default: () => [] }, commands: { type: Array, default: () => [] },
   projectIds: { type: Array, default: () => [] }, busy: { type: Boolean, default: false },
   running: { type: Boolean, default: false }, stopping: { type: Boolean, default: false },
   context: { type: Object, default: null }, variant: { type: String, default: 'docked' },
@@ -146,7 +153,7 @@ const profileDefaults = computed(() => agentConfig(store.catalog, props.agentId)
 const profileLabel = computed(() => props.agentId ? (profileDefaults.value?.agent_name || props.agentName || 'Removed agent') : 'Global defaults')
 const customConfiguration = computed(() => !sameConfig(profileDefaults.value, {
   agent_set: props.agentSet || 'default', model: props.model || store.catalog.default_model,
-  reasoning_effort: props.reasoningEffort, tools: props.tools, project_ids: props.projectIds
+  reasoning_effort: props.reasoningEffort, tools: props.tools, project_ids: props.projectIds, packages: props.packages
 }))
 const selectedModel = computed(() => store.catalog.models?.find(m => m.id === (props.model || store.catalog.default_model)))
 const imageSupport = computed(() => selectedModel.value?.supports_images)
@@ -180,6 +187,9 @@ const toolCount = computed(() => props.tools === null ? allTools.value.length : 
 const toolLabel = computed(() => props.tools === null ? `${allTools.value.length} tools` : `${props.tools.length}/${allTools.value.length} tools`)
 const meter = computed(() => contextMeter(props.context, modelContextWindow(store.catalog, props.model)))
 const shortModel = computed(() => selectedModel.value?.name || (props.model || store.catalog.default_model || 'Choose model').split('/').pop())
+const commandSuggestions = computed(() => /^\/[^\s]*$/.test(props.modelValue)
+  ? props.commands.filter(command => command.name.startsWith(props.modelValue.slice(1))).slice(0, 8) : [])
+function chooseCommand (name) { emit('update:modelValue', `/${name} `); input.value?.focus() }
 function onInput (event) {
   emit('update:modelValue', event.target.value)
   event.target.style.height = 'auto'
@@ -218,6 +228,8 @@ defineExpose({ focus: () => input.value?.focus() })
   animation: composer-light-orbit 4s linear infinite;
 }
 @keyframes composer-light-orbit { to { --composer-orbit-angle: 360deg; } }
+.composer__commands { max-height: 180px; overflow: auto; border-bottom: 1px solid var(--border); padding: 6px; }
+.composer__commands strong { white-space: nowrap; }
 .composer__attachments { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 14px; }
 .composer__attachment { position: relative; padding-top: 12px; max-width: 150px; }
 .composer__attachment > button { position: absolute; right: 0; top: 8px; background: var(--surface-input); }

@@ -8,7 +8,7 @@
         <p class="welcome__lead">An idea. A conversation. A workflow.</p>
       </div>
       <Composer ref="composer" v-model="text" v-model:attachments="attachments" :agent-id="config.agent_id" :agent-name="config.agent_name || ''"
-        :agent-set="config.agent_set" :model="config.model" :reasoning-effort="config.reasoning_effort" :tools="config.tools" :project-ids="config.project_ids"
+        :agent-set="config.agent_set" :model="config.model" :reasoning-effort="config.reasoning_effort" :tools="config.tools" :project-ids="config.project_ids" :packages="config.packages || []"
         variant="welcome" :busy="busy" :configuration-ready="store.catalogLoaded" placeholder="Ask, build, or automate…"
         @update:agent-id="chooseAgent" @update:agent-set="override('agent_set', $event)" @update:model="override('model', $event)"
         @update:reasoning-effort="override('reasoning_effort', $event)" @update:tools="override('tools', $event)" @update:project-ids="override('project_ids', $event)"
