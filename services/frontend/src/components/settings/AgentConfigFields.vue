@@ -16,10 +16,15 @@
         <span class="material-icons" aria-hidden="true">expand_more</span>
         <ModelPicker :model-value="effective.model" @update:model-value="update('model', $event)" />
       </button>
-      <select v-else-if="field.key === 'agent_set'" :id="`${prefix}-input-agent`" class="field" :value="effective.agent_set" :disabled="disabled"
-        @change="update('agent_set', $event.target.value)">
-        <option v-for="set in environments" :key="set.name" :value="set.name">{{ set.name }}{{ set.ready === false ? ' · building' : '' }}</option>
-      </select>
+      <button v-else-if="field.key === 'agent_set'" :id="`${prefix}-input-agent`" class="field field--button" type="button" :disabled="disabled">
+        <span class="grow truncate">{{ effective.agent_set }}</span><span class="material-icons" aria-hidden="true">expand_more</span>
+        <q-menu class="pick-menu">
+          <button v-for="set in environments" :key="set.name" v-close-popup type="button" class="pick-menu__item" @click="update('agent_set', set.name)">
+            <span class="grow truncate">{{ set.name }}</span><span v-if="set.ready === false" class="chip chip--warning">building</span>
+            <span v-if="set.name === effective.agent_set" class="material-icons pick-menu__check" aria-hidden="true">check</span>
+          </button>
+        </q-menu>
+      </button>
       <ReasoningPicker v-else-if="field.key === 'reasoning_effort'" :id="`${prefix}-input-reasoning`" class="field field--button config-field__reasoning"
         :aria-label="label(field)" :model-value="effective.reasoning_effort" :capabilities="selectedModel" :busy="disabled"
         @update:model-value="update('reasoning_effort', $event)" />

@@ -161,7 +161,15 @@ async function main() {
   const interactive = Boolean(job.chat_id);
   const args = ["--mode", interactive ? "rpc" : "json", ...(historyFile ? ["--session", historyFile] : ["--no-session"]),
                 "--provider", "nautionette", "--model", model, "--approve"];
-  if (job.system_prompt) args.push("--append-system-prompt", job.system_prompt);
+  const systemInstructions = [job.system_prompt];
+  if (job.packages?.length) systemInstructions.push(
+    "This container is destroyed when your response ends. Background extension work cannot survive across turns. " +
+    "Wait for every child you launch and consume its result before giving your final response. " +
+    "For pi-subagents async runs, use bg_wait with the returned run ID before finishing, even if the extension suggests returning control for a later notification. " +
+    "Use Nautionette durable workflows, not extension background jobs, for work that must continue after this turn."
+  );
+  const systemPrompt = systemInstructions.filter(Boolean).join("\n\n");
+  if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
   if (!interactive) args.push("--", prompt);
 
   const child = spawn("pi", args, {
@@ -230,7 +238,7 @@ async function main() {
       case "extension_ui_request":
         if (["select", "confirm", "input", "editor"].includes(event.method)) {
           send({ type: "extension_ui_response", id: event.id, cancelled: true });
-          runError = "This package requested an unsupported dialog. Configure it in Settings → Agents → Pi packages.";
+          runError = "This package requested an unsupported dialog. Configure it in Settings → Extension library.";
           emit({ type: "error", message: runError });
           child.kill();
         } else if (event.method === "notify") {

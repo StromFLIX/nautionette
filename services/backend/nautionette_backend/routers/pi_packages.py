@@ -68,8 +68,8 @@ async def search_packages(
 async def list_installations():
     return {
         "installations": [
-            pi_packages.installation(row["id"])
-            for row in db.query("SELECT id FROM pi_package_installations ORDER BY created_at DESC LIMIT 200")
+            pi_packages.library_installation(row["id"])
+            for row in db.query("SELECT id FROM pi_package_installations ORDER BY created_at DESC")
         ]
     }
 
@@ -98,6 +98,11 @@ async def install_package(payload: dict[str, Any] = Body(...)):
     )
     spawn(pi_packages.finish_install(installation_id), name=f"package-{installation_id}")
     return pi_packages.installation(installation_id)
+
+
+@router.patch("/api/pi-packages/installations/{installation_id}/configuration")
+async def configure_installation(installation_id: str, payload: dict[str, Any] = Body(...)):
+    return pi_packages.configure_library(installation_id, payload)
 
 
 @router.get("/api/pi-packages/revisions/{revision_id}")

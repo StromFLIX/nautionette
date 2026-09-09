@@ -119,6 +119,7 @@
         :tools="chat?.tools ?? null"
         :project-ids="chat?.project_ids || []"
         :packages="chat?.packages || []"
+        :configuration-saving="settingsPending > 0"
         :commands="chat?.package_commands || []"
         :running="streaming"
         :stopping="stopping"
@@ -129,6 +130,7 @@
         @update:reasoning-effort="patch({ reasoning_effort: $event })"
         @update:tools="patch({ tools: $event })"
         @update:project-ids="patch({ project_ids: $event })"
+        @update:packages="patch({ packages: $event })"
         @send="send"
         @stop="stopResponse"
       />
@@ -171,6 +173,7 @@ const streaming = computed(() => Boolean(activeTurn.value))
 const controlBusy = ref(false)
 const controlError = ref('')
 const titleBusy = ref(false)
+const settingsPending = ref(0)
 const stopping = computed(() => controlBusy.value || Boolean(activeTurn.value?.stop_requested))
 const liveSteps = computed(() => activeTurn.value?.steps || [])
 const liveStatus = computed(() => activeTurn.value?.stop_requested ? 'Stopping...' : activeTurn.value?.status || '')
@@ -351,6 +354,7 @@ async function send () {
 function patch (fields) {
   const id = chatId.value
   const version = generation
+  settingsPending.value++
   settingsSave = settingsSave.then(async () => {
     try {
       const updated = await api.updateChat(id, fields)
@@ -360,6 +364,8 @@ function patch (fields) {
     } catch (error) {
       $q.notify({ type: 'negative', message: error.message })
       return false
+    } finally {
+      if (version === generation) settingsPending.value--
     }
   })
   return settingsSave
@@ -461,6 +467,7 @@ watch(chatId, (id) => {
   approvalError.value = ''
   chat.value = null
   settingsSave = Promise.resolve(true)
+  settingsPending.value = 0
   savedMessages.value = []
   activeTurn.value = null
   draft.value = ''

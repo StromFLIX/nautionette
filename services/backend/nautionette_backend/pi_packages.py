@@ -27,6 +27,42 @@ def installation(installation_id: str) -> dict[str, Any]:
     return {**row, "metadata": json.loads(row["metadata"]), "allow_scripts": bool(row["allow_scripts"])}
 
 
+def library_installation(installation_id: str) -> dict[str, Any]:
+    """Expose a selectable default without adopting any agent's private configuration.
+
+    Legacy artifacts get a fresh, empty default. Existing revision IDs never move.
+    The conditional update also makes concurrent library reads safe.
+    """
+    item = installation(installation_id)
+    if item["status"] == "ready" and not item["default_revision_id"]:
+        default = create_revision({"installation_id": installation_id})
+        db.execute(
+            "UPDATE pi_package_installations SET default_revision_id = ? "
+            "WHERE id = ? AND default_revision_id IS NULL",
+            (default["id"], installation_id),
+        )
+        item = installation(installation_id)
+    return item
+
+
+def configure_library(installation_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if payload.keys() - {"previous_id", "filters", "configuration"}:
+        raise HTTPException(422, "Unknown library configuration field")
+    item = library_installation(installation_id)
+    if not item["default_revision_id"] or payload.get("previous_id") != item["default_revision_id"]:
+        raise HTTPException(409, "Library configuration changed; reload before saving")
+    updated = create_revision({**payload, "installation_id": installation_id})
+    changed = db.execute(
+        "UPDATE pi_package_installations SET default_revision_id = ? "
+        "WHERE id = ? AND default_revision_id = ?",
+        (updated["id"], installation_id, payload["previous_id"]),
+    )
+    if not changed.rowcount:
+        raise HTTPException(409, "Library configuration changed; reload before saving")
+    bus.publish("agent.package.changed", {"installation_id": installation_id})
+    return updated
+
+
 async def finish_install(installation_id: str) -> None:
     row = installation(installation_id)
     try:
@@ -83,6 +119,8 @@ def create_revision(payload: dict[str, Any]) -> dict[str, Any]:
     if item["status"] != "ready":
         raise HTTPException(409, "Only successfully installed artifacts can be selected")
     previous = _revision(payload["previous_id"]) if payload.get("previous_id") else None
+    if previous and previous["installation_id"] != item["id"]:
+        raise HTTPException(422, "Previous revision must belong to the same installation")
     try:
         selected = filters(payload.get("filters", {}))
         config = configuration(

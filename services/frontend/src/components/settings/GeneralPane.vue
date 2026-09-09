@@ -6,10 +6,10 @@
   <section id="default-chat-agent" class="setting general-starting-agent">
     <label for="general-starting-agent" class="setting__label">Default agent</label>
     <div class="row">
-      <select id="general-starting-agent" v-model="form.default_agent_id" class="field grow" :disabled="saving || !loaded">
-        <option :value="null">Global defaults</option>
-        <option v-for="agent in store.catalog.agents || []" :key="agent.id" :value="agent.id">{{ agent.name }}</option>
-      </select>
+      <button id="general-starting-agent" type="button" class="field field--button grow" :disabled="saving || !loaded">
+        <span class="grow truncate">{{ store.catalog.agents?.find(agent => agent.id === form.default_agent_id)?.name || 'Global defaults' }}</span><span class="material-icons" aria-hidden="true">expand_more</span>
+        <AgentPicker v-model="form.default_agent_id" />
+      </button>
       <RouterLink class="btn btn--outline" to="/settings/agents#agent-profiles">Manage agents<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink>
     </div>
   </section>
@@ -63,6 +63,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import AgentConfigFields from './AgentConfigFields.vue'
+import AgentPicker from '../AgentPicker.vue'
 import { DEFAULT_CONFIG_KEYS as CONFIG_KEYS, globalChatConfig } from '../../agent-config'
 import { compactChars } from '../../format'
 import { actions, historyBudget, store } from '../../store'

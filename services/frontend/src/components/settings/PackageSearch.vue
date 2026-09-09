@@ -7,7 +7,7 @@
     <p v-if="!loading && !error && !items.length" class="caption dim">No matching packages. You can also install by npm name or public GitHub URL.</p>
     <article v-for="item in items" :key="item.name" class="package-search__item">
       <div class="grow"><strong>{{ item.name }}</strong> <span class="caption dim">{{ item.version }}</span><p class="caption dim">{{ item.description }}</p></div>
-      <button type="button" class="btn btn--sm" @click="$emit('select', `npm:${item.name}@${item.version}`)">Choose</button>
+      <button type="button" class="btn btn--sm" :disabled="disabled || Boolean(installed(item))" @click="$emit('select', `npm:${item.name}@${item.version}`)">{{ installed(item) || actionLabel }}</button>
     </article>
     <button v-if="nextOffset !== null" type="button" class="btn btn--sm" :disabled="loading" @click="search(nextOffset)">More packages</button>
   </section>
@@ -15,7 +15,11 @@
 <script setup>
 import { onUnmounted, ref, watch } from 'vue'
 import { api } from '../../api'
-const props = defineProps({ query: { type: String, default: '' } })
+const props = defineProps({ query: { type: String, default: '' }, actionLabel: { type: String, default: 'View package' }, disabled: Boolean, installations: { type: Array, default: () => [] } })
+function installed (item) {
+  const match = props.installations.find(value => value.source === `npm:${item.name}@${item.version}` && value.status !== 'failed')
+  return match ? (match.status === 'ready' ? 'Installed' : 'Installing…') : ''
+}
 defineEmits(['select'])
 const items = ref([]), loading = ref(false), error = ref(''), nextOffset = ref(null)
 let controller, timer, generation = 0

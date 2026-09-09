@@ -95,6 +95,16 @@ for (const tools of [undefined, null, [], ['read'], ['name,with,commas']]) {
   })
 }
 
+test('selected packages receive same-turn background guidance without replacing the agent prompt', async () => {
+  const result = await run({ chat_id: 'chat', prompt: 'hi', system_prompt: 'Review carefully.', packages: ['revision'] })
+  const prompt = result.spawnArgs[result.spawnArgs.indexOf('--append-system-prompt') + 1]
+  assert.match(prompt, /^Review carefully\./)
+  assert.match(prompt, /bg_wait with the returned run ID/)
+  assert.match(prompt, /cannot survive across turns/)
+  const withoutPackages = await run({ chat_id: 'chat', prompt: 'hi', system_prompt: 'Review carefully.', packages: [] })
+  assert.equal(withoutPackages.spawnArgs[withoutPackages.spawnArgs.indexOf('--append-system-prompt') + 1], 'Review carefully.')
+})
+
 test('RPC waits for settled after retries and never publishes a recovered error as terminal', async () => {
   const result = await run({ chat_id: 'chat', prompt: '/review' }, [
     { type: 'message_end', message: { role: 'assistant', stopReason: 'error', errorMessage: 'temporary overload' } },

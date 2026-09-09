@@ -270,3 +270,69 @@ def test_concurrent_configuration_writers_keep_one_key(monkeypatch, tmp_path):
         str(i) for i in range(20)
     ]
     assert [path.name for path in tmp_path.iterdir()] == ["pi-packages.key"]
+
+
+def test_library_defaults_are_selectable_without_agents_and_do_not_adopt_private_config(client, artifact):
+    item = artifact()
+    private = revision(client, item, configuration={"env": {"PRIVATE_KEY": "agent-only"}})
+    library = client.get("/api/pi-packages/installations").json()["installations"][0]
+    default_id = library["default_revision_id"]
+    assert default_id != private["id"]
+    assert pi_packages.for_run([default_id])[0]["configuration"] == {"env": {}, "files": {}}
+    assert client.get("/api/pi-packages/installations").json()["installations"][0] == library
+    chat = client.post("/api/chats", json={"packages": [default_id]}).json()
+    assert chat["packages"] == [default_id]
+    assert chat["agent_id"] is None
+    assert client.patch(f"/api/chats/{chat['id']}", json={"packages": []}).json()["packages"] == []
+
+
+def test_library_configuration_is_atomic_private_and_does_not_reselect_snapshots(client, artifact, db):
+    item = artifact()
+    default_id = pi_packages.library_installation(item)["default_revision_id"]
+    agent = client.post("/api/agents", json={"name": "Selected", "config": {"packages": [default_id]}}).json()
+    chat = client.post("/api/chats", json={"agent_id": agent["id"]}).json()
+    db.execute("UPDATE chats SET queue_paused = 1 WHERE id = ?", (chat["id"],))
+    client.post(
+        f"/api/chats/{chat['id']}/messages", json={"text": "Review", "message_id": "pinned", "queue": True}
+    )
+    job = db.one("SELECT job FROM chat_turns WHERE id = 'pinned'")["job"]
+    path = f"/api/pi-packages/installations/{item}/configuration"
+    payload = {"previous_id": default_id, "configuration": {"env": {"SERVICE_KEY": "secret"}}}
+    saved = client.patch(path, json=payload)
+    assert saved.status_code == 200
+    assert "secret" not in saved.text
+    updated = saved.json()["id"]
+    assert pi_packages.library_installation(item)["default_revision_id"] == updated
+    assert client.patch(path, json=payload).status_code == 409
+    assert pi_packages.library_installation(item)["default_revision_id"] == updated
+    assert client.get(f"/api/agents/{agent['id']}").json()["config"]["packages"] == [default_id]
+    assert client.get(f"/api/chats/{chat['id']}").json()["chat"]["packages"] == [default_id]
+    assert db.one("SELECT job FROM chat_turns WHERE id = 'pinned'")["job"] == job
+    assert (
+        client.patch(
+            path, json={"previous_id": updated, "configuration": {"env": {"HOME": "bad"}}}
+        ).status_code
+        == 422
+    )
+    assert pi_packages.library_installation(item)["default_revision_id"] == updated
+    assert pi_packages.for_run([updated])[0]["configuration"]["env"]["SERVICE_KEY"] == "secret"
+
+
+def test_library_config_rejects_unrelated_revisions_and_requires_auth(client, anonymous, artifact):
+    first, second = artifact(), artifact()
+    previous = revision(client, first, configuration={"env": {"KEY": "private"}})
+    assert (
+        client.post(
+            "/api/pi-packages/revisions",
+            json={
+                "installation_id": second,
+                "previous_id": previous["id"],
+                "configuration": {"env": {"KEY": None}},
+            },
+        ).status_code
+        == 422
+    )
+    assert (
+        anonymous.patch(f"/api/pi-packages/installations/{first}/configuration", json={}).status_code == 401
+    )
+    assert pi_packages.library_installation(artifact(status="failed"))["default_revision_id"] is None

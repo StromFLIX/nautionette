@@ -1,29 +1,40 @@
 # Managed Pi packages
 
-Saved agents can select Pi extensions, skills and prompt templates from immutable,
-shared package artifacts. **Settings → Pi packages** is the configuration surface;
-the agent editor also includes the same controls. No per-agent image or manual
-configuration-file editing is required. Global defaults select no packages.
+**Settings → Extension library** manages workspace-wide installation and default
+configuration. It does not require or select an agent. **Agent editors and chat
+composers** select installed packages through the same searchable checkbox picker,
+alongside tools and projects. No per-agent image or manual configuration-file
+editing is required. Global defaults select no packages.
 
 ## Use
 
-1. Search using the existing Settings search (or the package section's search).
-   Results come from npm's `pi-package` keyword catalog. Search is cached,
-   debounced and paginated; registry failures offer retry without losing the form.
-2. Choose a saved agent. Download a result or enter `npm:package@version`,
-   `npm:@scope/package@version`, or a public `https://github.com/owner/repo@ref`.
-   Private repositories, local paths, arbitrary hosts and credential-bearing URLs
-   are not supported. Tags/default branches are resolved once at installation.
-3. Add a successfully downloaded artifact to that agent. Under **Configuration &
-   resources**, choose resource types or Pi path filters. Omit a type for all its
-   resources; `[]` disables it. Pi themes do not change Nautionette's web theme.
-4. Enter any required environment variables/configuration files in Settings,
-   choose **Use configuration revision**, then **Save agent packages** (or
-   **Save agent** in the agent editor). These are explicit, separate steps.
-5. Start a new chat with that agent, or explicitly reapply the agent in an existing
-   chat. After Pi reports its commands on a turn, typing `/` offers discovered
-   extension, prompt and skill commands. Historical messages have native Pi roles,
-   so the current slash command still starts at input offset zero.
+1. Open **Extension library → Discover packages** and search the npm `pi-package`
+   catalog. Click **Install** on a result. Shared Settings search also links to
+   packages. For an unlisted source, expand **Install from npm or public GitHub**.
+   Accepted sources include `npm:package@version`, `npm:@scope/package@version`,
+   and public `https://github.com/owner/repo@ref`. Private repositories, local
+   paths, arbitrary hosts and credential-bearing URLs are not supported.
+2. The **Installed** view shows installation progress, failures/retry and ready
+   packages. Installing never enables a package in an agent or chat.
+3. Under an installed package's **Configuration & resources**, optionally set
+   resource types, environment variables and configuration files. **Save
+   configuration** publishes the defaults for future selections in one step.
+   Advanced Pi path filters remain available; themes do not change the web theme.
+4. Select installed packages in an agent editor and **Save agent**, or open
+   **Chat configuration → Extensions** below the message input. Chat selection
+   saves immediately for future messages, without editing the saved agent.
+   Deselecting does not uninstall a package. No agent is required for chat selection.
+5. Optional **Agent-specific configuration** overrides the library defaults for
+   that agent. Apply the override, then save the agent. Library changes do not
+   overwrite existing agent/chat revisions. The picker offers **Use library
+   configuration** to explicitly replace a pinned override with current defaults.
+6. After Pi reports its commands on a turn, typing `/` offers discovered extension,
+   prompt and skill commands. Historical messages retain native Pi roles.
+
+Legacy installations receive an empty default revision the first time the library
+is listed; private per-agent settings are never promoted into shared defaults.
+Existing selection IDs and queued jobs remain untouched. Concurrent library
+configuration saves use the previous revision ID and reject stale writes.
 
 Downloads do not automatically change any agent. Editing an agent does not change
 existing chats. Accepted/queued turns retain their package/configuration revision
@@ -33,9 +44,12 @@ selecting a new revision; there are no turn-start downloads or silent upgrades.
 
 ## Configuration and secrets
 
-Packages do not have a universal configuration schema. This version provides an
-advanced JSON editor, not guessed per-package forms. Follow the package's own
-documentation to supply supported environment variables or configuration files:
+Packages do not have a universal configuration schema. Settings provides named
+rows for environment variables and configuration-file paths/content, not guessed
+package-specific forms. Follow the package's documentation. Previously saved
+values are never shown; leave a saved row's value blank to keep it, or remove the
+row to omit it. To replace a saved value with an empty string, remove and re-add
+its row. The underlying API accepts:
 
 ```json
 {
@@ -91,6 +105,19 @@ selection/authorization. Native per-call session seeding preserves text/image
 history but does **not** persist extension session entries, auth sessions, caches,
 custom messages or extension state between turns.
 
+The Pi image pins **0.85.1** as a full npm installation. Pi 0.84.4 lacked the
+`@earendil-works/chord` and `chord/context` imports required by current
+`pi-subagents` async runners. The image now verifies these host imports during
+build; do not graft a second, unrelated chord copy onto the old Pi SDK.
+
+Async subagents can run **within a turn**, provided the parent waits for their
+completion (for `pi-subagents`, `bg_wait` with the returned run ID) before ending.
+The runner includes this instruction whenever packages are selected. RPC reports
+`hasUI=true`, so pi-subagents' headless auto-drain does not apply: its suggestion
+to return control and await a later notification is incompatible with our
+per-turn containers. This is not cross-turn background persistence. Use durable
+Nautionette workflows for that.
+
 Installation success is not a compatibility guarantee. RPC-compatible extensions,
 Pi skills and text prompts are supported. Terminal widgets, interactive setup or
 OAuth flows, packages needing extra OS dependencies/custom images, dependency
@@ -117,7 +144,7 @@ npm --prefix services/frontend run build
 ```
 
 The real-Pi RPC test uses a local fixture package and a local mock model endpoint;
-it needs installed Pi 0.84.4, not model credentials or network access. Browser tests
+it needs installed Pi, not model credentials or network access. Browser tests
 mock APIs. The broker contracts cover isolation, failures, immutability and private
 configuration delivery without Docker. A separate real-Docker smoke test requires
 a rebuilt default agent image and explicit permission for public package downloads:
@@ -129,3 +156,17 @@ NAUTIONETTE_DOCKER_TESTS=1 NAUTIONETTE_PACKAGE_TEST_SOURCE='npm:<trusted-package
 
 That opt-in test installs the chosen package with scripts disabled, checks cleanup
 and immutability, then verifies a read-only runtime mount without loading extensions.
+
+A separate opt-in regression uses real `pi-subagents` (verified with 0.66.0) and a
+local mock gateway to launch an async child, await it and check its output. It does
+not install packages or contact public services. Put Pi 0.85.1 on PATH and run:
+
+```sh
+NAUTIONETTE_SUBAGENTS_DIR=/path/to/installed/pi-subagents \
+  node --test tests/agent/test_subagents_rpc.mjs
+node images/pi-base/verify-pi-runtime.mjs /path/to/pi-coding-agent
+```
+
+The subagent regression reproduces the missing-chord error under Pi 0.84.4.
+Rebuild the Pi base and derived agent images to deploy the runtime fix; rebuilding
+only the frontend will not change the Pi version.

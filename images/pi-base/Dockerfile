@@ -27,8 +27,12 @@ RUN npm install -g --ignore-scripts playwright@${PLAYWRIGHT_VERSION} \
   && rm -rf /var/lib/apt/lists/*
 
 # Pi updates must not invalidate the much larger Chromium/OS dependency layer.
-RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.84.4 \
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.85.1 \
   && npm cache clean --force
+# SDK-based subagents need the host's chord exports, not a separately installed
+# copy (which can break runtime identity). Fail the image build if they regress.
+COPY verify-pi-runtime.mjs /usr/local/lib/nautionette/verify-pi-runtime.mjs
+RUN node /usr/local/lib/nautionette/verify-pi-runtime.mjs
 
 # Model traffic goes to agentgateway's OpenAI-compatible endpoint, so no
 # provider key ever enters this container.

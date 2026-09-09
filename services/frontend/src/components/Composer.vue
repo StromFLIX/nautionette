@@ -45,7 +45,7 @@
         @click="configurationOpen = !configurationOpen">
         <span class="material-icons" aria-hidden="true">tune</span>
         <span v-if="customConfiguration && !configurationOpen" class="composer__configured" aria-label="Custom configuration" />
-        <q-tooltip>Agent, reasoning, tools & projects{{ customConfiguration ? ' · customized' : '' }}</q-tooltip>
+        <q-tooltip>Agent, reasoning, tools, projects & extensions{{ customConfiguration ? ' · customized' : '' }}</q-tooltip>
       </button>
       <button v-if="running" class="composer__stop" :disabled="stopping" aria-label="Stop response" @click="$emit('stop')">
         <span class="material-icons" aria-hidden="true">stop</span><q-tooltip>{{ stopping ? 'Stopping response' : 'Stop response' }}</q-tooltip>
@@ -109,8 +109,17 @@
             <q-tooltip>Writable projects for the next message</q-tooltip>
           </button>
         </div>
+        <div class="composer__option">
+          <span class="composer__option-label">Extensions</span>
+          <button class="pick" type="button" aria-label="Select extensions" :class="{ 'pick--quiet': !packages.length }" :disabled="busy || configurationSaving">
+            <span class="material-icons pick__icon" aria-hidden="true">widgets</span>
+            <span class="truncate">{{ packages.length ? `${packages.length} selected` : 'Extensions' }}</span>
+            <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
+            <PackagePicker :model-value="packages" :disabled="busy || configurationSaving" @update:model-value="$emit('update:packages', $event)" />
+            <q-tooltip>Extensions, skills and prompts for the next message</q-tooltip>
+          </button>
+        </div>
       </div>
-      <p v-if="packages.length" class="caption dim">{{ packages.length }} pinned Pi package(s). <RouterLink to="/settings/packages">Configure packages in Settings</RouterLink>. Type / for commands discovered on this chat's last run.</p>
       <div class="composer__configuration-foot"><span>{{ meter.label }}</span><RouterLink to="/settings/workspace">Workspace preferences<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink></div>
     </div>
   </div>
@@ -127,6 +136,7 @@ import { addImages, IMAGE_TYPES } from '../attachments'
 import { api } from '../api'
 import ToolPicker from './ToolPicker.vue'
 import ProjectPicker from './ProjectPicker.vue'
+import PackagePicker from './PackagePicker.vue'
 import { store } from '../store'
 import { preferences } from '../preferences'
 import { contextMeter, modelContextWindow } from '../context'
@@ -140,9 +150,9 @@ const props = defineProps({
   projectIds: { type: Array, default: () => [] }, busy: { type: Boolean, default: false },
   running: { type: Boolean, default: false }, stopping: { type: Boolean, default: false },
   context: { type: Object, default: null }, variant: { type: String, default: 'docked' },
-  placeholder: { type: String, default: 'Message…' }, configurationReady: { type: Boolean, default: true }
+  placeholder: { type: String, default: 'Message…' }, configurationReady: { type: Boolean, default: true }, configurationSaving: Boolean
 })
-const emit = defineEmits(['update:attachments', 'update:modelValue', 'update:agentId', 'update:agentSet', 'update:model', 'update:reasoningEffort', 'update:tools', 'update:projectIds', 'send', 'stop'])
+const emit = defineEmits(['update:attachments', 'update:modelValue', 'update:agentId', 'update:agentSet', 'update:model', 'update:reasoningEffort', 'update:tools', 'update:projectIds', 'update:packages', 'send', 'stop'])
 const input = ref(null)
 const focused = ref(false)
 const fileInput = ref(null)
@@ -264,7 +274,7 @@ defineExpose({ focus: () => input.value?.focus() })
 .composer__profile { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
 .composer__profile-picker { max-width: min(280px, 100%); color: var(--text); background: var(--surface-hover); }
 .composer__profile > .caption { font-size: 10px; }
-.composer__options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.composer__options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .composer__option { min-width: 0; }
 .composer__option-label { display: block; color: var(--text-dim); font-size: 10px; margin: 0 8px 4px; }
 .composer__option > .pick { width: 100%; max-width: none; background: var(--surface-hover); }

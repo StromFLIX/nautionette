@@ -74,6 +74,7 @@ export const api = {
   searchPackages: (query, offset = 0, signal) => request(`/api/pi-packages/search?q=${encodeURIComponent(query)}&offset=${offset}`, { signal }),
   packageInstallations: () => request('/api/pi-packages/installations'),
   installPackage: (payload) => request('/api/pi-packages/installations', { method: 'POST', ...json(payload) }),
+  configurePackage: (id, payload) => request(`/api/pi-packages/installations/${encodeURIComponent(id)}/configuration`, { method: 'PATCH', ...json(payload) }),
   packageRevision: (id) => request(`/api/pi-packages/revisions/${encodeURIComponent(id)}`),
   createPackageRevision: (payload) => request('/api/pi-packages/revisions', { method: 'POST', ...json(payload) }),
   createAgent: (payload) => request('/api/agents', { method: 'POST', ...json(payload) }),

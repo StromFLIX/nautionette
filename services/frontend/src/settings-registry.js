@@ -45,9 +45,9 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
-    key: 'packages', label: 'Pi packages', icon: 'inventory_2', group: 'Connections', scope: 'Per agent',
+    key: 'packages', label: 'Extension library', icon: 'inventory_2', group: 'Connections', scope: 'Workspace',
     load: () => import('./components/settings/PackagesPane.vue'),
-    entries: [entry('pi-packages', 'Pi packages', 'Install and configure extensions, skills and prompts per agent.', 'npm git search resources secrets environment configuration install update rollback')]
+    entries: [entry('pi-packages', 'Extension library', 'Install extensions, skills and prompts for the workspace. Select them separately in agents and chats.', 'npm git search resources secrets environment configuration install update rollback')]
   },
   {
     key: 'mcp', label: 'MCP servers', icon: 'extension', group: 'Connections', scope: 'Instance',

@@ -149,6 +149,7 @@ CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
 
 # Applied on every start; each one fails harmlessly once it is already in place.
 _MIGRATIONS = (
+    "ALTER TABLE pi_package_installations ADD COLUMN default_revision_id TEXT",
     "ALTER TABLE chat_turns ADD COLUMN context TEXT",
     "ALTER TABLE chat_turns ADD COLUMN job TEXT",
     "ALTER TABLE chat_turns ADD COLUMN stop_requested INTEGER NOT NULL DEFAULT 0",

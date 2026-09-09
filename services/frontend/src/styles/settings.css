@@ -66,6 +66,7 @@ select.field {
   border-radius: var(--radius-md);
   background: var(--surface-panel);
 }
+.setting + .settings-disclosure, .settings-disclosure + .settings-disclosure { margin-top: 24px; }
 .settings-disclosure > summary {
   display: flex;
   align-items: center;

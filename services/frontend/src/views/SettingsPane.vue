@@ -20,14 +20,17 @@
         </button>
         <kbd v-else class="settings__search-key">/</kbd>
       </div>
-      <label class="settings__mobile-nav">
-        <span class="sr-only">Settings category</span>
-        <select class="field" :value="tab" @change="openSection($event.target.value)">
-          <optgroup v-for="group in SETTINGS_GROUPS" :key="group" :label="group">
-            <option v-for="item in sectionsIn(group)" :key="item.key" :value="item.key">{{ item.label }}</option>
-          </optgroup>
-        </select>
-      </label>
+      <button type="button" class="settings__mobile-nav field field--button" aria-label="Settings category">
+        <span class="material-icons" aria-hidden="true">{{ section.icon }}</span><span class="grow">{{ section.label }}</span><span class="material-icons" aria-hidden="true">expand_more</span>
+        <q-menu class="pick-menu">
+          <template v-for="group in SETTINGS_GROUPS" :key="group">
+            <div class="pick-menu__label section-label">{{ group }}</div>
+            <button v-for="item in sectionsIn(group)" :key="item.key" v-close-popup type="button" class="pick-menu__item" @click="openSection(item.key)">
+              <span class="grow">{{ item.label }}</span><span v-if="tab === item.key" class="material-icons pick-menu__check" aria-hidden="true">check</span>
+            </button>
+          </template>
+        </q-menu>
+      </button>
     </div>
 
     <div class="settings__workspace grow">
@@ -192,8 +195,8 @@ onUnmounted(() => { document.removeEventListener('keydown', shortcuts); observer
   .settings__workspace { grid-template-columns: minmax(0, 1fr); }
   .settings__tree, .settings__shortcut, .settings__search-key, .settings__breadcrumb > span { display: none; }
   .settings__searchbar { padding: 12px max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left)); }
-  .settings__mobile-nav { display: block; margin-top: 10px; }
-  .settings__mobile-nav select { font-size: 13px; }
+  .settings__mobile-nav { display: flex; width: 100%; margin-top: 10px; font-size: 13px; }
+  .settings__mobile-nav .material-icons { font-size: 18px; }
   .settings__body { padding: 20px max(16px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
   .settings__head { gap: 8px; }
   .settings__result { gap: 10px; padding: 16px 0; }

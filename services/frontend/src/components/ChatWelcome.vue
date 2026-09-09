@@ -12,6 +12,7 @@
         variant="welcome" :busy="busy" :configuration-ready="store.catalogLoaded" placeholder="Ask, build, or automate…"
         @update:agent-id="chooseAgent" @update:agent-set="override('agent_set', $event)" @update:model="override('model', $event)"
         @update:reasoning-effort="override('reasoning_effort', $event)" @update:tools="override('tools', $event)" @update:project-ids="override('project_ids', $event)"
+        @update:packages="override('packages', $event)"
         @send="$emit('start', { text, configuration: config, attachments })" />
 
       <p v-if="!store.catalogLoaded && store.catalogError" class="caption" role="alert">{{ store.catalogError }} <button class="btn btn--sm" @click="actions.loadCatalog(true)">Retry defaults</button></p>
