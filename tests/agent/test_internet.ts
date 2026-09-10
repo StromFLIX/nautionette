@@ -1,6 +1,23 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import extension, { waitForInternetDecision } from "../../images/pi-base/internet.ts";
+
+function assertGatewayAccessGuidance(text: string) {
+  const normalized = text.replace(/\s+/g, " ");
+  assert.match(normalized, /tools exposed through agentgateway do not require chat internet approval/);
+  assert.match(normalized, /regardless of tool name or service/);
+  assert.match(normalized, /Use them normally even when direct internet access is blocked, pending, or denied/);
+  assert.match(normalized, /Do not tunnel arbitrary shell commands or direct network requests/);
+}
+
+test("default agent instructions distinguish direct egress from configured gateway tools", () => {
+  const instructions = readFileSync(new URL("../../images/agent-sets/default/AGENTS.md", import.meta.url), "utf8");
+  assertGatewayAccessGuidance(instructions);
+  assert.match(instructions, /approval controls only direct connections from the agent container/);
+  assert.match(instructions, /Git clone\/fetch\/pull\/push, direct HTTP\/API/);
+  assert.doesNotMatch(instructions, /Do not bypass a pending or denied request using MCP/);
+});
 
 test("the approval waiter ignores missing and invalid decisions", async () => {
   let attempts = 0;
@@ -37,7 +54,11 @@ test("a session decision is reused and workflow agents do not get a chat approva
           assert.equal((await tool.execute("call", {})).details.internet_status, "allowed");
         }
       } else {
-        await assert.rejects(tool.execute("call", {}), /denied/);
+        await assert.rejects(tool.execute("call", {}), (error: Error) => {
+          assert.match(error.message, /Direct internet access was denied/);
+          assertGatewayAccessGuidance(error.message);
+          return true;
+        });
       }
     }
   } finally {
@@ -65,7 +86,13 @@ test("failed Git DNS lookup points to approval without masking or retrying the c
         assert.equal(handler, undefined);
         continue;
       }
+      assert.match(tool.description, /only for direct internet connections from the agent container/);
       assert.match(tool.description, /Git clone\/fetch\/pull\/push/);
+      assertGatewayAccessGuidance(tool.description);
+      // A gateway tool's upstream DNS failure is not a request for container egress.
+      for (const toolName of ["test_tool_a", "custom_action_b", "another_tool_c"]) {
+        assert.equal(await handler({ ...event, toolName }), undefined);
+      }
       const result = await handler(event);
       if (status === "allowed") {
         assert.equal(result, undefined);
@@ -75,6 +102,7 @@ test("failed Git DNS lookup points to approval without masking or retrying the c
       assert.equal(result.isError, undefined);
       assert.equal(event.content.length, 1);
       const guidance = result.content[1].text;
+      assertGatewayAccessGuidance(guidance);
       if (status === "denied") {
         assert.match(guidance, /denied/);
         assert.doesNotMatch(guidance, /Call request_internet_access/);

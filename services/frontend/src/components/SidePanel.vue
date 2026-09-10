@@ -331,9 +331,25 @@ const filteredChats = computed(() =>
 
 // Relative windows have to age on their own, or a chat stays "active" forever.
 const now = ref(Date.now())
+function refreshNow () {
+  if (document.visibilityState !== 'hidden') now.value = Date.now()
+}
+watch(() => route.fullPath, refreshNow)
 let ticker = null
-onMounted(() => { ticker = setInterval(() => { now.value = Date.now() }, 30000) })
-onUnmounted(() => clearInterval(ticker))
+onMounted(() => {
+  ticker = setInterval(refreshNow, 30000)
+  // Background tabs throttle timers. Reapply the window immediately on return,
+  // even when the selected filter itself has not changed.
+  document.addEventListener('visibilitychange', refreshNow)
+  window.addEventListener('focus', refreshNow)
+  window.addEventListener('pageshow', refreshNow)
+})
+onUnmounted(() => {
+  clearInterval(ticker)
+  document.removeEventListener('visibilitychange', refreshNow)
+  window.removeEventListener('focus', refreshNow)
+  window.removeEventListener('pageshow', refreshNow)
+})
 
 const filteredWorkflows = computed(() =>
   store.workflows.filter((workflow) => matches(`${workflow.name} ${workflow.title || ''} ${workflow.description || ''}`)))

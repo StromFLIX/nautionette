@@ -789,6 +789,7 @@ pre.code {
 :root[data-chat-list-animation='false'] .avatar__spinner-arc,
 :root[data-message-window-animation='false'] .composer--running::before,
 :root[data-tool-indicator-animation='false'] .tool-group__indicator-arc,
+:root[data-tool-indicator-animation='false'] .tool-group__indicator-dot,
 :root[data-tool-indicator-animation='false'] .tool__pulse {
   animation: none !important;
 }

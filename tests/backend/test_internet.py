@@ -71,6 +71,28 @@ def test_future_turns_inherit_only_their_chats_grant(client, db, broker):
     assert [job["chat_id"] for job in broker.jobs] == [approved, approved, blocked]
 
 
+@pytest.mark.parametrize("status", ["blocked", "pending", "denied", "allowed"])
+def test_chat_prompt_gates_only_direct_egress_not_gateway_tools(client, db, broker, status):
+    chat_id = client.post("/api/chats", json={}).json()["id"]
+    db.execute("UPDATE chats SET internet_status = ? WHERE id = ?", (status, chat_id))
+    response = client.post(f"/api/chats/{chat_id}/messages", json={"text": "Run the configured tool"})
+    assert response.status_code == 200
+    job = broker.jobs[-1]
+    assert job["internet_allowed"] is (status == "allowed")
+    prompt = job["system_prompt"]
+    assert f"Direct internet access is {status} for this chat" in prompt
+    assert "only direct connections from the agent container" in prompt
+    assert "Git clone/fetch/pull/push, direct HTTP/API calls, or package downloads" in prompt
+    assert "Before making such a connection, call request_internet_access" in prompt
+    assert "tools exposed through agentgateway do not require chat internet approval" in prompt
+    assert "regardless of tool name or service" in prompt
+    assert "Use them normally even when direct internet access is blocked, pending, or denied" in prompt
+    assert "If denied, continue with local work and configured gateway tools" in prompt
+    assert "Do not tunnel arbitrary shell commands or direct network requests" in prompt
+    assert "Before first accessing the internet" not in prompt
+    assert "never bypass the decision via MCP tools or workflows" not in prompt
+
+
 async def test_tool_request_is_visible_until_turn_ends(db, broker, monkeypatch):
     chat = db.create_chat("Research", "default")
     db.accept_chat_message(chat["id"], "Research this", "turn-a")

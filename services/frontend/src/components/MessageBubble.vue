@@ -11,10 +11,7 @@
       </div>
       <template v-for="(part, index) in groupedParts" :key="part.id || index">
         <ToolCallGroup v-if="part.kind === 'tool-group'" :steps="part.steps" :live="live" :timing="meta.timing">
-          <template v-for="(step, stepIndex) in part.steps" :key="step.id || stepIndex">
-            <ToolCall v-if="step.kind === 'tool'" :step="step" :live="live" />
-            <div v-else-if="step.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(step.text)" />
-          </template>
+          <ToolCall v-for="(step, stepIndex) in part.steps" :key="step.id || stepIndex" :step="step" :live="live" />
         </ToolCallGroup>
         <div v-else-if="part.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(part.text)" />
       </template>
@@ -94,7 +91,7 @@ const parts = computed(() => {
   return spoken ? steps.value : [...steps.value, { kind: 'text', text: props.content }]
 })
 const groupedParts = computed(() => groupToolCalls(parts.value))
-// Copy the whole answer, including narration inside collapsed tools, as Markdown.
+// Copy the whole answer, including narration between tool groups, as Markdown.
 // Tool arguments/results and UI status labels are not part of the answer.
 const responseText = computed(() => [
   ...parts.value.filter((part) => part.kind === 'text').map((part) => part.text),
