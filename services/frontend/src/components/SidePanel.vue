@@ -196,6 +196,7 @@ import { actions, health, store } from '../store'
 import { api } from '../api'
 import ChatRow from './ChatRow.vue'
 import { preferences } from '../preferences'
+import { chatRecency } from '../chat-order'
 
 defineProps({ showCollapseButton: { type: Boolean, default: false } })
 defineEmits(['collapse-sidebar'])
@@ -272,7 +273,8 @@ function groupsFor (chat) {
   return [['__all__', 'Chats']]
 }
 
-const byRecency = (a, b) => (b.updated_at || 0) - (a.updated_at || 0)
+const recency = (chat) => chatRecency(chat, preferences.chatOrderBy)
+const byRecency = (a, b) => recency(b) - recency(a)
 
 const chatGroups = computed(() => {
   const byKey = new Map()
@@ -291,7 +293,7 @@ const chatGroups = computed(() => {
       older: group.older.sort(byRecency),
       // Rank by what is actually shown; the newest chat wins the top slot.
       recency: Math.max(
-        ...(showOlder.value ? [...group.visible, ...group.older] : group.visible).map((chat) => chat.updated_at || 0),
+        ...(showOlder.value ? [...group.visible, ...group.older] : group.visible).map(recency),
         -1
       )
     }))

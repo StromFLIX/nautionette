@@ -20,7 +20,7 @@
         <div class="row">
           <span class="row-item__title grow truncate">{{ chat.title }}</span>
           <span v-if="chat.unread" class="row-item__unread" role="img" aria-label="Unread messages" title="Unread messages" />
-          <span class="row-item__time">{{ shortTime(chat.updated_at) }}</span>
+          <span class="row-item__time">{{ shortTime(chatRecency(chat, preferences.chatOrderBy)) }}</span>
         </div>
         <div class="row-item__sub truncate">
           <span v-if="needsInternet" class="row-item__activity row-item__activity--attention">
@@ -53,6 +53,8 @@
 <script setup>
 import { computed } from 'vue'
 import { avatarStyle, initials, shortTime } from '../format'
+import { chatRecency } from '../chat-order'
+import { preferences } from '../preferences'
 
 const props = defineProps({
   chat: { type: Object, required: true },

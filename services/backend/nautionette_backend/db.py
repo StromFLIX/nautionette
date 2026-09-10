@@ -169,6 +169,8 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN last_read_message_id TEXT",
     "ALTER TABLE chats ADD COLUMN marked_unread INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN read_revision INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE chats ADD COLUMN last_message_at REAL",
+    "ALTER TABLE chats ADD COLUMN last_user_message_at REAL",
     # Legacy titles have no provenance: protect them rather than guessing which were manual.
     "ALTER TABLE chats ADD COLUMN title_state TEXT NOT NULL DEFAULT 'manual'",
     "ALTER TABLE chats ADD COLUMN title_revision INTEGER NOT NULL DEFAULT 0",
@@ -216,6 +218,17 @@ class Database:
                     self._conn.execute(statement)
                 except sqlite3.OperationalError:
                     pass  # already applied
+            # Backfill only legacy rows, never overwrite live message timestamps on restart.
+            self._conn.execute(
+                "UPDATE chats SET last_message_at = COALESCE("
+                "(SELECT MAX(created_at) FROM messages WHERE chat_id = chats.id), created_at) "
+                "WHERE last_message_at IS NULL"
+            )
+            self._conn.execute(
+                "UPDATE chats SET last_user_message_at = COALESCE("
+                "(SELECT MAX(created_at) FROM messages WHERE chat_id = chats.id AND role = 'user'), "
+                "created_at) WHERE last_user_message_at IS NULL"
+            )
             lease_columns = self._conn.execute("PRAGMA table_info(project_leases)").fetchall()
             if [column["name"] for column in lease_columns if column["pk"]] == ["project_id"]:
                 self._conn.execute("ALTER TABLE project_leases RENAME TO project_leases_legacy")
@@ -263,8 +276,9 @@ class Database:
         chat_id = uuid.uuid4().hex[:12]
         self.execute(
             "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort,"
-            " created_at, updated_at, title_state, project_ids, agent_id, agent_name, packages)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " created_at, updated_at, title_state, project_ids, agent_id, agent_name, packages,"
+            " last_message_at, last_user_message_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 chat_id,
                 title,
@@ -279,6 +293,8 @@ class Database:
                 agent_id,
                 agent_name,
                 json.dumps(packages or []),
+                now,
+                now,
             ),
         )
         return self.get_chat(chat_id)  # type: ignore[return-value]
@@ -420,7 +436,11 @@ class Database:
             "INSERT INTO messages (id, chat_id, role, content, meta, created_at) VALUES (?,?,?,?,?,?)",
             (message_id, chat_id, role, content, json.dumps(meta or {}), now),
         )
-        self.touch_chat(chat_id)
+        self.execute(
+            "UPDATE chats SET updated_at = ?, last_message_at = ?, "
+            "last_user_message_at = CASE WHEN ? = 'user' THEN ? ELSE last_user_message_at END WHERE id = ?",
+            (now, now, role, now, chat_id),
+        )
         return {
             "id": message_id,
             "chat_id": chat_id,
@@ -518,7 +538,10 @@ class Database:
                 self._conn.execute(
                     "UPDATE chats SET project_ids = ? WHERE id = ?", (json.dumps(project_ids), chat_id)
                 )
-            self._conn.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (now, chat_id))
+            self._conn.execute(
+                "UPDATE chats SET updated_at = ?, last_message_at = ?, last_user_message_at = ? WHERE id = ?",
+                (now, now, now, chat_id),
+            )
             message = {
                 "id": message_id,
                 "chat_id": chat_id,
@@ -608,7 +631,8 @@ class Database:
         steps: list,
         status: str,
         timing: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> bool:
+        """Persist all agent activity; prose also advances message-only ordering."""
         with self._lock, self._conn:
             if event.get("type") in {"usage", "result"} and "context" in event:
                 self._conn.execute(
@@ -622,6 +646,16 @@ class Database:
             self._conn.execute(
                 "INSERT INTO chat_turn_events (turn_id, payload) VALUES (?,?)",
                 (turn_id, json.dumps(event)),
+            )
+            now = time.time()
+            is_message = event.get("type") == "delta" and bool(event.get("text"))
+            return bool(
+                self._conn.execute(
+                    "UPDATE chats SET updated_at = ?, "
+                    "last_message_at = CASE WHEN ? THEN ? ELSE last_message_at END "
+                    "WHERE id = (SELECT chat_id FROM chat_turns WHERE id = ? AND state = 'running')",
+                    (now, is_message, now, turn_id),
+                ).rowcount
             )
 
     def finish_chat_turn(self, turn_id: str, content: str, meta: dict[str, Any]) -> None:
@@ -659,7 +693,10 @@ class Database:
             "INSERT INTO messages (id, chat_id, role, content, meta, created_at) VALUES (?,?,?,?,?,?)",
             (message["id"], turn["chat_id"], "assistant", content, json.dumps(meta), now),
         )
-        self._conn.execute("UPDATE chats SET updated_at = ? WHERE id = ?", (now, turn["chat_id"]))
+        self._conn.execute(
+            "UPDATE chats SET updated_at = ?, last_message_at = ? WHERE id = ?",
+            (now, now, turn["chat_id"]),
+        )
         return message
 
     def record_run(

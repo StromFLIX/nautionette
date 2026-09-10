@@ -71,6 +71,24 @@ an explicit warning instead of claiming the change was saved.
 Device preferences never update instance settings. Resetting the workspace does
 not reset the selected theme. There is no cross-device account synchronization.
 
+### Chat order
+
+**Settings → Workspace → Chat list → Chat order** controls recency for both chat
+rows and group ordering. **All activity** is the default: user messages, streamed
+agent replies, tool calls and results, thinking, and other agent progress all count.
+**Messages only** counts user messages and agent prose (including streamed replies);
+**User messages only** ignores agent activity. The row timestamp uses the selected
+clock too. Active chats rise when new activity arrives; they are not permanently
+pinned above more recent completed chats. Activity-window filtering still uses all
+activity and retains running chats, unread replies and approval requests.
+
+The choice is saved on this device, synchronized between tabs and restored to
+**All activity** by **Reset workspace**. The backend persists separate activity,
+message and user-message timestamps, backfilling existing chats from their saved
+messages. Live progress refreshes every client's chat list at most once per second
+per running turn; completion still refreshes immediately. Deploy the backend and
+frontend together for live activity and all three ordering modes.
+
 ### Interface size
 
 The default is **125%** on desktop, mobile web and native WebViews. Workspace's

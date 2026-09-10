@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from time import monotonic
 from typing import Any
 
 from . import chat_images, git_authorship, projects
@@ -15,6 +16,8 @@ from .clients import broker
 from .db import db
 from .events import bus, sse
 from .runtime import history_budget, remember_agent_result, runtime
+
+CHAT_PROGRESS_NOTICE_INTERVAL = 1.0
 
 CLEANUP_FAILURE = "The old chat agent could not be cleaned up. Retry your message to retry cleanup."
 
@@ -134,6 +137,7 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     shutdown = False
     agent_requested = False
     cleanup_failed = False
+    last_progress_notice = float("-inf")
     try:
         turn = db.one("SELECT stop_requested FROM chat_turns WHERE id = ?", (turn_id,))
         if not turn or turn["stop_requested"]:
@@ -257,7 +261,15 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                     timeline.add_text(event["text"])
                     received_text = True
             timeline.observe(event)
-            db.record_chat_progress(turn_id, event, timeline.steps, status, timeline.timing.snapshot())
+            changed = db.record_chat_progress(
+                turn_id, event, timeline.steps, status, timeline.timing.snapshot()
+            )
+            # Refresh every client's sidebar, including chats that are not open.
+            # Persist every event, but don't reload the list for every streamed token.
+            now = monotonic()
+            if changed and now - last_progress_notice >= CHAT_PROGRESS_NOTICE_INTERVAL:
+                bus.publish("chat.progress", {"chat_id": chat_id})
+                last_progress_notice = now
     except asyncio.CancelledError:
         shutdown = True
         failure = "The answer was interrupted by a backend shutdown."
