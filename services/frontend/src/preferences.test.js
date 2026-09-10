@@ -46,6 +46,28 @@ test('sidebar collapse defaults to expanded and only accepts boolean preferences
   }
 })
 
+test('chat visibility preferences migrate, validate, reset and contribute to settings search', () => {
+  for (const defaults of [preferenceDefaults(), workspaceDefaults(), sanitizePreferences({ chatActiveMinutes: 60 })]) {
+    assert.equal(defaults.chatKeepSelectedVisible, true)
+    assert.equal(defaults.chatSelectionGraceSeconds, 60)
+  }
+  assert.equal(sanitizePreferences({ chatKeepSelectedVisible: false }).chatKeepSelectedVisible, false)
+  for (const invalid of ['false', 0, null]) {
+    assert.equal(validPreference('chatKeepSelectedVisible', invalid), false)
+    assert.equal(sanitizePreferences({ chatKeepSelectedVisible: invalid }).chatKeepSelectedVisible, true)
+  }
+  for (const seconds of [0, 1, 60, 120, 3600]) {
+    assert.equal(validPreference('chatSelectionGraceSeconds', seconds), true)
+    assert.equal(sanitizePreferences({ chatSelectionGraceSeconds: seconds }).chatSelectionGraceSeconds, seconds)
+  }
+  for (const invalid of [-1, 3601, NaN, Infinity, '60', null, true]) {
+    assert.equal(validPreference('chatSelectionGraceSeconds', invalid), false)
+    assert.equal(sanitizePreferences({ chatSelectionGraceSeconds: invalid }).chatSelectionGraceSeconds, 60)
+  }
+  assert.ok(searchSettings('selected chat').some(entry => entry.id === 'chatKeepSelectedVisible'))
+  assert.ok(searchSettings('grace period').some(entry => entry.id === 'chatSelectionGraceSeconds'))
+})
+
 test('activity animations default on, validate independently and are searchable', () => {
   const keys = ['chatListAnimation', 'messageWindowAnimation', 'toolIndicatorAnimation']
   for (const key of keys) {

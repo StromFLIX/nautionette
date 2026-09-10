@@ -189,7 +189,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RUN_TONE, avatarStyle, scheduleTime, shortTime } from '../format'
 import { actions, health, store } from '../store'
@@ -197,7 +197,10 @@ import { api } from '../api'
 import ChatRow from './ChatRow.vue'
 import { preferences } from '../preferences'
 
-defineProps({ showCollapseButton: { type: Boolean, default: false } })
+const props = defineProps({
+  showCollapseButton: { type: Boolean, default: false },
+  isChatActive: { type: Function, required: true }
+})
 defineEmits(['collapse-sidebar'])
 
 const route = useRoute()
@@ -234,14 +237,6 @@ watch(activeMinutes, () => { showOlder.value = false })
 
 const activeLabel = computed(() =>
   ({ 60: 'hour', 1440: '24 hours', 10080: '7 days', 43200: '30 days' }[activeMinutes.value] || 'selected range'))
-
-/** In range means: still needs me, or touched inside the chosen window. */
-function isChatActive (chat) {
-  if (chat.unread || chat.answering || needsInternet(chat)) return true
-  if (!activeMinutes.value) return true
-  if (!chat.updated_at) return false
-  return (now.value / 1000 - chat.updated_at) <= activeMinutes.value * 60
-}
 
 function projectLabel (id) {
   return store.projects.find((project) => project.id === id)?.full_name || id
@@ -280,7 +275,7 @@ const chatGroups = computed(() => {
     for (const [key, label] of groupsFor(chat)) {
       if (!byKey.has(key)) byKey.set(key, { key, label: label || 'Unknown', visible: [], older: [] })
       const group = byKey.get(key)
-      if (isChatActive(chat)) group.visible.push(chat)
+      if (props.isChatActive(chat)) group.visible.push(chat)
       else group.older.push(chat)
     }
   }
@@ -303,7 +298,7 @@ const chatGroups = computed(() => {
 
 const visibleCount = computed(() => chatGroups.value.reduce((total, group) => total + group.visible.length, 0))
 const hiddenCount = computed(() =>
-  filteredChats.value.length - filteredChats.value.filter((chat) => isChatActive(chat)).length)
+  filteredChats.value.length - filteredChats.value.filter((chat) => props.isChatActive(chat)).length)
 
 async function setUnread (chat, unread) {
   readBusy.value = chat.id
@@ -327,12 +322,6 @@ const matches = (haystack) => haystack.toLowerCase().includes(query.value.trim()
 
 const filteredChats = computed(() =>
   store.chats.filter((chat) => matches(`${chat.title} ${chat.last_message?.preview || ''}`)))
-
-// Relative windows have to age on their own, or a chat stays "active" forever.
-const now = ref(Date.now())
-let ticker = null
-onMounted(() => { ticker = setInterval(() => { now.value = Date.now() }, 30000) })
-onUnmounted(() => clearInterval(ticker))
 
 const filteredWorkflows = computed(() =>
   store.workflows.filter((workflow) => matches(`${workflow.name} ${workflow.title || ''} ${workflow.description || ''}`)))
