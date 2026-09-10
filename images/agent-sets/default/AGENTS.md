@@ -6,10 +6,17 @@ thrown away afterwards. Selected project worktrees persist across calls.
 - `/workspace` is scratch space for this call only.
 - Selected `/projects/<project-id>` worktrees retain local commits and uncommitted
   files. Preserve them when retrying a failed push; do not recreate or reset them.
-- Chat internet access requires `request_internet_access` and user approval before
-  contacting GitHub, including Git fetch/pull/push. A blocked DNS lookup is not
-  proof of missing repository permission. Request approval, wait for the decision,
-  and retry only if allowed. Do not bypass a pending or denied request using MCP.
+- Chat internet approval controls only direct connections from the agent container
+  (for example shell commands using curl, Git clone/fetch/pull/push, direct HTTP/API
+  calls, or package downloads). Call `request_internet_access` and wait for approval
+  before those operations. A blocked Git DNS lookup is not proof of missing
+  repository permission; request approval and retry only if allowed.
+- Configured tools exposed through agentgateway do not require chat internet
+  approval, regardless of tool name or service. Use them normally even when
+  direct internet access is blocked, pending, or denied;
+  their server-side network access is separate. Do not tunnel arbitrary shell
+  commands or direct network requests through tools or workflows to evade the
+  direct-egress gate.
 - `/workflows` is the live workflow directory, mounted read-only. Read it to see
   what already exists; never try to write there.
 - To create or change a workflow, use the `write_workflow` tool. It validates the

@@ -331,11 +331,13 @@ already have produced external side effects.
 
 Chat Pi containers start on `nautionette-agents`, a Docker `internal: true`
 network with access to the model/tool gateway but no direct internet route or
-connection to the backend and broker networks. Before fetching websites, cloning
-remote repositories, or downloading packages, Pi calls `request_internet_access`
-with its reason. The chat displays **Allow for this chat** and **Deny**, and the
-tool waits while the current turn remains active. Pending requests survive client
-reloads and reconnects, up to the configured agent-run timeout.
+connection to the backend and broker networks. Only **direct connections from the
+agent container** require approval: for example, shell commands using `curl`, Git
+clone/fetch/pull/push, direct HTTP/API requests, or package downloads. Before those
+operations, Pi calls `request_internet_access` with its reason. The chat displays
+**Allow for this chat** and **Deny**, and the tool waits while the current turn
+remains active. Pending requests survive client reloads and reconnects, up to the
+configured agent-run timeout.
 
 The user decision endpoint is `POST /api/chats/{id}/internet` with
 `{turn_id, allowed}`. It is not an MCP tool. Only an authenticated user decision
@@ -353,8 +355,12 @@ means the lifetime of the chat, not the browser tab or an individual Pi process.
 
 This controls **direct Pi egress**, not server-side internet use by configured
 MCP tools, model providers, or workflow activities. Those remain trusted system
-capabilities and are not sandboxed by this gate. Configure distinct `APP_TOKEN`
-and `INTERNAL_TOKEN` values for shared deployments.
+capabilities and are not sandboxed by this gate. Configured tools exposed through
+agentgateway **do not require chat internet approval**, regardless of tool name or
+service, even when direct access is blocked, pending, or denied. Do not tunnel
+arbitrary shell commands or direct network requests through tools or workflows to
+evade the direct-egress gate. Configure distinct `APP_TOKEN` and `INTERNAL_TOKEN`
+values for shared deployments.
 
 After updating, rebuild/recreate backend, docker-broker, frontend-web, and
 agentgateway with `docker compose up -d --build backend docker-broker frontend-web agentgateway`.
