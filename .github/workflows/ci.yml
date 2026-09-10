@@ -84,7 +84,7 @@ jobs:
           tests/chat.spec.js tests/appearance.spec.js tests/workspace.spec.js
           tests/projects.spec.js tests/settings-navigation.spec.js
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js
-          tests/packages.spec.js tests/new-chat-settings.spec.js --workers=1
+          tests/packages.spec.js tests/new-chat-settings.spec.js --workers=1 --reporter=dot,github
 
   images:
     name: Image (${{ matrix.name }})
