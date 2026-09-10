@@ -5,7 +5,7 @@
     <NavRail ref="navRail" class="shell__rail" :sidebar-collapsed="sideCollapsed" @open-sidebar="openSidebar" />
     <template v-if="!fullPage">
       <aside v-show="!sideCollapsed" id="shell-sidebar" class="shell__side" :style="{ width: `${sideWidth}px` }">
-        <SidePanel :show-collapse-button="!mobile" @collapse-sidebar="collapseSidebar" />
+        <SidePanel :show-collapse-button="!mobile" :is-chat-active="isChatActive" @collapse-sidebar="collapseSidebar" />
         <div
           class="shell__grip"
           :class="{ 'shell__grip--active': dragging }"
@@ -58,10 +58,13 @@ import { actions, store } from './store'
 import { auth, isNative, server } from './api'
 import { currentTokens, preferences } from './preferences'
 import { syncSystemBars } from './system-bars'
+import { useChatActivity } from './chat-activity'
 
 const DEFAULT_WIDTH = 320
 const route = useRoute()
 const router = useRouter()
+const selectedChatId = computed(() => route.name === 'chats' ? route.params.id || '' : '')
+const isChatActive = useChatActivity(selectedChatId, preferences, () => route.fullPath)
 const navRail = ref(null)
 const sideWidth = computed({ get: () => preferences.sideWidth, set: value => { preferences.sideWidth = value } })
 const dragging = ref(false)

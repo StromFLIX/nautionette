@@ -40,16 +40,28 @@ export function foldEvent (steps, event) {
   else if (event.type === 'tool_done') finishTool(steps, event)
 }
 
-/** One disclosure per answer, preserving narration between calls in its timeline. */
+/** Group consecutive calls only; narration stays visible between disclosures. */
 export function groupToolCalls (parts) {
-  const first = parts.findIndex((part) => part.kind === 'tool')
-  if (first === -1) return parts
-  const last = parts.findLastIndex((part) => part.kind === 'tool')
-  return [
-    ...parts.slice(0, first),
-    { kind: 'tool-group', id: 'tool-group', steps: parts.slice(first, last + 1) },
-    ...parts.slice(last + 1)
-  ]
+  if (!parts.some((part) => part.kind === 'tool')) return parts
+  const grouped = []
+  let group = null
+  parts.forEach((part, index) => {
+    // Invisible streaming deltas should not create separate disclosures.
+    if (part.kind === 'text' && !part.text.trim()) return
+    if (part.kind === 'tool') {
+      if (!group) {
+        // The first call's position stays stable as the timeline grows, even
+        // for legacy calls without IDs. Keep expanded groups/calls mounted.
+        group = { kind: 'tool-group', id: `tool-group-${index}`, steps: [] }
+        grouped.push(group)
+      }
+      group.steps.push(part)
+    } else {
+      grouped.push(part)
+      group = null
+    }
+  })
+  return grouped
 }
 
 /** An interrupted call may have no result, but is no longer executing. */

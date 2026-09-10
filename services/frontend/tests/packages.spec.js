@@ -120,6 +120,7 @@ for (const width of [1440, 320]) {
     expect(agent.config.packages).toEqual([pinned])
     await page.keyboard.press('Escape')
     await page.reload()
+    await page.getByRole('button', { name: 'Chat configuration', exact: true }).click()
     await page.getByRole('button', { name: 'Select extensions', exact: true }).click()
     await expect(page.getByRole('checkbox', { name: /pi-test-prompts/ })).toBeChecked()
     await page.getByRole('button', { name: 'Use library configuration', exact: true }).click()

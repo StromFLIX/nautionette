@@ -107,6 +107,7 @@
       <ProjectChanges v-if="chat?.project_ids?.length" :key="chatId"
         :chat-id="chatId" :project-ids="chat.project_ids" :running="streaming" />
       <Composer
+        :key="chatId"
         ref="composer"
         v-model="draft"
         v-model:attachments="attachments"
@@ -150,7 +151,7 @@ import ChatImage from '../components/ChatImage.vue'
 import { uploadImages } from '../attachments'
 import { avatarStyle, initials } from '../format'
 import { backTo } from '../router'
-import { actions, draftCount, onLiveEvent, store } from '../store'
+import { actions, chatSettings, draftCount, onLiveEvent, store } from '../store'
 import { api, chatStream } from '../api'
 import { delivery, onDelivery, pendingMessages } from '../delivery'
 import { latestContext } from '../context'
@@ -311,8 +312,10 @@ function scrollDown (behavior = 'smooth') {
 async function start ({ text, configuration, attachments: images = [] }) {
   if (starting.value || (!text.trim() && !images.length)) return
   starting.value = true
+  const scope = chatCacheScope()
   try {
     const created = await api.createChat({ agent_id: configuration.agent_id, ...Object.fromEntries(CONFIG_KEYS.map(key => [key, configuration[key]])) })
+    chatSettings.remember(created, scope)
     await actions.loadChats()
     await router.push(`/chats/${created.id}`)
     draft.value = text
@@ -340,6 +343,7 @@ async function send () {
     const uploaded = await uploadImages(id, images, api.uploadImage)
     if (version !== generation || id !== chatId.value) return
     delivery.enqueue(id, text, selectedProjects, uploaded)
+    chatSettings.remember(chat.value)
     draft.value = ''
     attachments.value = []
     scrollDown()
@@ -358,7 +362,10 @@ function patch (fields) {
   settingsSave = settingsSave.then(async () => {
     try {
       const updated = await api.updateChat(id, fields)
-      if (id === chatId.value && version === generation) chat.value = updated
+      if (id === chatId.value && version === generation) {
+        chat.value = updated
+        if (['agent_id', ...CONFIG_KEYS].some(key => Object.hasOwn(fields, key))) chatSettings.remember(updated)
+      }
       actions.loadChats()
       return true
     } catch (error) {
