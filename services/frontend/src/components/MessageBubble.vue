@@ -9,8 +9,13 @@
       <div v-if="meta.attachments?.length" class="bubble__images">
         <ChatImage v-for="image in meta.attachments" :key="image.id" :image="image" :chat-id="chatId" />
       </div>
-      <template v-for="(part, index) in parts" :key="part.id || index">
-        <ToolCall v-if="part.kind === 'tool'" :step="part" :live="live" />
+      <template v-for="(part, index) in groupedParts" :key="part.id || index">
+        <ToolCallGroup v-if="part.kind === 'tool-group'" :steps="part.steps" :live="live">
+          <template v-for="(step, stepIndex) in part.steps" :key="step.id || stepIndex">
+            <ToolCall v-if="step.kind === 'tool'" :step="step" :live="live" />
+            <div v-else-if="step.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(step.text)" />
+          </template>
+        </ToolCallGroup>
         <div v-else-if="part.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(part.text)" />
       </template>
       <div v-if="status" class="bubble__status caption">
@@ -46,7 +51,9 @@
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue'
 import ToolCall from './ToolCall.vue'
+import ToolCallGroup from './ToolCallGroup.vue'
 import ChatImage from './ChatImage.vue'
+import { groupToolCalls } from '../timeline'
 import { renderMarkdown } from '../markdown'
 import { copyText } from '../clipboard'
 import { RUN_TONE, shortTime } from '../format'
@@ -86,7 +93,8 @@ const parts = computed(() => {
   const spoken = steps.value.some((step) => step.kind === 'text' && step.text.trim())
   return spoken ? steps.value : [...steps.value, { kind: 'text', text: props.content }]
 })
-// Copy the whole visible answer, including narration around tools, as Markdown.
+const groupedParts = computed(() => groupToolCalls(parts.value))
+// Copy the whole answer, including narration inside collapsed tools, as Markdown.
 // Tool arguments/results and UI status labels are not part of the answer.
 const responseText = computed(() => [
   ...parts.value.filter((part) => part.kind === 'text').map((part) => part.text),

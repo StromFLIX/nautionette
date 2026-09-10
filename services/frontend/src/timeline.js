@@ -40,6 +40,34 @@ export function foldEvent (steps, event) {
   else if (event.type === 'tool_done') finishTool(steps, event)
 }
 
+/** One disclosure per answer, preserving narration between calls in its timeline. */
+export function groupToolCalls (parts) {
+  const first = parts.findIndex((part) => part.kind === 'tool')
+  if (first === -1) return parts
+  const last = parts.findLastIndex((part) => part.kind === 'tool')
+  return [
+    ...parts.slice(0, first),
+    { kind: 'tool-group', id: 'tool-group', steps: parts.slice(first, last + 1) },
+    ...parts.slice(last + 1)
+  ]
+}
+
+/** Count invocations, not unique names, including calls still in progress. */
+export function summarizeToolCalls (steps) {
+  const tools = steps.filter((step) => step.kind === 'tool')
+  const shell = tools.filter((step) => ['bash', 'powershell'].includes(step.name)).length
+  const other = tools.length - shell
+  const count = (number, noun) => `${number} ${noun}${number === 1 ? '' : 's'}`
+  const labels = []
+  if (shell) labels.push(count(shell, 'shell command'))
+  if (other) labels.push(count(other, shell ? 'other tool call' : 'tool call'))
+  return {
+    label: `Ran ${labels.join(' and ') || '0 tool calls'}`,
+    failed: tools.filter((step) => step.ok === false).length,
+    pending: tools.some((step) => step.ok === null)
+  }
+}
+
 function baseName (path = '') {
   const clean = String(path).replace(/[/\\]+$/, '')
   return clean.slice(Math.max(clean.lastIndexOf('/'), clean.lastIndexOf('\\')) + 1) || clean
