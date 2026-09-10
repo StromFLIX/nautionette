@@ -1,8 +1,16 @@
 <template>
   <div class="side stack grow">
     <header class="side__head">
-      <div class="row">
-        <h1 class="side__title grow">{{ heading }}</h1>
+      <div class="row side__heading">
+        <h1 class="side__title grow truncate" :title="heading">{{ heading }}</h1>
+        <button
+          v-if="showCollapseButton" type="button" class="btn btn--icon"
+          aria-label="Collapse sidebar" title="Collapse sidebar"
+          aria-expanded="true" aria-controls="shell-sidebar"
+          @click="$emit('collapse-sidebar')"
+        >
+          <span class="material-icons" aria-hidden="true">menu_open</span>
+        </button>
         <button
           v-if="section === 'chats'" type="button" class="btn btn--icon"
           :class="{ 'side__filter--active': groupBy !== 'none' || activeMinutes }"
@@ -189,6 +197,9 @@ import { api } from '../api'
 import ChatRow from './ChatRow.vue'
 import { preferences } from '../preferences'
 
+defineProps({ showCollapseButton: { type: Boolean, default: false } })
+defineEmits(['collapse-sidebar'])
+
 const route = useRoute()
 const router = useRouter()
 const query = ref('')
@@ -359,6 +370,10 @@ function refresh () {
 .side__head {
   padding: 16px 14px 14px;
   border-bottom: 1px solid var(--border);
+}
+
+.side__heading {
+  gap: var(--space-1);
 }
 
 .side__title {
