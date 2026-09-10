@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import Any
 from urllib.parse import quote
@@ -29,6 +30,24 @@ def _strip_userinfo(url: str) -> str:
     return f"{scheme}://{rest.rsplit('@', 1)[1]}"
 
 
+def public_target(entry: dict[str, Any]) -> dict[str, Any]:
+    """Expose editable launch metadata, but never environment values or HTTP auth."""
+    if "stdio" in entry:
+        stdio = entry["stdio"]
+        return {
+            "name": entry.get("name") or "mcp",
+            "host": "",
+            "transport": "stdio",
+            "command": stdio.get("cmd", ""),
+            "args": [arg.replace("$$", "$") for arg in stdio.get("args", [])],
+            "env": {key: None for key in stdio.get("env", {})},
+        }
+    return {
+        "name": entry.get("name") or "mcp",
+        "host": _strip_userinfo(entry.get("mcp", {}).get("host", "")),
+    }
+
+
 def _rpc(request_id: int | None, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
     message: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "params": params or {}}
     if request_id is not None:
@@ -38,13 +57,24 @@ def _rpc(request_id: int | None, method: str, params: dict[str, Any] | None = No
 
 def _rpc_result(response: httpx.Response) -> dict[str, Any]:
     """Streamable HTTP answers either as JSON or as a one-frame SSE body."""
+
+    def result(payload: Any) -> dict[str, Any]:
+        if not isinstance(payload, dict) or not isinstance(payload.get("result", {}), dict):
+            raise ValueError("Invalid MCP response")
+        if "error" in payload:
+            raise ValueError("MCP request failed")
+        return payload.get("result", {})
+
     text = response.text
     if response.headers.get("content-type", "").startswith("text/event-stream"):
         for line in text.splitlines():
             if line.startswith("data:"):
-                return json.loads(line[5:].strip()).get("result", {})
+                payload = json.loads(line[5:].strip())
+                parsed = result(payload)
+                if "result" in payload:
+                    return parsed
         return {}
-    return json.loads(text).get("result", {})
+    return result(json.loads(text))
 
 
 class GatewayClient:
@@ -84,13 +114,7 @@ class GatewayClient:
                     model_routes.append(route)
             if entry.get("name") == "*":
                 wildcard = True
-        targets = [
-            {
-                "name": entry.get("name") or "mcp",
-                "host": _strip_userinfo(entry.get("mcp", {}).get("host", "")),
-            }
-            for entry in (payload.get("mcp") or {}).get("targets", []) or []
-        ]
+        targets = [public_target(entry) for entry in (payload.get("mcp") or {}).get("targets", []) or []]
         return {
             "providers": providers,
             "wildcard_models": wildcard,
@@ -209,7 +233,7 @@ class GatewayClient:
         return [item for item in payload.get("data", []) if item.get("id") and "*" not in item["id"]]
 
     async def mcp_tools(
-        self, url: str | None = None, extra: dict[str, str] | None = None
+        self, url: str | None = None, extra: dict[str, str] | None = None, *, timeout: float = 90
     ) -> list[dict[str, Any]]:
         """One handshake against an MCP endpoint, for the tool picker."""
         url = url or settings.mcp_url
@@ -222,7 +246,7 @@ class GatewayClient:
         handshake = await client.post(
             url,
             headers=headers,
-            timeout=15,
+            timeout=timeout,
             json=_rpc(
                 1,
                 "initialize",
@@ -234,22 +258,58 @@ class GatewayClient:
             ),
         )
         handshake.raise_for_status()
-        if not _rpc_result(handshake).get("protocolVersion"):
-            raise ValueError("the endpoint did not answer as an MCP server")
         session = handshake.headers.get("mcp-session-id")
         if session:
             headers["Mcp-Session-Id"] = session
-        await client.post(url, headers=headers, timeout=15, json=_rpc(None, "notifications/initialized"))
-        listing = await client.post(url, headers=headers, timeout=15, json=_rpc(2, "tools/list"))
-        listing.raise_for_status()
-        body = _rpc_result(listing)
-        return [
-            {
-                "name": tool.get("name", "?"),
-                "description": (tool.get("description") or "").strip().split("\n")[0][:200],
-            }
-            for tool in body.get("tools", [])
-        ]
+        try:
+            version = _rpc_result(handshake).get("protocolVersion")
+            if not isinstance(version, str) or not version:
+                raise ValueError("the endpoint did not answer as an MCP server")
+            headers["MCP-Protocol-Version"] = version
+            initialized = await client.post(
+                url, headers=headers, timeout=15, json=_rpc(None, "notifications/initialized")
+            )
+            initialized.raise_for_status()
+            tools = []
+            cursor = None
+            seen = set()
+            for request_id in range(2, 102):
+                listing = await client.post(
+                    url,
+                    headers=headers,
+                    timeout=timeout,
+                    json=_rpc(request_id, "tools/list", {"cursor": cursor} if cursor else {}),
+                )
+                listing.raise_for_status()
+                body = _rpc_result(listing)
+                if not isinstance(body.get("tools"), list) or any(
+                    not isinstance(tool, dict)
+                    or not isinstance(tool.get("name"), str)
+                    or not isinstance(tool.get("description", ""), (str, type(None)))
+                    for tool in body["tools"]
+                ):
+                    raise ValueError("MCP tools/list did not return tools")
+                tools.extend(
+                    {
+                        "name": tool.get("name", "?"),
+                        "description": (tool.get("description") or "").strip().split("\n")[0][:200],
+                    }
+                    for tool in body["tools"]
+                )
+                cursor = body.get("nextCursor")
+                if not cursor:
+                    return tools
+                if not isinstance(cursor, str):
+                    raise ValueError("Invalid MCP pagination cursor")
+                if cursor in seen:
+                    raise ValueError("MCP tools/list repeated a cursor")
+                seen.add(cursor)
+            raise ValueError("MCP tools/list exceeded the page limit")
+        finally:
+            # Catalog and test sessions must not leave stdio child processes alive.
+            if session:
+                with contextlib.suppress(httpx.HTTPError):
+                    await client.delete(url, headers=headers, timeout=5)
 
 
 gateway = GatewayClient()

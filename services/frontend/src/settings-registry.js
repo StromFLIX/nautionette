@@ -53,7 +53,7 @@ export const SETTINGS_SECTIONS = [
     key: 'mcp', label: 'MCP servers', icon: 'extension', group: 'Connections', scope: 'Instance',
     load: () => import('./components/settings/McpPane.vue'),
     entries: [
-      entry('mcp-servers', 'MCP servers', 'Add, configure and test tool connections.', 'URL endpoint credentials authentication tools'),
+      entry('mcp-servers', 'MCP servers', 'Connect HTTP servers or run trusted stdio tools in agentgateway.', 'URL endpoint credentials authentication tools stdio command arguments environment npx uvx brave'),
       entry('tool-catalog', 'Tool catalog', 'Browse or search tools by server.', 'capabilities integration actions')
     ]
   },

@@ -130,7 +130,7 @@ services:
   # ------------------------------------------------------------------- tooling
 
   # https://agentgateway.dev - fronts MCP servers and the model provider. The
-  # upstream image with our config baked in, so nothing depends on a host path.
+  # upstream binary plus Node/Python runtimes for trusted stdio MCP targets.
   agentgateway:
     build:
       context: ./services/agentgateway
@@ -139,6 +139,10 @@ services:
     image: ${STACK_NAMESPACE:-nautionette}/agentgateway:dev
     restart: unless-stopped
     command: ["-f", "/config/config.yaml"]
+    # Reap descendants of short-lived stdio sessions; no Docker socket is mounted.
+    init: true
+    security_opt:
+      - no-new-privileges:true
     environment:
       # Optional: a key entered in Settings > Agents is stored by agentgateway itself.
       # These let an integration reference $VARIABLE instead of holding the key.

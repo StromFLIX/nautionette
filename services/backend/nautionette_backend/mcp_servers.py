@@ -1,7 +1,7 @@
 """MCP servers: the targets agentgateway federates onto one endpoint.
 
-One target that cannot answer takes the whole endpoint down with it, so every
-write is preceded by a handshake against the endpoint being written.
+Every write is preceded by a handshake. HTTP targets are probed directly; stdio
+commands are tested on an isolated gateway route before joining the federation.
 """
 
 from __future__ import annotations
@@ -10,8 +10,10 @@ import asyncio
 import contextlib
 import ipaddress
 import logging
+import re
 from typing import Any
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 import httpx
 from fastapi import HTTPException
@@ -20,7 +22,7 @@ from .catalog import tool_catalog
 from .clients import gateway
 from .config import settings
 from .events import bus
-from .fields import SECRET, SLUG
+from .fields import SECRET, SLUG, normalise
 from .gateway_config import (
     attempt,
     credential_state,
@@ -66,6 +68,145 @@ FIELDS: list[dict[str, Any]] = [
         "hint": "The token itself, or $MY_TOKEN in capitals to name a variable.",
     },
 ]
+
+
+STDIO_FIELDS = [
+    FIELDS[0],
+    {
+        "key": "command",
+        "label": "Command",
+        "pattern": r"(?:/[A-Za-z0-9._/-]+|[A-Za-z0-9._-]+)",
+        "placeholder": "npx",
+        "help": "Executable inside agentgateway, not a shell command line.",
+        "hint": "Use an executable name or absolute path; put arguments below.",
+    },
+]
+# clear_env prevents accidental inheritance of gateway/provider credentials. These
+# are runtime defaults, not user secrets. Package caches persist in the data volume.
+STDIO_ENV = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/data/mcp"}
+_PROBE_PREFIX = "nautionette-mcp-probe-"
+_active_probes: set[str] = set()
+
+
+async def recover_stdio_probes() -> None:
+    """Remove probes left by an interrupted backend, without touching active tests."""
+    for resource in await gateway.config_resources("traffic.route"):
+        identifier = resource.get("id", "")
+        if identifier.startswith(_PROBE_PREFIX) and identifier not in _active_probes:
+            await gateway.delete_config_resource("traffic.route", identifier)
+
+
+def normalise_config(name: str, payload: dict[str, Any]) -> dict[str, Any]:
+    transport = payload.get("transport", "http")
+    if transport not in ("http", "stdio"):
+        raise HTTPException(status_code=400, detail="transport must be http or stdio")
+    config: dict[str, Any] = normalise(
+        STDIO_FIELDS if transport == "stdio" else FIELDS, {**payload, "name": name}
+    )
+    config["transport"] = transport
+    if transport == "http":
+        return config
+    args = payload.get("args", [])
+    if (
+        not isinstance(args, list)
+        or len(args) > 256
+        or any(not isinstance(arg, str) or "\x00" in arg or len(arg) > 8192 for arg in args)
+    ):
+        raise HTTPException(status_code=400, detail="arguments must be an array of strings (no NUL bytes)")
+    config["args"] = args
+    if "env" in payload:
+        env = payload["env"]
+        if (
+            not isinstance(env, dict)
+            or len(env) > 128
+            or any(
+                not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", key)
+                or (
+                    value is not None
+                    and (not isinstance(value, str) or "\x00" in value or len(value) > 32768)
+                )
+                for key, value in env.items()
+            )
+        ):
+            raise HTTPException(
+                status_code=400, detail="environment must map variable names to strings or null"
+            )
+        config["env"] = env
+    return config
+
+
+def stdio_value(name: str, config: dict[str, Any], previous: dict[str, Any]) -> dict[str, Any]:
+    old_env = (previous.get("stdio") or {}).get("env") or {}
+    env = dict(STDIO_ENV)
+    # agentgateway expands $VARIABLE across its serialized configuration. Escape
+    # new literal input once; retained values are already in gateway storage form.
+    if "env" not in config:
+        env.update(old_env)
+    else:
+        for key, value in config["env"].items():
+            if value is None:
+                if key not in old_env:
+                    raise HTTPException(
+                        status_code=400, detail=f"enter a value for environment variable {key}"
+                    )
+                env[key] = old_env[key]
+            else:
+                env[key] = value.replace("$", "$$")
+    if len(env) > 128:
+        raise HTTPException(
+            status_code=400, detail="at most 128 environment variables, including HOME and PATH"
+        )
+    return {
+        "name": name,
+        "stdio": {
+            "cmd": config["command"],
+            "args": [arg.replace("$", "$$") for arg in config["args"]],
+            "env": env,
+            "clear_env": True,
+        },
+    }
+
+
+async def probe_stdio(target: dict[str, Any]) -> dict[str, Any]:
+    """Launch only this target in the gateway; never execute commands in the backend.
+
+    A random temporary route cannot affect /mcp. Delete its MCP session and then
+    the route even on handshake failure. Do not return process output or secrets.
+    """
+    identifier = f"{_PROBE_PREFIX}{uuid4().hex}"
+    path = f"/_nautionette/mcp-probes/{identifier}"
+    route = {
+        "name": identifier,
+        "gateways": ["default"],
+        "matches": [{"path": {"exact": path}}],
+        "backends": [{"mcp": {"targets": [target]}}],
+    }
+    _active_probes.add(identifier)
+    try:
+        await gateway.put_config_resources("traffic.route", [route])
+        try:
+            async with asyncio.timeout(90):
+                tools = await gateway.mcp_tools(f"{settings.gateway_url.rstrip('/')}{path}", timeout=90)
+            return {"ok": True, "status": None, "message": f"Process answered with {len(tools)} tools."}
+        except (httpx.HTTPError, ValueError, TimeoutError):
+            return {
+                "ok": False,
+                "status": None,
+                "message": "The stdio process did not answer MCP. Check the command, arguments "
+                "and environment in agentgateway. First-time package downloads may need another attempt.",
+            }
+    except httpx.HTTPError as exc:
+        raise gateway_problem(exc) from exc
+    finally:
+        try:
+            await gateway.delete_config_resource("traffic.route", identifier)
+        except httpx.HTTPError as exc:
+            if not isinstance(exc, httpx.HTTPStatusError) or exc.response.status_code != 404:
+                raise HTTPException(
+                    status_code=502, detail="Could not remove the temporary MCP probe route."
+                ) from exc
+        finally:
+            _active_probes.discard(identifier)
 
 
 def reachable_endpoint(url: str) -> None:
@@ -132,7 +273,17 @@ async def payload() -> dict[str, Any]:
         "servers": [
             {
                 "name": target["name"],
-                "url": target["host"],
+                "url": target.get("host", ""),
+                "transport": target.get("transport", "http"),
+                **(
+                    {
+                        "command": target.get("command", ""),
+                        "args": target.get("args", []),
+                        "env": target.get("env", {}),
+                    }
+                    if target.get("transport") == "stdio"
+                    else {}
+                ),
                 # A file-owned target is the checked-in baseline; the app cannot touch it.
                 "managed": target["name"] in managed,
                 "credential": credential_state(stored_credential(target["name"], targets)),
@@ -141,15 +292,16 @@ async def payload() -> dict[str, Any]:
             for target in config.get("targets") or []
         ],
         "fields": FIELDS,
+        "stdio_fields": STDIO_FIELDS,
         "storage_mode": mode,
         "writable": mode == "hybrid",
     }
 
 
-async def save(name: str, config: dict[str, str]) -> None:
+async def save(name: str, config: dict[str, Any]) -> None:
     """The path names the server; a name is never renamed, because tools are named after it."""
-    url = config["url"]
-    reachable_endpoint(url)
+    if config["transport"] == "http":
+        reachable_endpoint(config["url"])
 
     mode, targets = await fetch_resources()
     require_writable(mode)
@@ -158,12 +310,19 @@ async def save(name: str, config: dict[str, str]) -> None:
         if any(target["name"] == name for target in baseline.get("targets") or []):
             raise HTTPException(status_code=409, detail=f"{name} is defined in the gateway config")
 
-    credential = config["token"] or stored_credential(name, targets)
-    verdict = await probe(url, credential)
+    credential = ""
+    if config["transport"] == "stdio":
+        previous = resource_map(targets).get(name, {}).get("value", {})
+        target = stdio_value(name, config, previous)
+        verdict = await probe_stdio(target)
+    else:
+        credential = config["token"] or stored_credential(name, targets)
+        target = target_value(name, config["url"], credential)
+        verdict = await probe(config["url"], credential)
     if not verdict["ok"]:
         raise HTTPException(status_code=400, detail=verdict["message"])
     try:
-        await gateway.put_config_resources("mcp.target", [target_value(name, url, credential)])
+        await gateway.put_config_resources("mcp.target", [target])
     except httpx.HTTPError as exc:
         raise gateway_problem(exc, credential) from exc
 
@@ -184,6 +343,8 @@ async def test(name: str) -> dict[str, Any]:
     target = resource_map(targets).get(name, {}).get("value")
     if not target:
         raise HTTPException(status_code=404, detail="unknown MCP server")
+    if "stdio" in target:
+        return await probe_stdio(target)
     return await probe(target["mcp"]["host"], stored_credential(name, targets))
 
 
@@ -194,6 +355,7 @@ async def bootstrap_backend() -> None:
         try:
             mode, targets = await fetch_resources()
             require_writable(mode)
+            await recover_stdio_probes()
             verdict = await probe(settings.backend_mcp_url, credential)
             if verdict["ok"]:
                 if resource_map(targets).get("backend", {}).get("value") != target:

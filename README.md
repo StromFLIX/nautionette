@@ -72,7 +72,7 @@ Five rules the diagram encodes:
 | **Website** | The promotional site. Static, its own container and its own domain, so the app and the pitch never share a deploy. |
 | **Backend** | The only entrypoint: auth, triggers, webhooks, streaming to clients. Also memory, search and metadata in a SQLite store. Calls the broker, but does not hold the Docker socket. |
 | **Docker broker** | Holds `/var/run/docker.sock`. Runs one Pi container per agent call (`docker run --rm`), builds missing agent images, and reconciles worker containers using fixed configuration and an image allowlist. |
-| **agentgateway** | Upstream image, run as-is. One data plane for tools and models: federates MCP servers on `/mcp`, fronts every configured model provider on `/v1`, adds per-tool authorization and an audit trail. Its checked-in config is the baseline; the model integrations and MCP servers added in the app persist as runtime resources in its own SQLite volume. Config in [services/agentgateway/config/config.yaml](services/agentgateway/config/config.yaml). |
+| **agentgateway** | Upstream binary with Node/npm/npx and Python/uvx runtimes for trusted stdio MCP targets. One data plane for tools and models: federates MCP servers on `/mcp`, fronts every configured model provider on `/v1`, adds per-tool authorization and an audit trail. Its checked-in config is the baseline; the model integrations and MCP servers added in the app persist as runtime resources in its own SQLite volume. Config in [services/agentgateway/config/config.yaml](services/agentgateway/config/config.yaml). |
 | **workflow-mcp** | Our own MCP server, registered behind the gateway. Provides validated workflow authoring, immediate deployment, run controls and history, plus the REST side the backend uses to publish files. |
 | **Pi runs** | The agent runtime ([Pi](https://pi.dev), `@earendil-works/pi-coding-agent`). Pi is a CLI, so a call is a container run: start, work, exit. The base image is Node plus the Pi CLI plus `agent-run`, the wrapper that turns a job into NDJSON. An agent set extends it with Pi extensions and packages. |
 | **Temporal** | Orchestrator and workers. Durable runs, retries, schedules and history, stored in PostgreSQL. A workflow step can call MCP tools, invoke Pi, or run plain Python. |
@@ -787,7 +787,7 @@ libs/nautionette/             manifest schema and source helpers, shared by the 
 services/
   backend/                    entrypoint, management, calls the broker
   docker-broker/              owns docker.sock, fixed verbs only
-  agentgateway/config/        config for the upstream image
+  agentgateway/               gateway runtime image and baseline config
   workflow-mcp/               MCP + REST server for workflow authoring
   worker/                     Temporal workers
   frontend/                   one Quasar codebase, web and app targets
@@ -857,6 +857,12 @@ instead, put them in `.env`, recreate the gateway with
 `docker compose up -d --force-recreate agentgateway`, and type `$OPENAI_API_KEY` (or whichever
 variable) into the same field. Either way the secret stops at agentgateway.
 
+MCP servers are managed under **Settings > MCP servers**. Choose **HTTP** for an
+existing endpoint, or **stdio** to launch a trusted command inside agentgateway.
+The stdio form accepts an executable, a JSON argument array and secret environment
+variables; no separate MCP container is required. See [MCP server setup](docs/mcp-servers.md)
+for the Brave Search example, deployment steps and the shared-container trust boundary.
+
 Working on the Python services:
 
 ```
@@ -879,8 +885,17 @@ tests/workflow_mcp/   the store, the check chain, the REST face
 tests/lib/            the manifest schema and the source reader
 ```
 
-The one test that needs a subprocess is the workflow import check; it is marked `slow`
-and runs by default, since the committed workflows are validated with the real chain.
+The workflow import check uses a subprocess; it is marked `slow` and runs by default,
+since the committed workflows are validated with the real chain. The optional gateway
+runtime test starts a real gateway and Node MCP fixture (no downloads or provider key):
+
+```sh
+NAUTIONETTE_TEST_GATEWAY_BINARY=/path/to/agentgateway uv run pytest tests/agentgateway
+```
+
+It verifies mixed HTTP/stdio discovery, literal arguments and secrets, environment
+isolation, failed-save protection, session cleanup, persistence across gateway restarts,
+and removal. Without the variable it is skipped.
 
 ## Open points
 
