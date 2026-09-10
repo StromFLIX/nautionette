@@ -47,13 +47,11 @@
         <span v-if="customConfiguration && !configurationOpen" class="composer__configured" aria-label="Custom configuration" />
         <q-tooltip>Agent, reasoning, tools, projects & extensions{{ customConfiguration ? ' · customized' : '' }}</q-tooltip>
       </button>
-      <button v-if="running" class="composer__stop" :disabled="stopping" aria-label="Stop response" @click="$emit('stop')">
-        <span class="material-icons" aria-hidden="true">stop</span><q-tooltip>{{ stopping ? 'Stopping response' : 'Stop response' }}</q-tooltip>
-      </button>
-      <button class="composer__send" :class="{ 'composer__send--busy': busy }" :aria-label="running ? 'Queue message' : 'Send message'"
-        :disabled="busy || !configurationReady || (!modelValue.trim() && !attachments.length) || (attachments.length > 0 && imageSupport === false)" @click="submit">
-        <span class="material-icons" aria-hidden="true">{{ busy ? 'more_horiz' : running ? 'playlist_add' : 'arrow_upward' }}</span>
-        <q-tooltip>{{ running ? 'Queue message' : 'Send message' }} · {{ preferences.sendShortcut === 'enter' ? 'Enter' : '⌘ / Ctrl + Enter' }}</q-tooltip>
+      <button type="button" :class="showStop ? 'composer__stop' : ['composer__send', { 'composer__send--busy': busy }]"
+        :aria-label="showStop ? 'Stop response' : running ? 'Queue message' : 'Send message'"
+        :disabled="showStop ? stopping : !canSubmit" @click="showStop ? $emit('stop') : submit()">
+        <span class="material-icons" aria-hidden="true">{{ showStop ? 'stop' : busy ? 'more_horiz' : running ? 'playlist_add' : 'arrow_upward' }}</span>
+        <q-tooltip><template v-if="showStop">{{ stopping ? 'Stopping response' : 'Stop response' }}</template><template v-else>{{ running ? 'Queue message' : 'Send message' }} · {{ preferences.sendShortcut === 'enter' ? 'Enter' : '⌘ / Ctrl + Enter' }}</template></q-tooltip>
       </button>
     </div>
 
@@ -167,6 +165,9 @@ const customConfiguration = computed(() => !sameConfig(profileDefaults.value, {
 }))
 const selectedModel = computed(() => store.catalog.models?.find(m => m.id === (props.model || store.catalog.default_model)))
 const imageSupport = computed(() => selectedModel.value?.supports_images)
+const hasDraft = computed(() => Boolean(props.modelValue.trim() || props.attachments.length))
+const showStop = computed(() => props.running && !hasDraft.value)
+const canSubmit = computed(() => !props.busy && props.configurationReady && hasDraft.value && !(props.attachments.length && imageSupport.value === false))
 const imageNotice = computed(() => {
   if (imageSupport.value === true) return selectedModel.value?.image_support_reason || 'Image input supported.'
   if (imageSupport.value === false) return `${selectedModel.value?.image_support_reason || 'Image input is unavailable for this model/API route.'} Choose another model${props.attachments.length ? ' or remove the images' : ''}.`
@@ -213,7 +214,7 @@ function onKeydown (event) {
   submit()
 }
 function submit () {
-  if (props.busy || !props.configurationReady || (!props.modelValue.trim() && !props.attachments.length) || (props.attachments.length && imageSupport.value === false)) return
+  if (!canSubmit.value) return
   emit('send')
   if (input.value) input.value.style.height = 'auto'
 }
