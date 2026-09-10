@@ -64,7 +64,7 @@ const DEFAULT_WIDTH = 320
 const route = useRoute()
 const router = useRouter()
 const selectedChatId = computed(() => route.name === 'chats' ? route.params.id || '' : '')
-const isChatActive = useChatActivity(selectedChatId, preferences)
+const isChatActive = useChatActivity(selectedChatId, preferences, () => route.fullPath)
 const navRail = ref(null)
 const sideWidth = computed({ get: () => preferences.sideWidth, set: value => { preferences.sideWidth = value } })
 const dragging = ref(false)

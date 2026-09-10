@@ -224,6 +224,28 @@ test('grace survives a sidebar unmount in Settings, but is not restarted on retu
   await expect(chatRow(page, 'alpha')).toHaveCount(0)
 })
 
+for (const resume of ['visibilitychange', 'focus', 'pageshow', 'navigation']) {
+  test(`expired grace is cleared on ${resume} before throttled timers resume`, async ({ page, context }) => {
+    await filteredChats(context)
+    await page.clock.install()
+    await page.goto('/chats/alpha')
+    await expect(chatRow(page, 'alpha')).toBeVisible()
+    await mainNav(page).getByRole('link', { name: 'Chats', exact: true }).click()
+    await expect(page).toHaveURL(/\/chats$/)
+    await expect(chatRow(page, 'alpha')).toBeVisible()
+    const now = await page.evaluate(() => Date.now())
+    await page.clock.setSystemTime(now + 61_000)
+    if (resume === 'navigation') {
+      await mainNav(page).getByRole('link', { name: 'Workflows', exact: true }).click()
+      await expect(page.locator('.side__title')).toHaveText('Workflows')
+      await mainNav(page).getByRole('link', { name: 'Chats', exact: true }).click()
+    } else {
+      await page.evaluate(event => (event === 'visibilitychange' ? document : window).dispatchEvent(new Event(event)), resume)
+    }
+    await expect(chatRow(page, 'alpha')).toHaveCount(0)
+  })
+}
+
 for (const preferences of [{ chatKeepSelectedVisible: false }, { chatSelectionGraceSeconds: 0 }]) {
   test(`chat retention respects ${JSON.stringify(preferences)}`, async ({ page, context }) => {
     await filteredChats(context, preferences)

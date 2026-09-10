@@ -1,7 +1,7 @@
 import { onScopeDispose, reactive, ref, watch } from 'vue'
 
 /** Owned by the app shell so leaving for Settings does not lose the grace period. */
-export function useChatActivity (selectedChatId, preferences) {
+export function useChatActivity (selectedChatId, preferences, navigation) {
   const now = ref(Date.now())
   // Viewing a chat is local UI state, not new server-side activity or unread state.
   const leftAt = reactive(new Map())
@@ -31,9 +31,24 @@ export function useChatActivity (selectedChatId, preferences) {
   }, { flush: 'sync' })
   watch([() => preferences.chatKeepSelectedVisible, () => preferences.chatSelectionGraceSeconds], refresh, { flush: 'sync' })
 
+  function refreshWhenVisible () {
+    if (typeof document === 'undefined' || document.visibilityState !== 'hidden') refresh()
+  }
+  if (navigation) watch(navigation, refreshWhenVisible)
+
   // Relative activity windows still need to age when no chat or server state changes.
-  const ticker = setInterval(refresh, 30000)
-  onScopeDispose(() => { clearInterval(ticker); clearTimeout(expiryTimer) })
+  const ticker = setInterval(refreshWhenVisible, 30000)
+  // Background tabs throttle timers. Refresh both activity and grace deadlines
+  // immediately on return, even when selection and filter settings are unchanged.
+  const resumeEvents = typeof window === 'undefined' ? [] : [
+    [document, 'visibilitychange'], [window, 'focus'], [window, 'pageshow']
+  ]
+  for (const [target, event] of resumeEvents) target.addEventListener(event, refreshWhenVisible)
+  onScopeDispose(() => {
+    clearInterval(ticker)
+    clearTimeout(expiryTimer)
+    for (const [target, event] of resumeEvents) target.removeEventListener(event, refreshWhenVisible)
+  })
 
   return function isChatActive (chat) {
     if (chat.unread || chat.answering || ['pending', 'deciding'].includes(chat.internet_status)) return true

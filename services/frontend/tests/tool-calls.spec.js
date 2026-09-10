@@ -23,6 +23,17 @@ const tool = (id, name = 'bash', ok = true) => ({
 })
 const text = (value) => ({ kind: 'text', text: value })
 
+async function expectSummaryAlignment (summary) {
+  const label = summary.locator('.tool-group__label')
+  const labelBox = await label.boundingBox()
+  const lineHeight = await label.evaluate(el => parseFloat(getComputedStyle(el).lineHeight))
+  const firstLineCenter = labelBox.y + lineHeight / 2
+  for (const selector of ['.tool-group__indicator', '.tool-group__chevron']) {
+    const box = await summary.locator(selector).boundingBox()
+    expect(Math.abs(box.y + box.height / 2 - firstLineCenter)).toBeLessThan(1)
+  }
+}
+
 for (const width of [1440, 320]) {
   test(`tool calls collapse into one summary and retain the existing timeline at ${width}px`, async ({ page, context }) => {
     const steps = [
@@ -48,7 +59,8 @@ for (const width of [1440, 320]) {
     const indicator = summary.locator('.tool-group__indicator')
     await expect(indicator).toBeVisible()
     await expect(indicator).toHaveAttribute('aria-hidden', 'true')
-    await expect(indicator.locator('.tool-group__indicator-arc')).toHaveCount(0)
+    await expect(indicator.locator('.tool-group__indicator-arc, .tool-group__indicator-dot')).toHaveCount(0)
+    await expectSummaryAlignment(summary)
     const iconBox = await indicator.boundingBox()
     const labelBox = await summary.locator('.tool-group__label').boundingBox()
     expect(iconBox.width).toBeLessThanOrEqual(16)
@@ -97,15 +109,31 @@ test('live counts update while collapsed and expanded without resetting open cal
   await expect(timeline).toBeHidden()
   await expect(group.getByLabel('Tool calls in progress')).toBeVisible()
   const arc = group.locator('.tool-group__indicator-arc')
+  const dot = group.locator('.tool-group__indicator-dot')
+  await expect(dot).toBeVisible()
+  await expect(dot).toHaveCSS('animation-name', /tool-group-pulse/)
+  const opacity = await dot.evaluate(el => getComputedStyle(el).opacity)
+  await expect.poll(() => dot.evaluate(el => getComputedStyle(el).opacity)).not.toBe(opacity)
   await expect(arc).toHaveCSS('animation-name', /tool-group-orbit/)
+  const orbitNode = await arc.elementHandle()
   const offset = await arc.evaluate(el => getComputedStyle(el).strokeDashoffset)
   await expect.poll(() => arc.evaluate(el => getComputedStyle(el).strokeDashoffset)).not.toBe(offset)
   // Only the light travels; the octagonal outline stays upright.
   await expect(group.locator('.tool-group__indicator')).toHaveCSS('transform', 'none')
   data.active_turn.steps[1].ok = true
   data.active_turn.steps[1].result = 'First command complete'
+  // Thinking between calls must not stop or remount the orbit.
+  await expect(dot).toHaveCount(0)
+  await expect(group.getByLabel('Response in progress')).toBeVisible()
+  await expect(arc).toHaveCSS('animation-name', /tool-group-orbit/)
+  expect(await arc.evaluate((el, original) => el === original, orbitNode)).toBe(true)
+  const thinkingOffset = await arc.evaluate(el => getComputedStyle(el).strokeDashoffset)
+  await expect.poll(() => arc.evaluate(el => getComputedStyle(el).strokeDashoffset)).not.toBe(thinkingOffset)
   data.active_turn.steps.push(text('Checking the next file.'), tool('two', 'read', null))
   await expect(summary).toContainText('Ran 1 shell command and 1 other tool call')
+  await expect(dot).toBeVisible()
+  await expect(group.getByLabel('Tool calls in progress')).toBeVisible()
+  expect(await arc.evaluate((el, original) => el === original, orbitNode)).toBe(true)
   await expect(timeline).toBeHidden()
   await summary.click()
   const call = timeline.locator('.tool').first()
@@ -125,7 +153,11 @@ test('live counts update while collapsed and expanded without resetting open cal
   data.active_turn.steps[4].ok = true
   data.active_turn.steps.push(text('Finished with a read error.'))
   await expect(group.getByLabel('Tool calls in progress')).toHaveCount(0)
-  await expect(arc).toHaveCount(0)
+  await expect(dot).toHaveCount(0)
+  // The model is still streaming its final answer after the last tool finishes.
+  await expect(group.getByLabel('Response in progress')).toBeVisible()
+  await expect(arc).toHaveCSS('animation-name', /tool-group-orbit/)
+  expect(await arc.evaluate((el, original) => el === original, orbitNode)).toBe(true)
   await expect(group.locator('.tool-group__indicator-track')).toBeVisible()
   await expect(summary).toContainText('1 failed')
   await expect(page.getByText('Finished with a read error.')).toBeVisible()
@@ -133,6 +165,9 @@ test('live counts update while collapsed and expanded without resetting open cal
   data.active_turn = null
   await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toHaveCount(0)
   await expect(summary).toContainText('Ran 2 shell commands and 1 other tool call')
+  await expect(arc).toHaveCount(0)
+  await expect(dot).toHaveCount(0)
+  await expect(group.locator('.tool-group__indicator')).toHaveAttribute('aria-hidden', 'true')
   await expect(timeline).toBeHidden()
 })
 
@@ -147,6 +182,7 @@ test('legacy tool names are counted and messages expand independently', async ({
   await expect(groups).toHaveCount(2)
   await expect(groups.first().locator('summary')).toContainText('Ran 3 tool calls')
   await expect(groups.last().locator('summary')).toContainText('Ran 1 shell command')
+  await expectSummaryAlignment(groups.first().locator('summary'))
   await expect(page.getByText('Plain response')).toBeVisible()
   await expect(page.getByText('Legacy response')).toBeVisible()
   await expect(page.getByText('New response')).toBeVisible()
@@ -173,11 +209,16 @@ for (const width of [1440, 320]) {
     const composer = page.locator('.composer')
     const indicator = page.getByLabel('Tool calls in progress')
     const arc = indicator.locator('.tool-group__indicator-arc')
+    const dot = indicator.locator('.tool-group__indicator-dot')
     const summary = page.locator('.tool-group__summary')
     const label = summary.locator('.tool-group__label')
     await expect(label).toHaveText('Ran 6 shell commands and 16 other tool calls')
     await expect(summary).toContainText('1 failed')
+    await expectSummaryAlignment(summary)
     const iconBox = await indicator.boundingBox()
+    const dotBox = await dot.boundingBox()
+    expect(Math.abs(dotBox.x + dotBox.width / 2 - (iconBox.x + iconBox.width / 2))).toBeLessThan(1)
+    expect(Math.abs(dotBox.y + dotBox.height / 2 - (iconBox.y + iconBox.height / 2))).toBeLessThan(1)
     const labelBox = await label.boundingBox()
     expect(iconBox.x + iconBox.width).toBeLessThan(labelBox.x)
     expect(iconBox.width).toBeLessThanOrEqual(16)
@@ -188,6 +229,8 @@ for (const width of [1440, 320]) {
       await expect(spinner.locator('.avatar__spinner-arc')).toHaveCSS('animation-name', chatList ? 'chat-activity-sweep' : 'none')
       await expect.poll(() => composer.evaluate(el => getComputedStyle(el, '::before').animationName !== 'none')).toBe(messageWindow)
       await expect(arc).toHaveCSS('animation-name', toolIndicator ? /tool-group-orbit/ : 'none')
+      await expect(dot).toHaveCSS('animation-name', toolIndicator ? /tool-group-pulse/ : 'none')
+      await expect(dot).toBeVisible()
       await expect(page.getByLabel('Tool running', { exact: true })).toHaveCount(1)
       await expect(page.locator('.tool__pulse')).toHaveCSS('animation-name', toolIndicator ? /tool-pulse/ : 'none')
       // Motion preferences never hide progress, errors, or interaction targets.

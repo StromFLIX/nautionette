@@ -255,7 +255,8 @@ defineExpose({ focus: () => input.value?.focus() })
 .pick:disabled { opacity: 0.5; cursor: not-allowed; }
 .pick:hover:not(:disabled) { background: var(--surface-active); color: var(--text); }
 .pick--quiet { color: var(--text-dim); }
-.pick--icon { position: relative; flex: none; justify-content: center; width: 2.125rem; padding: 0; }
+.pick--icon, .composer__send, .composer__stop { width: 2.125rem; height: 2rem; }
+.pick--icon { position: relative; flex: none; justify-content: center; padding: 0; }
 .pick--icon > .material-icons { font-size: 1.1875rem; }
 .pick--active { background: var(--accent-soft); color: var(--accent); }
 .pick__icon, .pick__caret { flex: none; font-size: 1rem; }
@@ -265,7 +266,7 @@ defineExpose({ focus: () => input.value?.focus() })
 .meter { width: 38px; height: 3px; border-radius: var(--radius-pill); background: var(--surface-active); overflow: hidden; }
 .meter__fill { height: 100%; background: var(--accent); transition: width 200ms var(--ease); }
 .meter__fill--hot { background: var(--warning); }
-.composer__send, .composer__stop { position: relative; display: grid; place-items: center; flex: none; width: 2.25rem; height: 2.25rem; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--accent-text); cursor: pointer; }
+.composer__send, .composer__stop { position: relative; display: grid; place-items: center; flex: none; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--accent-text); cursor: pointer; }
 .composer__send::before { content: ''; position: absolute; inset: 0; background: var(--accent); clip-path: var(--octagon); transition: background var(--transition); }
 .composer__send:not(:disabled):hover::before { background: var(--accent-hover); }
 .composer__send > .material-icons { position: relative; }

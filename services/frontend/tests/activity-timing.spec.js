@@ -64,11 +64,15 @@ test('dots track individual execution, not model activity; live timings freeze o
   const breakdown = group.getByRole('group', { name: 'Response timing' })
   const dots = page.getByLabel('Tool running', { exact: true })
   await expect(dots).toHaveCount(2)
+  const summaryDot = group.locator('.tool-group__indicator-dot')
+  const orbit = group.locator('.tool-group__indicator-arc')
+  await expect(summaryDot).toBeVisible()
   const initial = await breakdown.textContent()
   await expect.poll(() => breakdown.textContent()).not.toBe(initial)
   data.active_turn.steps[0].ok = true
   data.active_turn.steps[0].duration_ms = 1500
   await expect(dots).toHaveCount(1)
+  await expect(summaryDot).toBeVisible()
   await expect(group.locator('.tool__duration')).toHaveText('1.5s')
   await expect(group.getByLabel('Tool calls in progress')).toBeVisible()
   // An incomplete/interrupted result is not a running tool, even in a live answer.
@@ -76,6 +80,9 @@ test('dots track individual execution, not model activity; live timings freeze o
   Object.assign(data.active_turn.timing, { tools_ms: 2000, active: 'thinking', updated_at: Date.now() / 1000 })
   await expect(dots).toHaveCount(0)
   await expect(group.getByLabel('Tool calls in progress')).toHaveCount(0)
+  await expect(summaryDot).toHaveCount(0)
+  await expect(group.getByLabel('Response in progress')).toBeVisible()
+  await expect(orbit).toHaveCSS('animation-name', /tool-group-orbit/)
   await expect(page.locator('.composer')).toHaveClass(/composer--running/)
   await expect(breakdown).toContainText('Tools 2s')
   await group.locator('.tool__row').last().click()
@@ -91,6 +98,8 @@ test('dots track individual execution, not model activity; live timings freeze o
   await page.waitForTimeout(400)
   await expect(breakdown).toHaveText('Tools 2sThinking 1sReply 500msOther 200ms')
   await expect(dots).toHaveCount(0)
+  await expect(summaryDot).toHaveCount(0)
+  await expect(orbit).toHaveCount(0)
 })
 
 test('restart timing is labeled as the recorded portion rather than inventing downtime', async ({ page, context }) => {
@@ -101,5 +110,5 @@ test('restart timing is labeled as the recorded portion rather than inventing do
   await page.goto('/chats/tools')
   await page.locator('.tool-group summary').click()
   await expect(page.getByRole('group', { name: 'Response timing' })).toHaveText('RecordedTools 2.2sThinking 1s')
-  await expect(page.locator('.tool__pulse, .tool__duration, .tool-group__indicator-arc')).toHaveCount(0)
+  await expect(page.locator('.tool__pulse, .tool__duration, .tool-group__indicator-arc, .tool-group__indicator-dot')).toHaveCount(0)
 })
