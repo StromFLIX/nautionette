@@ -87,10 +87,7 @@ class FakeGateway:
                 wildcard = True
         targets = [
             *self.file_targets,
-            *(
-                public_target(value)
-                for value in self.resources.get("mcp.target", {}).values()
-            ),
+            *(public_target(value) for value in self.resources.get("mcp.target", {}).values()),
         ]
         return {
             "providers": providers,
