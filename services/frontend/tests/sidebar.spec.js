@@ -3,10 +3,10 @@ import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 import { mockDesign } from './design-fixture.js'
 
 const collapseButton = page => page.getByRole('button', { name: 'Collapse sidebar', exact: true })
-const expandButton = page => page.getByRole('button', { name: 'Expand sidebar', exact: true })
+const chatsLink = page => page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Chats', exact: true })
 const savedPreferences = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREFERENCES_KEY)
 
-test('sidebar icon makes room for the chat without losing its draft, search or resized width', async ({ page, context }) => {
+test('header collapse button makes room for the chat without losing its draft, search or resized width', async ({ page, context }) => {
   await mockDesign(context)
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
@@ -21,29 +21,39 @@ test('sidebar icon makes room for the chat without losing its draft, search or r
   await grip.press('ArrowRight')
   await expect(grip).toHaveAttribute('aria-valuenow', '330')
   const expandedWidth = (await main.boundingBox()).width
+  await expect(sidebar.locator('.side__head').getByRole('button', { name: 'Collapse sidebar', exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation').getByRole('button')).toHaveCount(0)
+  const collapseBox = await collapseButton(page).boundingBox()
+  const groupBox = await page.getByRole('button', { name: 'Group', exact: true }).boundingBox()
+  expect(collapseBox.x + collapseBox.width).toBeLessThanOrEqual(groupBox.x)
+  expect(collapseBox.y).toBeCloseTo(groupBox.y)
   await expect(collapseButton(page)).toHaveAttribute('aria-controls', 'shell-sidebar')
   await expect(collapseButton(page)).toHaveAttribute('aria-expanded', 'true')
   await collapseButton(page).click()
   await expect(sidebar).toBeHidden()
   await expect(grip).toBeHidden()
-  await expect(expandButton(page)).toHaveAttribute('aria-expanded', 'false')
-  await expect(expandButton(page)).toBeFocused()
+  await expect(collapseButton(page)).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Expand sidebar', exact: true })).toHaveCount(0)
+  await expect(chatsLink(page)).toBeFocused()
   await expect(input).toHaveValue('Keep this draft while I focus')
   expect((await main.boundingBox()).width).toBeCloseTo(expandedWidth + 330)
   await page.screenshot({ path: '/tmp/nautionette-sidebar-collapsed.png' })
 
-  // The same control remains in the tab order and supports native button keys.
-  await expandButton(page).press('Enter')
+  // Focus moves to the existing navigation link, which reopens the current list.
+  await page.keyboard.press('Enter')
   await expect(sidebar).toBeVisible()
-  await expect(collapseButton(page)).toBeFocused()
+  await expect(page).toHaveURL(/\/chats\/alpha$/)
+  await expect(chatsLink(page)).toBeFocused()
   await expect(sidebar).toHaveCSS('width', '330px')
   await expect(search).toHaveValue('Design')
   await expect(input).toHaveValue('Keep this draft while I focus')
   expect((await main.boundingBox()).width).toBeCloseTo(expandedWidth)
   await collapseButton(page).press('Space')
   await expect(sidebar).toBeHidden()
-  await expandButton(page).press('Space')
+  await expect(chatsLink(page)).toBeFocused()
+  await chatsLink(page).click()
   await expect(sidebar).toBeVisible()
+  await expect(input).toHaveValue('Keep this draft while I focus')
   await page.screenshot({ path: '/tmp/nautionette-sidebar-expanded.png' })
   expect(errors).toEqual([])
 })
@@ -55,10 +65,12 @@ test('collapse preference survives reload and restores the saved sidebar width',
   await collapseButton(page).click()
   await expect.poll(async () => (await savedPreferences(page)).sideCollapsed).toBe(true)
   await page.reload()
-  await expect(expandButton(page)).toBeVisible()
+  await expect(collapseButton(page)).toBeHidden()
+  await expect(chatsLink(page)).toBeVisible()
   await expect(page.locator('#shell-sidebar')).toBeHidden()
   await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeVisible()
-  await expandButton(page).click()
+  await chatsLink(page).click()
+  await expect(page).toHaveURL(/\/chats\/alpha$/)
   await expect(page.locator('#shell-sidebar')).toHaveCSS('width', '330px')
   await expect.poll(async () => (await savedPreferences(page)).sideCollapsed).toBe(false)
   await page.reload()
@@ -83,6 +95,37 @@ test('navigation icons reopen collapsed lists, including the current section', a
   await expect(page.locator('#shell-sidebar')).toBeVisible()
 })
 
+for (const interfaceSize of [125, 150]) {
+  test(`header actions fit the narrowest sidebar at ${interfaceSize}% interface size`, async ({ page, context }) => {
+    await mockDesign(context)
+    await context.addInitScript(({ key, interfaceSize }) => {
+      localStorage.setItem(key, JSON.stringify({ sideWidth: 260, interfaceSize }))
+    }, { key: PREFERENCES_KEY, interfaceSize })
+    await page.setViewportSize({ width: 901, height: 800 })
+    await page.goto('/chats/alpha')
+    const header = page.locator('.side__head')
+    const title = header.getByRole('heading')
+    const collapse = collapseButton(page)
+    for (const section of ['Chats', 'Workflows', 'Runs']) {
+      await page.getByRole('navigation').getByRole('link', { name: section, exact: true }).click()
+      await expect(title).toHaveText(section)
+      // Long headings truncate instead of painting over the adjacent buttons.
+      await expect(title).toHaveCSS('overflow', 'hidden')
+      await expect(title).toHaveCSS('text-overflow', 'ellipsis')
+      const titleBox = await title.boundingBox()
+      const collapseBox = await collapse.boundingBox()
+      expect(titleBox.x + titleBox.width).toBeLessThanOrEqual(collapseBox.x)
+      for (const button of await header.getByRole('button').all()) {
+        await expect(button).toBeInViewport({ ratio: 1 })
+        const box = await button.boundingBox()
+        const headerBox = await header.boundingBox()
+        expect(box.x + box.width).toBeLessThanOrEqual(headerBox.x + headerBox.width)
+      }
+      expect(await header.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    }
+  })
+}
+
 test('settings stays full width and does not forget the desktop collapse preference', async ({ page, context }) => {
   await mockDesign(context)
   await page.goto('/chats/alpha')
@@ -90,10 +133,10 @@ test('settings stays full width and does not forget the desktop collapse prefere
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'Settings', exact: true }).click()
   await expect(page).toHaveURL(/\/settings\/general$/)
   await expect(collapseButton(page)).toHaveCount(0)
-  await expect(expandButton(page)).toHaveCount(0)
   await expect(page.locator('#shell-sidebar')).toHaveCount(0)
   await page.goBack()
-  await expect(expandButton(page)).toBeVisible()
+  await expect(chatsLink(page)).toBeVisible()
+  await expect(collapseButton(page)).toBeHidden()
   await expect(page.locator('#shell-sidebar')).toBeHidden()
 })
 
@@ -103,11 +146,11 @@ for (const width of [390, 900]) {
     await page.goto('/chats/alpha')
     await collapseButton(page).click()
     await page.setViewportSize({ width, height: 800 })
-    await expect(expandButton(page)).toHaveCount(0)
     await expect(collapseButton(page)).toHaveCount(0)
     await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Back to chats', exact: true }).click()
     await expect(page.locator('#shell-sidebar')).toBeVisible()
+    await expect(collapseButton(page)).toHaveCount(0)
     await expect(page.getByRole('separator', { name: 'Resize sidebar' })).toBeHidden()
     const nav = page.getByRole('navigation', { name: 'Main navigation' })
     await expect(nav).toBeVisible()
@@ -119,7 +162,8 @@ for (const width of [390, 900]) {
     await page.reload()
     await expect(page.locator('#shell-sidebar')).toBeVisible()
     await page.setViewportSize({ width: 1440, height: 1000 })
-    await expect(expandButton(page)).toBeVisible()
+    await expect(chatsLink(page)).toBeVisible()
+    await expect(collapseButton(page)).toBeHidden()
     await expect(page.locator('#shell-sidebar')).toBeHidden()
   })
 }

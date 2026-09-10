@@ -109,15 +109,17 @@ async def tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], li
     # Asking every server directly is the fallback for a gateway that does not
     # prefix, and a remote server is slow, so only pay for it when a name needs it.
     if any(not prefixed(tool["name"]) for tool in federated):
+        http_targets = [target for target in targets if target.get("host")]
         per_target = await asyncio.gather(
-            *(attempt(gateway.mcp_tools(target["host"]), []) for target in targets)
+            *(attempt(gateway.mcp_tools(target["host"]), []) for target in http_targets)
         )
-        for target, tools in zip(targets, per_target, strict=True):
+        for target, tools in zip(http_targets, per_target, strict=True):
             for tool in tools:
                 owner_of[tool["name"]] = target["name"]
 
     def server_for(name: str) -> str:
-        return owner_of.get(name) or prefixed(name) or "other"
+        single_stdio = len(targets) == 1 and targets[0].get("transport") == "stdio"
+        return owner_of.get(name) or prefixed(name) or (targets[0]["name"] if single_stdio else "other")
 
     tools = [{**tool, "server": server_for(tool["name"])} for tool in federated]
     servers = [

@@ -2,13 +2,10 @@
   <div class="app-frame">
     <EnvironmentBanner />
   <div class="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed }">
-    <NavRail
-      class="shell__rail" :show-sidebar-toggle="!fullPage && !mobile" :sidebar-expanded="!sideCollapsed"
-      @toggle-sidebar="preferences.sideCollapsed = !preferences.sideCollapsed" @open-sidebar="openSidebar"
-    />
+    <NavRail ref="navRail" class="shell__rail" :sidebar-collapsed="sideCollapsed" @open-sidebar="openSidebar" />
     <template v-if="!fullPage">
       <aside v-show="!sideCollapsed" id="shell-sidebar" class="shell__side" :style="{ width: `${sideWidth}px` }">
-        <SidePanel />
+        <SidePanel :show-collapse-button="!mobile" @collapse-sidebar="collapseSidebar" />
         <div
           class="shell__grip"
           :class="{ 'shell__grip--active': dragging }"
@@ -65,6 +62,7 @@ import { syncSystemBars } from './system-bars'
 const DEFAULT_WIDTH = 320
 const route = useRoute()
 const router = useRouter()
+const navRail = ref(null)
 const sideWidth = computed({ get: () => preferences.sideWidth, set: value => { preferences.sideWidth = value } })
 const dragging = ref(false)
 const gate = ref(store.needsServer)
@@ -82,6 +80,12 @@ const sideCollapsed = computed(() => !mobile.value && preferences.sideCollapsed)
 
 function openSidebar () {
   if (!mobile.value) preferences.sideCollapsed = false
+}
+
+function collapseSidebar () {
+  preferences.sideCollapsed = true
+  // Keep keyboard focus on the navigation link that can reopen the hidden list.
+  navRail.value?.focusActiveItem()
 }
 
 watch([() => preferences.theme, currentTokens, hasSelection, fullPage, mobile],

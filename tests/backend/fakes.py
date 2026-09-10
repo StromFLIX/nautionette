@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
+from nautionette_backend.clients.agentgateway import public_target
 
 
 def http_error(status: int, body: str = "") -> httpx.HTTPStatusError:
@@ -87,7 +88,7 @@ class FakeGateway:
         targets = [
             *self.file_targets,
             *(
-                {"name": value["name"], "host": value["mcp"]["host"]}
+                public_target(value)
                 for value in self.resources.get("mcp.target", {}).values()
             ),
         ]
@@ -114,7 +115,7 @@ class FakeGateway:
         return list(self.served_models)
 
     async def mcp_tools(
-        self, url: str | None = None, extra: dict[str, str] | None = None
+        self, url: str | None = None, extra: dict[str, str] | None = None, *, timeout: float = 90
     ) -> list[dict[str, str]]:
         key = url or ""
         if key not in self.tools:

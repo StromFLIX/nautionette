@@ -24,6 +24,7 @@ def test_a_server_from_the_gateway_config_file_cannot_be_edited(client, backend)
         {
             "name": "workflows",
             "url": "http://workflow-mcp:8000/mcp",
+            "transport": "http",
             "managed": False,
             "credential": {"mode": "none", "variable": ""},
             "tool_count": 0,

@@ -66,7 +66,7 @@ async def get_mcp_servers() -> dict[str, Any]:
 
 @router.put("/api/mcp-servers/{name}")
 async def put_mcp_server(name: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
-    config = normalise(mcp_servers.FIELDS, {**payload, "name": name})
+    config = mcp_servers.normalise_config(name, payload)
     await mcp_servers.save(name, config)
     forget_catalog()
     bus.publish("mcp.server.changed", {"server": name, "configured": True})
