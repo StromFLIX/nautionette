@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { openChatConfiguration } from './helpers'
+import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 
 function refreshReadState (data) {
   const lastRead = data.messages.findIndex((message) => message.id === data.chat.last_read_message_id)
@@ -134,6 +135,127 @@ function initial () {
       messages: [], active_turn: null
     }]))
   }
+}
+
+async function filteredChats (context, preferences = {}) {
+  const state = initial()
+  state.chats.alpha.chat.updated_at -= 7200
+  await mockChats(context, state)
+  await context.addInitScript(({ key, preferences }) => {
+    localStorage.setItem(key, JSON.stringify({ chatActiveMinutes: 60, ...preferences }))
+  }, { key: PREFERENCES_KEY, preferences })
+  return state
+}
+
+const chatRow = (page, id) => page.locator(`#shell-sidebar a[href="/chats/${id}"]`)
+const mainNav = page => page.getByRole('navigation', { name: 'Main navigation' })
+
+test('opening an old unread chat keeps it in the grouped list after acknowledgement without bypassing search', async ({ page, context }) => {
+  const state = await filteredChats(context, { chatGroupBy: 'model' })
+  const timestamp = state.chats.alpha.chat.updated_at
+  state.chats.alpha.messages = [{ id: 'reply', role: 'assistant', content: 'Please read this old reply', meta: {} }]
+  await page.clock.install()
+  await page.goto('/chats')
+  const alpha = chatRow(page, 'alpha')
+  await expect(alpha.getByLabel('Unread messages')).toBeVisible()
+  await alpha.click()
+  await expect.poll(() => state.chats.alpha.chat.unread).toBe(false)
+  await expect(alpha.getByLabel('Unread messages')).toHaveCount(0)
+  await page.clock.fastForward(300_000)
+  await expect(alpha).toBeVisible()
+  await expect(alpha).toHaveClass(/row-item--active/)
+  await expect(page.locator('.side__group-count')).toHaveText('2')
+  await expect(page.getByRole('button', { name: 'Show 1 older', exact: true })).toHaveCount(0)
+  const search = page.getByRole('textbox', { name: 'Search chats', exact: true })
+  await search.fill('beta')
+  await expect(alpha).toHaveCount(0)
+  await search.fill('')
+  await expect(alpha).toBeVisible()
+  expect(state.chats.alpha.chat.updated_at).toBe(timestamp)
+})
+
+test('leaving a chat retains it for a minute and returning restarts the grace period', async ({ page, context }) => {
+  await filteredChats(context)
+  await page.clock.install()
+  await page.goto('/chats/alpha')
+  const alpha = chatRow(page, 'alpha')
+  await expect(alpha).toBeVisible()
+  await chatRow(page, 'beta').click()
+  await page.clock.fastForward(50_000)
+  await expect(alpha).toBeVisible()
+  await alpha.click()
+  await chatRow(page, 'beta').click()
+  await page.clock.fastForward(15_000) // Past the first, cancelled expiry.
+  await expect(alpha).toBeVisible()
+  await page.clock.fastForward(46_000)
+  await expect(alpha).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Show 1 older', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Show 1 older', exact: true }).click()
+  await expect(alpha).toBeVisible()
+})
+
+for (const width of [1440, 390]) {
+  test(`leaving a chat for the list retains it until grace expires at ${width}px`, async ({ page, context }) => {
+    await filteredChats(context)
+    await page.setViewportSize({ width, height: 900 })
+    await page.clock.install()
+    await page.goto('/chats/alpha')
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeVisible()
+    if (width < 900) await page.getByRole('button', { name: 'Back to chats', exact: true }).click()
+    else await mainNav(page).getByRole('link', { name: 'Chats', exact: true }).click()
+    await expect(page).toHaveURL(/\/chats$/)
+    await expect(chatRow(page, 'alpha')).toBeVisible()
+    await page.clock.fastForward(61_000)
+    await expect(chatRow(page, 'alpha')).toHaveCount(0)
+  })
+}
+
+test('grace survives a sidebar unmount in Settings, but is not restarted on return', async ({ page, context }) => {
+  await filteredChats(context)
+  await page.clock.install()
+  await page.goto('/chats/alpha')
+  await expect(chatRow(page, 'alpha')).toBeVisible()
+  await mainNav(page).getByRole('link', { name: 'Settings', exact: true }).click()
+  await expect(page.locator('#shell-sidebar')).toHaveCount(0)
+  await page.clock.fastForward(40_000)
+  await mainNav(page).getByRole('link', { name: 'Chats', exact: true }).click()
+  await expect(chatRow(page, 'alpha')).toBeVisible()
+  await page.clock.fastForward(21_000)
+  await expect(chatRow(page, 'alpha')).toHaveCount(0)
+})
+
+for (const resume of ['visibilitychange', 'focus', 'pageshow', 'navigation']) {
+  test(`expired grace is cleared on ${resume} before throttled timers resume`, async ({ page, context }) => {
+    await filteredChats(context)
+    await page.clock.install()
+    await page.goto('/chats/alpha')
+    await expect(chatRow(page, 'alpha')).toBeVisible()
+    await mainNav(page).getByRole('link', { name: 'Chats', exact: true }).click()
+    await expect(page).toHaveURL(/\/chats$/)
+    await expect(chatRow(page, 'alpha')).toBeVisible()
+    const now = await page.evaluate(() => Date.now())
+    await page.clock.setSystemTime(now + 61_000)
+    if (resume === 'navigation') {
+      await mainNav(page).getByRole('link', { name: 'Workflows', exact: true }).click()
+      await expect(page.locator('.side__title')).toHaveText('Workflows')
+      await mainNav(page).getByRole('link', { name: 'Chats', exact: true }).click()
+    } else {
+      await page.evaluate(event => (event === 'visibilitychange' ? document : window).dispatchEvent(new Event(event)), resume)
+    }
+    await expect(chatRow(page, 'alpha')).toHaveCount(0)
+  })
+}
+
+for (const preferences of [{ chatKeepSelectedVisible: false }, { chatSelectionGraceSeconds: 0 }]) {
+  test(`chat retention respects ${JSON.stringify(preferences)}`, async ({ page, context }) => {
+    await filteredChats(context, preferences)
+    await page.goto('/chats/alpha')
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeVisible()
+    if (preferences.chatKeepSelectedVisible === false) await expect(chatRow(page, 'alpha')).toHaveCount(0)
+    else await expect(chatRow(page, 'alpha')).toBeVisible()
+    await chatRow(page, 'beta').click()
+    await expect(chatRow(page, 'alpha')).toHaveCount(0)
+  })
 }
 
 test('regenerate title updates the header and sidebar and prevents duplicate requests', async ({ page, context }) => {

@@ -71,6 +71,26 @@ an explicit warning instead of claiming the change was saved.
 Device preferences never update instance settings. Resetting the workspace does
 not reset the selected theme. There is no cross-device account synchronization.
 
+### Chat list activity and selection
+
+The activity window always includes unread replies, running chats and pending
+internet approvals. By default, **Keep selected chat visible** also retains the
+open chat, even after it is read and regardless of its activity timestamp.
+**Chat visibility grace period** keeps each recently left chat in the list for
+60 seconds by default; returning to it cancels that expiry, and leaving again
+starts a fresh period. Set the duration to 0 for selected-only retention, or turn
+off the switch to restore filtering solely by activity and attention state.
+Both controls are in **Settings → Workspace → Chat list**, saved per device and
+restored to their defaults by **Reset workspace**.
+
+Retention only bypasses the activity window: search, grouping and recency order
+still apply. The app shell owns transient, per-tab selection history so moving
+to Settings (which unmounts the sidebar), another section or the mobile chat list
+counts as leaving the chat without losing or restarting the timer. Reloading
+clears that transient history, but an open chat is immediately retained again.
+Viewing never changes a chat's activity timestamp or marks it unread to keep it
+visible. Expiry updates the list automatically without a server event.
+
 ### Interface size
 
 The default is **125%** on desktop, mobile web and native WebViews. Workspace's

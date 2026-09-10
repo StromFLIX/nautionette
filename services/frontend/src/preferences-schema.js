@@ -15,7 +15,9 @@ export const WORKSPACE_SETTINGS = [
   { key: 'showTimestamps', group: 'Chat', label: 'Message timestamps', description: 'Delivery errors and queued messages stay visible.', type: 'boolean', value: true },
   { key: 'starterPrompts', group: 'Chat', label: 'Starter prompts', description: 'Show suggestions on the new-chat screen.', type: 'boolean', value: true },
   { key: 'chatGroupBy', group: 'Chat list', label: 'Group chats by', type: 'select', value: 'none', options: [['none', 'No grouping'], ['project', 'Project'], ['model', 'Model'], ['internet', 'Internet access']] },
-  { key: 'chatActiveMinutes', group: 'Chat list', label: 'Activity window', description: 'Unread replies and requests for approval are never hidden.', type: 'select', value: 0, options: [[60, 'Last hour'], [1440, 'Last 24 hours'], [10080, 'Last 7 days'], [43200, 'Last 30 days'], [0, 'All chats']] },
+  { key: 'chatActiveMinutes', group: 'Chat list', label: 'Activity window', description: 'Unread replies, running chats and requests for approval are never hidden by this window.', type: 'select', value: 0, options: [[60, 'Last hour'], [1440, 'Last 24 hours'], [10080, 'Last 7 days'], [43200, 'Last 30 days'], [0, 'All chats']] },
+  { key: 'chatKeepSelectedVisible', group: 'Chat list', label: 'Keep selected chat visible', description: 'Keep the open chat in the list even when it is read and outside the activity window. Search still applies.', type: 'boolean', value: true },
+  { key: 'chatSelectionGraceSeconds', group: 'Chat list', label: 'Chat visibility grace period', description: 'With Keep selected chat visible enabled, retain each chat after leaving it so you can return easily. Use 0 for no grace period.', type: 'number', value: 60, min: 0, max: 3600, step: 1, unit: 'seconds' },
   { key: 'flowDirection', group: 'Code & workflows', label: 'Flow direction', description: 'Default orientation for workflow graphs.', type: 'select', value: 'TB', options: [['TB', 'Top to bottom'], ['LR', 'Left to right']] },
   { key: 'codeWrap', group: 'Code & workflows', label: 'Wrap source code', description: 'Wrap long lines in the code viewer.', type: 'boolean', value: false }
 ]
