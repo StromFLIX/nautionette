@@ -119,6 +119,11 @@ for (const entry of ['sidebar', 'welcome']) {
     if (entry === 'sidebar') expect(state.created[0]).toEqual({})
     const created = state.chats['created-1'].chat
     expect(created).toMatchObject({ agent_id: agent.id, reasoning_effort: null, tools: ['mail_read'], project_ids: [projectId] })
+    // The request reaching the mock does not mean the browser received the save.
+    // Wait for creation and persistence before navigating away from the welcome view.
+    await expect(page).toHaveURL(/\/chats\/created-1$/)
+    if (entry === 'welcome') await expect.poll(() => state.sent.length).toBe(2)
+    await expect.poll(() => stored(page)).toMatchObject({ agent_id: agent.id, tools: ['mail_read'], project_ids: [projectId] })
     // Recording still works in defaults mode so switching back uses the latest chat.
     await page.goto('/settings/workspace')
     await mode.selectOption({ label: 'Always use last settings' })

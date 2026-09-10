@@ -134,6 +134,9 @@ for (const width of [1440, 320]) {
     expect(state.sent[0].project_ids).toEqual([firstId, secondId])
     expect(state.messages[0].meta.project_ids).toEqual([firstId, secondId])
 
+    // Sending from the welcome view mounts a new, collapsed composer.
+    await expect(page).toHaveURL(/\/chats\/alpha$/)
+    await openChatConfiguration(page)
     await page.getByRole('button', { name: 'Select projects', exact: true }).click()
     await page.getByRole('checkbox', { name: 'team/nautionette', exact: true }).uncheck()
     await page.keyboard.press('Escape')
@@ -143,6 +146,7 @@ for (const width of [1440, 320]) {
     expect(state.sent[1].project_ids).toEqual([secondId])
     expect(state.messages[1].meta.project_ids).toEqual([secondId])
     await page.reload()
+    await openChatConfiguration(page)
     await expect(page.getByRole('button', { name: 'Select projects', exact: true })).toContainText('1 project')
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     expect(errors).toEqual([])
@@ -159,6 +163,7 @@ test('project selection is saved before sending and follows server snapshots', a
   await expect.poll(() => state.chat.project_ids).toEqual([firstId])
   expect(state.sent).toEqual([])
   await page.reload()
+  await openChatConfiguration(page)
   await expect(page.getByRole('button', { name: 'Select projects', exact: true })).toContainText('1 project')
   state.chat.project_ids = []
   await expect(page.getByRole('button', { name: 'Select projects', exact: true })).not.toContainText('1 project')
@@ -230,6 +235,7 @@ test('unavailable selected projects can be removed without being silently replac
   expect(state.sent[0].project_ids).toEqual([])
   expect(state.messages[0].meta.project_ids).toEqual([])
   await page.reload()
+  await openChatConfiguration(page)
   await expect(page.getByRole('button', { name: 'Select projects', exact: true })).not.toContainText('1 project')
 })
 
