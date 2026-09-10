@@ -41,6 +41,56 @@ for (const theme of THEMES) {
   })
 }
 
+for (const { name, width, hasTouch } of [
+  { name: 'desktop', width: 1440, hasTouch: false },
+  { name: 'narrow', width: 320, hasTouch: false },
+  { name: 'touch', width: 390, hasTouch: true },
+  { name: 'narrow touch', width: 320, hasTouch: true }
+]) {
+  test.describe(`${name} composer button sizes`, () => {
+    test.use({ viewport: { width, height: 1000 }, hasTouch, isMobile: hasTouch })
+
+    for (const interfaceSize of [100, 125, 150]) {
+      test(`actions match chat configuration at ${interfaceSize}% scale`, async ({ page, context }) => {
+        const state = await mockDesign(context)
+        await context.addInitScript(({ key, interfaceSize }) => localStorage.setItem(key, JSON.stringify({ interfaceSize })), { key: PREFERENCES_KEY, interfaceSize })
+        const settings = page.getByRole('button', { name: 'Chat configuration', exact: true })
+        const input = page.getByRole('textbox', { name: 'Message', exact: true })
+        const expectMatchingSize = async (name) => {
+          const action = page.getByRole('button', { name, exact: true })
+          await expect(action).toBeVisible()
+          const settingsBox = await settings.boundingBox()
+          const actionBox = await action.boundingBox()
+          expect(actionBox.width).toBeCloseTo(settingsBox.width, 1)
+          expect(actionBox.height).toBeCloseTo(settingsBox.height, 1)
+          if (hasTouch) {
+            expect(actionBox.width).toBeGreaterThanOrEqual(44)
+            expect(actionBox.height).toBeGreaterThanOrEqual(44)
+          }
+        }
+
+        // The welcome composer is only shown alongside the chat list on desktop.
+        for (const path of width > 640 ? ['/chats', '/chats/alpha'] : ['/chats/alpha']) {
+          await page.goto(path)
+          await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled()
+          await expectMatchingSize('Send message')
+          await input.fill('Draft message')
+          await settings.click()
+          await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled()
+          await expectMatchingSize('Send message')
+        }
+
+        state.data.active_turn = { id: 'running', steps: [], status: '' }
+        await input.fill('')
+        await page.reload()
+        await expectMatchingSize('Stop response')
+        await input.fill('Next message')
+        await expectMatchingSize('Queue message')
+      })
+    }
+  })
+}
+
 test.describe('touch layouts', () => {
   test.use({ hasTouch: true, isMobile: true })
 
