@@ -215,7 +215,11 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                     turn_id,
                     event.get("id", ""),
                     timeline.text,
-                    {"tools": timeline.tools, "steps": timeline.steps},
+                    {
+                        "tools": timeline.tools,
+                        "steps": timeline.steps,
+                        "timing": timeline.timing.snapshot(final=True),
+                    },
                 ):
                     timeline = Timeline()
             elif kind == "interrupted":
@@ -252,7 +256,8 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 if not received_text and event.get("text"):
                     timeline.add_text(event["text"])
                     received_text = True
-            db.record_chat_progress(turn_id, event, timeline.steps, status)
+            timeline.observe(event)
+            db.record_chat_progress(turn_id, event, timeline.steps, status, timeline.timing.snapshot())
     except asyncio.CancelledError:
         shutdown = True
         failure = "The answer was interrupted by a backend shutdown."
@@ -260,8 +265,12 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     except Exception as exc:
         failure = str(exc)
         if db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
-            db.record_chat_progress(turn_id, {"type": "error", "message": failure}, timeline.steps, "")
+            event = {"type": "error", "message": failure}
+            timeline.observe(event)
+            db.record_chat_progress(turn_id, event, timeline.steps, "", timeline.timing.snapshot())
     finally:
+        timing = timeline.timing.finish()
+        timeline.stop_tools()
         if controller is not None:
             finished.set()
             if shutdown:
@@ -293,7 +302,13 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         db.finish_chat_turn(
             turn_id,
             content,
-            {"tools": timeline.tools, "steps": timeline.steps, "error": failure, "interrupted": interrupted},
+            {
+                "tools": timeline.tools,
+                "steps": timeline.steps,
+                "error": failure,
+                "interrupted": interrupted,
+                "timing": timing,
+            },
         )
         bus.publish("chat.answered", {"chat_id": chat_id, "ok": failure is None})
         if failure is None:

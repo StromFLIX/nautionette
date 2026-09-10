@@ -784,6 +784,15 @@ pre.code {
   font-size: 1.25rem;
 }
 
+/* Independent activity indicators retain their static status when motion is off. */
+:root[data-chat-list-animation='false'] .avatar__spinner,
+:root[data-chat-list-animation='false'] .avatar__spinner-arc,
+:root[data-message-window-animation='false'] .composer--running::before,
+:root[data-tool-indicator-animation='false'] .tool-group__indicator-arc,
+:root[data-tool-indicator-animation='false'] .tool__pulse {
+  animation: none !important;
+}
+
 /* Includes JS-triggered CSS animations, Quasar popovers and graph edges. */
 :root[data-motion='reduced'] *,
 :root[data-motion='reduced'] *::before,

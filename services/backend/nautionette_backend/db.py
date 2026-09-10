@@ -151,6 +151,7 @@ CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
 _MIGRATIONS = (
     "ALTER TABLE pi_package_installations ADD COLUMN default_revision_id TEXT",
     "ALTER TABLE chat_turns ADD COLUMN context TEXT",
+    "ALTER TABLE chat_turns ADD COLUMN timing TEXT",
     "ALTER TABLE chat_turns ADD COLUMN job TEXT",
     "ALTER TABLE chat_turns ADD COLUMN stop_requested INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0",
@@ -538,6 +539,7 @@ class Database:
             turn.pop("job", None)
             turn["steps"] = json.loads(turn["steps"])
             turn["context"] = json.loads(turn["context"]) if turn["context"] else None
+            turn["timing"] = json.loads(turn["timing"]) if turn["timing"] else None
         return {"chat": self.get_chat(chat_id), "messages": self.list_messages(chat_id), "active_turn": turn}
 
     def next_chat_turn(self, chat_id: str) -> dict[str, Any] | None:
@@ -583,7 +585,9 @@ class Database:
                     "rowid = (SELECT COALESCE(MAX(rowid), 0) + 1 FROM messages) WHERE id = ?",
                     (message_id,),
                 )
-                self._conn.execute("UPDATE chat_turns SET steps = '[]', status = '' WHERE id = ?", (turn_id,))
+                self._conn.execute(
+                    "UPDATE chat_turns SET steps = '[]', status = '', timing = NULL WHERE id = ?", (turn_id,)
+                )
                 self._conn.execute("DELETE FROM project_leases WHERE turn_id = ?", (message_id,))
             return bool(changed)
 
@@ -597,7 +601,14 @@ class Database:
                 self._conn.execute("UPDATE chats SET queue_paused = 1 WHERE id = ?", (chat_id,))
             return bool(changed)
 
-    def record_chat_progress(self, turn_id: str, event: dict[str, Any], steps: list, status: str) -> None:
+    def record_chat_progress(
+        self,
+        turn_id: str,
+        event: dict[str, Any],
+        steps: list,
+        status: str,
+        timing: dict[str, Any] | None = None,
+    ) -> None:
         with self._lock, self._conn:
             if event.get("type") in {"usage", "result"} and "context" in event:
                 self._conn.execute(
@@ -605,8 +616,8 @@ class Database:
                     (json.dumps(event["context"]), turn_id),
                 )
             self._conn.execute(
-                "UPDATE chat_turns SET steps = ?, status = ? WHERE id = ?",
-                (json.dumps(steps), status, turn_id),
+                "UPDATE chat_turns SET steps = ?, status = ?, timing = COALESCE(?, timing) WHERE id = ?",
+                (json.dumps(steps), status, json.dumps(timing) if timing is not None else None, turn_id),
             )
             self._conn.execute(
                 "INSERT INTO chat_turn_events (turn_id, payload) VALUES (?,?)",
@@ -633,6 +644,9 @@ class Database:
         now = time.time()
         # Keep the latest provider measurement through reloads and interrupted-turn recovery.
         meta = {**meta, "context": json.loads(turn["context"]) if turn["context"] else None}
+        if "timing" not in meta and turn["timing"]:
+            # Recovery retains the last measured checkpoint, never backend downtime.
+            meta["timing"] = {**json.loads(turn["timing"]), "active": None, "partial": True}
         message = {
             "id": uuid.uuid4().hex[:12],
             "chat_id": turn["chat_id"],

@@ -56,6 +56,9 @@ function apply () {
   root.dataset.colorScheme = theme.mode
   root.dataset.density = preferences.density
   root.dataset.motion = preferences.motion
+  for (const key of ['chatListAnimation', 'messageWindowAnimation', 'toolIndicatorAnimation']) {
+    root.dataset[key] = String(preferences[key])
+  }
   root.dataset.codeWrap = String(preferences.codeWrap)
   Dark.set(theme.mode === 'dark')
   const tokens = currentTokens.value

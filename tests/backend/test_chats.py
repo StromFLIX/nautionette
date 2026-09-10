@@ -303,7 +303,13 @@ def test_an_answer_keeps_the_order_of_what_it_said_and_did(client, broker):
     steps = sse_events(send(client, chat["id"], "hello"))[-1]["message"]["meta"]["steps"]
     assert [step["kind"] for step in steps] == ["text", "tool", "text"]
     assert steps[0]["text"] == "Looking it up."
-    assert steps[1] == {
+    assert steps[1]["duration_ms"] >= 0
+    assert steps[1]["finished_at"] >= steps[1]["started_at"]
+    assert {
+        key: value
+        for key, value in steps[1].items()
+        if key not in {"started_at", "finished_at", "duration_ms"}
+    } == {
         "kind": "tool",
         "id": "c1",
         "name": "linear_search",

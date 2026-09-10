@@ -10,7 +10,7 @@
         <ChatImage v-for="image in meta.attachments" :key="image.id" :image="image" :chat-id="chatId" />
       </div>
       <template v-for="(part, index) in groupedParts" :key="part.id || index">
-        <ToolCallGroup v-if="part.kind === 'tool-group'" :steps="part.steps" :live="live">
+        <ToolCallGroup v-if="part.kind === 'tool-group'" :steps="part.steps" :live="live" :timing="meta.timing">
           <template v-for="(step, stepIndex) in part.steps" :key="step.id || stepIndex">
             <ToolCall v-if="step.kind === 'tool'" :step="step" :live="live" />
             <div v-else-if="step.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(step.text)" />

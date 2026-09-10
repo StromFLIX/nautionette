@@ -276,6 +276,10 @@ async function main() {
         break;
       case "message_update": {
         const inner = event.assistantMessageEvent;
+        // Measure observable phases without inferring hidden reasoning from idle time.
+        const phase = { thinking_start: "thinking", thinking_end: "other",
+          text_start: "reply", text_end: "other", toolcall_start: "other" }[inner?.type];
+        if (phase) emit({ type: "phase", phase });
         if (inner?.type === "text_delta" && inner.delta) {
           streamed += inner.delta;
           emit({ type: "delta", text: inner.delta });

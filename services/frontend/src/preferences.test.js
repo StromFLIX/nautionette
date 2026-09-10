@@ -46,6 +46,24 @@ test('sidebar collapse defaults to expanded and only accepts boolean preferences
   }
 })
 
+test('activity animations default on, validate independently and are searchable', () => {
+  const keys = ['chatListAnimation', 'messageWindowAnimation', 'toolIndicatorAnimation']
+  for (const key of keys) {
+    assert.equal(preferenceDefaults()[key], true)
+    assert.equal(workspaceDefaults()[key], true)
+    assert.equal(sanitizePreferences({ motion: 'reduced' })[key], true)
+    assert.equal(validPreference(key, false), true)
+    const saved = sanitizePreferences({ [key]: false })
+    assert.equal(saved[key], false)
+    for (const other of keys.filter(other => other !== key)) assert.equal(saved[other], true)
+    for (const invalid of ['false', 0, null, [], {}]) {
+      assert.equal(validPreference(key, invalid), false)
+      assert.equal(sanitizePreferences({ [key]: invalid })[key], true)
+    }
+    assert.ok(searchSettings('animation').some(entry => entry.id === key))
+  }
+})
+
 test('stored preferences isolate overrides by theme and drop invalid or unknown fields', () => {
   const result = sanitizePreferences({
     theme: 'daylight', overrides: { orbit: { accent: '#123456' }, daylight: { font: 'monospace', 'rail-width': 1 }, unknown: { accent: '#abcdef' } },

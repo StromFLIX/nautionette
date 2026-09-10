@@ -152,8 +152,30 @@ numbers and local font-family names. They cannot inject CSS declarations or load
 remote fonts/assets. Low text or button contrast produces a warning without
 preventing intentional customization. Theme reset has an Undo action.
 
-System reduced-motion preferences are always respected. The Workspace setting can
-also reduce motion independently of the system setting.
+System reduced-motion preferences are always respected. **Workspace → Animations**
+retains the overall **Motion** control and provides three independent, default-on
+switches: **Chat list animation** (the avatar progress ring), **Message window
+animation** (the composer's running border light), and **Tool-call indicator
+animation** (the tiny octagon to the left of the tool-call summary and the
+right-hand dots on individual running tool rows). Turning one
+off keeps its static status cue without affecting the other animations. The
+octagon's light travels around its fixed outline only while that group has pending
+live tool calls; completed or historical groups retain a quiet static outline.
+Global or system reduced motion overrides all three switches without clearing
+their saved choices. Like other workspace preferences, choices persist per device,
+synchronize between tabs, and return to enabled on **Reset workspace**.
+
+Expanded tool groups show a small response-wide timing line: **Tools · Thinking ·
+Reply · Other**, omitting unmeasured/empty phases. The backend measures elapsed
+phases with a monotonic clock; parallel tools count once, with tool execution
+prioritized over overlapping model activity. Thinking only counts reported
+reasoning; Other includes setup, waiting, retries and tool-call preparation.
+Each completed tool row also shows its own duration, including failed calls.
+The dots disappear as soon as the corresponding tool completes or is interrupted,
+even when the response is still live. Timings persist through reloads and steering
+boundaries; restart recovery keeps only the last measured checkpoint, labeled
+**Recorded**, without counting downtime. Historical messages without measurements
+show no invented durations. Live totals tick only while the group is expanded.
 
 ## Verification
 

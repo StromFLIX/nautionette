@@ -52,6 +52,11 @@ export function groupToolCalls (parts) {
   ]
 }
 
+/** An interrupted call may have no result, but is no longer executing. */
+export function isToolPending (step) {
+  return step.kind === 'tool' && step.ok === null && step.finished_at == null && !step.interrupted
+}
+
 /** Count invocations, not unique names, including calls still in progress. */
 export function summarizeToolCalls (steps) {
   const tools = steps.filter((step) => step.kind === 'tool')
@@ -64,7 +69,7 @@ export function summarizeToolCalls (steps) {
   return {
     label: `Ran ${labels.join(' and ') || '0 tool calls'}`,
     failed: tools.filter((step) => step.ok === false).length,
-    pending: tools.some((step) => step.ok === null)
+    pending: tools.some(isToolPending)
   }
 }
 

@@ -57,7 +57,7 @@
         />
         <MessageBubble
           v-if="streaming" role="assistant" live
-          :content="liveSteps.length || liveStatus ? '' : '…'" :meta="{ steps: liveSteps }"
+          :content="liveSteps.length || liveStatus ? '' : '…'" :meta="{ steps: liveSteps, timing: activeTurn?.timing }"
           :status="liveStatus"
         />
         <section v-if="queuedMessages.length" class="thread__queue" aria-label="Queued messages">

@@ -6,6 +6,7 @@ container, so the history the model sees is exactly what we hand over here.
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -13,6 +14,7 @@ from .. import pi_packages
 from ..clients import broker
 from ..config import settings
 from .prompts import CHAT_SYSTEM_PROMPT
+from .timing import ActivityTiming
 
 MAX_HISTORY_MESSAGES = 200
 # Characters of transcript handed to a cold container. Overridable in settings;
@@ -30,6 +32,8 @@ class Timeline:
 
     def __init__(self) -> None:
         self.steps: list[dict[str, Any]] = []
+        self.timing = ActivityTiming()
+        self._tool_started: dict[str, float] = {}
 
     def add_text(self, text: str) -> None:
         if not text:
@@ -47,14 +51,39 @@ class Timeline:
             "args": event.get("args"),
             "ok": None,
             "result": "",
+            "started_at": time.time(),
         }
+        self._tool_started[step["id"]] = time.monotonic()
         self.steps.append(step)
         return step
 
     def finish_tool(self, event: dict[str, Any]) -> None:
-        step = self._pending(event.get("id")) or self.start_tool(event)
+        step = self._pending(event.get("id"))
+        if step is None:
+            step = self.start_tool(event)
+            # A missing start event must not invent a zero-length measurement.
+            self._tool_started.pop(step["id"], None)
+            step.pop("started_at", None)
+        self._finish_tool_clock(step)
         step["ok"] = not event.get("error")
         step["result"] = (event.get("result") or "")[:TOOL_RESULT_CHARS]
+
+    def _finish_tool_clock(self, step: dict[str, Any]) -> None:
+        start = self._tool_started.pop(step["id"], None)
+        step["finished_at"] = time.time()
+        if start is not None:
+            step["duration_ms"] = round(max(0, time.monotonic() - start) * 1000)
+
+    def stop_tools(self) -> None:
+        for step in self.steps:
+            if step["kind"] == "tool" and step["ok"] is None and "finished_at" not in step:
+                self._finish_tool_clock(step)
+                step["interrupted"] = True
+
+    def observe(self, event: dict[str, Any]) -> None:
+        self.timing.observe(event, bool(self._tool_started))
+        if self.timing.stopped:
+            self.stop_tools()
 
     def _pending(self, call_id: str | None) -> dict[str, Any] | None:
         for step in reversed(self.steps):

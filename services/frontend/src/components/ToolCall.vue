@@ -6,7 +6,8 @@
       <span class="tool__title truncate">{{ shown.title }}</span>
       <span v-if="shown.detail" class="tool__detail truncate">{{ shown.detail }}</span>
       <span v-if="server" class="tool__server">{{ server }}</span>
-      <span v-if="running" class="tool__pulse" />
+      <span v-if="elapsed" class="tool__duration" :title="step.interrupted ? 'Time before interruption' : 'Tool execution time'">{{ elapsed }}</span>
+      <span v-if="running" class="tool__pulse" role="img" aria-label="Tool running" />
       <span v-else-if="step.ok === false" class="material-icons tool__failed">error_outline</span>
     </button>
 
@@ -21,7 +22,7 @@
       </div>
       <div class="tool__block">
         <div class="section-label">{{ step.ok === false ? 'Error' : 'Result' }}</div>
-        <pre class="tool__pre">{{ result || (running ? 'Still running…' : 'No output.') }}</pre>
+        <pre class="tool__pre">{{ result || (running ? 'Still running…' : step.interrupted ? 'Interrupted.' : 'No output.') }}</pre>
       </div>
     </div>
   </div>
@@ -29,7 +30,8 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { describeTool, prettyJson } from '../timeline'
+import { describeTool, isToolPending, prettyJson } from '../timeline'
+import { compactDuration } from '../activity-timing'
 import { store } from '../store'
 
 const props = defineProps({
@@ -47,7 +49,8 @@ const server = computed(() => {
   return name && name !== 'other' ? name : ''
 })
 const shown = computed(() => describeTool(props.step, server.value))
-const running = computed(() => props.live && props.step.ok === null)
+const running = computed(() => props.live && isToolPending(props.step))
+const elapsed = computed(() => compactDuration(props.step.duration_ms))
 const args = computed(() => prettyJson(props.step.args))
 const result = computed(() => prettyJson(props.step.result))
 </script>
@@ -122,6 +125,14 @@ const result = computed(() => prettyJson(props.step.result))
   background: var(--surface-active);
   color: var(--text-dim);
   font-size: 0.65625rem;
+}
+
+.tool__duration {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.65625rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .tool__failed {

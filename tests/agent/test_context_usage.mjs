@@ -54,6 +54,20 @@ async function runAgent (events, job = {}) {
   return output
 }
 
+test('reported thinking and reply boundaries are forwarded as timing phases', async () => {
+  const events = await runAgent([
+    ...['thinking_start', 'thinking_end', 'text_start', 'text_end', 'toolcall_start'].map(type => ({
+      type: 'message_update', assistantMessageEvent: { type }
+    })),
+    { type: 'message_end', message: message(usage) }
+  ])
+  assert.deepEqual(events.filter(event => event.type === 'phase'), [
+    { type: 'phase', phase: 'thinking' }, { type: 'phase', phase: 'other' },
+    { type: 'phase', phase: 'reply' }, { type: 'phase', phase: 'other' },
+    { type: 'phase', phase: 'other' }
+  ])
+})
+
 test('tool-loop usage is streamed and the final result keeps only the latest request', async () => {
   const smaller = { ...usage, input: 50, cacheRead: 0, cacheWrite: 0 }
   const events = await runAgent([

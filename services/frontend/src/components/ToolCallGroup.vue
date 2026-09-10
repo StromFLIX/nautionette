@@ -1,11 +1,16 @@
 <template>
-  <details class="tool-group">
+  <details class="tool-group" @toggle="open = $event.target.open">
     <summary class="tool-group__summary">
+      <svg class="tool-group__indicator" viewBox="0 0 24 24" focusable="false"
+        :role="running ? 'img' : undefined" :aria-label="running ? 'Tool calls in progress' : undefined" :aria-hidden="running ? undefined : true">
+        <path class="tool-group__indicator-track" d="M8 2H16L22 8V16L16 22H8L2 16V8Z" />
+        <path v-if="running" class="tool-group__indicator-arc" d="M8 2H16L22 8V16L16 22H8L2 16V8Z" pathLength="100" />
+      </svg>
       <span class="tool-group__label" aria-live="polite" aria-atomic="true">{{ summary.label }}</span>
-      <span v-if="live && summary.pending" class="tool-group__pulse" role="img" aria-label="Tool calls in progress" />
       <span v-if="summary.failed" class="tool-group__failed">{{ summary.failed }} failed</span>
       <span class="material-icons tool-group__chevron" aria-hidden="true">chevron_right</span>
     </summary>
+    <ActivityTiming v-if="open && timing" :timing="timing" :live="live" />
     <div class="tool-group__timeline">
       <slot />
     </div>
@@ -13,15 +18,19 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { summarizeToolCalls } from '../timeline'
+import ActivityTiming from './ActivityTiming.vue'
 
 const props = defineProps({
   steps: { type: Array, required: true },
+  timing: { type: Object, default: null },
   live: { type: Boolean, default: false }
 })
 
+const open = ref(false)
 const summary = computed(() => summarizeToolCalls(props.steps))
+const running = computed(() => props.live && summary.value.pending > 0)
 </script>
 
 <style scoped>
@@ -75,23 +84,34 @@ const summary = computed(() => summarizeToolCalls(props.steps))
   color: var(--danger);
 }
 
-.tool-group__pulse {
+.tool-group__indicator {
   flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: tool-group-pulse 1s ease-in-out infinite;
+  width: 0.75rem;
+  height: 0.75rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  pointer-events: none;
 }
 
-@keyframes tool-group-pulse {
-  50% {
-    opacity: 0.25;
-  }
+.tool-group__indicator-track {
+  opacity: 0.35;
+}
+
+.tool-group__indicator-arc {
+  stroke: var(--accent-hover);
+  stroke-linecap: round;
+  stroke-dasharray: 24 76;
+  animation: tool-group-orbit 2s linear infinite;
+}
+
+@keyframes tool-group-orbit {
+  to { stroke-dashoffset: -100; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tool-group__pulse { animation: none; }
+  .tool-group__indicator-arc { animation: none; }
   .tool-group__chevron { transition: none; }
 }
 </style>

@@ -4,6 +4,7 @@ async function mockChat (context, data) {
   const chat = { id: 'tools', title: 'Tool calls', model: 'test/model', read_revision: 0 }
   await context.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
+    chat.answering = Boolean(data.active_turn)
     if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: ': connected\n\n' })
     if (path === '/api/chats/tools/stream') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 100\ndata: ${JSON.stringify({ type: 'snapshot', chat, ...data })}\n\n` })
     if (path === '/api/chats/tools/read-state') return route.fulfill({ json: chat })
@@ -44,6 +45,14 @@ for (const width of [1440, 320]) {
     await expect(page.getByText('The final answer stays visible.')).toBeVisible()
     await expect(page.getByText('Now reading the source.')).toBeHidden()
     await expect(group.getByLabel('Tool calls in progress')).toHaveCount(0)
+    const indicator = summary.locator('.tool-group__indicator')
+    await expect(indicator).toBeVisible()
+    await expect(indicator).toHaveAttribute('aria-hidden', 'true')
+    await expect(indicator.locator('.tool-group__indicator-arc')).toHaveCount(0)
+    const iconBox = await indicator.boundingBox()
+    const labelBox = await summary.locator('.tool-group__label').boundingBox()
+    expect(iconBox.width).toBeLessThanOrEqual(16)
+    expect(iconBox.x + iconBox.width).toBeLessThan(labelBox.x)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: `test-results/tool-summary-${width}.png` })
 
@@ -87,6 +96,12 @@ test('live counts update while collapsed and expanded without resetting open cal
   await expect(summary).toContainText('Ran 1 shell command')
   await expect(timeline).toBeHidden()
   await expect(group.getByLabel('Tool calls in progress')).toBeVisible()
+  const arc = group.locator('.tool-group__indicator-arc')
+  await expect(arc).toHaveCSS('animation-name', /tool-group-orbit/)
+  const offset = await arc.evaluate(el => getComputedStyle(el).strokeDashoffset)
+  await expect.poll(() => arc.evaluate(el => getComputedStyle(el).strokeDashoffset)).not.toBe(offset)
+  // Only the light travels; the octagonal outline stays upright.
+  await expect(group.locator('.tool-group__indicator')).toHaveCSS('transform', 'none')
   data.active_turn.steps[1].ok = true
   data.active_turn.steps[1].result = 'First command complete'
   data.active_turn.steps.push(text('Checking the next file.'), tool('two', 'read', null))
@@ -110,6 +125,8 @@ test('live counts update while collapsed and expanded without resetting open cal
   data.active_turn.steps[4].ok = true
   data.active_turn.steps.push(text('Finished with a read error.'))
   await expect(group.getByLabel('Tool calls in progress')).toHaveCount(0)
+  await expect(arc).toHaveCount(0)
+  await expect(group.locator('.tool-group__indicator-track')).toBeVisible()
   await expect(summary).toContainText('1 failed')
   await expect(page.getByText('Finished with a read error.')).toBeVisible()
   data.messages = [{ id: 'saved', role: 'assistant', content: 'Finished with a read error.', meta: { steps: data.active_turn.steps } }]
@@ -138,4 +155,92 @@ test('legacy tool names are counted and messages expand independently', async ({
   await expect(groups.first().locator('.tool')).toHaveCount(3)
   await expect(groups.first().locator('.tool-group__timeline')).toBeVisible()
   await expect(groups.last().locator('.tool-group__timeline')).toBeHidden()
+  await expect(page.locator('.activity-timing, .tool__duration, .tool__pulse')).toHaveCount(0)
 })
+
+for (const width of [1440, 320]) {
+  test(`activity animations can be controlled independently at ${width}px`, async ({ page, context }) => {
+    await mockChat(context, { messages: [], active_turn: { id: 'active', steps: [
+      text('Checking the project.'),
+      ...Array.from({ length: 6 }, (_, i) => tool(`shell-${i}`)),
+      ...Array.from({ length: 14 }, (_, i) => tool(`read-${i}`, 'read')),
+      tool('failed', 'read', false), tool('pending', 'read', null)
+    ] } })
+    await page.setViewportSize({ width, height: 900 })
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+    await page.goto('/chats/tools')
+    const spinner = page.locator('a[href="/chats/tools"] .avatar__spinner')
+    const composer = page.locator('.composer')
+    const indicator = page.getByLabel('Tool calls in progress')
+    const arc = indicator.locator('.tool-group__indicator-arc')
+    const summary = page.locator('.tool-group__summary')
+    const label = summary.locator('.tool-group__label')
+    await expect(label).toHaveText('Ran 6 shell commands and 16 other tool calls')
+    await expect(summary).toContainText('1 failed')
+    const iconBox = await indicator.boundingBox()
+    const labelBox = await label.boundingBox()
+    expect(iconBox.x + iconBox.width).toBeLessThan(labelBox.x)
+    expect(iconBox.width).toBeLessThanOrEqual(16)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+
+    const expectAnimations = async ([chatList, messageWindow, toolIndicator]) => {
+      await expect(spinner).toHaveCSS('animation-name', chatList ? 'chat-activity-orbit' : 'none')
+      await expect(spinner.locator('.avatar__spinner-arc')).toHaveCSS('animation-name', chatList ? 'chat-activity-sweep' : 'none')
+      await expect.poll(() => composer.evaluate(el => getComputedStyle(el, '::before').animationName !== 'none')).toBe(messageWindow)
+      await expect(arc).toHaveCSS('animation-name', toolIndicator ? /tool-group-orbit/ : 'none')
+      await expect(page.getByLabel('Tool running', { exact: true })).toHaveCount(1)
+      await expect(page.locator('.tool__pulse')).toHaveCSS('animation-name', toolIndicator ? /tool-pulse/ : 'none')
+      // Motion preferences never hide progress, errors, or interaction targets.
+      await expect(indicator).toBeVisible()
+      await expect(composer).toHaveClass(/composer--running/)
+      await expect(summary).toContainText('1 failed')
+      await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toBeVisible()
+    }
+    await expectAnimations([true, true, true])
+
+    const settings = await context.newPage()
+    await settings.setViewportSize({ width, height: 900 })
+    await settings.goto('/settings/workspace')
+    const labels = ['Chat list animation', 'Message window animation', 'Tool-call indicator animation']
+    const keys = ['chatListAnimation', 'messageWindowAnimation', 'toolIndicatorAnimation']
+    const setAnimations = async (values) => {
+      for (let i = 0; i < labels.length; i++) {
+        await settings.getByRole('switch', { name: labels[i], exact: true }).setChecked(values[i])
+      }
+    }
+    // Every combination, synchronized live into the already-running chat tab.
+    for (let mask = 0; mask < 8; mask++) {
+      const values = keys.map((_, i) => Boolean(mask & (1 << i)))
+      await setAnimations(values)
+      await expectAnimations(values)
+    }
+    await settings.getByLabel('Motion', { exact: true }).selectOption('reduced')
+    await expectAnimations([false, false, false])
+    for (const name of labels) await expect(settings.getByRole('switch', { name, exact: true })).toBeChecked()
+    await settings.getByLabel('Motion', { exact: true }).selectOption('system')
+    await expectAnimations([true, true, true])
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await expectAnimations([false, false, false])
+    await page.emulateMedia({ reducedMotion: 'no-preference' })
+    await expectAnimations([true, true, true])
+
+    const saved = [false, true, false]
+    await setAnimations(saved)
+    await expectAnimations(saved)
+    await settings.reload()
+    for (let i = 0; i < labels.length; i++) {
+      await expect(settings.getByRole('switch', { name: labels[i], exact: true })).toBeChecked({ checked: saved[i] })
+    }
+    await page.reload()
+    await expectAnimations(saved)
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('nautionette.preferences.v1')))
+    expect(keys.map(key => stored[key])).toEqual(saved)
+    await summary.click()
+    await expect(page.locator('.tool-group__timeline')).toBeVisible()
+    await summary.click()
+    await settings.getByRole('button', { name: 'Reset workspace', exact: true }).click()
+    await expectAnimations([true, true, true])
+    await settings.close()
+    await page.screenshot({ path: `test-results/tool-indicator-running-${width}.png` })
+  })
+}
