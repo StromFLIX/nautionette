@@ -7,7 +7,11 @@ import { api, auth, isNative, liveEvents, server } from './api'
 import { delivery } from './delivery'
 import { chatCache, chatCacheScope, warmChatCache } from './chat-cache'
 import { agentConfig, globalChatConfig, resolveAgentConfig } from './agent-config'
+import { createChatSettings } from './new-chat-settings'
+import { preferenceError } from './preferences'
 import router from './router'
+
+export const chatSettings = createChatSettings({ scope: chatCacheScope, onError: message => { preferenceError.value = message } })
 
 const emptyCatalog = () => ({ agent_sets: [], agents: [], models: [], tools: [], default_model: '', default_agent_set: 'default', default_agent_id: null })
 const state = reactive({

@@ -8,12 +8,27 @@ test('workspace defaults are complete, independent and valid', () => {
   const defaults = preferenceDefaults()
   assert.equal(defaults.theme, 'orbit')
   assert.equal(defaults.interfaceSize, 125)
-  assert.equal(defaults.composerExpanded, false)
+  assert.equal(defaults.newChatSettings, 'last')
   assert.equal(defaults.motion, 'system')
   assert.deepEqual(Object.keys(workspaceDefaults()).sort(), WORKSPACE_SETTINGS.map(field => field.key).sort())
   for (const field of WORKSPACE_SETTINGS) assert.ok(validPreference(field.key, defaults[field.key]), field.key)
   defaults.overrides.orbit = { accent: '#000000' }
   assert.deepEqual(preferenceDefaults().overrides, {})
+})
+
+test('new-chat mode defaults to last settings and migrates away from persistent disclosure', () => {
+  const migrated = sanitizePreferences({ composerExpanded: true })
+  assert.equal(migrated.newChatSettings, 'last')
+  assert.equal(Object.hasOwn(migrated, 'composerExpanded'), false)
+  for (const mode of ['last', 'defaults']) {
+    assert.equal(validPreference('newChatSettings', mode), true)
+    assert.equal(sanitizePreferences({ newChatSettings: mode }).newChatSettings, mode)
+  }
+  for (const mode of [true, null, 'other', 1]) {
+    assert.equal(validPreference('newChatSettings', mode), false)
+    assert.equal(sanitizePreferences({ newChatSettings: mode }).newChatSettings, 'last')
+  }
+  assert.ok(searchSettings('new chat settings').some(entry => entry.id === 'newChatSettings'))
 })
 
 test('interface size migrates old preferences and accepts only supported sizes', () => {
@@ -76,7 +91,7 @@ test('stored preferences isolate overrides by theme and drop invalid or unknown 
   assert.equal(result.density, 'compact')
   assert.equal(result.showTimestamps, false)
   assert.equal(result.flowDirection, 'LR')
-  assert.equal(result.composerExpanded, false)
+  assert.equal(result.composerExpanded, undefined)
   assert.equal(result.sendShortcut, 'enter')
   assert.equal(result.chatActiveMinutes, 0)
   assert.equal(result.credentials, undefined)

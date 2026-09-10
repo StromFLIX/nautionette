@@ -116,6 +116,7 @@ export async function mockAgents (context) {
       if (method === 'PATCH') {
         state.chatWrites.push(body)
         if (state.chatPatchGate) await state.chatPatchGate
+        if (state.chatPatchFailure) return reply({ detail: 'Chat settings could not be saved' }, 422)
         if (Object.hasOwn(body, 'agent_id')) Object.assign(data.chat, selection(body.agent_id))
         Object.assign(data.chat, body)
         return reply(data.chat)

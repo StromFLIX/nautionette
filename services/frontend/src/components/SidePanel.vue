@@ -192,7 +192,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RUN_TONE, avatarStyle, scheduleTime, shortTime } from '../format'
-import { actions, health, store } from '../store'
+import { actions, chatSettings, health, store } from '../store'
+import { chatCacheScope } from '../chat-cache'
 import { api } from '../api'
 import ChatRow from './ChatRow.vue'
 import { preferences } from '../preferences'
@@ -348,8 +349,15 @@ async function startChat () {
   startingChat.value = true
   startError.value = ''
   try {
-    // Let the backend resolve the complete current default agent, not just its model.
-    const chat = await api.createChat({})
+    const scope = chatCacheScope()
+    // A catalog is needed to check whether a remembered agent still exists.
+    if (preferences.newChatSettings === 'last' && chatSettings.load(scope) && !store.catalogLoaded) {
+      if (!await actions.loadCatalog()) throw new Error(store.catalogError || 'Could not load chat settings.')
+    }
+    // An empty payload lets the backend resolve current defaults when requested,
+    // or when there is no history yet. Explicit last settings stay pinned.
+    const chat = await api.createChat(chatSettings.forNewChat(store.catalog, preferences.newChatSettings, scope))
+    chatSettings.remember(chat, scope)
     await actions.loadChats()
     await router.push(`/chats/${chat.id}`)
   } catch (error) { startError.value = `Could not create chat: ${error.message}` }

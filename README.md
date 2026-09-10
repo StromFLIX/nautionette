@@ -90,6 +90,8 @@ The interface defaults to **125%**, including on phones; choose 100%, 110%, 125%
 and per-workflow configuration stay separate.
 
 Agents, reasoning, tools and projects remain available behind **Chat configuration**.
+Its controls start closed in each chat and open only when you select them; opening
+one chat's controls never expands the next chat's composer.
 Open Settings with **Ctrl/Command + ,** and focus its search with **/**.
 See [Frontend design system](docs/frontend-design.md) for the extension points,
 persistence model and testing guidance.
@@ -105,8 +107,17 @@ deletes reusable agents. Each field shows **Inherited** or offers **Use global**
 Pick an agent under **Chat configuration**, customize individual fields, or use
 **Reapply agent defaults**. Applying an agent to an existing chat is explicit:
 profile edits never rewrite existing chat settings or already accepted/queued turns.
-Both the welcome composer and sidebar **New chat** use the same saved defaults.
-These instance-wide settings are separate from device appearance/workspace preferences.
+**Settings > Workspace > Chat > New chat settings** chooses how both the welcome
+composer and sidebar **New chat** start:
+- **Always use last settings** (the default): reuse the last model, agent, environment,
+  reasoning, tools, projects and extension revisions selected or used on this device.
+- **Always use defaults**: use the current global defaults and configured default agent.
+
+With no remembered settings, defaults apply. Last settings persist across reloads,
+separately for each backend. Opening an old chat does not replace them; choosing
+settings, creating a chat or sending a message does. Internet approval and messages
+are never copied. These device preferences do not alter instance-wide defaults,
+saved agents or existing chats.
 
 **All tools**, **No tools**, and a selected list are distinct. A selected list stays
 pinned even if every current tool is selected; only **All** opts into future MCP

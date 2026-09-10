@@ -109,12 +109,25 @@ individual composer controls customize the chat, not the saved agent. Existing c
 read their server snapshots and never automatically adopt profile edits. Send waits
 for pending chat configuration PATCHes before accepting a message.
 
-Welcome drafts follow asynchronously loaded defaults until the user overrides a
-field or selects an agent. They preserve typed text and deliberate selections during
-catalog refresh. The first send waits for successful discovery rather than guessing
-defaults. Successful settings/profile writes update the local catalog immediately,
-even if subsequent discovery fails; older in-flight responses cannot undo the save.
-Sidebar **New chat** posts an empty body so the backend resolves current defaults.
+The device preference `newChatSettings` chooses **Always use last settings** (default)
+or **Always use defaults** for both welcome drafts and sidebar **New chat**.
+`new-chat-settings.js` persists a whitelisted configuration snapshot per backend,
+including null/empty selections and pinned extension revision IDs, never chat content
+or internet approvals. Explicit welcome choices, successful chat configuration saves,
+chat creation and sends update this snapshot; simply viewing history does not.
+A removed agent loses its reference but retains its explicit configuration restrictions.
+
+With no snapshot or in defaults mode, welcome drafts follow asynchronously loaded
+defaults until the user overrides a field or selects an agent. With last settings,
+the draft starts from a fixed copy. Both preserve typed text and deliberate selections
+during catalog refresh. The first send waits for successful discovery rather than
+guessing defaults. Successful settings/profile writes update the local catalog
+immediately, even if subsequent discovery fails; older responses cannot undo the save.
+Sidebar **New chat** posts remembered settings or an empty body for backend defaults.
+
+Composer disclosure is component-local and starts closed. The thread composer is
+keyed by chat ID so navigation cannot carry an expanded panel into another chat.
+The obsolete `composerExpanded` workspace preference is ignored during migration.
 See [Agent configuration](agent-configuration.md) for the API and deployment contract.
 
 ## Themes

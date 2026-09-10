@@ -156,7 +156,8 @@ const focused = ref(false)
 const fileInput = ref(null)
 const imageError = ref('')
 const configurationId = useId()
-const configurationOpen = computed({ get: () => preferences.composerExpanded, set: value => { preferences.composerExpanded = value } })
+// Disclosure is local to this composer, not a preference carried into other chats.
+const configurationOpen = ref(false)
 const profileDefaults = computed(() => agentConfig(store.catalog, props.agentId))
 const profileLabel = computed(() => props.agentId ? (profileDefaults.value?.agent_name || props.agentName || 'Removed agent') : 'Global defaults')
 const customConfiguration = computed(() => !sameConfig(profileDefaults.value, {

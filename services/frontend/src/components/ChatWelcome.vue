@@ -50,9 +50,11 @@ import { computed, nextTick, ref, watch } from 'vue'
 import Composer from './Composer.vue'
 import BrandMark from './BrandMark.vue'
 import { modelContextWindow } from '../context'
-import { actions, store } from '../store'
+import { actions, chatSettings, store } from '../store'
 import { preferences } from '../preferences'
 import { agentConfig, copyConfig, defaultChatConfig, resolveAgentConfig } from '../agent-config'
+import { reusableChatSettings } from '../new-chat-settings'
+import { chatCacheScope } from '../chat-cache'
 
 defineProps({ busy: { type: Boolean, default: false } })
 defineEmits(['start'])
@@ -64,13 +66,29 @@ const prompts = [
 ]
 const text = ref('')
 const attachments = ref([])
-// Follow asynchronously loaded defaults until a field (or an agent) is explicitly chosen.
+// Capture history once per new-chat draft, so saving an override cannot feed back
+// into its own source. With no history (or in defaults mode), follow async defaults.
+const scope = chatCacheScope()
+const remembered = chatSettings.load(scope)
 const selectedAgent = ref(undefined)
 const overrides = ref({})
-const source = computed(() => selectedAgent.value === undefined ? defaultChatConfig(store.catalog) : agentConfig(store.catalog, selectedAgent.value))
+const source = computed(() => {
+  if (selectedAgent.value !== undefined) return agentConfig(store.catalog, selectedAgent.value)
+  if (preferences.newChatSettings === 'last' && remembered) {
+    const saved = store.catalogLoaded ? reusableChatSettings(store.catalog, remembered) : copyConfig(remembered)
+    return { ...saved, agent_name: agentConfig(store.catalog, saved.agent_id)?.agent_name ?? null }
+  }
+  return defaultChatConfig(store.catalog)
+})
 const lastSource = ref(defaultChatConfig(store.catalog))
 watch(source, value => { if (value) lastSource.value = copyConfig(value) }, { immediate: true, deep: true })
 const config = computed(() => resolveAgentConfig(overrides.value, source.value || lastSource.value))
+watch([config, () => store.catalogLoaded], () => {
+  // Remember deliberate choices, including unsent drafts, but never loading placeholders.
+  if (store.catalogLoaded && scope === chatCacheScope() && (selectedAgent.value !== undefined || Object.keys(overrides.value).length)) {
+    chatSettings.remember(config.value, scope)
+  }
+}, { deep: true })
 const composer = ref(null)
 const contextWindow = computed(() => modelContextWindow(store.catalog, config.value.model))
 function use (prompt) { text.value = prompt; nextTick(() => composer.value?.focus()) }
