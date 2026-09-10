@@ -71,19 +71,41 @@ function apply () {
 /** Called after Quasar is installed, before the first component is mounted. */
 export function startPreferences () {
   apply()
+  let synchronized = JSON.stringify(preferences)
   const stop = watch(preferences, () => {
     apply()
+    const current = JSON.stringify(preferences)
+    // Remote updates are already persisted. Echoing them can roll another tab
+    // back to an older snapshot while its storage events are still queued.
+    if (current === synchronized) return
     try {
-      localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences))
+      const previous = JSON.parse(synchronized)
+      const saved = localStorage.getItem(PREFERENCES_KEY)
+      let merged = { ...previous }
+      try { if (saved) merged = sanitizePreferences(JSON.parse(saved)) }
+      catch { /* Allow a local edit to replace malformed stored preferences. */ }
+      // Only save fields edited here; a background tab may not yet have received
+      // another tab's newer grouping/filter when it changes an unrelated setting.
+      for (const [key, value] of Object.entries(JSON.parse(current))) {
+        if (JSON.stringify(value) !== JSON.stringify(previous[key])) merged[key] = value
+      }
+      const serialized = JSON.stringify(merged)
+      localStorage.setItem(PREFERENCES_KEY, serialized)
+      synchronized = serialized
+      Object.assign(preferences, merged)
       preferenceError.value = ''
     } catch {
       preferenceError.value = 'Storage is unavailable. These changes apply for this session only.'
     }
   }, { deep: true, flush: 'post' })
   const sync = event => {
-    if (event.key !== PREFERENCES_KEY && event.key !== null) return
+    if (event.storageArea !== localStorage || (event.key !== PREFERENCES_KEY && event.key !== null)) return
     try {
-      Object.assign(preferences, event.newValue ? sanitizePreferences(JSON.parse(event.newValue)) : preferenceDefaults())
+      // event.newValue can be obsolete by the time a suspended tab handles it.
+      const saved = localStorage.getItem(PREFERENCES_KEY)
+      const next = saved ? sanitizePreferences(JSON.parse(saved)) : preferenceDefaults()
+      synchronized = JSON.stringify(next)
+      Object.assign(preferences, next)
     } catch { /* Ignore malformed cross-tab data; keep the current, usable theme. */ }
   }
   window.addEventListener('storage', sync)
