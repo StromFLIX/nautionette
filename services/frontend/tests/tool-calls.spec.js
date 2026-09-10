@@ -24,14 +24,16 @@ const tool = (id, name = 'bash', ok = true) => ({
 const text = (value) => ({ kind: 'text', text: value })
 
 async function expectSummaryAlignment (summary) {
-  const label = summary.locator('.tool-group__label')
-  const labelBox = await label.boundingBox()
-  const lineHeight = await label.evaluate(el => parseFloat(getComputedStyle(el).lineHeight))
-  const firstLineCenter = labelBox.y + lineHeight / 2
-  for (const selector of ['.tool-group__indicator', '.tool-group__chevron']) {
-    const box = await summary.locator(selector).boundingBox()
-    expect(Math.abs(box.y + box.height / 2 - firstLineCenter)).toBeLessThan(1)
-  }
+  // Measure together so scrolling between browser calls cannot skew alignment.
+  const offsets = await summary.evaluate(el => {
+    const label = el.querySelector('.tool-group__label')
+    const firstLineCenter = label.getBoundingClientRect().y + parseFloat(getComputedStyle(label).lineHeight) / 2
+    return ['.tool-group__indicator', '.tool-group__chevron'].map(selector => {
+      const box = el.querySelector(selector).getBoundingClientRect()
+      return Math.abs(box.y + box.height / 2 - firstLineCenter)
+    })
+  })
+  for (const offset of offsets) expect(offset).toBeLessThan(1)
 }
 
 for (const width of [1440, 320]) {
