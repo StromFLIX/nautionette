@@ -118,6 +118,11 @@ def test_chat_job_contains_only_selected_projects_and_retry_is_stable(client, db
         "A GitHub API or MCP 403 does not establish that Git push lacks write access" in job["system_prompt"]
     )
     assert "request_internet_access and wait; after approval retry" in job["system_prompt"]
+    assert "before direct GitHub connections from the agent container" in job["system_prompt"]
+    assert "tools exposed through agentgateway do not require this approval" in job["system_prompt"]
+    assert "Do not tunnel Git commands through MCP" in job["system_prompt"]
+    assert "Request internet access before contacting GitHub" not in job["system_prompt"]
+    assert "Do not bypass approval through MCP" not in job["system_prompt"]
     message = db.list_messages(created["id"])[0]
     assert message["meta"]["project_ids"] == [project_id]
     assert client.get(f"/api/chats/{created['id']}").json()["chat"]["project_ids"] == [project_id]
