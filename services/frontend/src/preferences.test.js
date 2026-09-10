@@ -30,6 +30,22 @@ test('interface size migrates old preferences and accepts only supported sizes',
   assert.ok(searchSettings('browser zoom').some(entry => entry.id === 'interfaceSize'))
 })
 
+test('sidebar collapse defaults to expanded and only accepts boolean preferences', () => {
+  assert.equal(preferenceDefaults().sideCollapsed, false)
+  assert.equal(workspaceDefaults().sideCollapsed, false)
+  assert.equal(sanitizePreferences({ sideWidth: 400 }).sideCollapsed, false)
+  for (const value of [true, false]) {
+    assert.equal(validPreference('sideCollapsed', value), true)
+    const saved = sanitizePreferences({ sideCollapsed: value, sideWidth: 400 })
+    assert.equal(saved.sideCollapsed, value)
+    assert.equal(saved.sideWidth, 400)
+  }
+  for (const value of ['true', 1, null, {}, []]) {
+    assert.equal(validPreference('sideCollapsed', value), false)
+    assert.equal(sanitizePreferences({ sideCollapsed: value }).sideCollapsed, false)
+  }
+})
+
 test('stored preferences isolate overrides by theme and drop invalid or unknown fields', () => {
   const result = sanitizePreferences({
     theme: 'daylight', overrides: { orbit: { accent: '#123456' }, daylight: { font: 'monospace', 'rail-width': 1 }, unknown: { accent: '#abcdef' } },

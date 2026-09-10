@@ -1,10 +1,13 @@
 <template>
   <div class="app-frame">
     <EnvironmentBanner />
-  <div class="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage }">
-    <NavRail class="shell__rail" />
+  <div class="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed }">
+    <NavRail
+      class="shell__rail" :show-sidebar-toggle="!fullPage && !mobile" :sidebar-expanded="!sideCollapsed"
+      @toggle-sidebar="preferences.sideCollapsed = !preferences.sideCollapsed" @open-sidebar="openSidebar"
+    />
     <template v-if="!fullPage">
-      <aside class="shell__side" :style="{ width: `${sideWidth}px` }">
+      <aside v-show="!sideCollapsed" id="shell-sidebar" class="shell__side" :style="{ width: `${sideWidth}px` }">
         <SidePanel />
         <div
           class="shell__grip"
@@ -74,12 +77,21 @@ const fullPage = computed(() => route.name === 'settings')
 const mobileMedia = window.matchMedia('(max-width: 900px)')
 const mobile = ref(mobileMedia.matches)
 const updateMobile = event => { mobile.value = event.matches }
+// Keep the desktop preference without hiding the list on narrow screens.
+const sideCollapsed = computed(() => !mobile.value && preferences.sideCollapsed)
+
+function openSidebar () {
+  if (!mobile.value) preferences.sideCollapsed = false
+}
 
 watch([() => preferences.theme, currentTokens, hasSelection, fullPage, mobile],
   ([theme, tokens, detail, full, narrow]) => syncSystemBars(theme, tokens, narrow && !detail && !full),
   { immediate: true, flush: 'post' })
 
 let stopDrag = () => {}
+watch([sideCollapsed, fullPage, mobile], ([collapsed, full, narrow]) => {
+  if (collapsed || full || narrow) stopDrag()
+})
 function startDrag (event) {
   if (event.button !== 0) return
   event.preventDefault()
@@ -160,7 +172,8 @@ onUnmounted(() => {
   background: var(--surface-app);
 }
 
-.shell--full {
+.shell--full,
+.shell--collapsed {
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
 }
 

@@ -1,13 +1,24 @@
 <template>
   <nav class="rail" aria-label="Main navigation">
-    <RouterLink to="/chats" class="rail__brand" aria-label="Nautionette">
+    <RouterLink to="/chats" class="rail__brand" aria-label="Nautionette" @click="$emit('open-sidebar')">
       <BrandMark />
     </RouterLink>
+
+    <button
+      v-if="showSidebarToggle" type="button" class="rail__item rail__sidebar-toggle"
+      :aria-label="sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'"
+      :title="sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'"
+      :aria-expanded="sidebarExpanded" aria-controls="shell-sidebar"
+      @click="$emit('toggle-sidebar')"
+    >
+      <span class="material-icons" aria-hidden="true">{{ sidebarExpanded ? 'menu_open' : 'menu' }}</span>
+    </button>
 
     <div class="rail__nav">
       <RouterLink
         v-for="item in items" :key="item.name" :to="item.to" class="rail__item"
         :class="{ 'rail__item--active': active === item.name }" :aria-current="active === item.name ? 'page' : undefined"
+        @click="$emit('open-sidebar')"
       >
         <span class="material-icons" aria-hidden="true">{{ item.icon }}</span>
         <span class="rail__label">{{ item.label }}</span>
@@ -33,6 +44,12 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { draftCount, health } from '../store'
 import BrandMark from './BrandMark.vue'
+
+defineProps({
+  showSidebarToggle: { type: Boolean, default: false },
+  sidebarExpanded: { type: Boolean, default: true }
+})
+defineEmits(['toggle-sidebar', 'open-sidebar'])
 
 const route = useRoute()
 const active = computed(() => route.name)
@@ -90,6 +107,10 @@ const items = computed(() => [
   cursor: pointer;
   text-decoration: none;
   transition: background var(--transition), color var(--transition);
+}
+
+.rail__sidebar-toggle {
+  min-height: 2rem;
 }
 
 .rail__item:hover {
@@ -159,6 +180,7 @@ const items = computed(() => [
   }
 
   .rail__brand,
+  .rail__sidebar-toggle,
   .rail__settings {
     display: none;
   }
