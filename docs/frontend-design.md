@@ -197,11 +197,22 @@ To add a token:
 before mounting the app. Use the shared surface overrides in `styles/base.css` for
 portaled menus and dialogs. Keep syntax styling in `styles/code.css`.
 
-Theme exports contain only a version, preset ID and token overrides. Imports are
-validated as a whole and limited to 64 KB: six/eight-digit hex colors, bounded
-numbers and local font-family names. They cannot inject CSS declarations or load
-remote fonts/assets. Low text or button contrast produces a warning without
-preventing intentional customization. Theme reset has an Undo action.
+Legacy version-1 theme exports contain only a version, preset ID and token
+overrides. These imports remain limited to 64 KB: six/eight-digit hex colors,
+bounded numbers and local font-family names. They cannot inject CSS declarations.
+Low text or button contrast produces a warning without preventing intentional
+customization. Theme reset has an Undo action.
+
+Version-2 **skin packs** add named, portable designs with AST-validated CSS,
+responsive layouts and bundled raster artwork/WOFF2 fonts. `skins.js` owns the
+schema, CSS validation/scoping and library limits; `SkinLibrary.vue` provides
+install/switch/download/remove, with sandboxed previews in `SkinPreview.vue`.
+Preferences keep `skins`, the selected `skin` id, its base `theme`, and independent
+`overrides["skin:<id>"]` tweaks. Switching off removes the whole stylesheet. Packs
+never load remote assets or execute scripts, but CSS can obscure controls: startup
+`?safe-appearance=1` and **Ctrl/Command + Alt + 0** restore Orbit without deleting
+the library. See [Custom skin packs](skin-packs.md) for the authoring contract,
+`data-skin-part` hooks, examples, limits and recovery details.
 
 System reduced-motion preferences are always respected. **Workspace → Animations**
 retains the overall **Motion** control and provides three independent, default-on

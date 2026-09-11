@@ -25,7 +25,9 @@ export const SETTINGS_SECTIONS = [
     load: () => import('./components/settings/AppearancePane.vue'),
     entries: [
       entry('themes', 'Color theme', 'Orbit, Nebula, Daylight or Sand. Make any of them yours.', 'dark light mode palette preset'),
-      entry('theme-transfer', 'Import & export theme', 'Share a theme as JSON, without account data.', 'backup restore download upload'),
+      entry('skin-library', 'Skin packs', 'Complete custom designs, including Winamp Classic and Windows XP examples.', 'library CSS layout textures typography import export download upload'),
+      entry('theme-transfer', 'Import & export designs', 'Share complete skin packs or legacy themes as JSON, without account data.', 'backup restore download upload'),
+      entry('skin-recovery', 'Recover appearance', 'Restore Orbit with Ctrl / Cmd + Alt + 0, or open ?safe-appearance=1.', 'reset broken skin safe mode'),
       ...THEME_TOKENS.map(token => entry(`token-${token.key}`, token.label, `Customize ${token.group.toLowerCase()}.`, `theme color style ${token.key} ${token.group}`))
     ]
   },

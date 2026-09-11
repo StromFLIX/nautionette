@@ -2,7 +2,7 @@
   <EmptyState v-if="!id" icon="history" title="Every run, in view" description="Select a run to inspect its timeline and results." to="/workflows" action="Open workflows" />
 
   <div v-else-if="detail" class="stack grow">
-    <header class="pane-head">
+    <header class="pane-head" data-skin-part="header">
       <button class="btn btn--icon pane-head__back" aria-label="Back to runs" @click="backTo('/runs')">
         <span class="material-icons">arrow_back</span>
       </button>

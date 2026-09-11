@@ -1,5 +1,5 @@
 <template>
-  <div class="welcome scroll-y">
+  <div class="welcome scroll-y" data-skin-part="welcome">
     <div class="welcome__inner">
       <div class="welcome__intro">
         <BrandMark class="welcome__mark" />

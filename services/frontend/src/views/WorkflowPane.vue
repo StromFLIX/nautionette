@@ -5,7 +5,7 @@
 
   <!-- a draft waiting for a human -->
   <div v-else-if="draft" class="stack grow">
-    <header class="pane-head draft-head">
+    <header class="pane-head draft-head" data-skin-part="header">
       <button class="btn btn--icon pane-head__back" aria-label="Back to workflows" @click="backTo('/workflows')">
         <span class="material-icons">arrow_back</span>
       </button>
@@ -65,7 +65,7 @@
 
   <!-- a published workflow -->
   <div v-else-if="workflow" class="stack grow">
-    <header class="pane-head">
+    <header class="pane-head" data-skin-part="header">
       <button class="btn btn--icon pane-head__back" aria-label="Back to workflows" @click="backTo('/workflows')">
         <span class="material-icons">arrow_back</span>
       </button>

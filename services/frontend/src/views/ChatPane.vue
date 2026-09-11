@@ -2,7 +2,7 @@
   <ChatWelcome v-if="!chatId" :busy="starting" @start="start" />
 
   <div v-else class="thread stack grow">
-    <header class="pane-head">
+    <header class="pane-head" data-skin-part="header">
       <button class="btn btn--icon pane-head__back" aria-label="Back to chats" @click="backTo('/chats')">
         <span class="material-icons">arrow_back</span>
         <span v-if="draftCount" class="pane-head__badge">{{ draftCount }}</span>
@@ -43,7 +43,7 @@
       </button>
     </header>
 
-    <div ref="scroller" class="thread__body scroll-y grow" @scroll.passive="acknowledgeRead">
+    <div ref="scroller" data-skin-part="conversation" class="thread__body scroll-y grow" @scroll.passive="acknowledgeRead">
       <div class="thread__inner">
         <p v-if="!messages.length && !activeTurn" class="caption dim" role="status">
           {{ reconnecting ? 'Waiting for connection. No saved messages on this device.' : 'No messages yet.' }}

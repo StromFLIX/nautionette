@@ -1,5 +1,5 @@
 <template>
-  <div class="msg" :class="`msg--${role}`">
+  <div class="msg" data-skin-part="message" :data-role="role" :class="`msg--${role}`">
     <div class="bubble" :class="{ 'bubble--wide': run || hasTools }">
       <RouterLink v-if="run" class="bubble__run" :to="`/runs/${run.workflow_id}`">
         <span class="material-icons">bolt</span>

@@ -1,10 +1,13 @@
 <template>
   <h2 class="settings__title">Appearance</h2>
-  <p class="settings__intro">Four starting points. No fixed rules.</p>
+  <p class="settings__intro">A familiar palette or a completely different world. Make this workspace yours.</p>
+
+  <SkinLibrary />
+  <h3 class="setting__label">Built-in themes</h3>
 
   <section id="themes" class="theme-grid" aria-label="Color theme">
     <button v-for="theme in THEMES" :key="theme.id" class="theme-card" :aria-label="`${theme.name} theme`"
-      :aria-pressed="preferences.theme === theme.id" :class="{ 'theme-card--selected': preferences.theme === theme.id }"
+      :aria-pressed="!currentSkin && preferences.theme === theme.id" :class="{ 'theme-card--selected': !currentSkin && preferences.theme === theme.id }"
       @click="chooseTheme(theme.id)">
       <div class="theme-card__preview" :style="previewStyle(theme)" aria-hidden="true">
         <div class="theme-card__rail"><i /><b /><b /></div>
@@ -13,7 +16,7 @@
       </div>
       <span class="theme-card__caption">
         <strong>{{ theme.name }}</strong>
-        <span v-if="preferences.theme === theme.id" class="material-icons" aria-hidden="true">check_circle</span>
+        <span v-if="!currentSkin && preferences.theme === theme.id" class="material-icons" aria-hidden="true">check_circle</span>
         <span v-else class="theme-card__mode">{{ theme.mode }}</span>
       </span>
       <span class="theme-card__description">{{ theme.description }}<span v-if="Object.keys(preferences.overrides[theme.id] || {}).length"> · custom</span></span>
@@ -47,7 +50,7 @@
       <p v-if="!visibleTokens.length" class="caption dim" role="status">No matching tokens.</p>
       <details v-for="group in visibleGroups" :key="group" class="settings-disclosure token-group" :open="Boolean(tokenQuery) || modifiedOnly">
         <summary><span class="grow">{{ group }}</span><span class="caption dim">{{ tokensIn(group).length }}</span></summary>
-        <div class="token-grid" :key="preferences.theme">
+        <div class="token-grid" :key="currentDesignKey">
           <div v-for="token in tokensIn(group)" :id="`token-${token.key}`" :key="token.key" class="token-field" :class="{ 'token-field--modified': hasOverride(token.key) }">
             <label :for="`theme-${token.key}`">{{ token.label }}<span v-if="hasOverride(token.key)" class="token-field__modified" title="Customized" aria-label="Customized" /></label>
             <div class="row">
@@ -71,10 +74,11 @@
   </details>
 
   <section id="theme-transfer" class="appearance__transfer">
+    <p class="caption muted">Import a .skin.json pack (up to 512 KB) or a legacy theme. Reimporting a pack replaces its matching id and resets its tweaks. Export shares only design files, never account or chat data.</p>
     <div class="row">
       <input ref="fileInput" type="file" accept=".json,application/json" hidden @change="upload" />
-      <button class="btn btn--outline btn--sm" @click="fileInput?.click()"><span class="material-icons" aria-hidden="true">upload</span>Import theme</button>
-      <button class="btn btn--outline btn--sm" @click="download"><span class="material-icons" aria-hidden="true">download</span>Export theme</button>
+      <button class="btn btn--outline btn--sm" @click="fileInput?.click()"><span class="material-icons" aria-hidden="true">upload</span>Import design</button>
+      <button class="btn btn--outline btn--sm" @click="download"><span class="material-icons" aria-hidden="true">download</span>{{ currentSkin ? 'Export skin pack' : 'Export theme' }}</button>
       <span class="grow" />
       <button v-if="undo" class="btn btn--sm" @click="undoReset">Undo reset</button>
       <button v-else class="btn btn--sm" :disabled="!Object.keys(currentOverrides).length" @click="reset">Reset theme</button>
@@ -91,8 +95,11 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import BrandMark from '../BrandMark.vue'
-import { THEMES, THEME_TOKENS, TOKEN_GROUPS, contrastRatio, exportTheme, importTheme, resolveTheme } from '../../themes'
-import { applyImportedTheme, currentOverrides, currentTokens, preferenceError, preferences, resetTheme, resetToken, setToken } from '../../preferences'
+import SkinLibrary from './SkinLibrary.vue'
+import { THEMES, THEME_TOKENS, TOKEN_GROUPS, contrastRatio, exportTheme, resolveTheme } from '../../themes'
+import { exportSkin, importDesign, MAX_SKIN_BYTES } from '../../skins'
+import { downloadDesign } from '../../skin-download'
+import { applyImportedSkin, applyImportedTheme, currentDesignKey, currentSkin, currentOverrides, currentTokens, preferenceError, preferences, resetTheme, resetToken, setToken } from '../../preferences'
 
 const fileInput = ref(null)
 const tokenQuery = ref('')
@@ -124,7 +131,7 @@ function clearErrors () {
   for (const key of Object.keys(errors)) delete errors[key]
   for (const key of Object.keys(drafts)) delete drafts[key]
 }
-function chooseTheme (id) { preferences.theme = id; undo.value = null; clearErrors(); notice.value = ''; transferError.value = '' }
+function chooseTheme (id) { Object.assign(preferences, { theme: id, skin: '' }); undo.value = null; clearErrors(); notice.value = ''; transferError.value = '' }
 function changeColor (key, value) { setToken(key, value); delete errors[key]; delete drafts[key]; undo.value = null }
 function clearToken (key) { resetToken(key); delete errors[key]; delete drafts[key] }
 function changeToken (token, raw) {
@@ -136,37 +143,37 @@ function changeToken (token, raw) {
       : 'Use font family names, separated by commas. No CSS declarations.'
 }
 function reset () {
-  undo.value = { theme: preferences.theme, overrides: { ...currentOverrides.value } }
+  undo.value = { key: currentDesignKey.value, overrides: { ...currentOverrides.value } }
   resetTheme()
   clearErrors()
 }
-function undoReset () { applyImportedTheme(undo.value); undo.value = null }
+function undoReset () { preferences.overrides[undo.value.key] = undo.value.overrides; undo.value = null }
 async function upload (event) {
   const file = event.target.files?.[0]
   event.target.value = ''
   if (!file) return
   transferError.value = ''; notice.value = ''
   try {
-    if (file.size > 64000) throw new Error('Theme files must be smaller than 64 KB.')
-    const imported = importTheme(await file.text())
-    applyImportedTheme(imported)
+    if (file.size > MAX_SKIN_BYTES) throw new Error('Skin packs must be smaller than 512 KB.')
+    const imported = importDesign(await file.text())
+    if (imported.kind === 'skin') applyImportedSkin(imported.skin)
+    else applyImportedTheme(imported)
     undo.value = null
     clearErrors()
-    notice.value = 'Theme imported.'
+    notice.value = imported.kind === 'skin' ? `${imported.skin.name} skin imported.` : 'Theme imported.'
   } catch (error) { transferError.value = error.message }
 }
-watch(() => preferences.theme, () => { clearErrors(); undo.value = null })
+watch(currentDesignKey, () => { clearErrors(); undo.value = null })
 defineExpose({ revealSetting: id => {
   if (id.startsWith('token-')) { tokenQuery.value = ''; modifiedOnly.value = false }
 } })
 function download () {
-  const blob = new Blob([exportTheme(preferences.theme, currentOverrides.value)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `nautionette-${preferences.theme}.json`
-  link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  transferError.value = ''
+  try {
+    const skin = currentSkin.value
+    downloadDesign(skin ? exportSkin(skin, currentOverrides.value) : exportTheme(preferences.theme, currentOverrides.value),
+      skin ? `${skin.id}.skin.json` : `nautionette-${preferences.theme}.json`)
+  } catch (error) { transferError.value = error.message }
 }
 </script>
 
@@ -221,7 +228,7 @@ function download () {
 .token-field__key { display: block; margin-top: 5px; font-size: 0.625rem; color: var(--text-dim); }
 .token-field__modified { display: inline-block; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; }
 .appearance__transfer { margin-top: 24px; }
-.appearance__transfer > .row { flex-wrap: wrap; }
+.appearance__transfer > .row { flex-wrap: wrap; margin-top: 12px; }
 .appearance__transfer .material-icons { font-size: 1rem; }
 .appearance__transfer p { margin: 12px 0 0; }
 .appearance__contrast { display: flex; align-items: center; gap: 6px; color: var(--warning); }

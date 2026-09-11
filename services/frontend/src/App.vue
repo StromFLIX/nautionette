@@ -1,10 +1,10 @@
 <template>
   <div class="app-frame">
     <EnvironmentBanner />
-  <div class="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed }">
+  <div class="shell" data-skin-part="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed }">
     <NavRail ref="navRail" class="shell__rail" :sidebar-collapsed="sideCollapsed" @open-sidebar="openSidebar" />
     <template v-if="!fullPage">
-      <aside v-show="!sideCollapsed" id="shell-sidebar" class="shell__side" :style="{ width: `${sideWidth}px` }">
+      <aside v-show="!sideCollapsed" data-skin-part="sidebar" id="shell-sidebar" class="shell__side" :style="{ width: `${sideWidth}px` }">
         <SidePanel :show-collapse-button="!mobile" :is-chat-active="isChatActive" @collapse-sidebar="collapseSidebar" />
         <div
           class="shell__grip"
@@ -17,7 +17,7 @@
       </aside>
     </template>
 
-    <main class="shell__main">
+    <main class="shell__main" data-skin-part="main">
       <RouterView />
     </main>
 

@@ -1,5 +1,5 @@
 <template>
-  <nav ref="rail" class="rail" aria-label="Main navigation">
+  <nav ref="rail" class="rail" data-skin-part="navigation" aria-label="Main navigation">
     <RouterLink to="/chats" class="rail__brand" aria-label="Nautionette" @click="$emit('open-sidebar')">
       <BrandMark />
     </RouterLink>

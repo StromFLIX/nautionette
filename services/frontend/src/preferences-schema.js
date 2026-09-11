@@ -1,4 +1,5 @@
 import { THEMES, sanitizeOverrides } from './themes.js'
+import { sanitizeSkins } from './skins.js'
 
 export const PREFERENCES_KEY = 'nautionette.preferences.v1'
 export const WORKSPACE_SETTINGS = [
@@ -24,7 +25,7 @@ export const WORKSPACE_SETTINGS = [
 ]
 export const WORKSPACE_GROUPS = [...new Set(WORKSPACE_SETTINGS.map(setting => setting.group))]
 export const workspaceDefaults = () => Object.fromEntries(WORKSPACE_SETTINGS.map(setting => [setting.key, setting.value]))
-export const preferenceDefaults = () => ({ theme: 'orbit', overrides: {}, ...workspaceDefaults() })
+export const preferenceDefaults = () => ({ theme: 'orbit', skin: '', skins: [], overrides: {}, ...workspaceDefaults() })
 
 export function validPreference (key, value) {
   const field = WORKSPACE_SETTINGS.find(setting => setting.key === key)
@@ -38,9 +39,12 @@ export function sanitizePreferences (data) {
   const result = preferenceDefaults()
   if (!data || typeof data !== 'object' || Array.isArray(data)) return result
   if (THEMES.some(theme => theme.id === data.theme)) result.theme = data.theme
-  for (const theme of THEMES) {
-    const overrides = sanitizeOverrides(data.overrides?.[theme.id])
-    if (Object.keys(overrides).length) result.overrides[theme.id] = overrides
+  result.skins = sanitizeSkins(data.skins)
+  const active = result.skins.find(skin => skin.id === data.skin)
+  if (active) { result.skin = active.id; result.theme = active.base }
+  for (const key of [...THEMES.map(theme => theme.id), ...result.skins.map(skin => `skin:${skin.id}`)]) {
+    const overrides = sanitizeOverrides(data.overrides?.[key])
+    if (Object.keys(overrides).length) result.overrides[key] = overrides
   }
   for (const field of WORKSPACE_SETTINGS) {
     if (validPreference(field.key, data[field.key])) result[field.key] = data[field.key]

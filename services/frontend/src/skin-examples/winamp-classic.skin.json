@@ -1,0 +1,41 @@
+{
+  "format": "nautionette-skin",
+  "version": 2,
+  "id": "winamp-classic",
+  "name": "Winamp Classic",
+  "author": "Nautionette",
+  "description": "Brushed metal, beveled controls, green phosphor displays. An original tribute to the classic player.",
+  "base": "orbit",
+  "tokens": {
+    "surface-app": "#181923",
+    "surface-rail": "#262736",
+    "surface-panel": "#252633",
+    "surface-raised": "#363848",
+    "surface-overlay": "#292b39",
+    "surface-input": "#10130f",
+    "surface-code": "#090d08",
+    "text": "#e3e4d7",
+    "text-muted": "#b7bca5",
+    "text-dim": "#a8ad97",
+    "accent": "#a8ef38",
+    "accent-text": "#152100",
+    "border": "#090a10",
+    "border-strong": "#777b8c",
+    "bubble-out": "#27361e",
+    "bubble-text": "#d4f7a1",
+    "font": "'Tahoma', 'Verdana', sans-serif",
+    "font-mono": "'Lucida Console', 'Courier New', monospace",
+    "radius-xs": 0,
+    "radius-sm": 2,
+    "radius-md": 2,
+    "radius-lg": 2,
+    "radius-xl": 2,
+    "header-height": 52,
+    "content-width": 1000,
+    "chat-font-size": 14
+  },
+  "assets": {
+    "metal": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAF0lEQVR42mMwNHbAihh09KyxIoZBqQMAXdknIVwMsVAAAAAASUVORK5CYII="
+  },
+  "css": "/* Winamp Classic: original CSS, no proprietary player assets. */\n[data-skin-part=\"shell\"] { background: #181923; gap: 4px; padding: 4px; }\n[data-skin-part=\"navigation\"], [data-skin-part=\"sidebar\"], [data-skin-part=\"main\"] { border: 2px solid; border-color: #777b8c #080911 #080911 #777b8c; box-shadow: inset 1px 1px #a0a2ad, inset -1px -1px #3c3e4c; }\n[data-skin-part=\"navigation\"], .side__head, .thread__foot { background: url(\"skin:metal\"); }\n[data-skin-part=\"header\"], .side__heading { background: linear-gradient(90deg, #242333, #57576e 48%, #242333); border-bottom: 2px groove #9295a3; color: #f4f1db; text-shadow: 1px 1px #080912; }\n.pane-head__title, .side__title { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }\n.side__heading { padding: 6px; }\n.side__search, [data-skin-part=\"composer\"], .field { border: 2px solid; border-color: #080b08 #676d61 #676d61 #080b08; box-shadow: inset 1px 1px #000000; background: #10130f; }\n.side__search-input, .composer__input { color: #b9f66a; font-family: var(--font-mono); }\n[data-skin-part=\"conversation\"], [data-skin-part=\"welcome\"] { background: radial-gradient(ellipse at top, #282b36, #12151b); }\n[data-skin-part=\"message\"][data-role=\"assistant\"] .bubble { background: #111810; border: 1px solid #505a42; border-left: 3px solid #8cc633; padding: 14px; box-shadow: inset 0 0 18px #000000; }\n[data-skin-part=\"message\"][data-role=\"user\"] .bubble { border: 1px solid #7c9255; box-shadow: 2px 2px #050705; }\n.bubble__body pre, [data-skin-part=\"code\"] { border: 2px inset #5d6651; background: #090d08; }\n.btn, .pick, .rail__item { border: 1px solid; border-color: #9294a2 #070811 #070811 #9294a2; background: linear-gradient(#555867, #353746 50%, #272938 51%, #3e4050); color: #efefdd; box-shadow: inset 1px 1px #6d6f7c; border-radius: 2px; }\n.btn:hover, .pick:hover, .rail__item:hover { background: linear-gradient(#666a7a, #353948); color: #c6ff6f; }\n.btn--primary, .rail__item--active { color: #c6ff6f; background: linear-gradient(#3c4d25, #17230e); border-color: #8f9d79 #060b03 #060b03 #8f9d79; }\n.composer__send::before { clip-path: none; border: 2px outset #b5d877; background: linear-gradient(#bfed72, #6f9f32); }\n.composer__send:disabled::before { background: #3c4436; border-color: #69745e; }\n.rail__brand .brand-mark { color: #b4f83f; filter: drop-shadow(0 0 3px #71ad1b); }\n.row-item--active { background: #132007; border-left: 3px solid #a8ef38; }\n.row-item--active .row-item__title { color: #c6ff6f; font-family: var(--font-mono); }\n.chip { border-radius: 1px; border: 1px solid #646956; font-family: var(--font-mono); text-transform: uppercase; }\n.settings__title, .welcome__title { font-family: var(--font-mono); letter-spacing: 0.04em; }\n@media (min-width: 901px) { [data-skin-part=\"shell\"] { padding: 10px; gap: 8px; } }\n@media (max-width: 900px) { [data-skin-part=\"shell\"] { gap: 0; padding: 0; } [data-skin-part=\"header\"] { border-top: 2px groove #9295a3; } }\n"
+}

@@ -82,8 +82,12 @@ Five rules the diagram encodes:
 
 The workspace uses a shared design system with subtle octagonal identity and
 searchable, grouped settings. **Settings > Appearance** offers Orbit, Nebula,
-Daylight and Sand, with editable colors, fonts, spacing and layout tokens, plus
-validated theme import/export. **Settings > Workspace** controls interface size,
+Daylight and Sand, with editable colors, fonts, spacing and layout tokens. Import
+complete **skin packs** with custom CSS, responsive layouts and bundled artwork or
+fonts; **Winamp Classic** and **Windows XP** are included as downloadable examples.
+The skin library preserves legacy theme imports and offers a recovery shortcut
+(**Ctrl/Command + Alt + 0**). See [Custom skin packs](docs/skin-packs.md) for the
+format, styling hooks and safe mode. **Settings > Workspace** controls interface size,
 density, sidebar width, composer behavior, code wrapping and graph orientation.
 The interface defaults to **125%**, including on phones; choose 100%, 110%, 125% or
 150% without browser zoom. These preferences save on this device; instance settings

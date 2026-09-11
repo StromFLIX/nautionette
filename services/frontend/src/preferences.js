@@ -2,6 +2,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { Dark, setCssVar } from 'quasar'
 import { cssTokens, resolveTheme, themeById, validToken } from './themes'
 import { PREFERENCES_KEY, preferenceDefaults, sanitizePreferences, validPreference, workspaceDefaults } from './preferences-schema'
+import { compileSkinCss, installSkin } from './skins'
 
 export const preferenceError = ref('')
 function load () {
@@ -23,33 +24,70 @@ function load () {
 
 export const preferences = reactive(load())
 export const reducedMotion = () => preferences.motion === 'reduced' || window.matchMedia('(prefers-reduced-motion: reduce)').matches
-export const currentOverrides = computed(() => preferences.overrides[preferences.theme] || {})
-export const currentTokens = computed(() => resolveTheme(preferences.theme, currentOverrides.value))
+export const currentSkin = computed(() => preferences.skins.find(skin => skin.id === preferences.skin) || null)
+export const currentDesignKey = computed(() => currentSkin.value ? `skin:${currentSkin.value.id}` : preferences.theme)
+export const currentOverrides = computed(() => preferences.overrides[currentDesignKey.value] || {})
+const effectiveOverrides = computed(() => ({ ...currentSkin.value?.tokens, ...currentOverrides.value }))
+export const currentTokens = computed(() => resolveTheme(currentSkin.value?.base || preferences.theme, effectiveOverrides.value))
 
 export function setToken (key, value) {
   if (!validToken(key, value)) return false
-  preferences.overrides[preferences.theme] = { ...currentOverrides.value, [key]: value }
+  preferences.overrides[currentDesignKey.value] = { ...currentOverrides.value, [key]: value }
   return true
 }
 export function resetToken (key) {
   const next = { ...currentOverrides.value }
   delete next[key]
-  preferences.overrides[preferences.theme] = next
+  preferences.overrides[currentDesignKey.value] = next
 }
-export function resetTheme () { preferences.overrides[preferences.theme] = {} }
+export function resetTheme () { preferences.overrides[currentDesignKey.value] = {} }
 export function resetWorkspace () { Object.assign(preferences, workspaceDefaults()) }
 export function setPreference (key, value) {
   if (validPreference(key, value)) preferences[key] = value
 }
 export function applyImportedTheme ({ theme, overrides }) {
   // A single patch, already validated by importTheme, so an invalid file is never partially applied.
-  Object.assign(preferences, { theme, overrides: { ...preferences.overrides, [theme]: overrides } })
+  Object.assign(preferences, { theme, skin: '', overrides: { ...preferences.overrides, [theme]: overrides } })
 }
-
+export function applyImportedSkin (skin) {
+  const skins = installSkin(preferences.skins, skin)
+  const overrides = { ...preferences.overrides }
+  delete overrides[`skin:${skin.id}`]
+  Object.assign(preferences, { skins, skin: skin.id, theme: skin.base, overrides })
+}
+export function chooseSkin (skin) {
+  Object.assign(preferences, { skin: skin.id, theme: skin.base })
+}
+export function removeSkin (id) {
+  const overrides = { ...preferences.overrides }
+  delete overrides[`skin:${id}`]
+  Object.assign(preferences, { skins: preferences.skins.filter(skin => skin.id !== id), overrides,
+    skin: preferences.skin === id ? '' : preferences.skin })
+}
+export function recoverAppearance () {
+  Object.assign(preferences, { skin: '', theme: 'orbit', overrides: { ...preferences.overrides, orbit: {} } })
+  // Immediate removal, even before Vue flushes or if storage is unavailable.
+  apply()
+}
+let skinStyle
+let appliedCss = ''
 function apply () {
   const root = document.documentElement
-  const theme = themeById(preferences.theme)
-  for (const [key, value] of Object.entries(cssTokens(theme.id, currentOverrides.value))) root.style.setProperty(key, value)
+  const theme = themeById(currentSkin.value?.base || preferences.theme)
+  for (const [key, value] of Object.entries(cssTokens(theme.id, effectiveOverrides.value))) root.style.setProperty(key, value)
+  root.dataset.skin = currentSkin.value?.id || ''
+  const css = activeSkinCss.value
+  if (css !== appliedCss) {
+    skinStyle?.remove()
+    skinStyle = null
+    if (css) {
+      skinStyle = document.createElement('style')
+      skinStyle.id = 'nautionette-skin'
+      skinStyle.textContent = css
+      document.head.append(skinStyle)
+    }
+    appliedCss = css
+  }
   root.style.fontSize = `${preferences.interfaceSize}%`
   root.style.colorScheme = theme.mode
   root.dataset.theme = theme.id
@@ -68,9 +106,29 @@ function apply () {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', tokens['surface-app'])
 }
 
+const systemReducedMotion = ref(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+const activeSkinCss = computed(() => currentSkin.value
+  ? compileSkinCss(currentSkin.value, preferences.motion === 'reduced' || systemReducedMotion.value) : '')
+
 /** Called after Quasar is installed, before the first component is mounted. */
 export function startPreferences () {
+  // Works even when a pack hides the entire interface; keep the library intact.
+  const safe = new URL(window.location.href).searchParams.get('safe-appearance') === '1'
+  if (safe) recoverAppearance()
   apply()
+  if (safe) {
+    try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences)) } catch { preferenceError.value = 'Storage is unavailable. Recovery applies for this session only.' }
+  }
+  const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
+  const motionChanged = event => { systemReducedMotion.value = event.matches; apply() }
+  motion.addEventListener('change', motionChanged)
+  const recover = event => {
+    if ((event.ctrlKey || event.metaKey) && event.altKey && event.code === 'Digit0') {
+      event.preventDefault()
+      recoverAppearance()
+    }
+  }
+  window.addEventListener('keydown', recover, true)
   let synchronized = JSON.stringify(preferences)
   const stop = watch(preferences, () => {
     apply()
@@ -86,13 +144,20 @@ export function startPreferences () {
       catch { /* Allow a local edit to replace malformed stored preferences. */ }
       // Only save fields edited here; a background tab may not yet have received
       // another tab's newer grouping/filter when it changes an unrelated setting.
-      for (const [key, value] of Object.entries(JSON.parse(current))) {
+      const local = JSON.parse(current)
+      for (const [key, value] of Object.entries(local)) {
         if (JSON.stringify(value) !== JSON.stringify(previous[key])) merged[key] = value
       }
-      const serialized = JSON.stringify(merged)
+      // Base theme and active pack are one selection, not independent settings.
+      if (local.theme !== previous.theme || local.skin !== previous.skin) {
+        merged.theme = local.theme
+        merged.skin = local.skin
+      }
+      const validated = sanitizePreferences(merged)
+      const serialized = JSON.stringify(validated)
       localStorage.setItem(PREFERENCES_KEY, serialized)
       synchronized = serialized
-      Object.assign(preferences, merged)
+      Object.assign(preferences, validated)
       preferenceError.value = ''
     } catch {
       preferenceError.value = 'Storage is unavailable. These changes apply for this session only.'
@@ -109,5 +174,13 @@ export function startPreferences () {
     } catch { /* Ignore malformed cross-tab data; keep the current, usable theme. */ }
   }
   window.addEventListener('storage', sync)
-  return () => { stop(); window.removeEventListener('storage', sync) }
+  return () => {
+    stop()
+    window.removeEventListener('storage', sync)
+    window.removeEventListener('keydown', recover, true)
+    motion.removeEventListener('change', motionChanged)
+    skinStyle?.remove()
+    skinStyle = null
+    appliedCss = ''
+  }
 }

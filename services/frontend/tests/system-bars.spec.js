@@ -6,6 +6,8 @@ import { mockDesign } from './design-fixture.js'
 async function mockAndroid (context, { theme = 'orbit', fail = false } = {}) {
   await mockDesign(context)
   await context.addInitScript(({ theme, fail, key }) => {
+    // Only the app has native APIs/storage; sandboxed skin previews do not.
+    if (window !== window.top) return
     localStorage.setItem('nautionette.server', location.origin)
     if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ theme }))
     window.systemBarCalls = []

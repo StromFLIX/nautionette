@@ -1,5 +1,5 @@
 <template>
-  <div class="composer" :class="[`composer--${variant}`, { 'composer--focus': focused, 'composer--running': running }]"
+  <div class="composer" data-skin-part="composer" :class="[`composer--${variant}`, { 'composer--focus': focused, 'composer--running': running }]"
     @dragover.prevent @drop.prevent="drop" @paste="paste">
     <div v-if="attachments.length" class="composer__attachments">
       <div v-for="image in attachments" :key="image.id" class="composer__attachment">

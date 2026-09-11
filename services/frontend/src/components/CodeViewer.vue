@@ -1,5 +1,5 @@
 <template>
-  <div class="viewer" :class="{ 'viewer--wrap': preferences.codeWrap }">
+  <div class="viewer" data-skin-part="code" :class="{ 'viewer--wrap': preferences.codeWrap }">
     <nav v-if="files.length > 1" class="viewer__files">
       <button
         v-for="file in files" :key="file.name" class="viewer__file"
