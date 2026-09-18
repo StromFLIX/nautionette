@@ -20,7 +20,6 @@ from .events import bus
 BASE_PATH = "/api/projects/github-app"
 COOKIE = "__Host-nautionette-github-setup"
 REGISTERED_SETTING = "github_projects_registered_app"
-WEBHOOK_SETTING = "github_projects_webhook"
 SETUP_SECONDS = 3600
 MAX_WEBHOOK_BYTES = 2 * 1024 * 1024
 
@@ -59,31 +58,40 @@ def public_origin(value: str) -> str:
 
 
 def registered_app() -> dict[str, Any]:
-    pending = db.get_setting(REGISTERED_SETTING, {})
-    if pending:
-        return pending
-    current = projects.app_config()
-    return current if current.get("webhook_secret") and current.get("public_url") else {}
+    return db.get_setting(REGISTERED_SETTING, {})
 
 
 def status() -> dict[str, Any]:
     registered = registered_app()
-    return projects.app_status() | {
+    connections = [projects.app_status(config["id"]) for config in projects.app_configs()]
+    return {
+        "connections": connections,
+        "configured": any(connection["configured"] for connection in connections),
         "registered": bool(registered),
-        "automatic": bool(projects.app_config().get("webhook_secret")),
-        "public_url": registered.get("public_url", os.environ.get("GITHUB_APP_PUBLIC_URL", "")),
-        "webhook": db.get_setting(WEBHOOK_SETTING, {}),
+        "public_url": registered.get("public_url")
+        or os.environ.get("GITHUB_APP_PUBLIC_URL", "")
+        or next((connection["public_url"] for connection in connections if connection["public_url"]), ""),
     }
 
 
-def begin(public_url: str, organization: str = "") -> dict[str, str]:
+def begin(
+    public_url: str, organization: str = "", connection_id: str = "", new_app: bool = False
+) -> dict[str, str]:
     origin = public_origin(os.environ.get("GITHUB_APP_PUBLIC_URL") or public_url)
     organization = organization.strip()
     if organization and not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?", organization):
         raise HTTPException(422, "Enter a GitHub organization name, not a URL")
-    config = registered_app()
-    if config and config.get("public_url") != origin:
+    config = projects.app_config(connection_id) if connection_id else ({} if new_app else registered_app())
+    if config and not config.get("slug"):
+        raise HTTPException(409, "This GitHub App has no installation URL; configure it again")
+    if config.get("public_url") and config["public_url"] != origin:
         raise HTTPException(409, "Use the public URL where this App was registered to finish setup")
+    # Reuse App credentials, not the previous installation's state or webhook history.
+    config = {
+        key: config[key]
+        for key in ("app_id", "private_key", "webhook_secret", "slug", "public_url")
+        if key in config
+    }
     state = secrets.token_urlsafe(32)
     db.execute("DELETE FROM github_app_setups WHERE expires_at < ?", (time.time(),))
     db.execute(
@@ -212,9 +220,17 @@ async def installed(state: str, browser: str, installation_id: str, action: str 
         account=installation.get("account", {}).get("login", ""),
         workflows=installation.get("permissions", {}).get("workflows") == "write",
     )
-    db.set_setting(projects.APP_SETTING, config)
-    db.execute("DELETE FROM settings WHERE key = ?", (REGISTERED_SETTING,))
-    projects._tokens.clear()
+    existing = next(
+        (
+            item
+            for item in projects.app_configs()
+            if item["app_id"] == config["app_id"] and item["installation_id"] == installation_id
+        ),
+        {},
+    )
+    projects.save_connection(existing | config)
+    if registered_app().get("app_id") == config["app_id"]:
+        db.execute("DELETE FROM settings WHERE key = ?", (REGISTERED_SETTING,))
     db.execute("DELETE FROM github_app_setups WHERE state_hash = ?", (digest(state),))
     return f"{origin}/settings/projects?github=connected"
 
@@ -224,20 +240,22 @@ def webhook(body: bytes, signature: str, event: str, delivery: str) -> dict[str,
         raise HTTPException(413, "GitHub webhook is too large")
     if not re.fullmatch(r"sha256=[a-f0-9]{64}", signature):
         raise HTTPException(401, "Invalid GitHub webhook signature")
-    configs = [projects.app_config(), db.get_setting(REGISTERED_SETTING, {})]
-    config = next(
-        (
-            candidate
-            for candidate in configs
-            if candidate.get("webhook_secret")
-            and hmac.compare_digest(
-                signature,
-                "sha256=" + hmac.new(candidate["webhook_secret"].encode(), body, hashlib.sha256).hexdigest(),
-            )
-        ),
-        None,
+    configs = [*projects.app_configs(), registered_app()]
+    # Registrations may complete in either order; their signed pings remain valid.
+    configs.extend(
+        json.loads(row["config"])
+        for row in db.query("SELECT config FROM github_app_setups WHERE expires_at >= ?", (time.time(),))
     )
-    if not config:
+    verified = [
+        candidate
+        for candidate in configs
+        if candidate.get("webhook_secret")
+        and hmac.compare_digest(
+            signature,
+            "sha256=" + hmac.new(candidate["webhook_secret"].encode(), body, hashlib.sha256).hexdigest(),
+        )
+    ]
+    if not verified:
         raise HTTPException(401, "Invalid GitHub webhook signature")
     if not re.fullmatch(r"[A-Za-z0-9-]{1,128}", delivery):
         raise HTTPException(400, "Invalid GitHub webhook delivery")
@@ -253,7 +271,16 @@ def webhook(body: bytes, signature: str, event: str, delivery: str) -> dict[str,
         raise HTTPException(400, "Invalid GitHub webhook payload") from exc
     if event not in {"ping", "installation", "installation_repositories", "repository", "push"}:
         return {"ok": True, "ignored": True}
-    if event != "ping" and str(installation.get("id")) != config.get("installation_id"):
+    # An App can have multiple installations sharing the same signing secret.
+    config = next(
+        (
+            candidate
+            for candidate in verified
+            if candidate.get("id") and str(installation.get("id")) == candidate.get("installation_id")
+        ),
+        verified[0] if event == "ping" else None,
+    )
+    if not config:
         return {"ok": True, "ignored": True}
     db.execute("DELETE FROM github_webhook_deliveries WHERE received_at < ?", (time.time() - 7 * 86400,))
     if not db.execute(
@@ -262,7 +289,7 @@ def webhook(body: bytes, signature: str, event: str, delivery: str) -> dict[str,
     ).rowcount:
         return {"ok": True, "duplicate": True}
     if event in {"installation", "installation_repositories", "repository"}:
-        projects._tokens.clear()
+        projects.invalidate_tokens(config["id"])
     if event == "installation":
         action = payload.get("action")
         if action in {"deleted", "suspend", "unsuspend", "new_permissions_accepted"}:
@@ -273,17 +300,26 @@ def webhook(body: bytes, signature: str, event: str, delivery: str) -> dict[str,
             config["workflows"] = permissions.get("workflows") == "write"
             if action in {"unsuspend", "new_permissions_accepted"} and permissions.get("contents") != "write":
                 config["installation_status"] = "permissions_required"
-            db.set_setting(projects.APP_SETTING, config)
     full_name = repository.get("full_name", "")
     if event in {"repository", "push"} and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", full_name):
         db.execute(
             "UPDATE projects SET full_name = ?, default_branch = COALESCE(?, default_branch) "
-            "WHERE repository_id = ?",
-            (full_name, repository.get("default_branch"), repository.get("id")),
+            "WHERE repository_id = ? AND connection_id = ?",
+            (full_name, repository.get("default_branch"), repository.get("id"), config["id"]),
         )
-    db.set_setting(WEBHOOK_SETTING, {"last_received_at": time.time(), "event": event})
+    if config.get("id"):
+        config["webhook"] = {"last_received_at": time.time(), "event": event}
+        db.execute(
+            "UPDATE github_project_connections SET config = ? WHERE id = ?",
+            (json.dumps(config), config["id"]),
+        )
     bus.publish(
         "projects.github_event",
-        {"event": event, "action": payload.get("action", ""), "repository_id": repository.get("id")},
+        {
+            "event": event,
+            "action": payload.get("action", ""),
+            "repository_id": repository.get("id"),
+            "connection_id": config.get("id", ""),
+        },
     )
     return {"ok": True}

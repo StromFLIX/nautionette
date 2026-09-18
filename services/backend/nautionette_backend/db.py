@@ -132,6 +132,10 @@ CREATE TABLE IF NOT EXISTS project_leases (
     turn_id TEXT NOT NULL REFERENCES chat_turns(id) ON DELETE CASCADE,
     PRIMARY KEY (project_id, turn_id)
 );
+CREATE TABLE IF NOT EXISTS github_project_connections (
+    id TEXT PRIMARY KEY,
+    config TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS github_app_setups (
     state_hash TEXT PRIMARY KEY,
     browser_hash TEXT NOT NULL DEFAULT '',
@@ -149,6 +153,7 @@ CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
 
 # Applied on every start; each one fails harmlessly once it is already in place.
 _MIGRATIONS = (
+    "ALTER TABLE projects ADD COLUMN connection_id TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE pi_package_installations ADD COLUMN default_revision_id TEXT",
     "ALTER TABLE chat_turns ADD COLUMN context TEXT",
     "ALTER TABLE chat_turns ADD COLUMN timing TEXT",
@@ -239,6 +244,29 @@ class Database:
                 )
                 self._conn.execute("INSERT INTO project_leases SELECT * FROM project_leases_legacy")
                 self._conn.execute("DROP TABLE project_leases_legacy")
+            # Preserve the former singleton installation and its project bindings.
+            legacy = self._conn.execute(
+                "SELECT value FROM settings WHERE key = 'github_projects_app'"
+            ).fetchone()
+            if legacy:
+                config = json.loads(legacy["value"])
+                if config.get("app_id") and config.get("installation_id"):
+                    connection_id = f"{config['app_id']}-{config['installation_id']}"
+                    webhook = self._conn.execute(
+                        "SELECT value FROM settings WHERE key = 'github_projects_webhook'"
+                    ).fetchone()
+                    if webhook:
+                        config["webhook"] = json.loads(webhook["value"])
+                    self._conn.execute(
+                        "INSERT OR IGNORE INTO github_project_connections (id, config) VALUES (?,?)",
+                        (connection_id, json.dumps(config)),
+                    )
+                    self._conn.execute(
+                        "UPDATE projects SET connection_id = ? WHERE connection_id = ''", (connection_id,)
+                    )
+                    self._conn.execute(
+                        "DELETE FROM settings WHERE key IN ('github_projects_app', 'github_projects_webhook')"
+                    )
             self._conn.commit()
 
     # ------------------------------------------------------------------ basics

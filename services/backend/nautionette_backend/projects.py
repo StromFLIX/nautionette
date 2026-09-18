@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import os
 import re
 import shutil
@@ -19,21 +20,55 @@ from .clients.http import shared
 from .db import db
 
 PROJECTS_DIR = Path(os.environ.get("PROJECTS_DIR", "/projects"))
-APP_SETTING = "github_projects_app"
-_tokens: dict[int, tuple[str, float]] = {}
+_tokens: dict[tuple[str, int | None], tuple[str, float]] = {}
 
 
-def app_config() -> dict[str, Any]:
-    return db.get_setting(APP_SETTING, {})
+def app_configs() -> list[dict[str, Any]]:
+    return [
+        json.loads(row["config"]) | {"id": row["id"]}
+        for row in db.query("SELECT * FROM github_project_connections ORDER BY id")
+    ]
 
 
-def app_status() -> dict[str, Any]:
-    config = app_config()
-    return {key: config.get(key, "") for key in ("app_id", "installation_id", "slug")} | {
+def app_config(connection_id: str = "") -> dict[str, Any]:
+    if connection_id:
+        row = db.one("SELECT * FROM github_project_connections WHERE id = ?", (connection_id,))
+        if not row:
+            raise HTTPException(404, "GitHub connection not found")
+        return json.loads(row["config"]) | {"id": row["id"]}
+    configs = app_configs()
+    if len(configs) > 1:
+        raise HTTPException(422, "Choose a GitHub connection")
+    return configs[0] if configs else {}
+
+
+def save_connection(config: dict[str, Any]) -> str:
+    connection_id = f"{config['app_id']}-{config['installation_id']}"
+    db.execute(
+        "INSERT INTO github_project_connections (id, config) VALUES (?,?) "
+        "ON CONFLICT(id) DO UPDATE SET config = excluded.config",
+        (connection_id, json.dumps({key: value for key, value in config.items() if key != "id"})),
+    )
+    invalidate_tokens(connection_id)
+    return connection_id
+
+
+def invalidate_tokens(connection_id: str) -> None:
+    for key in list(_tokens):
+        if key[0] == connection_id:
+            del _tokens[key]
+
+
+def app_status(connection_id: str = "") -> dict[str, Any]:
+    config = app_config(connection_id)
+    return {key: config.get(key, "") for key in ("id", "app_id", "installation_id", "slug")} | {
         "configured": bool(config.get("private_key") and config.get("installation_id"))
         and config.get("installation_status", "connected") == "connected",
         "installation_status": config.get("installation_status", ""),
         "account": config.get("account", ""),
+        "automatic": bool(config.get("webhook_secret")),
+        "public_url": config.get("public_url", ""),
+        "webhook": config.get("webhook", {}),
         "install_url": f"https://github.com/apps/{config['slug']}/installations/new"
         if config.get("slug")
         else "",
@@ -76,34 +111,50 @@ async def github(method: str, path: str, token: str, **kwargs) -> dict[str, Any]
 
 
 async def configure(app_id: str, installation_id: str, private_key: str) -> dict[str, Any]:
-    config = {
+    existing = next(
+        (
+            config
+            for config in app_configs()
+            if config["app_id"] == app_id and config["installation_id"] == installation_id
+        ),
+        {},
+    )
+    config = existing | {
         "app_id": app_id,
         "installation_id": installation_id,
-        "private_key": private_key.strip() or app_config().get("private_key", ""),
+        "private_key": private_key.strip() or existing.get("private_key", ""),
     }
     token = app_jwt(config)
     app = await github("GET", "/app", token)
     installation = await github("GET", f"/app/installations/{installation_id}", token)
-    if installation.get("permissions", {}).get("contents") != "write":
-        raise HTTPException(422, "The GitHub App installation needs Contents: read and write")
+    if (
+        str(installation.get("app_id")) != app_id
+        or installation.get("suspended_at")
+        or installation.get("permissions", {}).get("contents") != "write"
+    ):
+        raise HTTPException(
+            422, "The GitHub App installation must be active and allow Contents: read and write"
+        )
     config["slug"] = app["slug"]
     config["workflows"] = installation.get("permissions", {}).get("workflows") == "write"
-    db.set_setting(APP_SETTING, config)
-    _tokens.clear()
-    return app_status()
+    config["account"] = installation.get("account", {}).get("login", "")
+    config["installation_status"] = "connected"
+    return app_status(save_connection(config))
 
 
-async def installation_token(repository_id: int | None = None) -> str:
-    cached = _tokens.get(repository_id or 0)
-    if cached and cached[1] > time.time():
+async def installation_token(repository_id: int | None = None, connection_id: str = "") -> str:
+    config = app_config(connection_id)
+    key = (config.get("id", ""), repository_id)
+    cached = _tokens.get(key)
+    if cached and cached[1] > time.time() and config.get("installation_status", "connected") == "connected":
         return cached[0]
-    result = await installation_access(repository_id)
-    _tokens[repository_id or 0] = (result["token"], time.time() + 3000)
+    result = await installation_access(repository_id, config.get("id", ""))
+    _tokens[key] = (result["token"], time.time() + 3000)
     return result["token"]
 
 
-async def installation_access(repository_id: int | None = None) -> dict[str, Any]:
-    config = app_config()
+async def installation_access(repository_id: int | None = None, connection_id: str = "") -> dict[str, Any]:
+    config = app_config(connection_id)
     if not config.get("installation_id") or config.get("installation_status", "connected") != "connected":
         raise HTTPException(409, "Connect a GitHub App in Projects settings first")
     permissions = {"contents": "write"}
@@ -117,11 +168,15 @@ async def installation_access(repository_id: int | None = None) -> dict[str, Any
     )
 
 
-async def repositories(page: int) -> dict[str, Any]:
+async def repositories(page: int, connection_id: str = "") -> dict[str, Any]:
+    config = app_config(connection_id)
     result = await github(
-        "GET", f"/installation/repositories?per_page=50&page={page}", await installation_token()
+        "GET",
+        f"/installation/repositories?per_page=50&page={page}",
+        await installation_token(connection_id=config.get("id", "")),
     )
     return {
+        "connection_id": config["id"],
         "total_count": result["total_count"],
         "repositories": [
             {key: repository.get(key) for key in ("id", "full_name", "private", "default_branch")}
@@ -157,13 +212,19 @@ def selection(value: Any) -> list[str]:
     return selected
 
 
-async def add_repository(full_name: str) -> dict[str, Any]:
+async def add_repository(full_name: str, connection_id: str = "") -> dict[str, Any]:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", full_name):
         raise HTTPException(422, "Repository must be owner/name")
-    repository = await github("GET", f"/repos/{full_name}", await installation_token())
-    await installation_token(repository["id"])
+    config = app_config(connection_id)
+    repository = await github(
+        "GET", f"/repos/{full_name}", await installation_token(connection_id=config.get("id", ""))
+    )
+    connection_id = config["id"]
+    await installation_token(repository["id"], connection_id)
     existing = db.one("SELECT * FROM projects WHERE repository_id = ?", (repository["id"],))
     if existing:
+        if existing["connection_id"] != connection_id:
+            raise HTTPException(409, "This repository already belongs to another GitHub connection")
         if existing["status"] == "archived":
             if not checkout(existing["id"]).is_dir():
                 raise HTTPException(409, "The saved checkout is missing")
@@ -175,14 +236,23 @@ async def add_repository(full_name: str) -> dict[str, Any]:
     project = {
         "id": uuid.uuid4().hex,
         "repository_id": repository["id"],
+        "connection_id": connection_id,
         "full_name": repository["full_name"],
         "default_branch": repository["default_branch"],
         "status": "cloning",
         "error": "",
     }
     db.execute(
-        "INSERT INTO projects (id, repository_id, full_name, default_branch, status) VALUES (?,?,?,?,?)",
-        (project["id"], project["repository_id"], project["full_name"], project["default_branch"], "cloning"),
+        "INSERT INTO projects (id, repository_id, full_name, default_branch, status, connection_id) "
+        "VALUES (?,?,?,?,?,?)",
+        (
+            project["id"],
+            project["repository_id"],
+            project["full_name"],
+            project["default_branch"],
+            "cloning",
+            connection_id,
+        ),
     )
     spawn(clone(project), name=f"clone-{project['id']}")
     return project
@@ -216,7 +286,7 @@ async def clone(project: dict[str, Any]) -> None:
             raise RuntimeError("A checkout already exists; it has been left untouched")
         if staging.exists():
             shutil.rmtree(staging)
-        token = await installation_token(project["repository_id"])
+        token = await installation_token(project["repository_id"], project["connection_id"])
         credentials = base64.b64encode(f"x-access-token:{token}".encode()).decode()
         environment = dict(
             os.environ,
@@ -262,7 +332,7 @@ async def agent_credentials(project_ids: list[str]) -> list[dict[str, Any]]:
     try:
         for project_id in selection(project_ids):
             project = db.one("SELECT * FROM projects WHERE id = ?", (project_id,))
-            access = await installation_access(project["repository_id"])
+            access = await installation_access(project["repository_id"], project["connection_id"])
             credentials.append(
                 {
                     "full_name": project["full_name"],

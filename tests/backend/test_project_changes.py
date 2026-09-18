@@ -41,7 +41,8 @@ def workspace(db, tmp_path, monkeypatch):
             git(checkout, "add", ".")
             git(checkout, "commit", "-m", "Initial")
             db.execute(
-                "INSERT INTO projects VALUES (?,?,?,?,?,?)",
+                "INSERT INTO projects (id, repository_id, full_name, default_branch, status, error) "
+                "VALUES (?,?,?,?,?,?)",
                 (project_id, repository_id, f"owner/repo-{repository_id}", "main", "ready", ""),
             )
         chat = chat or db.create_chat("Changes", "default")

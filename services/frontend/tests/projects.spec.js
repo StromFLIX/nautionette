@@ -4,10 +4,15 @@ import { openChatConfiguration } from './helpers'
 const firstId = 'a'.repeat(32)
 const secondId = 'b'.repeat(32)
 const repository = { id: 123, full_name: 'team/nautionette', default_branch: 'main', private: true }
+const privateRepository = { id: 456, full_name: 'personal/private-repository', default_branch: 'main', private: true }
+const teamConnection = { id: '1-10', app_id: '1', installation_id: '10', configured: true, automatic: true, account: 'team', slug: 'team-app', public_url: 'https://nautionette.example.com' }
+const personalConnection = { ...teamConnection, id: '2-20', app_id: '2', installation_id: '20', account: 'personal', slug: 'personal-app' }
 
 async function mockProjects (context) {
   const state = {
-    app: { configured: false, app_id: '', installation_id: '' },
+    app: { configured: false, registered: false, connections: [] },
+    repositories: { [teamConnection.id]: [repository], [personalConnection.id]: [privateRepository] },
+    repositoryRequests: [], added: [],
     projects: [], sent: [], saved: null, downloaded: false,
     chat: { id: 'alpha', title: 'Project work', agent_set: 'default', model: 'test/model', project_ids: [] },
     messages: [],
@@ -31,12 +36,26 @@ async function mockProjects (context) {
       return reply({ start_url: '/api/projects/github-app/start?state=test-state' })
     }
     if (path === '/api/projects/github-app/start') return route.fulfill({ contentType: 'text/html', body: '<form method="post" action="https://github.com/settings/apps/new?state=test-state"><input name="manifest" value="{}"></form><script>document.forms[0].submit()</script>' })
-    if (path === '/api/projects/repositories') return reply({ total_count: 1, repositories: [repository] })
+    if (path === '/api/projects/repositories') {
+      const connectionId = new URL(route.request().url()).searchParams.get('connection_id')
+      state.repositoryRequests.push(connectionId)
+      const repositories = state.repositories[connectionId] || []
+      return reply({ connection_id: connectionId, total_count: repositories.length, repositories })
+    }
     if (path === '/api/projects') {
       if (method === 'POST') {
-        expect(data().full_name).toBe(repository.full_name)
-        state.projects.push({ id: firstId, repository_id: 123, full_name: repository.full_name, status: 'cloning', path: `/projects/${firstId}` })
-        return reply(state.projects[0], 202)
+        const payload = data()
+        state.added.push(payload)
+        const selected = state.repositories[payload.connection_id]?.find((item) => item.full_name === payload.full_name)
+        expect(selected).toBeDefined()
+        const id = selected.id === repository.id ? firstId : secondId
+        let project = state.projects.find((item) => item.id === id)
+        if (!project) {
+          project = { id, repository_id: selected.id, full_name: selected.full_name, connection_id: payload.connection_id, path: `/projects/${id}` }
+          state.projects.push(project)
+        }
+        project.status = 'cloning'
+        return reply(project, 202)
       }
       if (state.downloaded && state.projects[0]) state.projects[0].status = 'ready'
       return reply({ projects: state.projects })
@@ -70,7 +89,7 @@ async function mockProjects (context) {
     expect(route.request().method()).toBe('POST')
     expect(route.request().postData()).toContain('manifest=')
     expect(route.request().headers().authorization).toBeUndefined()
-    state.app = { configured: true, registered: true, automatic: true, account: 'team', slug: 'nautionette', public_url: state.saved.public_url }
+    state.app = { configured: true, registered: false, connections: [teamConnection], public_url: state.saved.public_url }
     await route.fulfill({ status: 303, headers: { location: 'http://127.0.0.1:9012/settings/projects?github=connected' } })
   })
   return state
@@ -102,7 +121,7 @@ for (const width of [1440, 320]) {
     await page.screenshot({ path: `/tmp/nautionette-github-connect-${width}.png`, fullPage: true })
     await page.getByRole('button', { name: 'Connect GitHub' }).click()
     await expect(page.getByText('Connected', { exact: true })).toBeVisible()
-    expect(state.saved).toEqual({ public_url: 'https://nautionette.example.com', organization: 'team' })
+    expect(state.saved).toEqual({ public_url: 'https://nautionette.example.com', organization: 'team', new_app: false })
     await page.getByRole('button', { name: 'download Add', exact: true }).click()
     await expect(page.getByText('Downloading', { exact: true })).toBeVisible()
     state.downloaded = true
@@ -249,6 +268,121 @@ test('registered Apps can resume installation without uploading credentials', as
   await expect(page.getByLabel('Public instance URL')).toHaveAttribute('readonly', '')
   await expect(page.getByLabel('App owner')).toHaveCount(0)
   await expect(page.locator('input[type="file"]')).toHaveCount(0)
+})
+
+for (const width of [1440, 320]) {
+  test(`personal and organization connections stay separate at ${width}px`, async ({ page, context }) => {
+    const state = await mockProjects(context)
+    state.app = { configured: true, registered: false, connections: [teamConnection, personalConnection] }
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/settings/projects')
+    await expect(page.getByText('Connected', { exact: true })).toHaveCount(2)
+    await expect(page.getByRole('button', { name: 'Add GitHub connection' })).toBeEnabled()
+    const selector = page.getByLabel('GitHub connection', { exact: true })
+    await expect(selector).toHaveValue(teamConnection.id)
+    await expect(page.locator('#available-repositories')).toContainText(repository.full_name)
+    await selector.selectOption(personalConnection.id)
+    await expect(page.locator('#available-repositories')).toContainText(privateRepository.full_name)
+    await expect(page.locator('#available-repositories')).not.toContainText(repository.full_name)
+    await page.getByRole('button', { name: 'download Add', exact: true }).click()
+    await expect.poll(() => state.added).toEqual([{ full_name: privateRepository.full_name, connection_id: personalConnection.id }])
+    await expect(page.locator('#repositories')).toContainText('personal · personal-app (20)')
+    await selector.selectOption(teamConnection.id)
+    await page.getByRole('button', { name: 'download Add', exact: true }).click()
+    await expect.poll(() => state.added.length).toBe(2)
+    expect(state.added[1]).toEqual({ full_name: repository.full_name, connection_id: teamConnection.id })
+    await expect(page.locator('#repositories')).toContainText('team · team-app (10)')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    await page.screenshot({ path: `/tmp/nautionette-multiple-github-${width}.png`, fullPage: true })
+    await page.reload()
+    await expect(page.getByText('Connected', { exact: true })).toHaveCount(2)
+    await expect(page.locator('#repositories .project-row')).toHaveCount(2)
+    await selector.selectOption(personalConnection.id)
+    await expect(page.getByRole('button', { name: 'check Added', exact: true })).toBeDisabled()
+  })
+}
+
+test('connection switching ignores stale repository responses', async ({ page, context }) => {
+  const state = await mockProjects(context)
+  state.app = { configured: true, connections: [teamConnection, personalConnection] }
+  let release
+  const gate = new Promise((resolve) => { release = resolve })
+  let waiting = false
+  await context.route('**/api/projects/repositories?**', async (route) => {
+    if (new URL(route.request().url()).searchParams.get('connection_id') === personalConnection.id) {
+      waiting = true
+      await gate
+    }
+    return route.fallback()
+  })
+  await page.goto('/settings/projects')
+  const selector = page.getByLabel('GitHub connection', { exact: true })
+  await expect(selector).toBeEnabled()
+  await selector.selectOption(personalConnection.id)
+  await expect.poll(() => waiting).toBe(true)
+  await expect(page.locator('#available-repositories .project-row')).toHaveCount(0)
+  await selector.selectOption(teamConnection.id)
+  await expect(page.locator('#available-repositories')).toContainText(repository.full_name)
+  const stale = page.waitForResponse((response) => response.url().includes('/api/projects/repositories?') && response.url().includes('connection_id=2-20'))
+  release()
+  await stale
+  await expect(page.locator('#available-repositories')).not.toContainText(privateRepository.full_name)
+  await page.getByRole('button', { name: 'download Add', exact: true }).click()
+  await expect.poll(() => state.added).toEqual([{ full_name: repository.full_name, connection_id: teamConnection.id }])
+})
+
+test('failed downloads retry with the project connection, not the browser selection', async ({ page, context }) => {
+  const state = await mockProjects(context)
+  state.app = { configured: true, connections: [teamConnection, personalConnection] }
+  state.projects = [{ id: secondId, repository_id: privateRepository.id, full_name: privateRepository.full_name, connection_id: personalConnection.id, status: 'failed' }]
+  await page.goto('/settings/projects')
+  await expect(page.getByLabel('GitHub connection', { exact: true })).toHaveValue(teamConnection.id)
+  await page.getByRole('button', { name: `Retry ${privateRepository.full_name}` }).click()
+  await expect.poll(() => state.added).toEqual([{ full_name: privateRepository.full_name, connection_id: personalConnection.id }])
+})
+
+test('repository access reopens only the chosen connection', async ({ page, context }) => {
+  const state = await mockProjects(context)
+  state.app = { configured: true, connections: [teamConnection, personalConnection] }
+  await context.route('**/api/projects/github-app/connect', async (route) => {
+    state.saved = route.request().postDataJSON()
+    await route.fulfill({ status: 409, json: { detail: 'Test stops before navigating to GitHub' } })
+  })
+  await page.goto('/settings/projects')
+  await page.getByRole('button', { name: 'Repository access for personal', exact: true }).click()
+  await expect.poll(() => state.saved).toEqual({ public_url: personalConnection.public_url, connection_id: personalConnection.id })
+  await expect(page.getByText('Connected', { exact: true })).toHaveCount(2)
+})
+
+test('pending registration can be resumed or bypassed to add another account', async ({ page, context }) => {
+  const state = await mockProjects(context)
+  state.app = { configured: true, registered: true, public_url: teamConnection.public_url, connections: [teamConnection] }
+  await context.route('**/api/projects/github-app/connect', async (route) => {
+    state.saved = route.request().postDataJSON()
+    await route.fulfill({ status: 409, json: { detail: 'Test stops before navigating to GitHub' } })
+  })
+  await page.goto('/settings/projects')
+  await expect(page.getByRole('button', { name: 'Complete installation' })).toBeEnabled()
+  await page.getByRole('button', { name: 'Connect another account' }).click()
+  await expect(page.getByLabel('App owner')).toBeVisible()
+  await page.getByRole('button', { name: 'Resume pending installation' }).click()
+  await expect(page.getByLabel('App owner')).toBeHidden()
+  await page.getByRole('button', { name: 'Connect another account' }).click()
+  await page.getByLabel('App owner').selectOption('organization')
+  await page.getByLabel('Organization', { exact: true }).fill('another-org')
+  await page.getByRole('button', { name: 'Add GitHub connection' }).click()
+  await expect.poll(() => state.saved).toEqual({ public_url: teamConnection.public_url, organization: 'another-org', new_app: true })
+  await expect(page.getByText('Connected', { exact: true })).toHaveCount(1)
+})
+
+test('suspended connections do not prevent browsing healthy accounts', async ({ page, context }) => {
+  const state = await mockProjects(context)
+  state.app = { configured: true, connections: [{ ...teamConnection, configured: false, installation_status: 'suspended' }, personalConnection] }
+  await page.goto('/settings/projects')
+  await expect(page.getByText('Suspended', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('GitHub connection', { exact: true })).toHaveValue(personalConnection.id)
+  await expect(page.locator('#available-repositories')).toContainText(privateRepository.full_name)
+  expect(state.repositoryRequests).toEqual([personalConnection.id])
 })
 
 test('connection errors leave a retryable form', async ({ page, context }) => {

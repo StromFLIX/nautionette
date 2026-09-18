@@ -17,6 +17,7 @@ class GitHubApp(BaseModel):
 
 class Repository(BaseModel):
     full_name: str = Field(max_length=250)
+    connection_id: str = Field(default="", max_length=100)
 
 
 @router.get("/api/projects/github-app")
@@ -30,8 +31,11 @@ async def configure_project_app(payload: GitHubApp):
 
 
 @router.get("/api/projects/repositories")
-async def project_repositories(page: int = Query(default=1, ge=1, le=1000)):
-    return await projects.repositories(page)
+async def project_repositories(
+    page: int = Query(default=1, ge=1, le=1000),
+    connection_id: str = Query(default="", max_length=100),
+):
+    return await projects.repositories(page, connection_id)
 
 
 @router.get("/api/projects")
@@ -41,7 +45,7 @@ async def project_list():
 
 @router.post("/api/projects", status_code=202)
 async def add_project(payload: Repository):
-    return await projects.add_repository(payload.full_name)
+    return await projects.add_repository(payload.full_name, payload.connection_id)
 
 
 @router.delete("/api/projects/{project_id}")

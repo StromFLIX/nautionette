@@ -22,7 +22,9 @@ def configured(backend, monkeypatch, tmp_path):
     project_id = "a" * 32
     projects.checkout(project_id).mkdir()
     backend.db.execute(
-        "INSERT INTO projects VALUES (?,?,?,?,?,?)", (project_id, 1, "owner/repo", "main", "ready", "")
+        "INSERT INTO projects (id, repository_id, full_name, default_branch, status, error) "
+        "VALUES (?,?,?,?,?,?)",
+        (project_id, 1, "owner/repo", "main", "ready", ""),
     )
     return project_id
 

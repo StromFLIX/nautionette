@@ -18,6 +18,8 @@ HEADERS = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Fra
 class Connect(BaseModel):
     public_url: str = Field(default="", max_length=2048)
     organization: str = Field(default="", max_length=39)
+    connection_id: str = Field(default="", max_length=100)
+    new_app: bool = False
 
 
 def failure_response(error: HTTPException) -> HTMLResponse:
@@ -33,7 +35,9 @@ def failure_response(error: HTTPException) -> HTMLResponse:
 
 @router.post(github_setup.BASE_PATH + "/connect", dependencies=[Depends(require_user)])
 async def connect(payload: Connect):
-    return github_setup.begin(payload.public_url, payload.organization)
+    return github_setup.begin(
+        payload.public_url, payload.organization, payload.connection_id, payload.new_app
+    )
 
 
 @router.get(github_setup.BASE_PATH + "/start", include_in_schema=False)

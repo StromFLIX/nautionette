@@ -14,20 +14,19 @@ def project_storage(db, tmp_path, monkeypatch):
     monkeypatch.setattr(projects, "PROJECTS_DIR", tmp_path)
 
 
-def ready_project(db, full_name="owner/repository", repository_id=123):
+def ready_project(db, full_name="owner/repository", repository_id=123, connection_id="1-2"):
     project_id = f"{repository_id:032x}"
     projects.checkout(project_id).mkdir()
     db.execute(
-        "INSERT INTO projects VALUES (?,?,?,?,?,?)",
-        (project_id, repository_id, full_name, "main", "ready", ""),
+        "INSERT INTO projects (id, repository_id, full_name, default_branch, status, connection_id) "
+        "VALUES (?,?,?,?,?,?)",
+        (project_id, repository_id, full_name, "main", "ready", connection_id),
     )
     return project_id
 
 
 def test_project_settings_are_user_only_and_never_return_private_key(client, anonymous, db):
-    db.set_setting(
-        projects.APP_SETTING, {"app_id": "1", "installation_id": "2", "private_key": "secret", "slug": "app"}
-    )
+    projects.save_connection({"app_id": "1", "installation_id": "2", "private_key": "secret", "slug": "app"})
     result = client.get("/api/projects/github-app")
     assert result.json()["configured"] is True
     assert "secret" not in result.text and "private_key" not in result.text
@@ -50,7 +49,7 @@ def test_selection_requires_ready_checkouts(db):
 async def test_agents_receive_fresh_repository_scoped_tokens_then_revoke_them(db, monkeypatch):
     selected = ready_project(db)
     ready_project(db, "owner/other", 456)
-    db.set_setting(projects.APP_SETTING, {"app_id": "1", "installation_id": "2"})
+    projects.save_connection({"app_id": "1", "installation_id": "2"})
     monkeypatch.setattr(projects, "app_jwt", lambda config: "jwt")
     remote = AsyncMock(return_value={"token": "installation-secret", "expires_at": "2099-01-01T00:00:00Z"})
     monkeypatch.setattr(projects, "github", remote)
@@ -155,7 +154,7 @@ def test_archiving_keeps_working_tree_and_refuses_busy_projects(client, db):
 
 @pytest.mark.asyncio
 async def test_installation_tokens_are_repository_scoped_and_refreshed(db, monkeypatch):
-    db.set_setting(projects.APP_SETTING, {"app_id": "1", "installation_id": "2"})
+    projects.save_connection({"app_id": "1", "installation_id": "2"})
     monkeypatch.setattr(projects, "app_jwt", lambda config: "jwt")
     remote = AsyncMock(return_value={"token": "installation-secret"})
     monkeypatch.setattr(projects, "github", remote)
@@ -163,7 +162,7 @@ async def test_installation_tokens_are_repository_scoped_and_refreshed(db, monke
     assert remote.call_args.kwargs["json"] == {"permissions": {"contents": "write"}, "repository_ids": [123]}
     await projects.installation_token(123)
     assert remote.await_count == 1
-    projects._tokens[123] = ("old", 0)
+    projects._tokens[("1-2", 123)] = ("old", 0)
     await projects.installation_token(123)
     assert remote.await_count == 2
 
@@ -178,7 +177,9 @@ def test_old_exclusive_reservations_migrate_without_losing_data(tmp_path):
     )
     project_id = "a" * 32
     database.execute(
-        "INSERT INTO projects VALUES (?,?,?,?,?,?)", (project_id, 1, "owner/repo", "main", "ready", "")
+        "INSERT INTO projects (id, repository_id, full_name, default_branch, status, error) "
+        "VALUES (?,?,?,?,?,?)",
+        (project_id, 1, "owner/repo", "main", "ready", ""),
     )
     first = database.create_chat("First", "default")
     second = database.create_chat("Second", "default")

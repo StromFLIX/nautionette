@@ -113,7 +113,7 @@ async def test_foreign_installation_and_expired_callbacks_do_not_replace_connect
         "public_url": "https://nautionette.example.com",
     }
     db.set_setting(github_setup.REGISTERED_SETTING, config)
-    db.set_setting(projects.APP_SETTING, {"app_id": "old", "private_key": "old-key"})
+    projects.save_connection({"app_id": "old", "installation_id": "1", "private_key": "old-key"})
     state, flow = begin()
     assert "manifest" not in flow
     monkeypatch.setattr(projects, "app_jwt", lambda config: "jwt")
@@ -161,11 +161,10 @@ def send_webhook(client, payload, event="installation", delivery="delivery", sec
 
 
 def test_signed_webhooks_are_public_but_deduplicated_and_revoke_suspended_installations(db, anonymous):
-    db.set_setting(
-        projects.APP_SETTING,
-        {"app_id": "12", "installation_id": "34", "webhook_secret": "secret", "private_key": "key"},
+    projects.save_connection(
+        {"app_id": "12", "installation_id": "34", "webhook_secret": "secret", "private_key": "key"}
     )
-    projects._tokens[123] = ("cached-token", time.time() + 3000)
+    projects._tokens[("12-34", 123)] = ("cached-token", time.time() + 3000)
     payload = {"action": "suspend", "installation": {"id": 34}}
     assert send_webhook(anonymous, payload, secret=b"wrong").status_code == 401
     assert projects.app_status()["configured"]
@@ -181,9 +180,8 @@ def test_signed_webhooks_are_public_but_deduplicated_and_revoke_suspended_instal
 
 
 def test_foreign_installations_and_malformed_webhooks_cannot_change_settings(db, anonymous):
-    db.set_setting(
-        projects.APP_SETTING,
-        {"app_id": "12", "installation_id": "34", "webhook_secret": "secret", "private_key": "key"},
+    projects.save_connection(
+        {"app_id": "12", "installation_id": "34", "webhook_secret": "secret", "private_key": "key"}
     )
     assert send_webhook(anonymous, {"action": "deleted", "installation": {"id": 999}}).json()["ignored"]
     assert projects.app_status()["configured"]
@@ -198,11 +196,11 @@ def test_foreign_installations_and_malformed_webhooks_cannot_change_settings(db,
 
 
 def test_push_webhooks_update_metadata_without_touching_chat_worktrees(db, anonymous, tmp_path, monkeypatch):
-    db.set_setting(
-        projects.APP_SETTING, {"app_id": "12", "installation_id": "34", "webhook_secret": "secret"}
-    )
+    projects.save_connection({"app_id": "12", "installation_id": "34", "webhook_secret": "secret"})
     db.execute(
-        "INSERT INTO projects VALUES (?,?,?,?,?,?)", ("a" * 32, 99, "owner/old", "master", "ready", "")
+        "INSERT INTO projects (id, repository_id, full_name, default_branch, status, connection_id) "
+        "VALUES (?,?,?,?,?,?)",
+        ("a" * 32, 99, "owner/old", "master", "ready", "12-34"),
     )
     monkeypatch.setattr(projects, "PROJECTS_DIR", tmp_path)
     local = tmp_path / "unfinished.txt"
@@ -218,10 +216,8 @@ def test_push_webhooks_update_metadata_without_touching_chat_worktrees(db, anony
 
 
 def test_repository_access_changes_invalidate_installation_token_cache(db, anonymous):
-    db.set_setting(
-        projects.APP_SETTING, {"app_id": "12", "installation_id": "34", "webhook_secret": "secret"}
-    )
-    projects._tokens[123] = ("cached-token", time.time() + 3000)
+    projects.save_connection({"app_id": "12", "installation_id": "34", "webhook_secret": "secret"})
+    projects._tokens[("12-34", 123)] = ("cached-token", time.time() + 3000)
     assert (
         send_webhook(
             anonymous, {"action": "removed", "installation": {"id": 34}}, event="installation_repositories"

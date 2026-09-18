@@ -392,8 +392,9 @@ containers/networks, cleaned up afterward:
 
 ## GitHub Projects
 
-Settings > Projects connects a GitHub App installation and downloads selected
-repositories into the persistent `nautionette-projects` Docker volume. The folder
+Settings > Projects connects multiple GitHub App installations, including personal
+and organization accounts side by side, and downloads selected repositories into the
+persistent `nautionette-projects` Docker volume. The folder
 picker beside the model and tool selectors chooses which projects a message exposes.
 Selections are captured in the durable outbox and saved with the accepted message;
 retries cannot silently change that selection.
@@ -403,7 +404,19 @@ retries cannot silently change that selection.
 1. Open Settings > Projects and choose **Connect GitHub**. The public HTTPS instance
   URL is prefilled when possible. Select a personal account or enter an organization.
 2. Confirm the App registration on GitHub, then select the repositories it can access.
-3. GitHub returns to Projects automatically. Add repositories from the installation list.
+3. GitHub returns to Projects automatically. Select a **GitHub connection** above the
+   available repository list, then add repositories from that account.
+4. Choose **Add GitHub connection** to connect another personal or organization account.
+   Each connection has its own registration, credentials, status, and **Repository access**
+   button. A pending installation can be resumed or bypassed with **Connect another account**.
+
+Each project keeps the connection it was added through, including download retries and
+repository-scoped credentials for chat agents. Switching the repository browser does not
+change existing project bindings. A repository already added through another connection
+cannot silently be reassigned. Existing single-connection installations and all their
+project bindings migrate automatically on backend startup, without changing checkouts,
+chat selections, or unpushed work. The manual App configuration API also adds or updates
+only the matching App/installation rather than replacing other accounts.
 
 The App manifest registers the webhook and callback URLs, Contents/Workflows write
 permissions, and Metadata read access. GitHub generates the private key and webhook
@@ -422,14 +435,14 @@ webhooks validate GitHub's HMAC-SHA256 signature. The `/connect` endpoint remain
 user-authenticated. Setup links expire after one hour. Returning on another device or
 browser requires starting setup again; existing registration credentials are retained.
 
-Signed lifecycle webhooks invalidate cached installation access after repository or
-installation changes. Repository rename/default-branch events update metadata; push
+Signed lifecycle webhooks invalidate cached access only for the matching connection after
+repository or installation changes. Repository rename/default-branch events update metadata; push
 events never reset, pull, or overwrite chat worktrees. Duplicate deliveries are ignored
 for seven days and request bodies are limited to 2 MiB. The connection status shows the
-last accepted webhook. Existing manually configured Apps remain usable; they can be
-upgraded by connecting an automatically registered App.
+last accepted webhook for that connection. Existing manually configured Apps remain usable
+alongside automatically registered Apps.
 
-The private key is stored in the backend's SQLite settings, never returned by the API
+Private keys are stored in the backend's SQLite database, never returned by the API
 or placed in an agent. The webhook secret is also backend-only. Protect the
 backend-data volume and its backups, configure `APP_TOKEN` and `INTERNAL_TOKEN`, and
 use HTTPS outside local development. The App belongs to your GitHub account or
@@ -551,7 +564,7 @@ The broker rebuilds the changed Pi images automatically. Project agents run as U
 10001, matching the backend, with capabilities dropped. Custom agent sets must keep
 their image-provided Pi configuration readable so it can be copied into `/workspace`.
 
-Checks: `uv run pytest tests/backend/test_projects.py tests/backend/test_github_setup.py
+Checks: `uv run pytest tests/backend/test_projects.py tests/backend/test_github_setup.py tests/backend/test_github_connections.py
 tests/broker/test_projects.py`, `node --test tests/agent/test_project_git.mjs`, and
 `npm --prefix services/frontend run test:e2e -- projects.spec.js`. The opt-in Docker
 check is `NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_projects_docker.py`;

@@ -47,6 +47,9 @@ jobs:
       - name: Agent defaults, profiles and durable chat configuration
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py
 
+      - name: GitHub connections, migrations and project credentials
+        run: uv run pytest tests/backend/test_github_connections.py tests/backend/test_github_setup.py tests/backend/test_projects.py tests/backend/test_project_changes.py tests/broker/test_projects.py
+
       - name: Committed workflows still validate
         run: uv run --package nautionette-workflow-mcp python scripts/check_workflows.py
 

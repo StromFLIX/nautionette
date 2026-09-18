@@ -25,6 +25,7 @@ _TABLES = (
     "chats",
     "project_leases",
     "projects",
+    "github_project_connections",
     "github_app_setups",
     "github_webhook_deliveries",
     "runs",
