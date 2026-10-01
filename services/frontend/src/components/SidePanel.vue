@@ -78,20 +78,13 @@
         <div v-for="group in chatGroups" :key="group.key" class="side__chat-group">
           <div v-if="group.key !== '__all__'" class="side__group section-label">
             <span class="truncate">{{ group.label }}</span>
-            <span class="side__group-count">{{ group.visible.length + (showOlder ? group.older.length : 0) }}</span>
+            <span class="side__group-count">{{ group.chats.length }}</span>
           </div>
 
           <ChatRow
-            v-for="chat in group.visible" :key="chat.id"
+            v-for="chat in group.chats" :key="chat.id"
             :chat="chat" :active-route-id="route.params.id" :read-busy="readBusy" @toggle-unread="setUnread"
           />
-
-          <template v-if="showOlder">
-            <ChatRow
-              v-for="chat in group.older" :key="chat.id"
-              :chat="chat" :active-route-id="route.params.id" :read-busy="readBusy" @toggle-unread="setUnread"
-            />
-          </template>
         </div>
 
         <button
@@ -197,7 +190,7 @@ import { chatCacheScope } from '../chat-cache'
 import { api } from '../api'
 import ChatRow from './ChatRow.vue'
 import { preferences } from '../preferences'
-import { chatRecency } from '../chat-order'
+import { CHAT_GROUP_OPTIONS, groupChats } from '../chat-groups'
 
 const props = defineProps({
   showCollapseButton: { type: Boolean, default: false },
@@ -213,12 +206,7 @@ const readError = ref('')
 const startingChat = ref(false)
 const startError = ref('')
 
-const groupOptions = [
-  { value: 'none', label: 'All' },
-  { value: 'project', label: 'Project' },
-  { value: 'model', label: 'Model' },
-  { value: 'internet', label: 'Internet' }
-]
+const groupOptions = CHAT_GROUP_OPTIONS.map(([value, label]) => ({ value, label: value === 'none' ? 'All' : label }))
 
 // A real ladder of ranges instead of three flavours of "a few minutes".
 const activeOptions = [
@@ -233,75 +221,19 @@ const showGroupControls = ref(false)
 const groupBy = computed({ get: () => preferences.chatGroupBy, set: value => { preferences.chatGroupBy = value } })
 const activeMinutes = computed({ get: () => preferences.chatActiveMinutes, set: value => { preferences.chatActiveMinutes = value } })
 const showOlder = ref(false)
-const needsInternet = (chat) => ['pending', 'deciding'].includes(chat.internet_status)
 
 watch(activeMinutes, () => { showOlder.value = false })
 
 const activeLabel = computed(() =>
   ({ 60: 'hour', 1440: '24 hours', 10080: '7 days', 43200: '30 days' }[activeMinutes.value] || 'selected range'))
 
-function projectLabel (id) {
-  return store.projects.find((project) => project.id === id)?.full_name || id
-}
+const chatGroups = computed(() =>
+  groupChats(filteredChats.value, groupBy.value, store.projects)
+    .map(group => ({ ...group, chats: group.chats.filter(chat => showOlder.value || props.isChatActive(chat)) }))
+    .filter(group => group.chats.length))
 
-function modelLabel (chat) {
-  const id = chat.model || store.catalog.default_model
-  return store.catalog.models.find((model) => model.id === id)?.name || id || 'Default model'
-}
-
-function internetLabel (chat) {
-  if (needsInternet(chat)) return 'Needs approval'
-  return { allowed: 'Internet allowed', blocked: 'Internet blocked' }[chat.internet_status] || chat.internet_status || 'Unknown'
-}
-
-function groupsFor (chat) {
-  if (groupBy.value === 'project') {
-    const ids = Array.isArray(chat.project_ids) ? chat.project_ids : []
-    return ids.length ? ids.map((id) => [id, projectLabel(id)]) : [['__none__', 'No project']]
-  }
-  if (groupBy.value === 'model') {
-    const id = chat.model || store.catalog.default_model || '__none__'
-    return [[id, modelLabel(chat)]]
-  }
-  if (groupBy.value === 'internet') {
-    return [[chat.internet_status || '__none__', internetLabel(chat)]]
-  }
-  return [['__all__', 'Chats']]
-}
-
-const recency = (chat) => chatRecency(chat, preferences.chatOrderBy)
-const byRecency = (a, b) => recency(b) - recency(a)
-
-const chatGroups = computed(() => {
-  const byKey = new Map()
-  for (const chat of filteredChats.value) {
-    for (const [key, label] of groupsFor(chat)) {
-      if (!byKey.has(key)) byKey.set(key, { key, label: label || 'Unknown', visible: [], older: [] })
-      const group = byKey.get(key)
-      if (props.isChatActive(chat)) group.visible.push(chat)
-      else group.older.push(chat)
-    }
-  }
-  const groups = [...byKey.values()]
-    .map((group) => ({
-      ...group,
-      visible: group.visible.sort(byRecency),
-      older: group.older.sort(byRecency),
-      // Rank by what is actually shown; the newest chat wins the top slot.
-      recency: Math.max(
-        ...(showOlder.value ? [...group.visible, ...group.older] : group.visible).map(recency),
-        -1
-      )
-    }))
-    .filter((group) => group.visible.length || (showOlder.value && group.older.length))
-  // Newest activity first; a catch-all bucket never outranks a named one.
-  const rank = (group) => (group.key === '__none__' ? 1 : 0)
-  return groups.sort((a, b) => rank(a) - rank(b) || b.recency - a.recency || String(a.label).localeCompare(String(b.label)))
-})
-
-const visibleCount = computed(() => chatGroups.value.reduce((total, group) => total + group.visible.length, 0))
-const hiddenCount = computed(() =>
-  filteredChats.value.length - filteredChats.value.filter((chat) => props.isChatActive(chat)).length)
+const visibleCount = computed(() => filteredChats.value.filter(chat => props.isChatActive(chat)).length)
+const hiddenCount = computed(() => filteredChats.value.length - visibleCount.value)
 
 async function setUnread (chat, unread) {
   readBusy.value = chat.id
@@ -453,14 +385,14 @@ function refresh () {
 
 .side__control {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   min-width: 0;
 }
 
 .side__control-label {
   flex: none;
-  width: 46px;
   color: var(--text-dim);
   font-size: 0.6875rem;
   font-weight: 650;
@@ -470,6 +402,7 @@ function refresh () {
 
 .seg {
   display: flex;
+  flex-wrap: wrap;
   flex: 1;
   min-width: 0;
   padding: 2px;
@@ -479,8 +412,8 @@ function refresh () {
 }
 
 .seg__btn {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: max-content;
   padding: 4px 6px;
   border-radius: var(--radius-pill);
   border: none;

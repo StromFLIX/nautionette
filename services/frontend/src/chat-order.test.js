@@ -1,38 +1,39 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { chatRecency } from './chat-order.js'
+import { byChatStart, chatStartedAt } from './chat-order.js'
 import { sanitizePreferences, validPreference, workspaceDefaults } from './preferences-schema.js'
 import { searchSettings } from './settings-registry.js'
 
-const chats = [
-  { id: 'working', updated_at: 60, last_message_at: 20, last_user_message_at: 10 },
-  { id: 'answered', updated_at: 50, last_message_at: 50, last_user_message_at: 15 },
-  { id: 'asked', updated_at: 40, last_message_at: 40, last_user_message_at: 40 }
-]
+const orderedIds = chats => [...chats].sort(byChatStart).map(chat => chat.id)
 
-test('chat order can count all activity, all messages, or only user messages', () => {
-  const order = mode => [...chats].sort((a, b) => chatRecency(b, mode) - chatRecency(a, mode)).map(chat => chat.id)
-  assert.deepEqual(order(), ['working', 'answered', 'asked'])
-  assert.deepEqual(order('messages'), ['answered', 'asked', 'working'])
-  assert.deepEqual(order('user'), ['asked', 'answered', 'working'])
+test('chats sort newest-started first, regardless of messages, progress or read state', () => {
+  const chats = [
+    { id: 'working', created_at: 10, updated_at: 60, last_message_at: 20, last_user_message_at: 10, answering: true },
+    { id: 'answered', created_at: 20, updated_at: 50, last_message_at: 50, last_user_message_at: 15, unread: true },
+    { id: 'asked', created_at: 30, updated_at: 40, last_message_at: 40, last_user_message_at: 40 },
+    { id: 'empty', created_at: 40 }
+  ]
+  assert.deepEqual(orderedIds(chats), ['empty', 'asked', 'answered', 'working'])
+  Object.assign(chats[0], { updated_at: 1000, last_message_at: 1000, last_user_message_at: 1000, unread: true })
+  assert.deepEqual(orderedIds(chats.reverse()), ['empty', 'asked', 'answered', 'working'])
+  assert.equal(chatStartedAt(chats.find(chat => chat.id === 'working')), 10)
 })
 
-test('old cached lists and empty chats have a usable ordering timestamp', () => {
-  for (const mode of ['activity', 'messages', 'user']) {
-    assert.equal(chatRecency({ updated_at: 20 }, mode), 20)
-    assert.equal(chatRecency({ created_at: 10 }, mode), 10)
-    assert.equal(chatRecency({}, mode), 0)
+test('equal or missing start times are deterministic even if the API changes order', () => {
+  const chats = [{ id: 'b', created_at: 10 }, { id: 'a', created_at: 10 }, { id: 'd', updated_at: 100 }, { id: 'c' }]
+  assert.deepEqual(orderedIds(chats), ['a', 'b', 'c', 'd'])
+  chats[2].updated_at += 1000
+  assert.deepEqual(orderedIds(chats.reverse()), ['a', 'b', 'c', 'd'])
+  for (const value of [undefined, null, 0, -1, NaN, Infinity, '10']) {
+    assert.equal(chatStartedAt({ created_at: value, updated_at: 20, last_message_at: 30 }), 0)
   }
-  assert.equal(chatRecency({ updated_at: 20, last_user_message_at: 0 }, 'user'), 0)
 })
 
-test('chat order defaults to all activity and is validated, persisted and searchable', () => {
-  assert.equal(workspaceDefaults().chatOrderBy, 'activity')
-  assert.equal(sanitizePreferences({}).chatOrderBy, 'activity')
-  assert.equal(sanitizePreferences({ chatOrderBy: 'invalid' }).chatOrderBy, 'activity')
-  for (const mode of ['activity', 'messages', 'user']) {
-    assert.equal(validPreference('chatOrderBy', mode), true)
-    assert.equal(sanitizePreferences({ chatOrderBy: mode }).chatOrderBy, mode)
+test('obsolete activity ordering preferences cannot restore jumping rows', () => {
+  assert.equal(Object.hasOwn(workspaceDefaults(), 'chatOrderBy'), false)
+  for (const mode of ['activity', 'messages', 'user', 'invalid']) {
+    assert.equal(validPreference('chatOrderBy', mode), false)
+    assert.equal(Object.hasOwn(sanitizePreferences({ chatOrderBy: mode }), 'chatOrderBy'), false)
   }
-  assert.ok(searchSettings('chat order').some(entry => entry.id === 'chatOrderBy' && entry.section.key === 'workspace'))
+  assert.equal(searchSettings('chat order').some(entry => entry.id === 'chatOrderBy'), false)
 })

@@ -14,7 +14,7 @@ export async function mockDesign (context) {
   }
   const workflow = { name: 'digest', title: 'Morning digest', description: 'The updates that matter.', graph, code: `# A deliberately long source line\nsource = '${'a'.repeat(250)}'\nasync def digest():\n    return source\n`, manifest: { inputs: { type: 'object', properties: {} } }, runs: [], settings: {} }
   const data = {
-    chat: { id: 'alpha', title: 'Design review', agent_set: 'default', model: 'test/model', tools: null, project_ids: [], updated_at: now, read_revision: 0, last_read_message_id: 'answer' },
+    chat: { id: 'alpha', title: 'Design review', agent_set: 'default', model: 'test/model', tools: null, project_ids: [], created_at: now - 120, updated_at: now, read_revision: 0, last_read_message_id: 'answer' },
     messages: [
       { id: 'question', role: 'user', content: 'Make room for what matters.', meta: {}, created_at: now - 120 },
       { id: 'answer', role: 'assistant', content: '## A quieter workspace\n\nKeep the power. Lose the clutter.\n\n```javascript\nconst theme = "orbit"\n```', meta: {}, created_at: now - 60 }

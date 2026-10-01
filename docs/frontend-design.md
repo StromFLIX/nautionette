@@ -71,23 +71,33 @@ an explicit warning instead of claiming the change was saved.
 Device preferences never update instance settings. Resetting the workspace does
 not reset the selected theme. There is no cross-device account synchronization.
 
-### Chat order
+### Chat rows, grouping and order
 
-**Settings → Workspace → Chat list → Chat order** controls recency for both chat
-rows and group ordering. **All activity** is the default: user messages, streamed
-agent replies, tool calls and results, thinking, and other agent progress all count.
-**Messages only** counts user messages and agent prose (including streamed replies);
-**User messages only** ignores agent activity. The row timestamp uses the selected
-clock too. Active chats rise when new activity arrives; they are not permanently
-pinned above more recent completed chats. Activity-window filtering still uses all
-activity and retains running chats, unread replies and approval requests.
+Chat rows are a single line: a small hexagon, title, unread dot when applicable,
+and conversation start time. Active responses use a filled, pulsing hexagon;
+inactive chats use an empty outline. Approval requests retain a warning-colored
+outline and row edge, with an accessible status label and tooltip. The full approval
+controls remain in the conversation. Avatars, latest-message previews and the
+separate **In progress** badge are not shown in the chat list. Workflow and run
+rows retain their existing layouts.
 
-The choice is saved on this device, synchronized between tabs and restored to
-**All activity** by **Reset workspace**. The backend persists separate activity,
-message and user-message timestamps, backfilling existing chats from their saved
-messages. Live progress refreshes every client's chat list at most once per second
-per running turn; completion still refreshes immediately. Deploy the backend and
-frontend together for live activity and all three ordering modes.
+**Group → All / Date / Activity / Project** and **Settings → Workspace → Chat list →
+Group chats by** share the same choices. Date groups use the conversation's local
+calendar start date, with absolute date labels that remain valid across midnight.
+Activity groups have a fixed priority: **Needs attention**, **Active**, **Unread**,
+then **Inactive**; a chat moves between these groups only when its state changes.
+Multi-project chats appear once in each project, with **No project** last. Project
+groups sort by their newest conversation start, independently of activity filtering.
+Grouping persists on this device and synchronizes between tabs. Retired Model and
+Internet grouping values fall back to **No grouping**, also the reset default.
+
+Rows always sort by conversation start (`created_at`), newest first, with an ID
+tie-breaker. Messages, streamed progress, tools and read-state changes do not reorder
+rows or change their displayed timestamp. Revealing older chats merges them into
+this same order rather than appending a second list. Missing start times sort last;
+never fall back to mutable activity timestamps. The obsolete `chatOrderBy` preference
+is ignored during migration. Activity-window filtering still uses all activity and
+retains running chats, unread replies and approval requests.
 
 ### Chat list activity and selection
 
@@ -101,7 +111,7 @@ off the switch to restore filtering solely by activity and attention state.
 Both controls are in **Settings → Workspace → Chat list**, saved per device and
 restored to their defaults by **Reset workspace**.
 
-Retention only bypasses the activity window: search, grouping and recency order
+Retention only bypasses the activity window: search, grouping and start-time order
 still apply. The app shell owns transient, per-tab selection history so moving
 to Settings (which unmounts the sidebar), another section or the mobile chat list
 counts as leaving the chat without losing or restarting the timer. Reloading
@@ -216,7 +226,7 @@ the library. See [Custom skin packs](skin-packs.md) for the authoring contract,
 
 System reduced-motion preferences are always respected. **Workspace → Animations**
 retains the overall **Motion** control and provides three independent, default-on
-switches: **Chat list animation** (the avatar progress ring), **Message window
+switches: **Chat list animation** (the active chat's pulsing hexagon), **Message window
 animation** (the composer's running border light), and **Tool-call indicator
 animation** (the tiny octagon to the left of the tool-call summary and the
 right-hand dots on individual running tool rows). Turning one

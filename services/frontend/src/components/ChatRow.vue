@@ -9,34 +9,16 @@
         'row-item--unread': chat.unread
       }"
     >
-      <div class="avatar" :style="avatarStyle(chat.id)">
-        {{ initials(chat.title) }}
-        <svg v-if="chat.answering && !needsInternet" class="avatar__spinner" viewBox="0 0 46 46" aria-hidden="true" focusable="false">
-          <circle class="avatar__spinner-track" cx="23" cy="23" r="22" />
-          <circle class="avatar__spinner-arc" cx="23" cy="23" r="22" pathLength="100" />
-        </svg>
-      </div>
-      <div class="grow">
-        <div class="row">
-          <span class="row-item__title grow truncate">{{ chat.title }}</span>
-          <span v-if="chat.unread" class="row-item__unread" role="img" aria-label="Unread messages" title="Unread messages" />
-          <span class="row-item__time">{{ shortTime(chatRecency(chat, preferences.chatOrderBy)) }}</span>
-        </div>
-        <div class="row-item__sub truncate">
-          <span v-if="needsInternet" class="row-item__activity row-item__activity--attention">
-            <span class="material-icons" aria-hidden="true">public</span>
-            {{ chat.internet_status === 'deciding' ? 'Applying internet decision' : 'Internet approval needed' }}
-          </span>
-          <span v-else-if="chat.answering" class="row-item__activity">
-            <span class="row-item__activity-dot" aria-hidden="true" />
-            In progress
-          </span>
-          <template v-else>
-            <span v-if="chat.last_message?.role === 'user'" class="dim">You: </span>
-            {{ chat.last_message?.preview || 'No messages yet' }}
-          </template>
-        </div>
-      </div>
+      <svg
+        class="chat-status" :class="{ 'chat-status--active': chat.answering && !needsInternet, 'chat-status--attention': needsInternet }"
+        viewBox="0 0 20 20" role="img" :aria-label="statusLabel" focusable="false"
+      >
+        <title>{{ statusLabel }}</title>
+        <polygon points="10,2 17,6 17,14 10,18 3,14 3,6" />
+      </svg>
+      <span class="row-item__title grow truncate" :title="chat.title">{{ chat.title }}</span>
+      <span v-if="chat.unread" class="row-item__unread" role="img" aria-label="Unread messages" title="Unread messages" />
+      <span class="row-item__time" :title="startedAt ? `Started ${fullTime(startedAt)}` : undefined">{{ shortTime(startedAt) }}</span>
     </RouterLink>
     <button class="btn btn--icon btn--sm chat-list-item__menu" :aria-label="`Options for ${chat.title}`">
       <span class="material-icons" aria-hidden="true">more_vert</span>
@@ -52,9 +34,8 @@
 
 <script setup>
 import { computed } from 'vue'
-import { avatarStyle, initials, shortTime } from '../format'
-import { chatRecency } from '../chat-order'
-import { preferences } from '../preferences'
+import { fullTime, shortTime } from '../format'
+import { chatStartedAt } from '../chat-order'
 
 const props = defineProps({
   chat: { type: Object, required: true },
@@ -64,6 +45,10 @@ const props = defineProps({
 defineEmits(['toggle-unread'])
 
 const needsInternet = computed(() => ['pending', 'deciding'].includes(props.chat.internet_status))
+const statusLabel = computed(() => needsInternet.value
+  ? (props.chat.internet_status === 'deciding' ? 'Applying internet decision' : 'Internet approval needed')
+  : props.chat.answering ? 'Active' : 'Inactive')
+const startedAt = computed(() => chatStartedAt(props.chat))
 </script>
 
 <style scoped>
@@ -80,11 +65,18 @@ const needsInternet = computed(() => ['pending', 'deciding'].includes(props.chat
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
+  min-height: 2rem;
+  padding-block: calc(var(--list-padding) * 0.6);
 }
 
 .chat-list-item__menu {
   flex: 0 0 auto;
   color: var(--text-muted);
+}
+
+@media (max-width: 900px), (pointer: coarse) {
+  .chat-list-item > .row-item,
+  .chat-list-item__menu { min-height: 44px; }
 }
 
 @media (hover: hover) {

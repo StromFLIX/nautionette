@@ -17,7 +17,7 @@ async function fixture (context) {
     { id: 'unread', title: 'Unread old chat', project_ids: [], updated_at: now - 10800, unread: true },
     { id: 'running', title: 'Running old chat', project_ids: [], updated_at: now - 10800, answering: true },
     { id: 'approval', title: 'Approval old chat', project_ids: [], updated_at: now - 10800, internet_status: 'pending' }
-  ]
+  ].map((chat, index) => ({ ...chat, created_at: chat.updated_at - index }))
   await context.route('**/api/chats', route => route.fulfill({ json: { chats } }))
   await context.route('**/api/chats/*', route => {
     const id = new URL(route.request().url()).pathname.split('/').pop()
@@ -43,6 +43,105 @@ async function expectView (page) {
   await expect(titles(page)).not.toContainText(['Old project chat'])
   await expect(page.getByRole('button', { name: 'Show 1 older', exact: true })).toBeVisible()
 }
+
+test('group controls and workspace settings offer the same useful views', async ({ page, context }) => {
+  await fixture(context)
+  await page.goto('/chats')
+  await page.getByRole('button', { name: 'Group', exact: true }).click()
+  await expect(grouping(page).getByRole('button')).toHaveText(['All', 'Date', 'Activity', 'Project'])
+  const settings = await context.newPage()
+  await settings.goto('/settings/workspace')
+  const select = settings.getByLabel('Group chats by', { exact: true })
+  await expect(select.locator('option')).toHaveText(['No grouping', 'Date', 'Activity', 'Project'])
+  for (const [label, value] of [['Date', 'date'], ['Activity', 'activity']]) {
+    await grouping(page).getByRole('button', { name: label, exact: true }).click()
+    await expect(select).toHaveValue(value)
+    await page.reload()
+    await page.getByRole('button', { name: 'Group', exact: true }).click()
+    await expect(grouping(page).getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-pressed', 'true')
+  }
+  await settings.getByRole('button', { name: 'Reset workspace', exact: true }).click()
+  await expect(grouping(page).getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true')
+})
+
+for (const width of [1440, 320]) {
+  test(`single-line rows and grouping controls fit long titles at 150% and ${width}px`, async ({ page, context }) => {
+    const chats = await fixture(context)
+    chats[0].title = 'Refine cashflow layout and make the project comparison easier to read without expanding the sidebar'
+    chats[0].answering = true
+    chats[0].unread = true
+    await context.addInitScript(key => {
+      localStorage.setItem(key, JSON.stringify({ interfaceSize: 150, sideWidth: 260, theme: 'nebula', chatGroupBy: 'project' }))
+    }, PREFERENCES_KEY)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats')
+    await page.getByRole('button', { name: 'Group', exact: true }).click()
+    for (const button of await grouping(page).getByRole('button').all()) {
+      await expect(button).toBeInViewport({ ratio: 1 })
+      expect(await button.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    }
+    const row = page.locator('a[href="/chats/recent"]')
+    const title = row.locator('.row-item__title')
+    await expect(title).toHaveCSS('text-overflow', 'ellipsis')
+    await expect(title).toHaveAttribute('title', chats[0].title)
+    const time = await row.locator('.row-item__time').boundingBox()
+    const titleBox = await title.boundingBox()
+    const icon = await row.locator('.chat-status').boundingBox()
+    expect(icon.x + icon.width).toBeLessThan(titleBox.x)
+    expect(titleBox.x + titleBox.width).toBeLessThan(time.x)
+    expect(titleBox.y + titleBox.height / 2).toBeCloseTo(time.y + time.height / 2, 0)
+    const box = await row.boundingBox()
+    expect(box.height).toBeLessThan(56)
+    if (width === 320) expect(box.height).toBeGreaterThanOrEqual(44)
+    expect(await page.locator('.side__list').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    await page.screenshot({ path: `/tmp/nautionette-compact-chat-list-${width}.png` })
+  })
+}
+
+test('activity groups distinguish attention, active, unread and inactive without message previews', async ({ page, context }) => {
+  const chats = await fixture(context)
+  const running = chats.find(chat => chat.id === 'running')
+  chats[0].answering = true
+  chats[0].last_message = { role: 'assistant', preview: 'This preview must stay out of the list' }
+  await page.goto('/chats')
+  await page.getByRole('button', { name: 'Group', exact: true }).click()
+  await grouping(page).getByRole('button', { name: 'Activity', exact: true }).click()
+  await expect(page.locator('.side__group .truncate')).toHaveText(['Needs attention', 'Active', 'Unread', 'Inactive'])
+  const active = page.locator('.side__chat-group').filter({ has: page.locator('.side__group .truncate', { hasText: /^Active$/ }) })
+  await expect(active.locator('.row-item__title')).toHaveText(['Recent project chat', 'Running old chat'])
+  await expect(page.locator('.side__list')).not.toContainText('This preview must stay out of the list')
+  await expect(page.locator('.side__list')).not.toContainText('No messages yet')
+  await expect(page.locator('.side__list .avatar, .side__list .row-item__sub, .side__list .row-item__activity')).toHaveCount(0)
+  running.answering = false
+  running.unread = true
+  await page.evaluate(async () => (await import('/src/store.js')).actions.loadChats())
+  await expect(active.locator('.row-item__title')).toHaveText(['Recent project chat'])
+  const unread = page.locator('.side__chat-group').filter({ has: page.locator('.side__group .truncate', { hasText: /^Unread$/ }) })
+  await expect(unread.locator('.row-item__title')).toHaveText(['Unread old chat', 'Running old chat'])
+  await expect(unread.locator('.chat-status')).toHaveCount(2)
+  await expect(unread.locator('.chat-status--active')).toHaveCount(0)
+})
+
+test.describe('local date grouping', () => {
+  test.use({ timezoneId: 'America/Los_Angeles', locale: 'en-US' })
+  test('date groups follow conversation start dates rather than UTC or latest activity', async ({ page, context }) => {
+    const chats = await fixture(context)
+    chats.splice(0, chats.length,
+      { id: 'first', title: 'Before local midnight', created_at: Date.parse('2026-09-30T23:59:00-07:00') / 1000, updated_at: Date.now() / 1000 },
+      { id: 'second', title: 'After local midnight', created_at: Date.parse('2026-10-01T00:01:00-07:00') / 1000 },
+      { id: 'third', title: 'Same local day, different UTC day', created_at: Date.parse('2026-09-30T00:01:00-07:00') / 1000 }
+    )
+    await page.goto('/chats')
+    await page.getByRole('button', { name: 'Group', exact: true }).click()
+    await grouping(page).getByRole('button', { name: 'Date', exact: true }).click()
+    await expect(page.locator('.side__group .truncate')).toHaveText(['Oct 1, 2026', 'Sep 30, 2026'])
+    await expect(page.locator('.side__group-count')).toHaveText(['1', '2'])
+    await expect(titles(page)).toHaveText(['After local midnight', 'Before local midnight', 'Same local day, different UTC day'])
+    await page.getByRole('textbox', { name: 'Search chats', exact: true }).fill('Before local')
+    await expect(page.locator('.side__group-count')).toHaveText('1')
+    await expect(titles(page)).toHaveText(['Before local midnight'])
+  })
+})
 
 test('project grouping and activity filtering survive navigation, reload and browser tabs', async ({ page, context }) => {
   await fixture(context)

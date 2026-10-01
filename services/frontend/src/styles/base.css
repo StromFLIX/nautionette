@@ -647,31 +647,8 @@ pre.code {
   color: var(--text-muted);
 }
 
-.row-item__activity {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 3px;
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-soft);
-  color: var(--accent-hover);
-  font-size: 0.6875rem;
-  font-weight: 650;
-  line-height: 1.5;
-}
-
 .row-item--attention {
   box-shadow: inset 2px 0 var(--warning);
-}
-
-.row-item__activity--attention {
-  color: var(--warning);
-  background: var(--warning-soft);
-}
-
-.row-item__activity .material-icons {
-  font-size: 0.8125rem;
 }
 
 .row-item--unread .row-item__title {
@@ -686,54 +663,31 @@ pre.code {
   background: var(--accent-hover);
 }
 
-.row-item__activity-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.row-item--running .avatar {
-  position: relative;
-}
-
-.avatar__spinner {
-  position: absolute;
-  inset: -3px;
-  width: calc(100% + 6px);
-  height: calc(100% + 6px);
+.chat-status {
+  display: block;
+  flex: none;
+  width: 0.8rem;
+  height: 0.8rem;
+  color: var(--text-dim);
   fill: none;
-  stroke-width: 2;
-  pointer-events: none;
-  animation: chat-activity-orbit 2s linear infinite;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
 }
 
-.avatar__spinner-track {
-  stroke: var(--accent-soft);
+.chat-status--active {
+  color: var(--accent-hover);
+  fill: currentColor;
+  animation: chat-status-pulse 1.8s ease-in-out infinite;
 }
 
-.avatar__spinner-arc {
-  stroke: var(--accent-hover);
-  stroke-linecap: round;
-  stroke-dasharray: 25 75;
-  animation: chat-activity-sweep 1.5s ease-in-out infinite;
+.chat-status--attention {
+  color: var(--warning);
 }
 
-@keyframes chat-activity-orbit {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes chat-activity-sweep {
-  0% { stroke-dasharray: 5 95; stroke-dashoffset: 0; }
-  50% { stroke-dasharray: 70 30; stroke-dashoffset: -20; }
-  100% { stroke-dasharray: 5 95; stroke-dashoffset: -100; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .avatar__spinner,
-  .avatar__spinner-arc {
-    animation: none;
-  }
+@keyframes chat-status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .row-item__title {
@@ -785,8 +739,7 @@ pre.code {
 }
 
 /* Independent activity indicators retain their static status when motion is off. */
-:root[data-chat-list-animation='false'] .avatar__spinner,
-:root[data-chat-list-animation='false'] .avatar__spinner-arc,
+:root[data-chat-list-animation='false'] .chat-status,
 :root[data-message-window-animation='false'] .composer--running::before,
 :root[data-tool-indicator-animation='false'] .tool-group__indicator-arc,
 :root[data-tool-indicator-animation='false'] .tool-group__indicator-dot,

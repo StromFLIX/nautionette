@@ -229,7 +229,7 @@ test('preferences migrate legacy values and synchronize between tabs', async ({ 
   })
   await page.goto('/settings/workspace')
   await expect(page.getByLabel('Sidebar width', { exact: true })).toHaveValue('420')
-  await expect(page.getByLabel('Group chats by', { exact: true })).toHaveValue('model')
+  await expect(page.getByLabel('Group chats by', { exact: true })).toHaveValue('none') // Removed grouping falls back safely.
   await expect(page.getByLabel('Activity window', { exact: true })).toHaveValue('1440')
   const second = await context.newPage()
   await second.goto('/settings/appearance')

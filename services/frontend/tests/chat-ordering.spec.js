@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 import { mockDesign } from './design-fixture.js'
 
 const titles = page => page.locator('.side__list .row-item__title')
@@ -8,11 +9,11 @@ async function fixture (context) {
   const now = Date.now() / 1000
   const chats = [
     { ...state.data.chat, id: 'working', title: 'Agent using tools', project_ids: ['tools'], answering: true,
-      updated_at: now - 60, last_message_at: now - 300, last_user_message_at: now - 600 },
+      created_at: now - 18000, updated_at: now - 60, last_message_at: now - 300, last_user_message_at: now - 600 },
     { ...state.data.chat, id: 'replied', title: 'Agent replied', project_ids: ['reply'], answering: false,
-      updated_at: now - 120, last_message_at: now - 120, last_user_message_at: now - 500 },
+      created_at: now - 7200, updated_at: now - 120, last_message_at: now - 120, last_user_message_at: now - 500 },
     { ...state.data.chat, title: 'User just asked', project_ids: ['user'], answering: false,
-      updated_at: now - 180, last_message_at: now - 180, last_user_message_at: now - 180 }
+      created_at: now - 600, updated_at: now - 180, last_message_at: now - 180, last_user_message_at: now - 180 }
   ]
   Object.assign(state.data.chat, chats[2])
   await context.route('**/api/chats', route => route.fulfill({ json: { chats } }))
@@ -34,66 +35,73 @@ async function fixture (context) {
 }
 
 async function emit (page, kind, chatId) {
+  const refreshed = page.waitForResponse(response => response.url().endsWith('/api/chats'))
   await page.evaluate(({ kind, chatId }) => {
     window.globalEvents.dispatchEvent(new MessageEvent('message', {
       data: JSON.stringify({ kind, chat_id: chatId, at: Date.now() / 1000 })
     }))
   }, { kind, chatId })
+  await refreshed
 }
 
-for (const grouped of [false, true]) {
-  test(`chat order settings apply live, persist and reset${grouped ? ' with project grouping' : ''}`, async ({ page, context }) => {
+for (const group of ['All', 'Date', 'Project']) {
+  test(`${group} keeps start-time order and timestamps through live activity, reload and workspace reset`, async ({ page, context }) => {
     const chats = await fixture(context)
+    // Saved activity-order preferences from previous releases must not opt users
+    // back into rows that jump on every streamed update.
+    await context.addInitScript(key => {
+      if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ chatOrderBy: 'activity' }))
+    }, PREFERENCES_KEY)
     await page.goto('/chats/alpha')
-    if (grouped) {
-      await page.getByRole('button', { name: 'Group', exact: true }).click()
-      await page.getByRole('group', { name: 'Group chats by', exact: true }).getByRole('button', { name: 'Project', exact: true }).click()
+    await page.getByRole('button', { name: 'Group', exact: true }).click()
+    await page.getByRole('group', { name: 'Group chats by', exact: true }).getByRole('button', { name: group, exact: true }).click()
+    const expected = ['User just asked', 'Agent replied', 'Agent using tools']
+    await expect(titles(page)).toHaveText(expected)
+    if (group === 'Project') await expect(page.locator('.side__group .truncate')).toHaveText(['Project user', 'Project reply', 'Project tools'])
+    const working = chats[0]
+    const row = page.locator('a[href="/chats/working"]')
+    const time = await page.evaluate(async timestamp => (await import('/src/format.js')).shortTime(timestamp), working.created_at)
+    await expect(row.locator('.row-item__time')).toHaveText(time)
+    await expect(row.locator('.row-item__time')).toHaveAttribute('title', /^Started /)
+    for (const clock of ['updated_at', 'last_message_at', 'last_user_message_at']) {
+      working[clock] = Date.now() / 1000
+      chats.reverse() // The API may return a different live-activity order too.
+      await emit(page, 'chat.progress', working.id)
+      await expect(titles(page)).toHaveText(expected)
+      await expect(row.locator('.row-item__time')).toHaveText(time)
+      await expect(row.getByRole('img', { name: 'Active', exact: true })).toBeVisible()
     }
-    await expect(titles(page)).toHaveText(['Agent using tools', 'Agent replied', 'User just asked'])
+    Object.assign(working, { answering: false, unread: true })
+    await emit(page, 'chat.completed', working.id)
+    await expect(row.getByRole('img', { name: 'Inactive', exact: true })).toBeVisible()
+    await expect(row.getByLabel('Unread messages')).toBeVisible()
+    await expect(titles(page)).toHaveText(expected)
+    await expect(page).toHaveURL(/\/chats\/alpha$/)
+    await expect(page.locator('.row-item--active .row-item__title')).toHaveText('User just asked')
+    await page.reload()
+    await expect(titles(page)).toHaveText(expected)
     const settings = await context.newPage()
     await settings.goto('/settings/workspace')
-    const order = settings.getByLabel('Chat order', { exact: true })
-    await expect(order).toHaveValue('activity')
-    await order.selectOption('messages')
-    await expect(titles(page)).toHaveText(['Agent replied', 'User just asked', 'Agent using tools'])
-    if (grouped) await expect(page.locator('.side__group .truncate')).toHaveText(['Project reply', 'Project user', 'Project tools'])
-    const time = await page.evaluate(async timestamp => (await import('/src/format.js')).shortTime(timestamp), chats[0].last_message_at)
-    await expect(page.locator('.row-item', { hasText: 'Agent using tools' }).locator('.row-item__time')).toHaveText(time)
-    await order.selectOption('user')
-    await expect(titles(page)).toHaveText(['User just asked', 'Agent replied', 'Agent using tools'])
-    await page.reload()
-    await expect(titles(page)).toHaveText(['User just asked', 'Agent replied', 'Agent using tools'])
-    await settings.reload()
-    await expect(settings.getByLabel('Chat order', { exact: true })).toHaveValue('user')
+    await expect(settings.getByLabel('Chat order', { exact: true })).toHaveCount(0)
     await settings.getByRole('button', { name: 'Reset workspace', exact: true }).click()
-    await expect(settings.getByLabel('Chat order', { exact: true })).toHaveValue('activity')
-    await expect(titles(page)).toHaveText(['Agent using tools', 'Agent replied', 'User just asked'])
+    await expect(titles(page)).toHaveText(expected)
   })
 }
 
-test('agent progress in an unopened chat refreshes ordering without moving the selected chat', async ({ page, context }) => {
-  const chats = await fixture(context)
-  const working = chats[0]
-  working.updated_at = working.last_message_at
-  await page.goto('/chats/alpha')
-  await expect(titles(page)).toHaveText(['Agent replied', 'User just asked', 'Agent using tools'])
-  working.updated_at = Date.now() / 1000
-  await emit(page, 'chat.progress', working.id)
-  await expect(titles(page)).toHaveText(['Agent using tools', 'Agent replied', 'User just asked'])
-  await expect(page).toHaveURL(/\/chats\/alpha$/)
-  await expect(page.locator('.row-item--active .row-item__title')).toHaveText('User just asked')
-
-  const settings = await context.newPage()
-  await settings.goto('/settings/workspace')
-  await settings.getByLabel('Chat order', { exact: true }).selectOption('messages')
-  await expect(titles(page)).toHaveText(['Agent replied', 'User just asked', 'Agent using tools'])
-  working.updated_at += 60 // Tools do not reorder the message-only view.
-  const refreshed = page.waitForResponse(response => response.url().endsWith('/api/chats'))
-  await emit(page, 'chat.progress', working.id)
-  await refreshed
-  await expect(titles(page)).toHaveText(['Agent replied', 'User just asked', 'Agent using tools'])
-  working.last_message_at = working.updated_at // Streamed prose does, before the turn completes.
-  await emit(page, 'chat.progress', working.id)
-  await expect(titles(page)).toHaveText(['Agent using tools', 'Agent replied', 'User just asked'])
-  await expect(page.locator('.row-item', { hasText: 'Agent using tools' })).toContainText('In progress')
-})
+for (const group of ['All', 'Project']) {
+  test(`showing older chats preserves overall creation order in ${group}`, async ({ page, context }) => {
+    const chats = await fixture(context)
+    // A recent conversation can have no recent activity while an older one runs.
+    chats[1].updated_at = Date.now() / 1000 - 7200
+    for (const chat of chats) chat.project_ids = ['tools']
+    await page.goto('/chats/alpha')
+    await page.getByRole('button', { name: 'Group', exact: true }).click()
+    await page.getByRole('group', { name: 'Group chats by', exact: true }).getByRole('button', { name: group, exact: true }).click()
+    await page.getByRole('group', { name: 'Show chats active within', exact: true }).getByRole('button', { name: '1h', exact: true }).click()
+    await expect(titles(page)).toHaveText(['User just asked', 'Agent using tools'])
+    await page.getByRole('button', { name: 'Show 1 older', exact: true }).click()
+    await expect(titles(page)).toHaveText(['User just asked', 'Agent replied', 'Agent using tools'])
+    await page.getByRole('button', { name: 'Hide 1 older', exact: true }).click()
+    await expect(titles(page)).toHaveText(['User just asked', 'Agent using tools'])
+  })
+}

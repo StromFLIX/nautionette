@@ -1,5 +1,9 @@
-/** One clock for chat rows and group ordering. Fall back for older cached lists. */
-export function chatRecency (chat, order = 'activity') {
-  const field = { activity: 'updated_at', messages: 'last_message_at', user: 'last_user_message_at' }[order] || 'updated_at'
-  return chat[field] ?? chat.updated_at ?? chat.created_at ?? 0
+/** Conversation start is immutable; never fall back to a live activity clock. */
+export function chatStartedAt (chat) {
+  return Number.isFinite(chat.created_at) && chat.created_at > 0 ? chat.created_at : 0
+}
+
+/** The ID breaks ties so server activity ordering cannot shuffle equal timestamps. */
+export function byChatStart (a, b) {
+  return chatStartedAt(b) - chatStartedAt(a) || String(a.id).localeCompare(String(b.id))
 }
