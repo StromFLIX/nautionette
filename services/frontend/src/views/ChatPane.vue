@@ -1,5 +1,5 @@
 <template>
-  <ChatWelcome v-if="!chatId" :busy="starting" @start="start" />
+  <ChatWelcome v-if="!chatId && !isNewChat" :busy="starting" @start="start" />
 
   <div v-else class="thread stack grow">
     <header class="pane-head" data-skin-part="header">
@@ -24,7 +24,7 @@
         <span class="material-icons" style="font-size: 0.9375rem">account_tree</span>
         {{ chat.promoted_to }}
       </RouterLink>
-      <button class="btn btn--icon" aria-label="Chat options">
+      <button v-if="chatId" class="btn btn--icon" aria-label="Chat options">
         <span class="material-icons">more_vert</span>
         <q-menu anchor="bottom right" self="top right" class="pick-menu">
           <button v-close-popup class="pick-menu__item" @click="markUnread">
@@ -45,7 +45,7 @@
 
     <div ref="scroller" data-skin-part="conversation" class="thread__body scroll-y grow" @scroll.passive="acknowledgeRead">
       <div class="thread__inner">
-        <p v-if="!messages.length && !activeTurn" class="caption dim" role="status">
+        <p v-if="!isNewChat && !messages.length && !activeTurn" class="caption dim" role="status">
           {{ reconnecting ? 'Waiting for connection. No saved messages on this device.' : 'No messages yet.' }}
         </p>
         <MessageBubble
@@ -85,6 +85,12 @@
     </div>
 
     <div class="thread__foot scroll-y">
+      <p v-if="isNewChat && starting" class="thread__creation caption dim" role="status">Creating chat… You can start typing.</p>
+      <p v-if="creationError" class="thread__creation caption" role="alert">
+        {{ creationError }}
+        <button class="btn btn--sm" @click="createNewChat">Retry creation</button>
+        <RouterLink to="/settings/general">Review defaults</RouterLink>
+      </p>
       <p v-if="cacheError" class="caption" role="alert">{{ cacheError }}</p>
       <p v-if="controlError" class="caption" role="alert">{{ controlError }}</p>
       <p v-if="readError" class="caption" role="alert">{{ readError }}</p>
@@ -104,14 +110,15 @@
         </div>
         <p v-if="approvalError" class="thread__approval-error" role="alert">{{ approvalError }}</p>
       </section>
-      <ProjectChanges v-if="chat?.project_ids?.length" :key="chatId"
+      <ProjectChanges v-if="chatId && chat?.project_ids?.length" :key="chatId"
         :chat-id="chatId" :project-ids="chat.project_ids" :running="streaming" />
       <Composer
-        :key="chatId"
+        :key="composerKey"
         ref="composer"
         v-model="draft"
         v-model:attachments="attachments"
         :busy="sendingDraft"
+        :preparing="isNewChat"
         :agent-id="chat?.agent_id ?? null"
         :agent-name="chat?.agent_name || ''"
         :agent-set="chat?.agent_set || ''"
@@ -156,8 +163,9 @@ import { api, chatStream } from '../api'
 import { delivery, onDelivery, pendingMessages } from '../delivery'
 import { latestContext } from '../context'
 import { cacheError, chatCache, chatCacheScope } from '../chat-cache'
-import { reducedMotion } from '../preferences'
-import { CONFIG_KEYS } from '../agent-config'
+import { preferences, reducedMotion } from '../preferences'
+import { CONFIG_KEYS, defaultChatConfig } from '../agent-config'
+import { reusableChatSettings } from '../new-chat-settings'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -179,14 +187,18 @@ const stopping = computed(() => controlBusy.value || Boolean(activeTurn.value?.s
 const liveSteps = computed(() => activeTurn.value?.steps || [])
 const liveStatus = computed(() => activeTurn.value?.stop_requested ? 'Stopping...' : activeTurn.value?.status || '')
 const starting = ref(false)
+const creationError = ref('')
 const scroller = ref(null)
 const composer = ref(null)
+const composerKey = ref(0)
 const approvalRequest = ref('')
 const approvalError = ref('')
 const internetPending = computed(() => ['pending', 'deciding'].includes(chat.value?.internet_status))
 const approvalBusy = computed(() => approvalRequest.value === chatId.value || chat.value?.internet_status === 'deciding')
 
-const chatId = computed(() => route.params.id || '')
+// /chats/new is a local draft, never a backend chat ID.
+const isNewChat = computed(() => route.name === 'chats' && route.params.id === 'new')
+const chatId = computed(() => route.name === 'chats' && !isNewChat.value ? route.params.id || '' : '')
 const queuedMessages = computed(() => savedMessages.value.filter((message) => message.meta?.queued))
 const messages = computed(() => {
   const known = new Set(savedMessages.value.map((message) => message.id))
@@ -202,6 +214,7 @@ const context = computed(() => latestContext(
 ))
 
 let stream = null
+let creation = null
 let generation = 0
 let settingsSave = Promise.resolve(true)
 let readKey = ''
@@ -211,7 +224,7 @@ const readError = ref('')
 
 async function acknowledgeRead () {
   const el = scroller.value
-  if (readSuspended || !chat.value || reconnecting.value || document.visibilityState !== 'visible' || !el ||
+  if (readSuspended || !chatId.value || !chat.value || reconnecting.value || document.visibilityState !== 'visible' || !el ||
       el.scrollHeight - el.scrollTop - el.clientHeight > 100) return
   const id = chatId.value
   const revision = chat.value.read_revision
@@ -269,7 +282,7 @@ function connectChat () {
   stream = null
   const version = ++generation
   const id = chatId.value
-  if (!id) return
+  if (!id) { reconnecting.value = false; return }
   reconnecting.value = true
   let received = false
   const scope = chatCacheScope()
@@ -309,28 +322,71 @@ function scrollDown (behavior = 'smooth') {
   })
 }
 
+function currentCreation (request) {
+  return creation === request && route.name === 'chats' && request.scope === chatCacheScope()
+}
+
+async function createNewChat () {
+  if (!isNewChat.value || starting.value) return
+  const request = { scope: chatCacheScope() }
+  creation = request
+  starting.value = true
+  creationError.value = ''
+  nextTick(() => { if (currentCreation(request)) composer.value?.focus() })
+  try {
+    const remembered = preferences.newChatSettings === 'last' ? chatSettings.load(request.scope) : null
+    chat.value = { title: 'New chat', ...(remembered || defaultChatConfig(store.catalog)) }
+    // Validate a remembered profile without delaying the editor. Initial/live
+    // discovery can supersede this read; only an actual catalog error is failure.
+    while (remembered && !store.catalogLoaded) {
+      await actions.loadCatalog()
+      if (!currentCreation(request)) return
+      if (!store.catalogLoaded && store.catalogError) throw new Error(store.catalogError)
+    }
+    if (!currentCreation(request)) return
+    // Empty means current backend defaults; explicit last settings stay pinned.
+    const created = await api.createChat(remembered ? reusableChatSettings(store.catalog, remembered) : {})
+    actions.addChat(created, request.scope)
+    if (!currentCreation(request)) return
+    chatSettings.remember(created, request.scope)
+    request.created = created
+    // Replace the temporary URL, preserving the same editor, draft and focus.
+    await router.replace(`/chats/${created.id}`)
+  } catch (error) {
+    if (currentCreation(request)) {
+      creationError.value = `Could not create chat: ${error.message}`
+      if (error.status === 401) store.needsToken = true
+    }
+  } finally {
+    if (creation === request) { creation = null; starting.value = false }
+  }
+}
+
 async function start ({ text, configuration, attachments: images = [] }) {
   if (starting.value || (!text.trim() && !images.length)) return
+  const request = { scope: chatCacheScope() }
+  creation = request
   starting.value = true
-  const scope = chatCacheScope()
   try {
     const created = await api.createChat({ agent_id: configuration.agent_id, ...Object.fromEntries(CONFIG_KEYS.map(key => [key, configuration[key]])) })
-    chatSettings.remember(created, scope)
-    await actions.loadChats()
+    actions.addChat(created, request.scope)
+    if (!currentCreation(request)) return
+    chatSettings.remember(created, request.scope)
     await router.push(`/chats/${created.id}`)
+    if (chatId.value !== created.id || request.scope !== chatCacheScope()) return
     draft.value = text
     attachments.value = images
     chat.value = chat.value || created
     await send()
   } catch (error) {
-    $q.notify({ type: 'negative', message: error.message })
+    if (currentCreation(request)) $q.notify({ type: 'negative', message: error.message })
   } finally {
-    starting.value = false
+    if (creation === request) { creation = null; starting.value = false }
   }
 }
 
 async function send () {
-  if (sendingDraft.value) return
+  if (sendingDraft.value || !chatId.value) return
   const id = chatId.value
   const version = generation
   const text = draft.value.trim()
@@ -357,6 +413,7 @@ async function send () {
 
 function patch (fields) {
   const id = chatId.value
+  if (!id) return
   const version = generation
   settingsPending.value++
   settingsSave = settingsSave.then(async () => {
@@ -463,7 +520,11 @@ function remove () {
     })
 }
 
-watch(chatId, (id) => {
+watch(() => route.params.id, (id, previous) => {
+  const created = previous === 'new' && creation?.created && creation.created.id === id ? creation.created : null
+  creation = null // Late responses must not navigate back or overwrite another draft.
+  starting.value = false
+  creationError.value = ''
   readSuspended = false
   readKey = ''
   clearManualOnOpen = true
@@ -472,16 +533,20 @@ watch(chatId, (id) => {
   controlError.value = ''
   titleBusy.value = false
   approvalError.value = ''
-  chat.value = null
+  chat.value = created
   settingsSave = Promise.resolve(true)
   settingsPending.value = 0
   savedMessages.value = []
   activeTurn.value = null
-  draft.value = ''
-  attachments.value = []
+  if (!created) {
+    composerKey.value++
+    draft.value = ''
+    attachments.value = []
+  }
   sendingDraft.value = false
   connectChat()
-})
+  if (isNewChat.value) createNewChat()
+}, { immediate: true })
 
 const stopNavigation = router.afterEach((to, from, failure) => {
   if (to.name === 'chats' && to.params.id === chatId.value &&
@@ -500,7 +565,6 @@ function offline () {
   reconnecting.value = true
 }
 onMounted(() => {
-  connectChat()
   off = onLiveEvent((event) => {
     if (event.kind === 'client.reconnect') connectChat()
   })
@@ -516,6 +580,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   generation++
+  creation = null
   stream?.close()
   off()
   offDelivery()
@@ -583,6 +648,11 @@ onUnmounted(() => {
 .thread__foot > :deep(.composer) {
   max-width: var(--content-width);
   margin: 0 auto;
+}
+
+.thread__creation {
+  max-width: var(--content-width);
+  margin: 0 auto 10px;
 }
 
 .thread__approval {

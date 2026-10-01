@@ -89,6 +89,15 @@ export const actions = {
       default_agent_set: defaults.agent_set, default_agent_id: settings.default_agent_id ?? null })
   },
 
+  // Creation already returned the authoritative chat. Opening it must not wait
+  // for another list request or for the offline cache to finish writing.
+  addChat (chat, scope = chatCacheScope()) {
+    if (scope !== chatCacheScope()) return
+    state.chats = [chat, ...state.chats.filter(item => item.id !== chat.id)]
+    chatCache.saveList(state.chats, scope)
+    chatCache.put({ chat, messages: [], active_turn: null }, scope)
+  },
+
   async loadChats () {
     const scope = chatCacheScope()
     const data = await guard(() => api.chats())
