@@ -22,7 +22,7 @@
         </button>
         <button
           v-if="section === 'chats'" class="btn btn--icon side__new" title="New chat" aria-label="New chat"
-          :disabled="startingChat" @click="startChat"
+          :disabled="route.params.id === 'new'" @click="startChat"
         >
           <span class="material-icons">add</span>
         </button>
@@ -102,7 +102,6 @@
           {{ showOlder ? `Hide ${hiddenCount} older` : `Show ${hiddenCount} older` }}
         </button>
         <p v-if="readError" class="side__error caption" role="alert">{{ readError }}</p>
-        <p v-if="startError" class="side__error caption" role="alert">{{ startError }} <RouterLink to="/settings/general">Review defaults</RouterLink></p>
         <p v-if="!filteredChats.length" class="side__empty caption">
           {{ query ? 'Nothing matches that.' : 'No chats yet.' }}
         </p>
@@ -192,8 +191,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { RUN_TONE, avatarStyle, scheduleTime, shortTime } from '../format'
-import { actions, chatSettings, health, store } from '../store'
-import { chatCacheScope } from '../chat-cache'
+import { actions, health, store } from '../store'
 import { api } from '../api'
 import ChatRow from './ChatRow.vue'
 import { preferences } from '../preferences'
@@ -210,8 +208,6 @@ const router = useRouter()
 const query = ref('')
 const readBusy = ref('')
 const readError = ref('')
-const startingChat = ref(false)
-const startError = ref('')
 
 const groupOptions = [
   { value: 'none', label: 'All' },
@@ -336,23 +332,9 @@ const filteredRuns = computed(() =>
   store.runs.filter((run) => matches(`${run.workflow} ${run.status} ${run.trigger}`)))
 
 async function startChat () {
-  if (startingChat.value) return
-  startingChat.value = true
-  startError.value = ''
-  try {
-    const scope = chatCacheScope()
-    // A catalog is needed to check whether a remembered agent still exists.
-    if (preferences.newChatSettings === 'last' && chatSettings.load(scope) && !store.catalogLoaded) {
-      if (!await actions.loadCatalog()) throw new Error(store.catalogError || 'Could not load chat settings.')
-    }
-    // An empty payload lets the backend resolve current defaults when requested,
-    // or when there is no history yet. Explicit last settings stay pinned.
-    const chat = await api.createChat(chatSettings.forNewChat(store.catalog, preferences.newChatSettings, scope))
-    chatSettings.remember(chat, scope)
-    await actions.loadChats()
-    await router.push(`/chats/${chat.id}`)
-  } catch (error) { startError.value = `Could not create chat: ${error.message}` }
-  finally { startingChat.value = false }
+  // Keep the list beneath the draft even if clicked during initial lazy routing.
+  await router.isReady()
+  router.push('/chats/new')
 }
 
 function refresh () {

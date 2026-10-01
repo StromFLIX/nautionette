@@ -161,10 +161,18 @@ the draft starts from a fixed copy. Both preserve typed text and deliberate sele
 during catalog refresh. The first send waits for successful discovery rather than
 guessing defaults. Successful settings/profile writes update the local catalog
 immediately, even if subsequent discovery fails; older responses cannot undo the save.
-Sidebar **New chat** posts remembered settings or an empty body for backend defaults.
+Sidebar **New chat** opens and focuses a local `/chats/new` composer immediately,
+then posts remembered settings or an empty body for backend defaults in the background.
+Typing and attachments stay available during discovery and creation; Send and
+server-dependent configuration controls wait for a real chat ID. A failed creation
+shows a retry without discarding the draft. Success replaces the temporary URL while
+keeping the same editor, selection, focus and attachments. Late responses never navigate
+away from another view. Both creation entry points populate the local list/cache from
+the POST response instead of waiting for a list refresh.
 
 Composer disclosure is component-local and starts closed. The thread composer is
-keyed by chat ID so navigation cannot carry an expanded panel into another chat.
+keyed by the editing session so navigation cannot carry an expanded panel into another
+chat, while the temporary-to-created transition preserves the current editor.
 The obsolete `composerExpanded` workspace preference is ignored during migration.
 See [Agent configuration](agent-configuration.md) for the API and deployment contract.
 

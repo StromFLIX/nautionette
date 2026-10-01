@@ -27,7 +27,7 @@
         <span class="material-icons" aria-hidden="true">add_photo_alternate</span>
         <q-tooltip>{{ imageSupport === true ? 'Paste, drop or attach images · up to 4, 5 MiB each' : imageNotice }}</q-tooltip>
       </button>
-      <button class="pick composer__model" type="button" :disabled="busy" aria-label="Select model">
+      <button class="pick composer__model" type="button" :disabled="configurationBusy" aria-label="Select model">
         <span class="material-icons pick__icon" aria-hidden="true">memory</span>
         <span class="truncate">{{ shortModel }}</span>
         <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
@@ -57,20 +57,20 @@
 
     <div v-show="configurationOpen" :id="configurationId" class="composer__configuration scroll-y" aria-label="Chat configuration controls">
       <div class="composer__profile">
-        <button class="pick composer__profile-picker" type="button" aria-label="Select agent" :disabled="busy">
+        <button class="pick composer__profile-picker" type="button" aria-label="Select agent" :disabled="configurationBusy">
           <span class="material-icons pick__icon" aria-hidden="true">smart_toy</span><span class="truncate">{{ profileLabel }}</span>
           <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
           <AgentPicker :model-value="agentId" @update:model-value="$emit('update:agentId', $event)" />
         </button>
         <span v-if="customConfiguration" class="caption dim">{{ profileDefaults ? 'Customized' : 'Agent removed' }}</span>
-        <button v-if="customConfiguration && profileDefaults" class="pick pick--icon" type="button" aria-label="Reapply agent defaults" :disabled="busy" @click="$emit('update:agentId', agentId)">
+        <button v-if="customConfiguration && profileDefaults" class="pick pick--icon" type="button" aria-label="Reapply agent defaults" :disabled="configurationBusy" @click="$emit('update:agentId', agentId)">
           <span class="material-icons" aria-hidden="true">restart_alt</span><q-tooltip>Reapply this agent's current settings</q-tooltip>
         </button>
       </div>
       <div class="composer__options">
         <div class="composer__option">
           <span class="composer__option-label">Environment</span>
-          <button class="pick" type="button" aria-label="Select agent set" :disabled="busy">
+          <button class="pick" type="button" aria-label="Select agent set" :disabled="configurationBusy">
             <span class="material-icons pick__icon" aria-hidden="true">smart_toy</span>
             <span class="truncate">{{ agentSet || 'default' }}</span>
             <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
@@ -86,11 +86,11 @@
         </div>
         <div class="composer__option">
           <span class="composer__option-label">Reasoning</span>
-          <ReasoningPicker :model-value="reasoningEffort" :capabilities="selectedModel" :busy="busy" @update:model-value="$emit('update:reasoningEffort', $event)" />
+          <ReasoningPicker :model-value="reasoningEffort" :capabilities="selectedModel" :busy="configurationBusy" @update:model-value="$emit('update:reasoningEffort', $event)" />
         </div>
         <div class="composer__option">
           <span class="composer__option-label">Tools</span>
-          <button class="pick" :class="{ 'pick--quiet': !toolCount }" type="button" aria-label="Select tools" :disabled="busy">
+          <button class="pick" :class="{ 'pick--quiet': !toolCount }" type="button" aria-label="Select tools" :disabled="configurationBusy">
             <span class="material-icons pick__icon" aria-hidden="true">extension</span><span class="truncate">{{ toolLabel }}</span>
             <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
             <ToolPicker :model-value="tools" @update:model-value="$emit('update:tools', $event)" />
@@ -99,7 +99,7 @@
         </div>
         <div class="composer__option">
           <span class="composer__option-label">Projects</span>
-          <button class="pick" type="button" aria-label="Select projects" :class="{ 'pick--quiet': !projectIds.length }" :disabled="busy">
+          <button class="pick" type="button" aria-label="Select projects" :class="{ 'pick--quiet': !projectIds.length }" :disabled="configurationBusy">
             <span class="material-icons pick__icon" aria-hidden="true">folder_open</span>
             <span class="truncate">{{ projectIds.length ? `${projectIds.length} project${projectIds.length === 1 ? '' : 's'}` : 'Projects' }}</span>
             <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
@@ -109,11 +109,11 @@
         </div>
         <div class="composer__option">
           <span class="composer__option-label">Extensions</span>
-          <button class="pick" type="button" aria-label="Select extensions" :class="{ 'pick--quiet': !packages.length }" :disabled="busy || configurationSaving">
+          <button class="pick" type="button" aria-label="Select extensions" :class="{ 'pick--quiet': !packages.length }" :disabled="configurationBusy || configurationSaving">
             <span class="material-icons pick__icon" aria-hidden="true">widgets</span>
             <span class="truncate">{{ packages.length ? `${packages.length} selected` : 'Extensions' }}</span>
             <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
-            <PackagePicker :model-value="packages" :disabled="busy || configurationSaving" @update:model-value="$emit('update:packages', $event)" />
+            <PackagePicker :model-value="packages" :disabled="configurationBusy || configurationSaving" @update:model-value="$emit('update:packages', $event)" />
             <q-tooltip>Extensions, skills and prompts for the next message</q-tooltip>
           </button>
         </div>
@@ -145,7 +145,7 @@ const props = defineProps({
   agentSet: { type: String, default: '' }, model: { type: String, default: '' },
   reasoningEffort: { type: String, default: null }, tools: { type: Array, default: null },
   packages: { type: Array, default: () => [] }, commands: { type: Array, default: () => [] },
-  projectIds: { type: Array, default: () => [] }, busy: { type: Boolean, default: false },
+  projectIds: { type: Array, default: () => [] }, busy: { type: Boolean, default: false }, preparing: Boolean,
   running: { type: Boolean, default: false }, stopping: { type: Boolean, default: false },
   context: { type: Object, default: null }, variant: { type: String, default: 'docked' },
   placeholder: { type: String, default: 'Message…' }, configurationReady: { type: Boolean, default: true }, configurationSaving: Boolean
@@ -168,7 +168,9 @@ const selectedModel = computed(() => store.catalog.models?.find(m => m.id === (p
 const imageSupport = computed(() => selectedModel.value?.supports_images)
 const hasDraft = computed(() => Boolean(props.modelValue.trim() || props.attachments.length))
 const showStop = computed(() => props.running && !hasDraft.value)
-const canSubmit = computed(() => !props.busy && props.configurationReady && hasDraft.value && !(props.attachments.length && imageSupport.value === false))
+// Preparing a new chat gates server-dependent actions, never typing or attachments.
+const configurationBusy = computed(() => props.busy || props.preparing)
+const canSubmit = computed(() => !configurationBusy.value && props.configurationReady && hasDraft.value && !(props.attachments.length && imageSupport.value === false))
 const imageNotice = computed(() => {
   if (imageSupport.value === true) return selectedModel.value?.image_support_reason || 'Image input supported.'
   if (imageSupport.value === false) return `${selectedModel.value?.image_support_reason || 'Image input is unavailable for this model/API route.'} Choose another model${props.attachments.length ? ' or remove the images' : ''}.`
