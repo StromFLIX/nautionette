@@ -1,5 +1,8 @@
 // Opt-in integration with the real pi-subagents package. No downloads or paid models.
-// PATH=<Pi 0.85.1 bin>:$PATH NAUTIONETTE_SUBAGENTS_DIR=<installed pi-subagents> node --test this-file
+// PATH=<Pi bin>:$PATH NAUTIONETTE_SUBAGENTS_DIR=<installed pi-subagents> node --test this-file
+// Known failure on Pi 1.0 with pi-subagents 0.66.0 and 0.74.0: their async
+// runner requires the removed pi-agent-core/node export. Keep this opt-in
+// regression to verify a compatible upstream release (see docs/pi-packages.md).
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'

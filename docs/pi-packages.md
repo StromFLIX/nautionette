@@ -105,13 +105,22 @@ selection/authorization. Native per-call session seeding preserves text/image
 history but does **not** persist extension session entries, auth sessions, caches,
 custom messages or extension state between turns.
 
-The Pi image pins **0.85.1** as a full npm installation. Pi 0.84.4 lacked the
-`@earendil-works/chord` and `chord/context` imports required by current
-`pi-subagents` async runners. The image now verifies these host imports during
-build; do not graft a second, unrelated chord copy onto the old Pi SDK.
+The Pi image pins **1.0.0** as a full npm installation. The image build verifies
+the exact version, public SDK exports, and host dependency imports. Do not graft
+older or duplicate Pi dependencies onto this SDK to satisfy an extension.
 
-Async subagents can run **within a turn**, provided the parent waits for their
-completion (for `pi-subagents`, `bg_wait` with the returned run ID) before ending.
+**Upgrade compatibility:** Pi 1.0 removed `@earendil-works/pi-agent-core/node`.
+The async runners in `pi-subagents` **0.66.0 and 0.74.0** still require that export
+and fail before starting a child. Updating to 0.74.0 alone does not fix this.
+Deselect affected packages before deploying this image, or retain the previous
+Pi 0.85.1 image if async subagents are required until a compatible package release
+passes the opt-in regression below. Installed artifacts are not modified or
+silently upgraded. Basic RPC, gateway model routing, image input, reasoning,
+package discovery, and prompt/history support are tested separately.
+
+With a compatible extension, async subagents can run **within a turn**, provided
+the parent waits for their completion (for `pi-subagents`, `bg_wait` with the
+returned run ID) before ending.
 The runner includes this instruction whenever packages are selected. RPC reports
 `hasUI=true`, so pi-subagents' headless auto-drain does not apply: its suggestion
 to return control and await a later notification is incompatible with our
@@ -137,7 +146,7 @@ New SQLite tables/chat columns are additive; legacy chats keep an empty selectio
 ```sh
 docker compose up -d --build backend docker-broker frontend-web
 uv run pytest tests/backend/test_pi_packages.py tests/broker/test_packages.py
-node --test tests/agent/*.mjs
+node --test tests/agent/*.mjs tests/agent/*.ts
 npm --prefix services/frontend test
 npm --prefix services/frontend run test:e2e -- tests/packages.spec.js tests/agent-profiles.spec.js --workers=1
 npm --prefix services/frontend run build
@@ -157,9 +166,12 @@ NAUTIONETTE_DOCKER_TESTS=1 NAUTIONETTE_PACKAGE_TEST_SOURCE='npm:<trusted-package
 That opt-in test installs the chosen package with scripts disabled, checks cleanup
 and immutability, then verifies a read-only runtime mount without loading extensions.
 
-A separate opt-in regression uses real `pi-subagents` (verified with 0.66.0) and a
-local mock gateway to launch an async child, await it and check its output. It does
-not install packages or contact public services. Put Pi 0.85.1 on PATH and run:
+A separate opt-in regression uses real `pi-subagents` and a local mock gateway to
+launch an async child, await it and check its output. It does not install packages
+or contact public services. This passed with Pi 0.85.1 and pi-subagents 0.66.0;
+it currently fails with Pi 1.0.0 and pi-subagents 0.66.0 or 0.74.0 as described
+above. Keep this test as a compatibility gate for future package releases, not
+an expected-failure test. Put the target Pi version on PATH and run:
 
 ```sh
 NAUTIONETTE_SUBAGENTS_DIR=/path/to/installed/pi-subagents \
@@ -167,6 +179,7 @@ NAUTIONETTE_SUBAGENTS_DIR=/path/to/installed/pi-subagents \
 node images/pi-base/verify-pi-runtime.mjs /path/to/pi-coding-agent
 ```
 
-The subagent regression reproduces the missing-chord error under Pi 0.84.4.
-Rebuild the Pi base and derived agent images to deploy the runtime fix; rebuilding
-only the frontend will not change the Pi version.
+Rebuild the Pi base and derived agent images to deploy the runtime upgrade;
+rebuilding only the frontend will not change the Pi version. Pi 1.0's fullscreen
+TUI default does not affect Nautionette's RPC/JSON modes. Pi now normalizes prompt
+images before sending them; transport fixtures must be valid, decodable images.

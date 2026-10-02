@@ -12,7 +12,9 @@ import { fileURLToPath } from 'node:url'
 const piAvailable = spawnSync('pi', ['--version']).status === 0
 const extension = fileURLToPath(new URL('../../images/agent-sets/default/extensions/nautionette/index.ts', import.meta.url))
 const images = [
-  { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=' },
+  // Valid 1x1 red RGBA PNG. Pi 1.0 validates/normalizes prompt images;
+  // the previous fixture had an invalid IDAT CRC and was correctly omitted.
+  { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==' },
   { type: 'image', mimeType: 'image/gif', data: 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' }
 ]
 

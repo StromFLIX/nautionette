@@ -27,10 +27,10 @@ RUN npm install -g --ignore-scripts playwright@${PLAYWRIGHT_VERSION} \
   && rm -rf /var/lib/apt/lists/*
 
 # Pi updates must not invalidate the much larger Chromium/OS dependency layer.
-RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@0.85.1 \
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.0.0 \
   && npm cache clean --force
-# SDK-based subagents need the host's chord exports, not a separately installed
-# copy (which can break runtime identity). Fail the image build if they regress.
+# Verify Pi's public SDK and host dependencies without installing duplicate peers.
+# Third-party packages must support Pi 1.0's exports (see docs/pi-packages.md).
 COPY verify-pi-runtime.mjs /usr/local/lib/nautionette/verify-pi-runtime.mjs
 RUN node /usr/local/lib/nautionette/verify-pi-runtime.mjs
 
