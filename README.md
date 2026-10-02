@@ -891,6 +891,22 @@ instead, put them in `.env`, recreate the gateway with
 `docker compose up -d --force-recreate agentgateway`, and type `$OPENAI_API_KEY` (or whichever
 variable) into the same field. Either way the secret stops at agentgateway.
 
+For **GitHub Copilot**, use **Sign in with GitHub** when adding the integration,
+or on its existing card to reconnect. Open the GitHub authorization link, enter
+the displayed one-time code, and authorize with an account that has Copilot
+access. GitHub may name the authorization app **GitHub Copilot**. Keep the
+Nautionette form open until sign-in completes, then use **Test** to verify model
+access. The device flow does not need a public callback URL.
+
+The backend holds the pending device code only in memory until cancellation or
+expiry. A backend restart requires starting sign-in again. On success, the token
+replaces the integration's credential in the persistent `agentgateway-data`
+volume; neither the token nor the private device code is returned to the browser.
+Manual token entry and `GH_COPILOT_TOKEN` remain available as alternatives.
+Missing or rejected credentials now link the recovery instructions to sign-in,
+rather than requiring a new integration. Deploy the sign-in UI and API together
+with `docker compose up -d --build backend frontend-web`.
+
 MCP servers are managed under **Settings > MCP servers**. Choose **HTTP** for an
 existing endpoint, or **stdio** to launch a trusted command inside agentgateway.
 The stdio form accepts an executable, a JSON argument array and secret environment

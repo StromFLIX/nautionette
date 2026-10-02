@@ -39,7 +39,7 @@ INTEGRATION_TYPES: dict[str, dict[str, Any]] = {
     },
     "copilot": {
         "name": "GitHub Copilot",
-        "description": "Models the GitHub account behind this Copilot token may use.",
+        "description": "Sign in with GitHub to use models included in your Copilot subscription.",
         "provider": "copilot",
         "prefix": "copilot",
         "auth": {

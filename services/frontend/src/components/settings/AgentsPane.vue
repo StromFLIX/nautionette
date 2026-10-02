@@ -24,7 +24,7 @@
       </button>
       <button
         class="btn btn--sm btn--primary"
-        :disabled="!state.writable || !state.available.length" @click="toggleAdd"
+        :disabled="!state.writable || !state.available.length || loginBusy" @click="toggleAdd"
       >
         Add integration
       </button>
@@ -57,10 +57,19 @@
           </strong>
         </div>
         <p class="caption dim">{{ selected.description }}</p>
+        <CopilotLogin
+          v-if="selected.type === 'copilot'" ref="copilotLogin"
+          :config="{ integration_id: draft.integration_id }"
+          :disabled="Boolean(busy) || !state.writable || !draftValid"
+          @busy="loginBusy = $event" @connected="connected"
+        />
+        <p v-if="selected.type === 'copilot'" class="caption dim">
+          Alternatively, configure a GitHub token manually below.
+        </p>
         <DeclaredField
           v-for="field in selected.fields" :key="field.key" v-model="draft[field.key]"
           :field="field" :credential="selected.credential"
-          :disabled="selected.configured && field.key === 'slug'"
+          :disabled="loginBusy || (selected.configured && field.key === 'slug')"
         />
         <p class="caption dim">
           Credentials stay on agentgateway and are never returned to this page.
@@ -68,7 +77,7 @@
         <div class="row integration-actions">
           <button class="btn btn--sm" @click="cancelAdd">Cancel</button>
           <button
-            class="btn btn--sm btn--primary" :disabled="Boolean(busy) || !draftValid" @click="save"
+            class="btn btn--sm btn--primary" :disabled="Boolean(busy) || loginBusy || !draftValid" @click="save"
           >
             {{ busy
               ? 'Saving…'
@@ -109,19 +118,25 @@
       </div>
       <div class="row integration-actions">
         <button
-          v-if="item.fields.length" class="btn btn--sm" :disabled="Boolean(busy)"
+          v-if="item.type === 'copilot'" class="btn btn--sm btn--primary"
+          :disabled="Boolean(busy) || loginBusy || !state.writable" @click="signIn(item)"
+        >
+          Sign in with GitHub
+        </button>
+        <button
+          v-if="item.fields.length" class="btn btn--sm" :disabled="Boolean(busy) || loginBusy"
           @click="choose(item)"
         >
           Configure
         </button>
         <button
-          class="btn btn--sm btn--outline" :disabled="Boolean(busy)" @click="test(item)"
+          class="btn btn--sm btn--outline" :disabled="Boolean(busy) || loginBusy" @click="test(item)"
         >
           {{ busy === item.instance && action === 'test' ? 'Testing…' : 'Test' }}
         </button>
         <span class="grow" />
         <button
-          class="btn btn--sm btn--danger" :disabled="Boolean(busy)" @click="remove(item)"
+          class="btn btn--sm btn--danger" :disabled="Boolean(busy) || loginBusy" @click="remove(item)"
         >
           Remove
         </button>
@@ -147,10 +162,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import DeclaredField from './DeclaredField.vue'
 import AgentProfiles from './AgentProfiles.vue'
+import CopilotLogin from './CopilotLogin.vue'
 import { credentialLabel, draftIsValid, resetDraft } from './fields'
 import { actions, store } from '../../store'
 import { api } from '../../api'
@@ -164,6 +180,8 @@ const adding = ref(false)
 const choice = ref('')
 const busy = ref('')
 const action = ref('')
+const copilotLogin = ref(null)
+const loginBusy = ref(false)
 
 const selected = computed(() =>
   [...state.integrations, ...state.available]
@@ -219,6 +237,19 @@ function choose (integration) {
   adding.value = true
   choice.value = integration.instance || integration.type
   resetDraft(draft, integration.fields, integration.config)
+}
+
+async function signIn (integration) {
+  choose(integration)
+  await nextTick()
+  await copilotLogin.value?.start()
+}
+
+async function connected () {
+  delete tests.copilot
+  cancelAdd()
+  await refresh()
+  $q.notify({ type: 'positive', message: 'GitHub Copilot signed in. Use Test to verify model access.' })
 }
 
 function clearDraft () {
