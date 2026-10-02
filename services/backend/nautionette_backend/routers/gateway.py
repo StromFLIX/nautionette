@@ -10,6 +10,7 @@ from .. import integrations, mcp_servers
 from ..catalog import reset_default_model
 from ..events import bus
 from ..fields import normalise
+from ..integrations import copilot_login
 from ..integrations.registry import integration_fields, integration_spec, integration_type
 from ..runtime import forget_catalog, remember_agent_result, runtime
 from ..security import require_user
@@ -18,6 +19,21 @@ router = APIRouter(dependencies=[Depends(require_user)])
 
 
 # --------------------------------------------------------- model integrations
+
+
+@router.post("/api/model-integrations/copilot/login")
+async def start_copilot_login(payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    return await copilot_login.start(payload)
+
+
+@router.post("/api/model-integrations/copilot/login/{identifier}")
+async def poll_copilot_login(identifier: str) -> dict[str, Any]:
+    return await copilot_login.poll(identifier)
+
+
+@router.delete("/api/model-integrations/copilot/login/{identifier}", status_code=204)
+async def cancel_copilot_login(identifier: str) -> None:
+    await copilot_login.cancel(identifier)
 
 
 @router.get("/api/model-integrations")

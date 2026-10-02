@@ -41,10 +41,15 @@ def internal_headers() -> dict[str, str]:
 def upstream_problem(name: str, credential: str, status: int | None, body: str) -> str:
     """One actionable sentence, whichever provider refused the call."""
     text = body.lower()
-    if "token not found" in text:
-        return f"agentgateway found no {name} credential. Add {credential} and try again."
     if "copilot-integration-id" in text:
         return f"{name} rejected the configured integration ID."
+    if name == "GitHub Copilot" and ("token not found" in text or status in {401, 403}):
+        return (
+            "GitHub Copilot needs authorization. "
+            "Use Sign in with GitHub to connect or reconnect your account."
+        )
+    if "token not found" in text:
+        return f"agentgateway found no {name} credential. Add {credential} and try again."
     # xAI answers a rejected key with 400, so the body decides alongside the status.
     if status in {401, 403} or "api key" in text or "unauthorized" in text:
         return f"{name} rejected {credential}."

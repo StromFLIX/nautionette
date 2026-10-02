@@ -124,6 +124,17 @@ def test_a_refused_call_becomes_one_actionable_sentence(status, body, expected):
     assert upstream_problem("OpenAI", "$OPENAI_API_KEY", status, body) == expected
 
 
+@pytest.mark.parametrize("status, body", [(500, "Copilot token not found"), (401, ""), (403, "")])
+def test_missing_or_rejected_copilot_auth_points_to_sign_in(status, body):
+    assert "Use Sign in with GitHub" in upstream_problem("GitHub Copilot", "GH_COPILOT_TOKEN", status, body)
+
+
+def test_invalid_copilot_integration_id_keeps_its_specific_explanation():
+    assert upstream_problem("GitHub Copilot", "GH_COPILOT_TOKEN", 403, "copilot-integration-id") == (
+        "GitHub Copilot rejected the configured integration ID."
+    )
+
+
 @pytest.mark.parametrize(
     ("model", "endpoint", "prompt_fields"),
     [

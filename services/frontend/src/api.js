@@ -87,6 +87,12 @@ export const api = {
     request(`/api/model-integrations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   testModelIntegration: (id) =>
     request(`/api/model-integrations/${encodeURIComponent(id)}/test`, { method: 'POST' }),
+  startCopilotLogin: (config = {}) =>
+    request('/api/model-integrations/copilot/login', { method: 'POST', ...json(config) }),
+  pollCopilotLogin: (id) =>
+    request(`/api/model-integrations/copilot/login/${encodeURIComponent(id)}`, { method: 'POST' }),
+  cancelCopilotLogin: (id) =>
+    request(`/api/model-integrations/copilot/login/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   mcpServers: () => request('/api/mcp-servers'),
   saveMcpServer: (name, config = {}) =>
