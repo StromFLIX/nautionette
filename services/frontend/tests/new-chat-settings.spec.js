@@ -12,6 +12,11 @@ const stored = page => page.evaluate(prefix => {
 async function send (page, text = 'Use these settings') {
   await page.getByLabel('Message', { exact: true }).fill(text)
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(page.getByLabel('Message', { exact: true })).toHaveValue('')
+  // A request reaching the mock is not an acknowledgement; navigation can make the outbox retry it.
+  await expect.poll(() => page.evaluate(() =>
+    Object.keys(localStorage).filter(key => key.startsWith('nautionette.outbox.')).length
+  )).toBe(0)
 }
 async function noTools (page) {
   await page.getByLabel('Select tools', { exact: true }).click()

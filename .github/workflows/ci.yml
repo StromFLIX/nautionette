@@ -44,6 +44,9 @@ jobs:
       - name: Model capability and image API guards
         run: uv run pytest tests/backend/test_catalog.py tests/backend/test_model_capabilities.py tests/backend/test_chat_images.py
 
+      - name: Model integrations and Copilot sign-in
+        run: uv run pytest tests/backend/test_copilot_login.py tests/backend/test_integrations.py tests/backend/test_events_and_clients.py
+
       - name: Agent defaults, profiles and durable chat configuration
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py
 
@@ -87,7 +90,8 @@ jobs:
           tests/chat.spec.js tests/appearance.spec.js tests/workspace.spec.js
           tests/projects.spec.js tests/settings-navigation.spec.js
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js
-          tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js --workers=1 --reporter=dot,github
+          tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
+          tests/copilot-login.spec.js --workers=1 --reporter=dot,github
 
   images:
     name: Image (${{ matrix.name }})
