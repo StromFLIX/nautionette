@@ -15,6 +15,7 @@ import { prepareProjects, projectEnvironment } from "./project-git.mjs";
 import { contextUsage } from "./context-usage.mjs";
 import { createChatControl, listenForChatControl } from "./chat-control.mjs";
 import { createChatRecovery } from "./chat-recovery.mjs";
+import { prepareFiles, fileReferences } from "./chat-files.mjs";
 
 const OUT = process.stdout;
 
@@ -44,6 +45,7 @@ function renderPrompt(job) {
   const references = (images = []) => images.map(() => `[Attached image ${++imageNumber}]`).join("\n");
   parts.push(job.prompt || (job.images?.length ? "Please examine the attached image(s)." : ""));
   if (job.images?.length) parts.push(references(job.images));
+  if (job.files?.length) parts.push(fileReferences(job.files));
   if (job.output_schema) {
     parts.push(
       "",
@@ -64,7 +66,7 @@ function seedHistory(job, workspace, model) {
   let parentId = null;
   for (const message of job.history) {
     const id = randomUUID().replaceAll("-", "").slice(0, 8);
-    const content = [{ type: "text", text: message.content || "" }, ...(message.images || [])];
+    const content = [{ type: "text", text: (message.content || "") + fileReferences(message.files) }, ...(message.images || [])];
     const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } };
     entries.push({ type: "message", id, parentId, timestamp, message: {
@@ -149,6 +151,7 @@ async function main() {
   if (existsSync("/workspace-defaults")) {
     cpSync("/workspace-defaults", workspace, { recursive: true });
   }
+  prepareFiles(job, workspace);
   writeFileSync(`${workspace}/JOB.json`, JSON.stringify({ ...job, history: undefined, images: undefined, project_credentials: undefined, package_runtime: undefined }, null, 2));
   if (job.project_ids?.length) {
     emit({ type: "status", state: "projects", message: "Preparing this chat's project worktrees" });

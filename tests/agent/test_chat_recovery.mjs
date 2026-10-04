@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { createChatControl } from '../../images/pi-base/chat-control.mjs'
+import { prepareFiles, fileReferences } from '../../images/pi-base/chat-files.mjs'
 import { createChatRecovery, recoveryReason, RECOVERY_DELAYS_MS } from '../../images/pi-base/chat-recovery.mjs'
 
 const failed = (error = '503 service unavailable') => ({ type: 'message_end', message: {
@@ -252,7 +253,7 @@ const runner = readFileSync(new URL('../../images/pi-base/agent-run.mjs', import
 async function runWrapper (events, exitCode = null) {
   const output = []
   await runInNewContext(runner, {
-    Buffer, console, createChatControl, createChatRecovery,
+    Buffer, console, createChatControl, createChatRecovery, prepareFiles, fileReferences,
     mkdirSync () {}, existsSync () { return false }, writeFileSync () {},
     preparePackages () {}, projectEnvironment () { return {} }, contextUsage () { return null },
     listenForChatControl () { return { close () {} } },

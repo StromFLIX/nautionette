@@ -514,7 +514,7 @@ class Database:
                 if [a["id"] for a in json.loads(existing["meta"]).get("attachments", [])] != (
                     attachment_ids or []
                 ):
-                    raise ValueError("message_id was already used with different images")
+                    raise ValueError("message_id was already used with different attachments")
                 return {**dict(existing), "meta": json.loads(existing["meta"])}, False
             attachments = []
             for image_id in attachment_ids or []:
@@ -524,7 +524,7 @@ class Database:
                     (image_id, chat_id),
                 ).fetchone()
                 if not image:
-                    raise ValueError("An image is missing or already attached to another message")
+                    raise ValueError("An attachment is missing or already attached to another message")
                 attachments.append(dict(image))
             waiting = (
                 queue

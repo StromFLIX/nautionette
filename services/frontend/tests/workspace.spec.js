@@ -148,7 +148,7 @@ test('model picker restores keyboard focus and clears its tooltip when focus mov
   const model = page.getByRole('button', { name: 'Select model', exact: true })
   const tooltip = page.getByRole('tooltip').filter({ hasText: /^Model for this chat$/ })
   await input.focus()
-  await page.keyboard.press('Tab') // Attach images
+  await page.keyboard.press('Tab') // Attach files
   await page.keyboard.press('Tab') // Select model, without hovering it
   await expect(model).toBeFocused()
   await expect(tooltip).toBeVisible()

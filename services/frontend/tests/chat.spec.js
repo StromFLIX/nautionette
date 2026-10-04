@@ -34,7 +34,7 @@ async function mockChats (context, state) {
       if (state.changesFailure) return route.fulfill({ status: 503, json: { detail: 'Unavailable' } })
       return route.fulfill({ json: { projects: state.changes?.[changesPath[1]] || [] } })
     }
-    const imagePath = path.match(/^\/api\/chats\/([^/]+)\/images(?:\/([^/]+))?$/)
+    const imagePath = path.match(/^\/api\/chats\/([^/]+)\/attachments(?:\/([^/]+))?$/)
     if (imagePath) {
       const [, chatId, id] = imagePath
       if (method === 'POST') {
@@ -157,7 +157,7 @@ test('opening an old unread chat keeps it in the grouped list after acknowledgem
   await page.clock.fastForward(300_000)
   await expect(alpha).toBeVisible()
   await expect(alpha).toHaveClass(/row-item--active/)
-  await expect(page.locator('.side__group-count')).toHaveText('2')
+  await expect(page.locator('.side__group-count')).toHaveText('2 chats')
   await expect(page.getByRole('button', { name: 'Show 1 older', exact: true })).toHaveCount(0)
   const search = page.getByRole('textbox', { name: 'Search chats', exact: true })
   await search.fill('beta')
@@ -884,7 +884,7 @@ for (const width of [1440, 320]) {
   })
 }
 
-test('paste and drop supported images, remove previews, and validate formats', async ({ page, context }) => {
+test('paste and drop supported images, remove previews, and download other formats', async ({ page, context }) => {
   const state = initial()
   state.models = [{ id: 'test/model', supports_images: true }]
   await mockChats(context, state)
@@ -906,7 +906,9 @@ test('paste and drop supported images, remove previews, and validate formats', a
   await page.locator('textarea').fill('Text still works')
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled()
   await page.locator('input[type=file]').setInputFiles({ name: 'script.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') })
-  await expect(page.locator('.composer [role=alert]')).toContainText('PNG, JPEG, GIF or WebP')
+  await expect(page.locator('.composer img')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Download script.svg' })).toBeVisible()
+  await expect(page.locator('.composer svg')).toHaveCount(0)
   expect(state.uploads).toEqual([])
 })
 
@@ -916,9 +918,9 @@ for (const reason of ['The provider marks this model as text-only.', 'No compati
     state.models = [{ id: 'test/model', supports_images: false, image_support_reason: reason }]
     await mockChats(context, state)
     await page.goto('/chats/alpha')
-    await expect(page.getByRole('button', { name: 'Attach images' })).toBeDisabled()
-    await expect(page.locator('input[type=file]')).toBeDisabled()
-    await expect(page.getByRole('button', { name: 'Attach images' })).toHaveAttribute('title', new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+    await expect(page.getByRole('button', { name: 'Attach files' })).toBeEnabled()
+    await expect(page.locator('input[type=file]')).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Attach files' })).toHaveAttribute('title', new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     await openChatConfiguration(page)
     await expect(page.locator('.composer [role=status]')).toContainText(reason)
     for (const type of ['paste', 'drop', 'change']) {
@@ -947,8 +949,8 @@ test('unknown image support is labelled unverified and remains usable', async ({
   const state = initial()
   await mockChats(context, state)
   await page.goto('/chats/alpha')
-  await expect(page.getByRole('button', { name: 'Attach images' })).toBeEnabled()
-  await expect(page.getByRole('button', { name: 'Attach images' })).toHaveAttribute('title', /Image support unverified/)
+  await expect(page.getByRole('button', { name: 'Attach files' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Attach files' })).toHaveAttribute('title', /Image support unverified/)
   await page.locator('input[type=file]').setInputFiles(imageFile)
   await expect(page.locator('.composer [role=status]')).toContainText('Image support unverified')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
@@ -1037,6 +1039,82 @@ test('an image can start a new chat from the welcome composer', async ({ page, c
   await expect(page).toHaveURL(/\/chats\/created$/)
   await expect(page.locator('.msg--user img')).toBeVisible()
   expect(state.uploads[0].chatId).toBe('created')
+})
+
+const pdfFile = { name: 'report.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.7\noriginal PDF bytes\x00\xff', 'latin1') }
+
+for (const width of [1440, 320]) {
+  test(`PDF-only messages work with text models and download unchanged after reload at ${width}px`, async ({ page, context }) => {
+    const state = initial()
+    state.models = [{ id: 'test/model', supports_images: false }]
+    await mockChats(context, state)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats/alpha')
+    await page.locator('input[type=file]').setInputFiles(pdfFile)
+    await expect(page.locator('.composer img')).toHaveCount(0)
+    await expect(page.locator('.composer').getByRole('button', { name: 'Download report.pdf' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled()
+    await page.getByRole('button', { name: 'Send message', exact: true }).click()
+    await expect(page.locator('.msg--user .chat-file')).toBeVisible()
+    expect(state.payloads[0].text).toBe('')
+    expect(state.payloads[0].attachment_ids).toEqual(['image-0'])
+    expect(state.uploads[0].bytes.equals(pdfFile.buffer)).toBe(true)
+    await page.reload()
+    const downloadPromise = page.waitForEvent('download')
+    await page.locator('.msg--user').getByRole('button', { name: 'Download report.pdf' }).click()
+    const download = await downloadPromise
+    expect(download.suggestedFilename()).toBe('report.pdf')
+    const chunks = []
+    for await (const chunk of await download.createReadStream()) chunks.push(chunk)
+    expect(Buffer.concat(chunks).equals(pdfFile.buffer)).toBe(true)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  })
+}
+
+test('generic files can start a chat, be pasted/dropped, and be removed without rendering content', async ({ page, context }) => {
+  const state = initial()
+  state.models = [{ id: 'test/model', supports_images: false }]
+  await mockChats(context, state)
+  await page.goto('/chats')
+  for (const type of ['paste', 'drop']) {
+    await page.locator('textarea').evaluate((el, type) => {
+      const transfer = new DataTransfer()
+      transfer.items.add(new File(['<script>window.untrusted = true</script>'], `${type}.html`, { type: 'text/html' }))
+      el.dispatchEvent(type === 'paste'
+        ? new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true })
+        : new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }))
+    }, type)
+  }
+  await expect(page.locator('.composer .chat-file')).toHaveCount(2)
+  await page.getByRole('button', { name: 'Remove paste.html' }).click()
+  await page.getByRole('button', { name: 'Send message', exact: true }).click()
+  await expect(page).toHaveURL(/\/chats\/created$/)
+  await expect(page.locator('.msg--user .chat-file')).toContainText('drop.html')
+  expect(await page.evaluate(() => window.untrusted)).toBeUndefined()
+})
+
+test('failed file upload preserves the draft; queued files retain metadata across reload and retries', async ({ page, context }) => {
+  const state = initial()
+  state.models = [{ id: 'test/model', supports_images: false }]
+  state.uploadFailure = true
+  state.chats.alpha.active_turn = { id: 'running', steps: [] }
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await page.locator('input[type=file]').setInputFiles(pdfFile)
+  await page.getByRole('button', { name: 'Queue message', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Invalid image')
+  await expect(page.locator('.composer .chat-file')).toBeVisible()
+  state.uploadFailure = false
+  state.offline = true
+  await page.getByRole('button', { name: 'Queue message', exact: true }).click()
+  await expect(page.locator('.msg--user .chat-file')).toBeVisible()
+  await page.reload()
+  await expect(page.locator('.msg--user .chat-file')).toBeVisible()
+  state.offline = false
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await expect(page.getByRole('region', { name: 'Queued messages' }).locator('.chat-file')).toBeVisible()
+  expect(state.uploads).toHaveLength(1)
+  expect(new Set(state.payloads.map(item => item.message_id)).size).toBe(1)
 })
 
 function reasoningModels () {

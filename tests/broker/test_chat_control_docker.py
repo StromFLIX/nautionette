@@ -51,6 +51,7 @@ def test_real_pi_steering_and_stop_at_a_running_tool(monkeypatch, repo_root, sto
                 "agent-run.mjs",
                 "chat-control.mjs",
                 "chat-recovery.mjs",
+                "chat-files.mjs",
                 "project-git.mjs",
                 "context-usage.mjs",
                 "package-runtime.mjs",

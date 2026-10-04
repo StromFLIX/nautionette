@@ -8,7 +8,7 @@ import logging
 from time import monotonic
 from typing import Any
 
-from . import chat_images, git_authorship, projects
+from . import chat_attachments, git_authorship, projects
 from .agent import Timeline, build_history, stream_agent
 from .background import spawn
 from .chat_titles import refine_chat_title
@@ -88,7 +88,7 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
                     if not pending["job"]:
                         break
                     candidate = json.loads(pending["job"])
-                    # Image messages run as their own durable turn. Never send a text-only
+                    # Attachment messages run as their own durable turn. Never send a text-only
                     # steering command that silently drops attachments (or exceed exec argv limits).
                     if candidate.get("attachments"):
                         break
@@ -157,16 +157,19 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
             ],
             max_chars=history_budget(job.get("model")),
         )
-        job["images"] = chat_images.load_images(chat_id, job.get("attachments", []))
+        job.update(chat_attachments.load_attachments(chat_id, job.get("attachments", [])))
         for message in job["history"]:
             attachments = message.pop("attachments", [])
-            if attachments and job.get("supports_images") is False:
-                message["content"] += (
-                    f"\n[{len(attachments)} image(s) omitted: "
-                    "image input unavailable for this model/API route]"
-                )
-            elif attachments:
-                message["images"] = chat_images.load_images(chat_id, attachments)
+            if job.get("supports_images") is False:
+                images = [item for item in attachments if chat_attachments.is_image(item)]
+                if images:
+                    message["content"] += (
+                        f"\n[{len(images)} image(s) omitted: "
+                        "image input unavailable for this model/API route]"
+                    )
+                attachments = [item for item in attachments if not chat_attachments.is_image(item)]
+            if attachments:
+                message.update(chat_attachments.load_attachments(chat_id, attachments))
         controller = spawn(control_turn(turn_id, chat_id, job, finished), name=f"chat-control-{turn_id}")
         if job.get("project_ids"):
             # Resolve on execution, not enqueue: queued/new turns see the latest settings.

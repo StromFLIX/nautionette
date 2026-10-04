@@ -3,7 +3,7 @@
     @dragover.prevent @drop.prevent="drop" @paste="paste">
     <div v-if="attachments.length" class="composer__attachments">
       <div v-for="image in attachments" :key="image.id" class="composer__attachment">
-        <ChatImage :image="image" />
+        <ChatAttachment :attachment="image" />
         <button class="btn btn--icon" type="button" :disabled="busy" :aria-label="`Remove ${image.name}`" @click="removeImage(image)">
           <span class="material-icons" aria-hidden="true">close</span>
         </button>
@@ -11,7 +11,7 @@
     </div>
     <p v-if="!configurationReady" class="composer__notice caption" role="status">Loading chat defaults…</p>
     <p v-if="imageError" class="composer__notice caption" role="alert">{{ imageError }}</p>
-    <p v-if="imageSupport !== true && (attachments.length || configurationOpen)" class="composer__notice caption" role="status">{{ imageNotice }}</p>
+    <p v-if="imageSupport !== true && (hasImages || configurationOpen)" class="composer__notice caption" role="status">{{ imageNotice }}</p>
     <div v-if="commandSuggestions.length" class="composer__commands" aria-label="Pi command suggestions">
       <button v-for="command in commandSuggestions" :key="command.name" class="pick-menu__item" type="button" :disabled="busy" @click="chooseCommand(command.name)">
         <strong>/{{ command.name }}</strong><span class="caption dim truncate">{{ command.description }}</span>
@@ -21,11 +21,11 @@
       :rows="variant === 'welcome' ? 3 : 1" :disabled="busy" @input="onInput"
       @focus="focused = true" @blur="focused = false" @keydown="onKeydown" />
 
-    <input ref="fileInput" type="file" :accept="IMAGE_TYPES.join(',')" :disabled="busy || imageSupport === false" multiple hidden @change="chooseFiles" />
+    <input ref="fileInput" type="file" :disabled="busy" multiple hidden @change="chooseFiles" />
     <div class="composer__bar">
-      <button class="pick pick--icon" type="button" :disabled="busy || imageSupport === false" :title="imageNotice" aria-label="Attach images" @click="fileInput?.click()">
-        <span class="material-icons" aria-hidden="true">add_photo_alternate</span>
-        <q-tooltip>{{ imageSupport === true ? 'Paste, drop or attach images · up to 4, 5 MiB each' : imageNotice }}</q-tooltip>
+      <button class="pick pick--icon" type="button" :disabled="busy" :title="attachmentNotice" aria-label="Attach files" @click="fileInput?.click()">
+        <span class="material-icons" aria-hidden="true">attach_file</span>
+        <q-tooltip>{{ attachmentNotice }}</q-tooltip>
       </button>
       <button class="pick composer__model" type="button" :disabled="configurationBusy" aria-label="Select model">
         <span class="material-icons pick__icon" aria-hidden="true">memory</span>
@@ -129,8 +129,8 @@ import ModelPicker from './ModelPicker.vue'
 import AgentPicker from './AgentPicker.vue'
 import { agentConfig, sameConfig } from '../agent-config'
 import ReasoningPicker from './ReasoningPicker.vue'
-import ChatImage from './ChatImage.vue'
-import { addImages, IMAGE_TYPES } from '../attachments'
+import ChatAttachment from './ChatAttachment.vue'
+import { addAttachments, isImage } from '../attachments'
 import { api } from '../api'
 import ToolPicker from './ToolPicker.vue'
 import ProjectPicker from './ProjectPicker.vue'
@@ -166,20 +166,22 @@ const customConfiguration = computed(() => !sameConfig(profileDefaults.value, {
 }))
 const selectedModel = computed(() => store.catalog.models?.find(m => m.id === (props.model || store.catalog.default_model)))
 const imageSupport = computed(() => selectedModel.value?.supports_images)
+const hasImages = computed(() => props.attachments.some(isImage))
 const hasDraft = computed(() => Boolean(props.modelValue.trim() || props.attachments.length))
 const showStop = computed(() => props.running && !hasDraft.value)
 // Preparing a new chat gates server-dependent actions, never typing or attachments.
 const configurationBusy = computed(() => props.busy || props.preparing)
-const canSubmit = computed(() => !configurationBusy.value && props.configurationReady && hasDraft.value && !(props.attachments.length && imageSupport.value === false))
+const canSubmit = computed(() => !configurationBusy.value && props.configurationReady && hasDraft.value && !(hasImages.value && imageSupport.value === false))
 const imageNotice = computed(() => {
   if (imageSupport.value === true) return selectedModel.value?.image_support_reason || 'Image input supported.'
-  if (imageSupport.value === false) return `${selectedModel.value?.image_support_reason || 'Image input is unavailable for this model/API route.'} Choose another model${props.attachments.length ? ' or remove the images' : ''}.`
+  if (imageSupport.value === false) return `${selectedModel.value?.image_support_reason || 'Image input is unavailable for this model/API route.'} Choose another model${hasImages.value ? ' or remove the images' : ''}.`
   return 'Image support unverified for this model/API route. Images may not be understood.'
 })
+const attachmentNotice = computed(() => `Paste, drop or attach files · up to 4, 5 MiB each.${imageSupport.value === true ? '' : ` ${imageNotice.value} Other files remain available.`}`)
 function attach (files) {
   if (props.busy || !files?.length) return
-  if (imageSupport.value === false) { imageError.value = imageNotice.value; return }
-  try { emit('update:attachments', addImages(props.attachments, files)); imageError.value = '' }
+  if (imageSupport.value === false && Array.from(files).some(isImage)) { imageError.value = imageNotice.value; return }
+  try { emit('update:attachments', addAttachments(props.attachments, files)); imageError.value = '' }
   catch (error) { imageError.value = error.message }
 }
 function chooseFiles (event) { attach(event.target.files); event.target.value = '' }
@@ -193,7 +195,7 @@ function paste (event) {
 function removeImage (image) {
   emit('update:attachments', props.attachments.filter(item => item.id !== image.id))
   imageError.value = ''
-  if (image.uploaded) api.discardImage(image.uploadedChat, image.uploaded.id).catch(() => {})
+  if (image.uploaded) api.discardAttachment(image.uploadedChat, image.uploaded.id).catch(() => {})
 }
 const agentSets = computed(() => store.catalog.agent_sets || [])
 const allTools = computed(() => store.catalog.tools || [])

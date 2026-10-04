@@ -113,11 +113,11 @@ export const api = {
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
   chat: (id, signal = AbortSignal.timeout(15000)) => request(`/api/chats/${id}`, { signal }),
   projectChanges: (id, signal) => request(`/api/chats/${encodeURIComponent(id)}/project-changes`, { signal }),
-  uploadImage: (id, file) => request(`/api/chats/${id}/images?name=${encodeURIComponent(file.name)}`, {
-    method: 'POST', body: file, headers: { 'Content-Type': file.type }, signal: AbortSignal.timeout(60000)
+  uploadAttachment: (id, file) => request(`/api/chats/${id}/attachments?name=${encodeURIComponent(file.name)}`, {
+    method: 'POST', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' }, signal: AbortSignal.timeout(60000)
   }),
-  image: (chatId, imageId, signal) => request(`/api/chats/${chatId}/images/${imageId}`, { responseType: 'blob', signal }),
-  discardImage: (chatId, imageId) => request(`/api/chats/${chatId}/images/${imageId}`, { method: 'DELETE' }),
+  attachment: (chatId, id, signal) => request(`/api/chats/${chatId}/attachments/${id}`, { responseType: 'blob', signal }),
+  discardAttachment: (chatId, id) => request(`/api/chats/${chatId}/attachments/${id}`, { method: 'DELETE' }),
   sendMessage: (id, text, messageId, projectIds, attachments = []) => request(`/api/chats/${id}/messages`, {
     method: 'POST', headers: { Accept: 'application/json' },
     signal: AbortSignal.timeout(20000), ...json({ text, message_id: messageId, project_ids: projectIds,

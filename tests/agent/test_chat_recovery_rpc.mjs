@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { createChatControl } from '../../images/pi-base/chat-control.mjs'
+import { prepareFiles, fileReferences } from '../../images/pi-base/chat-files.mjs'
 import { createChatRecovery } from '../../images/pi-base/chat-recovery.mjs'
 
 const piAvailable = spawnSync('pi', ['--version']).status === 0
@@ -67,7 +68,7 @@ for (const outcome of ['recovered', 'exhausted', 'permanent']) {
       // Only file/system setup is isolated. Real commands, events, recovery logic
       // and the actual Pi subprocess are unchanged; no /workspace files are touched.
       await runInNewContext(source, {
-        Buffer, console, createChatControl, createChatRecovery,
+        Buffer, console, createChatControl, createChatRecovery, prepareFiles, fileReferences,
         mkdirSync () {}, existsSync () { return false }, writeFileSync () {},
         preparePackages () { return {} }, projectEnvironment () { return {} }, contextUsage () { return null },
         listenForChatControl () { return { close () {} } },
