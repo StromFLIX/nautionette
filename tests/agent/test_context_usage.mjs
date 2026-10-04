@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { contextUsage } from '../../images/pi-base/context-usage.mjs'
+import { createChatRecovery } from '../../images/pi-base/chat-recovery.mjs'
 
 const message = (usage) => ({ role: 'assistant', content: [{ type: 'text', text: 'hello' }], usage })
 const usage = { input: 1000, output: 200, cacheRead: 3000, cacheWrite: 400, totalTokens: 4600 }
@@ -30,7 +31,7 @@ async function runAgent (events, job = {}) {
   const source = readFileSync(new URL('../../images/pi-base/agent-run.mjs', import.meta.url), 'utf8')
     .replace(/^import .*;\n/gm, '')
   await runInNewContext(source, {
-    Buffer, console, contextUsage,
+    Buffer, console, contextUsage, createChatRecovery,
     mkdirSync () {}, writeFileSync () {}, existsSync () { return false },
     projectEnvironment () { return {} },
     preparePackages () {}, randomUUID () { return 'test-session'; },

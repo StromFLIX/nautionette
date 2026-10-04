@@ -95,3 +95,18 @@ test('streamed completion updates status without counting the call twice', () =>
   foldEvent(steps, { type: 'tool', id: 'two', name: 'read' })
   assert.deepEqual(summarizeToolCalls(steps), { label: 'Ran 1 shell command and 1 other tool call', failed: 1, pending: true })
 })
+
+test('recovery notices survive replay, separate tool groups, and never count as prose or tools', () => {
+  const steps = []
+  foldEvent(steps, { type: 'tool', id: 'one', name: 'write' })
+  foldEvent(steps, { type: 'tool_done', id: 'one', result: 'Saved' })
+  foldEvent(steps, { type: 'recovery', attempt: 1, max_attempts: 2, message: 'Automatic recovery 1/2' })
+  foldEvent(steps, { type: 'tool', id: 'two', name: 'read' })
+  foldEvent(steps, { type: 'delta', text: 'Resumed' })
+  const grouped = groupToolCalls(steps)
+  assert.deepEqual(grouped.map(part => part.kind), ['tool-group', 'recovery', 'tool-group', 'text'])
+  assert.deepEqual(grouped[1], { kind: 'recovery', attempt: 1, max_attempts: 2, message: 'Automatic recovery 1/2' })
+  assert.equal(summarizeToolCalls(steps).label, 'Ran 2 tool calls')
+  assert.deepEqual(groupToolCalls(JSON.parse(JSON.stringify(steps))), grouped)
+  assert.equal(steps.filter(part => part.kind === 'text').map(part => part.text).join(''), 'Resumed')
+})

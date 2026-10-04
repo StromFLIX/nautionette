@@ -14,6 +14,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync 
 import { prepareProjects, projectEnvironment } from "./project-git.mjs";
 import { contextUsage } from "./context-usage.mjs";
 import { createChatControl, listenForChatControl } from "./chat-control.mjs";
+import { createChatRecovery } from "./chat-recovery.mjs";
 
 const OUT = process.stdout;
 
@@ -127,8 +128,7 @@ function explain(error) {
   // The one failure everybody hits first deserves a sentence, not a status code.
   if (/401/.test(error) && /auth/i.test(error)) {
     return (
-      "the gateway has no model provider key: set OPENROUTER_API_KEY and restart agentgateway " +
-      `(upstream said: ${error.slice(0, 200)})`
+      "Model authentication failed. Check the configured model integration in Settings."
     );
   }
   return error;
@@ -195,13 +195,14 @@ async function main() {
   const send = (command) => child.stdin.write(JSON.stringify(command) + "\n");
   const control = interactive ? createChatControl({ send, emit }) : null;
   const controlServer = control ? listenForChatControl(control) : null;
+  const recovery = createChatRecovery({ control, emit, finish: () => child.kill() });
   child.stdin?.on("error", (error) => log("pi input closed:", error.message));
 
   let finalText = "";
   let streamed = "";
   let stderr = "";
   let buffer = "";
-  let runError = "";
+  let commandCompleted = false;
   let initialIsExtension = false;
   let context = null;
   let usage = null;
@@ -233,20 +234,21 @@ async function main() {
 
   function translate(event) {
     control?.receive(event);
+    recovery.observe(event);
     switch (event.type) {
       case "extension_ui_request":
         if (["select", "confirm", "input", "editor"].includes(event.method)) {
           send({ type: "extension_ui_response", id: event.id, cancelled: true });
-          runError = "This package requested an unsupported dialog. Configure it in Settings → Extension library.";
-          emit({ type: "error", message: runError });
+          recovery.fail("This package requested an unsupported dialog. Configure it in Settings → Extension library.");
+          emit({ type: "error", message: recovery.error });
           child.kill();
         } else if (event.method === "notify") {
           emit({ type: "status", state: "package", message: String(event.message || "").slice(0, 500) });
         }
         break;
       case "extension_error":
-        runError = "A Pi extension failed. Review its configuration and RPC compatibility in Settings.";
-        emit({ type: "error", message: runError });
+        recovery.fail("A Pi extension failed. Review its configuration and RPC compatibility in Settings.");
+        emit({ type: "error", message: recovery.error });
         child.kill();
         break;
       case "response":
@@ -257,8 +259,8 @@ async function main() {
         }
         if (event.id === "initial") {
           if (!event.success) {
-            runError = event.error || "Pi rejected the initial prompt";
-            emit({ type: "error", message: runError });
+            recovery.fail(event.error || "Pi rejected the initial prompt");
+            emit({ type: "error", message: recovery.error });
             child.kill();
           } else if (initialIsExtension) {
             // Commands that only notify or change state never emit agent_settled.
@@ -266,7 +268,8 @@ async function main() {
           }
         }
         if (event.id === "command-completion" && event.success && !event.data?.isStreaming && !event.data?.isCompacting && !event.data?.pendingMessageCount) {
-          if (!finalText && !runError) finalText = "Extension command completed.";
+          if (!finalText && !recovery.error) finalText = "Extension command completed.";
+          commandCompleted = true;
           child.kill();
         }
         break;
@@ -319,11 +322,6 @@ async function main() {
           context = contextUsage(message, model);
           usage = context ? message.usage : null;
           emit({ type: "usage", context });
-          if (message.stopReason === "error" && message.errorMessage) {
-            // A retry can recover this request. Only the final result may mark
-            // the turn failed; emitting a terminal error here would poison it.
-            runError = explain(message.errorMessage);
-          }
           const text = (message.content ?? [])
             .filter((part) => part.type === "text")
             .map((part) => part.text)
@@ -338,14 +336,11 @@ async function main() {
       case "compaction_end":
         emit({ type: "phase", phase: "other" });
         break;
-      case "auto_retry_end":
-        if (event.success) runError = "";
-        break;
       case "agent_end":
         emit({ type: "agent_end" });
         break;
       case "agent_settled":
-        if (interactive) child.kill();
+        recovery.settle();
         break;
       default:
         break;
@@ -367,17 +362,19 @@ async function main() {
     send({ id: "initial", type: "prompt", message: prompt, ...(images.length ? { images } : {}) });
   }
   const code = await completion;
+  recovery.close();
   control?.close();
   controlServer?.close();
 
   const text = (finalText || streamed).trim();
-
-  if (runError || (!text && code !== 0)) {
+  const unexpectedExit = interactive ? !recovery.settled && !commandCompleted : code !== 0;
+  if (recovery.error || unexpectedExit) {
+    const error = explain(recovery.error) || `Pi exited before completing the response (exit ${code}): ${stderr.trim().slice(-1200) || "no final result"}`;
     result({
       ok: false,
-      text: "",
+      text,
       output: null,
-      error: runError || `pi exited with ${code}: ${stderr.trim().slice(-1200) || "no output"}`,
+      error: error + (recovery.attempts ? ` Automatic recovery stopped after ${recovery.attempts} attempt(s); completed work was retained.` : ""),
     });
     return;
   }

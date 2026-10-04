@@ -47,7 +47,14 @@ def test_real_pi_steering_and_stop_at_a_running_tool(monkeypatch, repo_root, sto
         cleanup.callback(container.remove, force=True)
         archive = io.BytesIO()
         with tarfile.open(fileobj=archive, mode="w") as bundle:
-            for name in ("agent-run.mjs", "chat-control.mjs", "project-git.mjs", "context-usage.mjs"):
+            for name in (
+                "agent-run.mjs",
+                "chat-control.mjs",
+                "chat-recovery.mjs",
+                "project-git.mjs",
+                "context-usage.mjs",
+                "package-runtime.mjs",
+            ):
                 bundle.add(repo_root / "images/pi-base" / name, arcname=name)
             bundle.add(repo_root / "tests/agent/fixtures/chat-model.mjs", arcname="chat-model.mjs")
             bundle.add(

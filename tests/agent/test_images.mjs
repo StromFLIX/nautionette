@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
+import { createChatRecovery } from '../../images/pi-base/chat-recovery.mjs'
 
 const source = readFileSync(new URL('../../images/pi-base/agent-run.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '')
 
@@ -10,7 +11,7 @@ async function run (job, events = null) {
   const commands = [], output = [], writes = [], removed = []
   let spawnArgs, spawnOptions
   await runInNewContext(source, {
-    Buffer, console,
+    Buffer, console, createChatRecovery,
     mkdirSync () {}, existsSync () { return false },
     writeFileSync (path, value) { writes.push([path, value]) },
     readFileSync (path) { assert.equal(path, '/tmp/nautionette-job.json'); return JSON.stringify(job) },

@@ -187,6 +187,37 @@ Use **Resume queued messages** (`POST /api/chats/{id}/queue/resume`) to continue
 idle queued messages can be removed with `DELETE /api/chats/{id}/queue/{message_id}`.
 These controls require user authentication and are not exposed as MCP tools.
 
+### Safe automatic continuation
+
+Recoverable model failures no longer require a manual “continue” message. The Pi
+runner waits for native retries and context compaction to finish, then permits at
+most **two automatic continuations per chat container**, with **2s and 5s backoff**.
+It stays in the **same live session and workspace**, retaining tool calls/results,
+images, edits, credentials and the original tool/project/model restrictions. The
+continuation asks the agent to review the latest instructions and completed work,
+verify uncertain external outcomes read-only, and do only the unfinished work.
+It never replays the original job or directly reruns a tool. This is not an
+exactly-once guarantee for external systems: uncertain actions must be verified,
+not repeated blindly.
+
+The live response shows **Recovering automatically**; recovery attempts remain in
+the saved timeline after reload, without adding fake user messages. **Stop response**
+works during backoff, native retry and continuation. The existing overall container
+time limit still applies; recovery never extends it. New user messages remain queued
+while the internal continuation is being submitted and are acknowledged only when
+Pi actually consumes them.
+
+Only recognized transient model failures (rate limits, temporary server/network
+errors and unknown-model-error responses) get this continuation budget. Authentication,
+permissions, billing/quota, invalid requests, exhausted context compaction, extension
+errors, user cancellation, and tools with missing results do not. A process crash,
+broker disconnect or missing final result is **not success**, even if partial prose
+was already streamed. When continuation is unsafe or exhausted, the partial answer
+and error are retained and the queue is paused instead of cascading into more work.
+Use **Resume queued messages** after resolving the blocker. These changes require
+rebuilding the **Pi base/agent images, backend and frontend**; existing live containers
+continue using their original runner.
+
 Interactive generation is independent of client connections, but is not a Temporal
 workflow. On backend restart, unfinished turns retain their partial output and
 become explicitly interrupted answers; pending messages remain queued and paused

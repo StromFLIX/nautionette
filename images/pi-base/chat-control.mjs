@@ -6,6 +6,8 @@ export function createChatControl({ send, emit }) {
   let initialMessage = true
   let closed = false
   let stopping = false
+  let recovering = false
+  let recoveryInput = false
 
   function receive(event) {
     if (event.type === 'response' && requests.has(event.id)) {
@@ -17,13 +19,20 @@ export function createChatControl({ send, emit }) {
       } else request.resolve({ ok: true })
     }
     if (event.type === 'message_start' && event.message?.role === 'user') {
+      // Only the internal recovery prompt can arrive here while steering is
+      // held. It must never acknowledge a user's queued message by accident.
+      if (recoveryInput) {
+        recoveryInput = recovering = false
+        return
+      }
       if (initialMessage) initialMessage = false
       else {
         const message = queued.shift()
         if (message) emit({ type: 'input_consumed', id: message.id })
       }
     }
-    if (event.type === 'agent_end') close()
+    // agent_end is only a low-level boundary: retries/compaction can follow.
+    // The process owner closes controls after terminal settlement or exit.
   }
 
   function close() {
@@ -34,6 +43,7 @@ export function createChatControl({ send, emit }) {
   function command(input) {
     if (requests.has(input.id)) return requests.get(input.id).promise
     if (closed || stopping) return Promise.resolve({ ok: false, error: 'Agent is stopping or finished' })
+    if (recovering && input.type !== 'stop') return Promise.resolve({ ok: false, error: 'Agent is recovering; keep this input queued' })
     let resolve
     const promise = new Promise((done) => { resolve = done })
     requests.set(input.id, { promise, resolve })
@@ -49,7 +59,24 @@ export function createChatControl({ send, emit }) {
     return promise
   }
 
-  return { receive, command, close }
+  function beginRecovery() {
+    // Do not race unacknowledged user inputs or a stop request. No new steering
+    // is accepted until the internal prompt has entered the same Pi session.
+    if (closed || stopping || recovering || queued.length) return false
+    recovering = true
+    return true
+  }
+
+  function continueRecovery(id, message) {
+    if (closed || stopping || !recovering) return false
+    recoveryInput = true
+    send({ id, type: 'prompt', message })
+    return true
+  }
+
+  function cancelRecovery() { recovering = recoveryInput = false }
+
+  return { receive, command, close, beginRecovery, continueRecovery, cancelRecovery }
 }
 
 export function listenForChatControl(control, path = '/tmp/nautionette-chat.sock') {

@@ -129,6 +129,7 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
 async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     timeline = Timeline()
     received_text = False
+    received_result = False
     failure = None
     status = ""
     controller = None
@@ -219,8 +220,30 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                     timeline = Timeline()
             elif kind == "interrupted":
                 interrupted = True
-            status = event.get("message", "") if kind == "status" else ""
-            if kind == "delta":
+            if kind == "status":
+                status = event.get("message", "")
+            elif kind in {
+                "started",
+                "delta",
+                "thinking",
+                "tool",
+                "tool_done",
+                "input_consumed",
+                "result",
+                "error",
+                "interrupted",
+            } or (kind == "phase" and event.get("phase") != "other"):
+                status = ""
+            if kind == "recovery":
+                timeline.steps.append(
+                    {
+                        "kind": "recovery",
+                        "attempt": event.get("attempt"),
+                        "max_attempts": event.get("max_attempts"),
+                        "message": str(event.get("message") or "Automatic recovery")[:500],
+                    }
+                )
+            elif kind == "delta":
                 text = event.get("text", "")
                 received_text = received_text or bool(text)
                 timeline.add_text(text)
@@ -231,6 +254,7 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
             elif kind == "error":
                 failure = event.get("message")
             elif kind == "result":
+                received_result = True
                 remember_agent_result(bool(event.get("ok")))
                 if not event.get("ok") and not failure:
                     failure = (
@@ -253,12 +277,17 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
             if changed and now - last_progress_notice >= CHAT_PROGRESS_NOTICE_INTERVAL:
                 bus.publish("chat.progress", {"chat_id": chat_id})
                 last_progress_notice = now
+        if not received_result and not failure and not interrupted:
+            raise RuntimeError(
+                "The agent connection ended before a final result was received. "
+                "Partial work was retained; verify any unfinished tool before continuing."
+            )
     except asyncio.CancelledError:
         shutdown = True
         failure = "The answer was interrupted by a backend shutdown."
         raise
     except Exception as exc:
-        failure = str(exc)
+        failure = str(exc) or type(exc).__name__
         if db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
             event = {"type": "error", "message": failure}
             timeline.observe(event)
@@ -286,7 +315,7 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 logging.getLogger("nautionette").exception(
                     "Chat agent cleanup failed: chat=%s turn=%s", chat_id, turn_id
                 )
-        if cleanup_failed or shutdown:
+        if failure is not None or cleanup_failed or shutdown:
             db.execute("UPDATE chats SET queue_paused = 1 WHERE id = ?", (chat_id,))
         content = timeline.text or (f"The agent could not answer: {failure}" if failure else "(no answer)")
         db.finish_chat_turn(
@@ -307,7 +336,7 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 name=f"chat-title-refine-{chat_id}",
             )
         await projects.revoke_credentials(job.pop("project_credentials", []))
-        if not shutdown and not cleanup_failed:
+        if failure is None and not shutdown and not cleanup_failed:
             launch_next(chat_id)
 
 

@@ -13,7 +13,10 @@
         <ToolCallGroup v-if="part.kind === 'tool-group'" :steps="part.steps" :live="live" :current="part === latestToolGroup" :timing="meta.timing">
           <ToolCall v-for="(step, stepIndex) in part.steps" :key="step.id || stepIndex" :step="step" :live="live" />
         </ToolCallGroup>
-        <div v-else-if="part.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(part.text)" />
+        <div v-else-if="part.kind === 'recovery'" class="bubble__recovery caption" role="status">
+          <span class="material-icons" aria-hidden="true">history</span>{{ part.message }}
+        </div>
+        <div v-else-if="part.kind === 'text' && part.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(part.text)" />
       </template>
       <div v-if="status" class="bubble__status caption">
         <span class="material-icons bubble__spinner">autorenew</span>{{ status }}
@@ -247,6 +250,10 @@ const time = computed(() => shortTime(props.createdAt))
   color: var(--danger);
 }
 
+.bubble__recovery { margin: 8px 0; }
+.bubble__recovery .material-icons { font-size: 0.875rem; }
+
+.bubble__recovery,
 .bubble__status {
   display: flex;
   align-items: center;
