@@ -652,7 +652,7 @@ pre.code {
 }
 
 .row-item--unread .row-item__title {
-  font-weight: 750;
+  font-weight: 500;
 }
 
 .row-item__unread {
@@ -692,7 +692,7 @@ pre.code {
 
 .row-item__title {
   font-size: 0.84375rem;
-  font-weight: 550;
+  font-weight: 400;
 }
 
 .row-item__sub {
