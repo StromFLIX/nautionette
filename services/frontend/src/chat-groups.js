@@ -1,15 +1,15 @@
-import { byChatStart, chatStartedAt } from './chat-order.js'
+import { byChatActivity, chatActivityAt } from './chat-order.js'
 
 export const CHAT_GROUP_OPTIONS = [
   ['none', 'No grouping'], ['date', 'Date'], ['activity', 'Activity'], ['project', 'Project']
 ]
 
 function dateGroup (chat) {
-  const startedAt = chatStartedAt(chat)
-  if (!startedAt) return { key: '__unknown_date__', label: 'Unknown date', rank: 1 }
-  const date = new Date(startedAt * 1000)
-  // Use local calendar dates, not UTC slices or rolling 24-hour windows. Absolute
-  // labels stay accurate across midnight without moving chats between buckets.
+  const activityAt = chatActivityAt(chat)
+  if (!activityAt) return { key: '__unknown_date__', label: 'Unknown date', rank: 1 }
+  const date = new Date(activityAt * 1000)
+  // Use local calendar dates, not UTC slices or rolling 24-hour windows. Chats
+  // change date buckets only when a sent message or completed turn advances recency.
   return {
     key: `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
     label: date.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -23,11 +23,11 @@ function activityGroup (chat) {
   return { key: 'inactive', label: 'Inactive', rank: 2 }
 }
 
-/** Group and sort before visibility filtering, so activity cannot reorder projects. */
+/** Group and sort before visibility filtering, so filtering cannot reorder projects. */
 export function groupChats (chats, groupBy, projects = []) {
   const projectNames = new Map(projects.map(project => [project.id, project.full_name]))
   const groups = new Map()
-  for (const chat of [...chats].sort(byChatStart)) {
+  for (const chat of [...chats].sort(byChatActivity)) {
     let memberships
     if (groupBy === 'date') memberships = [dateGroup(chat)]
     else if (groupBy === 'activity') memberships = [activityGroup(chat)]
@@ -43,5 +43,5 @@ export function groupChats (chats, groupBy, projects = []) {
     }
   }
   return [...groups.values()].sort((a, b) =>
-    a.rank - b.rank || byChatStart(a.chats[0], b.chats[0]) || String(a.label).localeCompare(String(b.label)) || String(a.key).localeCompare(String(b.key)))
+    a.rank - b.rank || byChatActivity(a.chats[0], b.chats[0]) || String(a.label).localeCompare(String(b.label)) || String(a.key).localeCompare(String(b.key)))
 }

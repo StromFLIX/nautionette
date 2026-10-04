@@ -183,11 +183,11 @@ test.describe('local date grouping', () => {
     })
   }
 
-  test('date groups follow conversation start dates rather than UTC or latest activity', async ({ page, context }) => {
+  test('date groups follow local completed activity rather than UTC or live progress', async ({ page, context }) => {
     const chats = await fixture(context)
     chats.splice(0, chats.length,
-      { id: 'first', title: 'Before local midnight', created_at: Date.parse('2026-09-30T23:59:00-07:00') / 1000, updated_at: Date.now() / 1000 },
-      { id: 'second', title: 'After local midnight', created_at: Date.parse('2026-10-01T00:01:00-07:00') / 1000 },
+      { id: 'first', title: 'Before local midnight', created_at: 1, last_activity_at: Date.parse('2026-09-30T23:59:00-07:00') / 1000, updated_at: Date.now() / 1000 },
+      { id: 'second', title: 'After local midnight', created_at: 2, last_activity_at: Date.parse('2026-10-01T00:01:00-07:00') / 1000 },
       { id: 'third', title: 'Same local day, different UTC day', created_at: Date.parse('2026-09-30T00:01:00-07:00') / 1000 }
     )
     await page.goto('/chats')

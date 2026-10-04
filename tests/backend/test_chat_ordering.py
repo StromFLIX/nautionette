@@ -1,4 +1,4 @@
-"""Chat recency counts live agent work without losing message-only clocks."""
+"""List recency advances on user sends and full turn completion, never progress."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def clock(monkeypatch, value):
         {"type": "result", "ok": True},
     ],
 )
-def test_live_activity_reorders_chats_before_the_reply_finishes(client, db, monkeypatch, event):
+def test_live_activity_does_not_reorder_chats_before_the_reply_finishes(client, db, monkeypatch, event):
     clock(monkeypatch, 10)
     running = db.create_chat("Still working", "default")["id"]
     db.accept_chat_message(running, "First request", "turn")
@@ -38,13 +38,68 @@ def test_live_activity_reorders_chats_before_the_reply_finishes(client, db, monk
     clock(monkeypatch, 30)
     assert db.record_chat_progress("turn", event, [], "")
     listed = client.get("/api/chats").json()["chats"]
-    assert [chat["id"] for chat in listed] == [running, completed]
-    assert listed[0]["answering"] is True
-    assert listed[0]["updated_at"] == 30
-    assert listed[0]["last_message_at"] == (30 if event["type"] == "delta" else 10)
-    assert listed[0]["last_user_message_at"] == 10
+    assert [chat["id"] for chat in listed] == [completed, running]
+    assert db.list_chats(limit=1)[0]["id"] == completed
+    assert listed[1]["answering"] is True
+    assert listed[1]["updated_at"] == 30
+    assert listed[1]["last_message_at"] == (30 if event["type"] == "delta" else 10)
+    assert listed[1]["last_user_message_at"] == 10
+    assert listed[1]["last_activity_at"] == 10
     assert len(db.list_messages(running)) == 1  # Progress does not create transcript messages.
-    assert listed[0]["unread"] is False
+    assert listed[1]["unread"] is False
+
+    clock(monkeypatch, 40)
+    db.finish_chat_turn("turn", "Finished", {})
+    listed = client.get("/api/chats").json()["chats"]
+    assert [chat["id"] for chat in listed] == [running, completed]
+    assert listed[0]["last_activity_at"] == 40
+    assert listed[0]["answering"] is False
+    assert db.list_chats(limit=1)[0]["id"] == running
+
+
+@pytest.mark.parametrize("queue", [False, True])
+def test_user_send_bumps_an_existing_chat_immediately_but_retries_do_not(client, db, monkeypatch, queue):
+    clock(monkeypatch, 10)
+    older = db.create_chat("Older", "default")["id"]
+    if queue:
+        db.accept_chat_message(older, "Start", "running")
+    clock(monkeypatch, 20)
+    newer = db.create_chat("Newer", "default")["id"]
+    clock(monkeypatch, 30)
+    db.accept_chat_message(older, "New request", "send", queue=queue)
+    listed = client.get("/api/chats").json()["chats"]
+    assert [chat["id"] for chat in listed] == [older, newer]
+    assert listed[0]["last_activity_at"] == 30
+    clock(monkeypatch, 40)
+    assert not db.accept_chat_message(older, "New request", "send", queue=queue)[1]
+    assert db.get_chat(older)["last_activity_at"] == 30
+
+
+def test_metadata_read_state_and_non_conversation_messages_do_not_advance_recency(db, monkeypatch):
+    clock(monkeypatch, 10)
+    chat_id = db.create_chat("Work", "default")["id"]
+    reply = db.add_message(chat_id, "assistant", "Hello")
+    clock(monkeypatch, 20)
+    db.update_chat(chat_id, {"title": "Renamed", "model": "new/model"})
+    db.set_chat_read_state(chat_id, unread=True)
+    db.set_chat_read_state(chat_id, message_id=reply["id"], revision=1, clear_manual=True)
+    db.touch_chat(chat_id)
+    db.add_message(chat_id, "system", "Internal update")
+    db.add_message(chat_id, "tool", "Tool output")
+    assert db.get_chat(chat_id)["last_activity_at"] == 10
+
+
+@pytest.mark.parametrize("meta", [{}, {"error": "Failed"}, {"error": "Stopped", "interrupted": True}])
+def test_terminal_outcomes_advance_recency_only_when_finished(db, monkeypatch, meta):
+    clock(monkeypatch, 10)
+    chat_id = db.create_chat("Work", "default")["id"]
+    db.accept_chat_message(chat_id, "Start", "turn")
+    clock(monkeypatch, 20)
+    db.record_chat_progress("turn", {"type": "result", "ok": not meta}, [], "")
+    assert db.get_chat(chat_id)["last_activity_at"] == 10
+    clock(monkeypatch, 30)
+    db.finish_chat_turn("turn", "Terminal response", meta)
+    assert db.chat_snapshot(chat_id)["chat"]["last_activity_at"] == 30
 
 
 def test_message_clocks_include_saved_replies_queued_users_and_streamed_prose(db, monkeypatch):
@@ -58,6 +113,7 @@ def test_message_clocks_include_saved_replies_queued_users_and_streamed_prose(db
     db.record_chat_progress("turn", {"type": "tool", "name": "read"}, [], "")
     chat = db.get_chat(chat_id)
     assert (chat["updated_at"], chat["last_message_at"], chat["last_user_message_at"]) == (40, 30, 20)
+    assert chat["last_activity_at"] == 20
 
     clock(monkeypatch, 50)
     db.accept_chat_message(chat_id, "Next", "queued", queue=True)
@@ -65,23 +121,30 @@ def test_message_clocks_include_saved_replies_queued_users_and_streamed_prose(db
     assert not db.accept_chat_message(chat_id, "Next", "queued", queue=True)[1]
     chat = db.get_chat(chat_id)
     assert (chat["updated_at"], chat["last_message_at"], chat["last_user_message_at"]) == (50, 50, 50)
+    assert chat["last_activity_at"] == 50
     assert db.consume_chat_input("turn", "queued", "Working", {})
     assert db.get_chat(chat_id)["last_message_at"] == 60
+    assert db.get_chat(chat_id)["last_activity_at"] == 50
 
     clock(monkeypatch, 70)
     db.finish_chat_turn("turn", "Finished", {})
     chat = db.get_chat(chat_id)
     assert (chat["updated_at"], chat["last_message_at"], chat["last_user_message_at"]) == (70, 70, 50)
+    assert chat["last_activity_at"] == 70
     clock(monkeypatch, 80)
+    db.finish_chat_turn("turn", "Duplicate completion", {})
+    assert db.get_chat(chat_id)["last_activity_at"] == 70
     assert not db.record_chat_progress("turn", {"type": "delta", "text": "Late event"}, [], "")
     assert db.get_chat(chat_id)["updated_at"] == 70
 
     db.add_message(chat_id, "assistant", "Workflow notification")
     assert db.get_chat(chat_id)["last_message_at"] == 80
     assert db.get_chat(chat_id)["last_user_message_at"] == 50
+    assert db.get_chat(chat_id)["last_activity_at"] == 80
     clock(monkeypatch, 90)
     db.add_message(chat_id, "user", "Thanks")
     assert db.get_chat(chat_id)["last_user_message_at"] == 90
+    assert db.get_chat(chat_id)["last_activity_at"] == 90
 
 
 def test_legacy_clocks_are_backfilled_and_live_clocks_survive_restart(tmp_path, monkeypatch):
@@ -96,6 +159,11 @@ def test_legacy_clocks_are_backfilled_and_live_clocks_survive_restart(tmp_path, 
     db.add_message(chat_id, "assistant", "Answer")
     db.execute("ALTER TABLE chats DROP COLUMN last_message_at")
     db.execute("ALTER TABLE chats DROP COLUMN last_user_message_at")
+    # Simulate the old schema, including a live clock later than any saved message.
+    clock(monkeypatch, 35)
+    db.touch_chat(chat_id)
+    db.execute("DROP INDEX chats_activity")
+    db.execute("ALTER TABLE chats DROP COLUMN last_activity_at")
     db._conn.close()
 
     restored = Database(path)
@@ -103,6 +171,8 @@ def test_legacy_clocks_are_backfilled_and_live_clocks_survive_restart(tmp_path, 
     assert restored.get_chat(empty)["last_user_message_at"] == 10
     assert restored.get_chat(chat_id)["last_message_at"] == 30
     assert restored.get_chat(chat_id)["last_user_message_at"] == 20
+    assert restored.get_chat(empty)["last_activity_at"] == 10
+    assert restored.get_chat(chat_id)["last_activity_at"] == 30
     clock(monkeypatch, 40)
     restored.record_chat_progress("turn", {"type": "delta", "text": "More"}, [], "")
     clock(monkeypatch, 50)
@@ -111,12 +181,22 @@ def test_legacy_clocks_are_backfilled_and_live_clocks_survive_restart(tmp_path, 
     restarted = Database(path)
     chat = restarted.get_chat(chat_id)
     assert (chat["updated_at"], chat["last_message_at"], chat["last_user_message_at"]) == (50, 40, 20)
+    assert chat["last_activity_at"] == 30
+    # A persisted intermediate segment must not become recency on subsequent startups.
+    clock(monkeypatch, 60)
+    restarted.accept_chat_message(chat_id, "Steer", "steer", queue=True)
+    clock(monkeypatch, 70)
+    restarted.consume_chat_input("turn", "steer", "Partial", {})
     restarted._conn.close()
+    again = Database(path)
+    assert again.get_chat(chat_id)["last_activity_at"] == 60
+    again._conn.close()
 
 
 async def test_sidebar_progress_notices_are_throttled_but_completion_is_immediate(backend, monkeypatch):
     chat_id = backend.db.create_chat("Work", "default")["id"]
     backend.db.accept_chat_message(chat_id, "Start", "turn")
+    activity_at = backend.db.get_chat(chat_id)["last_activity_at"]
     bus = EventBus()
     monkeypatch.setattr(conversations, "bus", bus)
     ticks = [0, 0.1, 0.9, 1, 1.1, 2]
@@ -130,6 +210,7 @@ async def test_sidebar_progress_notices_are_throttled_but_completion_is_immediat
             clock(monkeypatch, 100 + tick)
             yield {"type": "delta", "text": "."}
             assert backend.db.get_chat(chat_id)["last_message_at"] == 100 + tick
+            assert backend.db.get_chat(chat_id)["last_activity_at"] == activity_at
             assert len(bus.history()) == [1, 1, 1, 2, 2, 3][index]
             assert backend.db.list_chats()[0]["answering"] is True
         yield {"type": "result", "ok": True}
@@ -140,3 +221,4 @@ async def test_sidebar_progress_notices_are_throttled_but_completion_is_immediat
     assert [event["kind"] for event in bus.history()] == ["chat.progress"] * 3 + ["chat.answered"]
     assert all(event["chat_id"] == chat_id for event in bus.history())
     assert backend.db.list_chats()[0]["answering"] is False
+    assert backend.db.get_chat(chat_id)["last_activity_at"] == 102

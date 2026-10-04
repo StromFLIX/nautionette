@@ -175,6 +175,7 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN read_revision INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN last_message_at REAL",
     "ALTER TABLE chats ADD COLUMN last_user_message_at REAL",
+    "ALTER TABLE chats ADD COLUMN last_activity_at REAL",
     # Legacy titles have no provenance: protect them rather than guessing which were manual.
     "ALTER TABLE chats ADD COLUMN title_state TEXT NOT NULL DEFAULT 'manual'",
     "ALTER TABLE chats ADD COLUMN title_revision INTEGER NOT NULL DEFAULT 0",
@@ -234,6 +235,16 @@ class Database:
                 "UPDATE chats SET last_user_message_at = COALESCE("
                 "(SELECT MAX(created_at) FROM messages WHERE chat_id = chats.id AND role = 'user'), "
                 "created_at) WHERE last_user_message_at IS NULL"
+            )
+            # Saved messages are the best available activity boundaries for legacy chats.
+            # Never seed from updated_at/last_message_at, which include live progress.
+            self._conn.execute(
+                "UPDATE chats SET last_activity_at = COALESCE("
+                "(SELECT MAX(created_at) FROM messages WHERE chat_id = chats.id "
+                "AND role IN ('user', 'assistant')), created_at) WHERE last_activity_at IS NULL"
+            )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS chats_activity ON chats(last_activity_at DESC, id)"
             )
             lease_columns = self._conn.execute("PRAGMA table_info(project_leases)").fetchall()
             if [column["name"] for column in lease_columns if column["pk"]] == ["project_id"]:
@@ -307,8 +318,8 @@ class Database:
         self.execute(
             "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort,"
             " created_at, updated_at, title_state, project_ids, agent_id, agent_name, packages,"
-            " last_message_at, last_user_message_at, timeout_exempt)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " last_message_at, last_user_message_at, last_activity_at, timeout_exempt)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 chat_id,
                 title,
@@ -323,6 +334,7 @@ class Database:
                 agent_id,
                 agent_name,
                 json.dumps(packages or []),
+                now,
                 now,
                 now,
                 timeout_exempt,
@@ -367,7 +379,7 @@ class Database:
 
     def list_chats(self, limit: int = 200) -> list[dict[str, Any]]:
         rows = self.query(
-            f"SELECT *, {_CHAT_UNREAD} FROM chats ORDER BY updated_at DESC LIMIT ?",  # noqa: S608
+            f"SELECT *, {_CHAT_UNREAD} FROM chats ORDER BY last_activity_at DESC, id LIMIT ?",  # noqa: S608
             (limit,),
         )
         if not rows:
@@ -471,8 +483,10 @@ class Database:
         )
         self.execute(
             "UPDATE chats SET updated_at = ?, last_message_at = ?, "
-            "last_user_message_at = CASE WHEN ? = 'user' THEN ? ELSE last_user_message_at END WHERE id = ?",
-            (now, now, role, now, chat_id),
+            "last_user_message_at = CASE WHEN ? = 'user' THEN ? ELSE last_user_message_at END, "
+            "last_activity_at = CASE WHEN ? IN ('user', 'assistant') THEN ? ELSE last_activity_at END "
+            "WHERE id = ?",
+            (now, now, role, now, role, now, chat_id),
         )
         return {
             "id": message_id,
@@ -572,8 +586,9 @@ class Database:
                     "UPDATE chats SET project_ids = ? WHERE id = ?", (json.dumps(project_ids), chat_id)
                 )
             self._conn.execute(
-                "UPDATE chats SET updated_at = ?, last_message_at = ?, last_user_message_at = ? WHERE id = ?",
-                (now, now, now, chat_id),
+                "UPDATE chats SET updated_at = ?, last_message_at = ?, last_user_message_at = ?, "
+                "last_activity_at = ? WHERE id = ?",
+                (now, now, now, now, chat_id),
             )
             message = {
                 "id": message_id,
@@ -665,7 +680,7 @@ class Database:
         status: str,
         timing: dict[str, Any] | None = None,
     ) -> bool:
-        """Persist all agent activity; prose also advances message-only ordering."""
+        """Persist live activity for snapshots/filtering without advancing list order."""
         with self._lock, self._conn:
             if event.get("type") in {"usage", "result"} and "context" in event:
                 self._conn.execute(
@@ -700,6 +715,12 @@ class Database:
                 return
             message = self._append_chat_answer(turn, content, meta)
             self._conn.execute("UPDATE chat_turns SET state = 'completed' WHERE id = ?", (turn_id,))
+            # Only the full turn ending advances recency, not intermediate answer
+            # segments saved while consuming queued/steering input.
+            self._conn.execute(
+                "UPDATE chats SET last_activity_at = ? WHERE id = ?",
+                (message["created_at"], turn["chat_id"]),
+            )
             self._conn.execute("DELETE FROM project_leases WHERE turn_id = ?", (turn_id,))
             self._conn.execute(
                 "INSERT INTO chat_turn_events (turn_id, payload) VALUES (?,?)",

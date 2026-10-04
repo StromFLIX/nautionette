@@ -17,7 +17,7 @@
       </svg>
       <span class="row-item__title grow truncate" :title="chat.title">{{ chat.title }}</span>
       <span v-if="chat.unread" class="row-item__unread" role="img" aria-label="Unread messages" title="Unread messages" />
-      <span class="row-item__time" :title="startedAt ? `Started ${fullTime(startedAt)}` : undefined">{{ shortTime(startedAt) }}</span>
+      <span class="row-item__time" :title="activityAt ? `Last activity ${fullTime(activityAt)}` : undefined">{{ shortTime(activityAt) }}</span>
     </RouterLink>
     <button
       type="button" class="btn btn--icon btn--sm chat-list-item__menu"
@@ -37,7 +37,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { fullTime, shortTime } from '../format'
-import { chatStartedAt } from '../chat-order'
+import { chatActivityAt } from '../chat-order'
 
 const props = defineProps({
   chat: { type: Object, required: true },
@@ -48,7 +48,7 @@ defineEmits(['toggle-unread'])
 
 const menuOpen = ref(false)
 const statusLabel = computed(() => props.chat.answering ? 'Active' : 'Inactive')
-const startedAt = computed(() => chatStartedAt(props.chat))
+const activityAt = computed(() => chatActivityAt(props.chat))
 </script>
 
 <style scoped>

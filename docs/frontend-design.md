@@ -74,28 +74,35 @@ not reset the selected theme. There is no cross-device account synchronization.
 ### Chat rows, grouping and order
 
 Chat rows are a single line: a small hexagon, title, unread dot when applicable,
-and conversation start time. Active responses use a filled, pulsing hexagon;
+and last completed activity time. Active responses use a filled, pulsing hexagon;
 inactive chats use an empty outline. Avatars, latest-message previews and the
 separate **In progress** badge are not shown in the chat list. Workflow and run
 rows retain their existing layouts.
 
 **Group → All / Date / Activity / Project** and **Settings → Workspace → Chat list →
-Group chats by** share the same choices. Date groups use the conversation's local
-calendar start date, with absolute date labels that remain valid across midnight.
+Group chats by** share the same choices. Date groups use the last completed activity's
+local calendar date, with absolute date labels that remain valid across midnight.
 Activity groups have a fixed priority: **Active**, **Unread**,
 then **Inactive**; a chat moves between these groups only when its state changes.
 Multi-project chats appear once in each project, with **No project** last. Project
-groups sort by their newest conversation start, independently of activity filtering.
+groups sort by their newest completed activity, independently of activity filtering.
 Grouping persists on this device and synchronizes between tabs. Retired grouping
 values fall back to **No grouping**, also the reset default.
 
-Rows always sort by conversation start (`created_at`), newest first, with an ID
-tie-breaker. Messages, streamed progress, tools and read-state changes do not reorder
-rows or change their displayed timestamp. Revealing older chats merges them into
-this same order rather than appending a second list. Missing start times sort last;
-never fall back to mutable activity timestamps. The obsolete `chatOrderBy` preference
-is ignored during migration. Activity-window filtering still uses all activity and
-retains running chats and unread replies.
+Rows sort by `last_activity_at`, newest first, with an ID tie-breaker. This clock
+advances when a human message is accepted (including queued messages), when the full
+agent turn finishes (including stopped/failed outcomes), or when a saved workflow
+reply arrives. Streaming prose, tool calls, intermediate saved steering segments,
+metadata and read-state changes never advance it. The row's timestamp and date group
+use the same clock, so a completed activity can move the chat to the top and into a
+new date group together. Retries of an accepted message or finished turn do not bump it.
+
+New empty chats initialize this clock to creation time; existing chats are backfilled
+from saved user/assistant messages, not live progress clocks. Older cached records
+fall back only to `created_at`; missing timestamps sort last. Revealing older chats
+merges them into this same order rather than appending a second list. The obsolete
+`chatOrderBy` preference remains ignored. Activity-window filtering still uses all
+activity (`updated_at`) and retains running chats and unread replies.
 
 ### Chat list activity and selection
 
@@ -109,7 +116,7 @@ off the switch to restore filtering solely by activity, running and unread state
 Both controls are in **Settings → Workspace → Chat list**, saved per device and
 restored to their defaults by **Reset workspace**.
 
-Retention only bypasses the activity window: search, grouping and start-time order
+Retention only bypasses the activity window: search, grouping and completed-activity order
 still apply. The app shell owns transient, per-tab selection history so moving
 to Settings (which unmounts the sidebar), another section or the mobile chat list
 counts as leaving the chat without losing or restarting the timer. Reloading
