@@ -40,6 +40,8 @@ def test_phases_and_parallel_tools_use_elapsed_not_summed_time(clock):
         "tools_ms": 5000,
         "thinking_ms": 3000,
         "reply_ms": 2000,
+        "model_ms": 0,
+        "tool_input_ms": 0,
         "other_ms": 5000,
         "active": None,
         "updated_at": 1015,
@@ -49,6 +51,82 @@ def test_phases_and_parallel_tools_use_elapsed_not_summed_time(clock):
     clock[0] = 999
     assert timeline.timing.finish()["tools_ms"] == 5000
     assert timeline.timing.finish()["other_ms"] == 5000
+
+
+def test_model_latency_and_tool_argument_generation_are_not_other(clock):
+    timeline = runner.Timeline()
+
+    def event(at, **payload):
+        clock[0] = at
+        if payload["type"] == "tool":
+            timeline.start_tool(payload)
+        elif payload["type"] == "tool_done":
+            timeline.finish_tool(payload)
+        timeline.observe(payload)
+
+    event(2, type="phase", phase="model")  # Request starts before any provider output.
+    event(22, type="phase", phase="thinking")
+    event(25, type="phase", phase="model")
+    event(26, type="phase", phase="tool_input")  # E.g. generating a large write/edit.
+    event(56, type="phase", phase="model")
+    event(57, type="usage")
+    event(58, type="tool", id="a", name="write")
+    event(59, type="tool", id="b", name="read")
+    event(60, type="tool_done", id="a")
+    event(62, type="tool_done", id="b")
+    event(63, type="phase", phase="model")  # Another request; no reported thinking.
+    event(73, type="phase", phase="reply")
+    event(75, type="phase", phase="model")
+    event(76, type="usage")
+    event(77, type="result")
+    snapshot = timeline.timing.finish()
+    assert snapshot == {
+        "tools_ms": 4000,
+        "thinking_ms": 3000,
+        "reply_ms": 2000,
+        "model_ms": 33000,
+        "tool_input_ms": 30000,
+        "other_ms": 5000,
+        "active": None,
+        "updated_at": 1077,
+    }
+    assert sum(value for key, value in snapshot.items() if key.endswith("_ms")) == 77000
+
+
+def test_tool_completion_and_status_do_not_erase_explicit_model_phase(clock):
+    tracker = timing.ActivityTiming()
+    tracker.observe({"type": "phase", "phase": "model"}, False)
+    clock[0] = 1
+    tracker.observe({"type": "tool"}, True)
+    clock[0] = 2
+    tracker.observe({"type": "phase", "phase": "thinking"}, True)
+    clock[0] = 3
+    tracker.observe({"type": "tool_done"}, False)
+    clock[0] = 4
+    tracker.observe({"type": "status", "state": "package"}, False)
+    clock[0] = 5
+    tracker.observe({"type": "usage"}, False)
+    clock[0] = 6
+    snapshot = tracker.finish()
+    assert snapshot["model_ms"] == 1000
+    assert snapshot["tools_ms"] == 2000
+    assert snapshot["thinking_ms"] == 2000
+    assert snapshot["other_ms"] == 1000
+
+
+@pytest.mark.parametrize("phase", ["model", "tool_input"])
+@pytest.mark.parametrize("terminal", ["result", "error", "interrupted"])
+def test_new_phases_freeze_at_termination(clock, phase, terminal):
+    tracker = timing.ActivityTiming()
+    tracker.observe({"type": "phase", "phase": phase}, False)
+    clock[0] = 3
+    tracker.observe({"type": terminal}, False)
+    clock[0] = 100
+    snapshot = tracker.finish()
+    assert snapshot[f"{phase}_ms"] == 3000
+    assert snapshot["active"] is None
+    assert snapshot["other_ms"] == 0
+    assert snapshot["thinking_ms"] == 0
 
 
 @pytest.mark.parametrize("terminal", ["result", "error", "interrupted"])
@@ -107,14 +185,28 @@ def test_timing_survives_reload_steering_and_restart_without_counting_downtime(t
     db.accept_chat_message(chat, "Run", "active")
     db.accept_chat_message(chat, "Next", "next", queue=True)
     steps = [{"kind": "tool", "id": "t", "name": "bash", "ok": True, "duration_ms": 1234}]
-    first = {"tools_ms": 1234, "other_ms": 100, "active": None, "updated_at": 10}
+    first = {
+        "tools_ms": 1234,
+        "other_ms": 100,
+        "model_ms": 2000,
+        "tool_input_ms": 800,
+        "active": None,
+        "updated_at": 10,
+    }
     db.record_chat_progress("active", {"type": "tool_done"}, steps, "", first)
     db = Database(path)
     assert db.chat_snapshot(chat)["active_turn"]["timing"] == first
     assert db.consume_chat_input("active", "next", "First", {"steps": steps, "timing": first})
     assert db.chat_snapshot(chat)["active_turn"]["timing"] is None
     assert db.list_messages(chat)[1]["meta"]["timing"] == first
-    second = {"thinking_ms": 500, "other_ms": 10, "active": "thinking", "updated_at": 20}
+    second = {
+        "thinking_ms": 500,
+        "other_ms": 10,
+        "model_ms": 4000,
+        "tool_input_ms": 500,
+        "active": "model",
+        "updated_at": 20,
+    }
     db.record_chat_progress("active", {"type": "thinking"}, [], "", second)
     monkeypatch.setattr(conversations, "db", db)
     conversations.recover_interrupted()

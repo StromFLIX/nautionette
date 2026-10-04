@@ -20,6 +20,19 @@ test('only the active live phase ticks; final and partial measurements remain fi
   assert.equal(activityBreakdown(timing, true, 9_000)[0].duration, '2s')
 })
 
+test('model waiting and tool argument generation tick separately from overhead and thinking', () => {
+  const timing = { model_ms: 20000, tool_input_ms: 30000, other_ms: 1000,
+    thinking_ms: 0, active: 'model', updated_at: 10 }
+  assert.deepEqual(activityBreakdown(timing, true, 11_000), [
+    { key: 'model', label: 'Model wait', duration: '21s' },
+    { key: 'tool_input', label: 'Tool input', duration: '30s' },
+    { key: 'other', label: 'Other', duration: '1s' }
+  ])
+  assert.equal(activityBreakdown({ ...timing, active: 'tool_input' }, true, 11_000)[1].duration, '31s')
+  assert.equal(activityBreakdown(timing, false, 99_000)[0].duration, '20s')
+  assert.equal(activityBreakdown({ ...timing, active: null }, true, 99_000)[1].duration, '30s')
+})
+
 test('old records and unreported thinking do not invent timings', () => {
   assert.deepEqual(activityBreakdown(null), [])
   assert.deepEqual(activityBreakdown({}), [])

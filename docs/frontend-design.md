@@ -237,17 +237,29 @@ animation** (the composer's running border light), and **Tool-call indicator
 animation** (the tiny octagon to the left of the tool-call summary and the
 right-hand dots on individual running tool rows). Turning one
 off keeps its static status cue without affecting the other animations. The
-octagon's light travels around its fixed outline only while that group has pending
-live tool calls; completed or historical groups retain a quiet static outline.
+octagon's light travels around its fixed outline on the latest group while the
+response is live, including model work between tools. Earlier completed groups
+retain a quiet static outline; an earlier group only stays animated if it still
+has genuinely pending tools. The center dot only indicates tool execution.
+Historical groups never animate.
 Global or system reduced motion overrides all three switches without clearing
 their saved choices. Like other workspace preferences, choices persist per device,
 synchronize between tabs, and return to enabled on **Reset workspace**.
 
-Expanded tool groups show a small response-wide timing line: **Tools · Thinking ·
-Reply · Other**, omitting unmeasured/empty phases. The backend measures elapsed
-phases with a monotonic clock; parallel tools count once, with tool execution
-prioritized over overlapping model activity. Thinking only counts reported
-reasoning; Other includes setup, waiting, retries and tool-call preparation.
+Expanded tool groups show a small response-wide (not per-group) timing line:
+**Tools · Thinking · Reply · Model wait · Tool input · Other**, omitting
+unmeasured/empty phases. The backend measures elapsed phases with a monotonic
+clock; parallel tools count once, with tool execution prioritized over overlapping
+model activity. Thinking only counts reported reasoning. Model wait starts at Pi's
+`turn_start`, before the provider emits its first byte, and includes request
+preparation, provider waiting and unreported model work (possibly hidden reasoning).
+Tool input measures `toolcall_start` through `toolcall_end`: generating arguments,
+including large file contents, is not tool execution. Between content blocks the
+clock returns to Model wait; assistant message completion ends that request.
+Other includes container/setup overhead, retries, compaction and unclassified time.
+Older recordings/agents keep their original Other measurements; there is not
+enough historical information to redistribute them safely. This requires both the
+updated agent image (phase events) and backend/frontend (new buckets).
 Each completed tool row also shows its own duration, including failed calls.
 The dots disappear as soon as the corresponding tool completes or is interrupted,
 even when the response is still live. Timings persist through reloads and steering

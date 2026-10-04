@@ -273,11 +273,25 @@ async function main() {
       case "session":
         emit({ type: "session", id: event.id });
         break;
+      case "turn_start":
+        // This precedes the provider stream (and its first byte). Waiting for a
+        // thinking/text block would charge prefill and hidden reasoning to Other.
+        emit({ type: "phase", phase: "model" });
+        break;
+      case "message_start":
+        // Also restore the phase after control.receive consumes a steered input
+        // and the backend starts a fresh response timeline.
+        if (["assistant", "user"].includes(event.message?.role)) {
+          emit({ type: "phase", phase: "model" });
+        }
+        break;
       case "message_update": {
         const inner = event.assistantMessageEvent;
-        // Measure observable phases without inferring hidden reasoning from idle time.
-        const phase = { thinking_start: "thinking", thinking_end: "other",
-          text_start: "reply", text_end: "other", toolcall_start: "other" }[inner?.type];
+        // Only observable reasoning is Thinking. Model wait and generating tool
+        // arguments are separate elapsed phases, not tool execution or overhead.
+        const phase = { thinking_start: "thinking", thinking_end: "model",
+          text_start: "reply", text_end: "model", toolcall_start: "tool_input",
+          toolcall_end: "model" }[inner?.type];
         if (phase) emit({ type: "phase", phase });
         if (inner?.type === "text_delta" && inner.delta) {
           streamed += inner.delta;
@@ -318,6 +332,12 @@ async function main() {
         }
         break;
       }
+      case "turn_end":
+      case "auto_retry_start":
+      case "compaction_start":
+      case "compaction_end":
+        emit({ type: "phase", phase: "other" });
+        break;
       case "auto_retry_end":
         if (event.success) runError = "";
         break;

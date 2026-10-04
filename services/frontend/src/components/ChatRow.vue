@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-list-item">
+  <div class="chat-list-item" :class="{ 'chat-list-item--menu-open': menuOpen }">
     <RouterLink
       :to="`/chats/${chat.id}`"
       class="row-item" :class="{
@@ -19,9 +19,12 @@
       <span v-if="chat.unread" class="row-item__unread" role="img" aria-label="Unread messages" title="Unread messages" />
       <span class="row-item__time" :title="startedAt ? `Started ${fullTime(startedAt)}` : undefined">{{ shortTime(startedAt) }}</span>
     </RouterLink>
-    <button class="btn btn--icon btn--sm chat-list-item__menu" :aria-label="`Options for ${chat.title}`">
+    <button
+      type="button" class="btn btn--icon btn--sm chat-list-item__menu"
+      :aria-label="`Options for ${chat.title}`" aria-haspopup="true" :aria-expanded="menuOpen"
+    >
       <span class="material-icons" aria-hidden="true">more_vert</span>
-      <q-menu anchor="bottom right" self="top right" class="pick-menu">
+      <q-menu v-model="menuOpen" anchor="bottom right" self="top right" class="pick-menu">
         <button v-close-popup class="pick-menu__item" :disabled="readBusy === chat.id" @click="$emit('toggle-unread', chat, !chat.unread)">
           <span class="material-icons" aria-hidden="true">{{ chat.unread ? 'mark_email_read' : 'mark_email_unread' }}</span>
           {{ chat.unread ? 'Mark as read' : 'Mark as unread' }}
@@ -32,7 +35,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { fullTime, shortTime } from '../format'
 import { chatStartedAt } from '../chat-order'
 
@@ -43,6 +46,7 @@ const props = defineProps({
 })
 defineEmits(['toggle-unread'])
 
+const menuOpen = ref(false)
 const statusLabel = computed(() => props.chat.answering ? 'Active' : 'Inactive')
 const startedAt = computed(() => chatStartedAt(props.chat))
 </script>
@@ -50,34 +54,49 @@ const startedAt = computed(() => chatStartedAt(props.chat))
 <style scoped>
 /* The row must be sized by the sidebar's width, never by its own text. */
 .chat-list-item {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+  --chat-menu-width: 2rem;
+  position: relative;
   width: 100%;
   min-width: 0;
 }
 
 .chat-list-item > .row-item {
-  flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
   min-height: 2rem;
   padding-block: calc(var(--list-padding) * 0.6);
+  padding-inline-end: calc(var(--chat-menu-width) + 8px);
 }
 
 .chat-list-item__menu {
-  flex: 0 0 auto;
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--chat-menu-width);
   color: var(--text-muted);
 }
 
 @media (max-width: 900px), (pointer: coarse) {
+  .chat-list-item { --chat-menu-width: 44px; }
   .chat-list-item > .row-item,
   .chat-list-item__menu { min-height: 44px; }
 }
 
-@media (hover: hover) {
-  .chat-list-item__menu { opacity: 0; transition: opacity var(--transition); }
-  .chat-list-item:hover .chat-list-item__menu,
-  .chat-list-item:focus-within .chat-list-item__menu { opacity: 1; }
+/* Touch keeps an always-visible action. Mouse/keyboard users get the full row
+   until they interact; only the available text width changes, not its size. */
+@media (hover: hover) and (pointer: fine) {
+  .chat-list-item > .row-item { padding-inline-end: 10px; }
+  .chat-list-item__menu {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .chat-list-item:is(:hover, :focus-within, .chat-list-item--menu-open) > .row-item {
+    padding-inline-end: calc(var(--chat-menu-width) + 8px);
+  }
+  .chat-list-item:is(:hover, :focus-within, .chat-list-item--menu-open) .chat-list-item__menu {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 </style>

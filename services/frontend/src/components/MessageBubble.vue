@@ -10,7 +10,7 @@
         <ChatImage v-for="image in meta.attachments" :key="image.id" :image="image" :chat-id="chatId" />
       </div>
       <template v-for="(part, index) in groupedParts" :key="part.id || index">
-        <ToolCallGroup v-if="part.kind === 'tool-group'" :steps="part.steps" :live="live" :timing="meta.timing">
+        <ToolCallGroup v-if="part.kind === 'tool-group'" :steps="part.steps" :live="live" :current="part === latestToolGroup" :timing="meta.timing">
           <ToolCall v-for="(step, stepIndex) in part.steps" :key="step.id || stepIndex" :step="step" :live="live" />
         </ToolCallGroup>
         <div v-else-if="part.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(part.text)" />
@@ -91,6 +91,7 @@ const parts = computed(() => {
   return spoken ? steps.value : [...steps.value, { kind: 'text', text: props.content }]
 })
 const groupedParts = computed(() => groupToolCalls(parts.value))
+const latestToolGroup = computed(() => groupedParts.value.findLast((part) => part.kind === 'tool-group'))
 // Copy the whole answer, including narration between tool groups, as Markdown.
 // Tool arguments/results and UI status labels are not part of the answer.
 const responseText = computed(() => [

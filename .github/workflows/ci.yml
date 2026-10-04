@@ -48,7 +48,7 @@ jobs:
         run: uv run pytest tests/backend/test_copilot_login.py tests/backend/test_integrations.py tests/backend/test_events_and_clients.py
 
       - name: Agent defaults, profiles and durable chat configuration
-        run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py
+        run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_activity_timing.py
 
       - name: GitHub connections, migrations and project credentials
         run: uv run pytest tests/backend/test_github_connections.py tests/backend/test_github_setup.py tests/backend/test_projects.py tests/backend/test_project_changes.py tests/broker/test_projects.py
@@ -91,7 +91,8 @@ jobs:
           tests/projects.spec.js tests/settings-navigation.spec.js
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
-          tests/copilot-login.spec.js --workers=1 --reporter=dot,github
+          tests/copilot-login.spec.js tests/tool-calls.spec.js tests/activity-timing.spec.js
+          --workers=1 --reporter=dot,github
 
   images:
     name: Image (${{ matrix.name }})
@@ -148,7 +149,7 @@ jobs:
           docker run --rm --network none --user 10001:10001 \
             --env HOME=/workspace --tmpfs /workspace:rw,mode=1777 \
             --volume "$PWD:/source:ro" --entrypoint bash nautionette/pi-agent-default:dev -c \
-            'pi --version && node --test /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs /source/tests/agent/test_packages_rpc.mjs'
+            'pi --version && node --test /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs /source/tests/agent/test_packages_rpc.mjs /source/tests/agent/test_context_usage.mjs'
 
       - name: Development tools work offline as the project user
         run: |

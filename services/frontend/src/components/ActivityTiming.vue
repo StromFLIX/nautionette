@@ -23,7 +23,7 @@ watch(() => props.live && props.timing.active, (active) => {
 onUnmounted(() => clearInterval(timer))
 const parts = computed(() => activityBreakdown(props.timing, props.live, now.value))
 const explanation = computed(() => [
-  'Elapsed time for this response. Parallel tools count once. Thinking measures reported reasoning only; Reply measures streamed text. Other includes setup, waiting and tool-call preparation.',
+  'Elapsed time for this response, not just this tool group. Parallel tools count once. Thinking measures reported reasoning only; Reply measures streamed text. Model wait includes request preparation, waiting for the provider and unreported model work (which may include hidden reasoning). Tool input measures streamed tool arguments, not execution. Other includes setup, retries, compaction and unclassified time. Older recordings may include model waiting and tool preparation in Other.',
   props.timing.partial ? 'Interrupted: only time measured before the last saved update is included.' : ''
 ].filter(Boolean).join(' '))
 </script>
