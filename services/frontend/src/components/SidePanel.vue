@@ -72,14 +72,14 @@
       </div>
     </header>
 
-    <div class="side__list scroll-y grow">
+    <div class="side__list scroll-y grow" :class="{ 'side__list--grouped': section === 'chats' && groupBy !== 'none' }">
       <!-- chats -->
       <template v-if="section === 'chats'">
         <div v-for="group in chatGroups" :key="group.key" class="side__chat-group">
-          <div v-if="group.key !== '__all__'" class="side__group section-label">
-            <span class="truncate">{{ group.label }}</span>
-            <span class="side__group-count">{{ group.chats.length }}</span>
-          </div>
+          <h2 v-if="group.key !== '__all__'" class="side__group side__group--chats">
+            <span class="truncate" :class="{ 'side__group-date': groupBy === 'date' }" :title="group.label">{{ group.label }}</span>
+            <span class="side__group-count">{{ group.chats.length }} {{ group.chats.length === 1 ? 'chat' : 'chats' }}</span>
+          </h2>
 
           <ChatRow
             v-for="chat in group.chats" :key="chat.id"
@@ -467,15 +467,16 @@ function refresh () {
   cursor: pointer;
 }
 
-.side__chat-group + .side__chat-group {
-  margin-top: 6px;
-}
-
 .side__list {
   padding: 10px 8px;
   /* Rows follow the panel width; long titles truncate instead of stretching. */
   min-width: 0;
   overflow-x: hidden;
+}
+
+.side__list--grouped {
+  /* Sticky headers must meet the search divider, not a padded scroll edge. */
+  padding-top: 0;
 }
 
 .side__list > * {
@@ -497,10 +498,38 @@ function refresh () {
   background: var(--surface-panel);
 }
 
+.side__group--chats {
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.side__group--chats .truncate {
+  flex: 1;
+  min-width: 0;
+}
+
+.side__group-date {
+  /* Keep the full date readable on narrow panels and at larger text sizes. */
+  white-space: normal;
+}
+
 .side__group-count {
+  flex: none;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--surface-input);
   color: var(--text-dim);
   font-weight: 500;
   font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .side__empty {

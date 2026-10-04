@@ -124,6 +124,66 @@ test('activity groups distinguish attention, active, unread and inactive without
 
 test.describe('local date grouping', () => {
   test.use({ timezoneId: 'America/Los_Angeles', locale: 'en-US' })
+  for (const [width, theme, interfaceSize] of [[1440, 'orbit', 100], [320, 'daylight', 150]]) {
+    test(`date headers stay flush and opaque while scrolling at ${width}px`, async ({ page, context }) => {
+      const chats = await fixture(context)
+      chats.splice(0, chats.length, ...Array.from({ length: 48 }, (_, index) => ({
+        id: `dated-${index}`,
+        title: `Conversation ${index + 1}`,
+        created_at: Date.parse(`2026-09-${30 - Math.floor(index / 16)}T12:00:00-07:00`) / 1000 - index
+      })))
+      await context.addInitScript(({ key, theme, interfaceSize }) => {
+        localStorage.setItem(key, JSON.stringify({ theme, interfaceSize, chatGroupBy: 'date' }))
+      }, { key: PREFERENCES_KEY, theme, interfaceSize })
+      await page.setViewportSize({ width, height: 700 })
+      await page.goto('/chats')
+      const list = page.locator('.side__list')
+      const headers = list.locator('.side__group')
+      await expect(headers).toHaveCount(3)
+      await expect(headers.first().locator('.truncate')).toHaveText('September 30, 2026')
+      await expect(headers.first().locator('.side__group-count')).toHaveText('16 chats')
+
+      const listBox = await list.boundingBox()
+      const searchBox = await page.locator('.side__head').boundingBox()
+      expect(listBox.y).toBeCloseTo(searchBox.y + searchBox.height, 0)
+      const headerBox = await headers.first().boundingBox()
+      expect(headerBox.y).toBeCloseTo(listBox.y, 0)
+      const label = headers.first().locator('.truncate')
+      await expect(label).toHaveCSS('text-transform', 'none')
+      expect(await label.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+      const labelBox = await label.boundingBox()
+      const countBox = await headers.first().locator('.side__group-count').boundingBox()
+      expect(labelBox.x + labelBox.width + 8).toBeLessThanOrEqual(countBox.x)
+      expect(countBox.x + countBox.width).toBeLessThanOrEqual(listBox.x + listBox.width)
+
+      const secondTop = (await headers.nth(1).boundingBox()).y - listBox.y
+      await list.evaluate(el => { el.scrollTop = 180 })
+      await expect.poll(async () => (await headers.first().boundingBox()).y).toBeCloseTo(listBox.y, 0)
+      // Hit-test the very top, not just the text: no chat may peek through.
+      const headerAtTop = () => list.evaluate(el => {
+        const box = el.getBoundingClientRect()
+        return document.elementFromPoint(box.x + 24, box.y + 1)?.closest('.side__group')?.textContent.trim()
+      })
+      expect(await headerAtTop()).toContain('September 30, 2026')
+      const background = await headers.first().evaluate(el => getComputedStyle(el).backgroundColor)
+      expect(background).toMatch(/^rgb\(/)
+      await page.screenshot({ path: `/tmp/nautionette-date-headers-${width}.png` })
+
+      // Headers meet without a transparent gap as the next group pushes up.
+      await list.evaluate((el, top) => { el.scrollTop = top }, secondTop - headerBox.height / 2)
+      await expect.poll(async () => {
+        const first = await headers.first().boundingBox()
+        const second = await headers.nth(1).boundingBox()
+        return Math.abs(first.y + first.height - second.y)
+      }).toBeLessThan(1)
+      expect(await headerAtTop()).toContain('September 30, 2026')
+      await list.evaluate((el, top) => { el.scrollTop = top }, secondTop + 100)
+      await expect.poll(async () => (await headers.nth(1).boundingBox()).y).toBeCloseTo(listBox.y, 0)
+      expect(await headerAtTop()).toContain('September 29, 2026')
+      expect(await list.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    })
+  }
+
   test('date groups follow conversation start dates rather than UTC or latest activity', async ({ page, context }) => {
     const chats = await fixture(context)
     chats.splice(0, chats.length,
@@ -134,11 +194,11 @@ test.describe('local date grouping', () => {
     await page.goto('/chats')
     await page.getByRole('button', { name: 'Group', exact: true }).click()
     await grouping(page).getByRole('button', { name: 'Date', exact: true }).click()
-    await expect(page.locator('.side__group .truncate')).toHaveText(['Oct 1, 2026', 'Sep 30, 2026'])
-    await expect(page.locator('.side__group-count')).toHaveText(['1', '2'])
+    await expect(page.locator('.side__group .truncate')).toHaveText(['October 1, 2026', 'September 30, 2026'])
+    await expect(page.locator('.side__group-count')).toHaveText(['1 chat', '2 chats'])
     await expect(titles(page)).toHaveText(['After local midnight', 'Before local midnight', 'Same local day, different UTC day'])
     await page.getByRole('textbox', { name: 'Search chats', exact: true }).fill('Before local')
-    await expect(page.locator('.side__group-count')).toHaveText('1')
+    await expect(page.locator('.side__group-count')).toHaveText('1 chat')
     await expect(titles(page)).toHaveText(['Before local midnight'])
   })
 })

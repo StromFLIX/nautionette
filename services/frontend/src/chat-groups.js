@@ -12,7 +12,7 @@ function dateGroup (chat) {
   // labels stay accurate across midnight without moving chats between buckets.
   return {
     key: `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`,
-    label: date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }),
+    label: date.toLocaleDateString([], { day: 'numeric', month: 'long', year: 'numeric' }),
     rank: 0
   }
 }
