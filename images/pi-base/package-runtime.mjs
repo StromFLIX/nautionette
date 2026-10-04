@@ -35,7 +35,7 @@ export function preparePackages({ file = '/tmp/nautionette-packages.json', agent
     }
   }
   if (existsSync(settingsPath) && lstatSync(settingsPath).isSymbolicLink()) throw new Error('Pi settings cannot be a symlink');
-  // Append managed local sources. Do not replace gateway/internet extensions or
+  // Append managed local sources. Do not replace gateway extensions or
   // allow npm/git fetching at turn startup. Artifact volumes stay read-only.
   settings.packages = [...(settings.packages || []), ...sources];
   writeFileSync(settingsPath, JSON.stringify(settings), { mode: 0o600 });

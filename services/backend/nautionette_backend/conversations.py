@@ -166,15 +166,6 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 )
             elif attachments:
                 message["images"] = chat_images.load_images(chat_id, attachments)
-        chat = db.get_chat(chat_id)
-        if chat:
-            previous_status = job.get("internet_status", "blocked")
-            job["internet_status"] = chat["internet_status"]
-            job["internet_allowed"] = chat["internet_status"] == "allowed"
-            job["system_prompt"] = job.get("system_prompt", "").replace(
-                f"Direct internet access is {previous_status}",
-                f"Direct internet access is {chat['internet_status']}",
-            )
         controller = spawn(control_turn(turn_id, chat_id, job, finished), name=f"chat-control-{turn_id}")
         if job.get("project_ids"):
             # Resolve on execution, not enqueue: queued/new turns see the latest settings.
@@ -235,14 +226,6 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 timeline.add_text(text)
             elif kind == "tool":
                 timeline.start_tool(event)
-                if event.get("name") == "request_internet_access":
-                    arguments = event.get("args") or {}
-                    reason = str(arguments.get("reason") or "The agent needs internet access.")[:1000]
-                    db.execute(
-                        "UPDATE chats SET internet_status = 'pending', internet_reason = ?, "
-                        "internet_turn_id = ? WHERE id = ? AND internet_status = 'blocked'",
-                        (reason, turn_id, chat_id),
-                    )
             elif kind == "tool_done":
                 timeline.finish_tool(event)
             elif kind == "error":
@@ -305,11 +288,6 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 )
         if cleanup_failed or shutdown:
             db.execute("UPDATE chats SET queue_paused = 1 WHERE id = ?", (chat_id,))
-        db.execute(
-            "UPDATE chats SET internet_status = 'blocked', internet_reason = '', internet_turn_id = '' "
-            "WHERE id = ? AND internet_turn_id = ? AND internet_status = 'pending'",
-            (chat_id, turn_id),
-        )
         content = timeline.text or (f"The agent could not answer: {failure}" if failure else "(no answer)")
         db.finish_chat_turn(
             turn_id,
@@ -341,10 +319,6 @@ def recover_interrupted() -> None:
     db.execute(
         "UPDATE projects SET status = 'failed', error = 'Download interrupted; retry' "
         "WHERE status = 'cloning'"
-    )
-    db.execute(
-        "UPDATE chats SET internet_status = 'blocked', internet_reason = '', internet_turn_id = '' "
-        "WHERE internet_status IN ('pending', 'deciding')"
     )
     for turn in db.query("SELECT * FROM chat_turns WHERE state = 'running'"):
         steps = json.loads(turn["steps"])

@@ -184,7 +184,6 @@ async function main() {
       NAUTIONETTE_MODEL_REASONING: JSON.stringify(job.model_reasoning || {}),
       NAUTIONETTE_REASONING_EFFORT: job.reasoning_effort ?? "",
       NAUTIONETTE_MODE: mode,
-      NAUTIONETTE_INTERNET_STATUS: job.chat_id ? (job.internet_status || "blocked") : "",
       // JSON preserves null (all) versus [] (none) and tool names containing commas.
       NAUTIONETTE_TOOLS_JSON: JSON.stringify(job.tools ?? null),
       // Compatibility for older/custom agent sets. New bridges use the lossless value above.

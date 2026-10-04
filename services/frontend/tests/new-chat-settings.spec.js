@@ -47,14 +47,14 @@ test('configuration opens only manually, including legacy preferences and reused
 })
 
 for (const entry of ['sidebar', 'welcome']) {
-  test(`${entry} reuses all last-used settings across reload without carrying internet approval`, async ({ page, context }) => {
+  test(`${entry} reuses all last-used settings across reload`, async ({ page, context }) => {
     const state = await mockAgents(context)
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
     const agent = state.addAgent('Writer')
     const settings = { agent_id: agent.id, model: 'test/model', agent_set: 'research', reasoning_effort: 'high',
       tools: ['mail_search'], project_ids: [projectId], packages: ['extension-revision'] }
-    Object.assign(state.data.chat, settings, { agent_name: agent.name, internet_status: 'allowed' })
+    Object.assign(state.data.chat, settings, { agent_name: agent.name })
     await page.goto('/chats/alpha')
     await send(page)
     await expect.poll(() => state.sent.length).toBe(1)
@@ -79,7 +79,6 @@ for (const entry of ['sidebar', 'welcome']) {
     }
     await expect.poll(() => state.created.length).toBe(1)
     expect(state.created[0]).toEqual(settings)
-    expect(state.chats['created-1'].chat).not.toHaveProperty('internet_status')
     await expect(toggle(page)).toHaveAttribute('aria-expanded', 'false')
     expect(errors).toEqual([])
   })

@@ -647,10 +647,6 @@ pre.code {
   color: var(--text-muted);
 }
 
-.row-item--attention {
-  box-shadow: inset 2px 0 var(--warning);
-}
-
 .row-item--unread .row-item__title {
   font-weight: 500;
 }
@@ -679,10 +675,6 @@ pre.code {
   color: var(--accent-hover);
   fill: currentColor;
   animation: chat-status-pulse 1.8s ease-in-out infinite;
-}
-
-.chat-status--attention {
-  color: var(--warning);
 }
 
 @keyframes chat-status-pulse {

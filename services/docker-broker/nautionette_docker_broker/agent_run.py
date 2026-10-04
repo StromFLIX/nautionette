@@ -16,7 +16,6 @@ from nautionette.pi_packages import configuration, filters, revision_id
 
 from . import chat_agents, daemon, images, packages, projects
 from .config import (
-    AGENT_EGRESS_NETWORK,
     AGENT_ENVIRONMENT,
     AGENT_MEMORY,
     AGENT_NETWORK,
@@ -180,42 +179,6 @@ def _copy_job(
         raise RuntimeError("Could not deliver the agent job")
 
 
-def decide_internet(chat_id: str, turn_id: str, allowed: bool) -> bool:
-    containers = chat_agents.containers(chat_id, turn_id, include_stopped=False)
-    if not containers:
-        return False
-    for container in containers:
-        container.reload()
-        networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
-        network = daemon.client().networks.get(AGENT_EGRESS_NETWORK)
-        newly_connected = allowed and AGENT_EGRESS_NETWORK not in networks
-        if newly_connected:
-            network.connect(container)
-        elif not allowed and AGENT_EGRESS_NETWORK in networks:
-            network.disconnect(container)
-        decision = "allowed" if allowed else "denied"
-        try:
-            result = container.exec_run(
-                [
-                    "node",
-                    "-e",
-                    'require("node:fs").writeFileSync("/tmp/nautionette-internet-decision", '
-                    + json.dumps(decision)
-                    + ")",
-                ]
-            )
-            if result.exit_code != 0:
-                raise RuntimeError("Could not deliver the internet approval decision")
-        except Exception:
-            if newly_connected:
-                try:
-                    network.disconnect(container)
-                except Exception:
-                    container.kill()
-            raise
-    return True
-
-
 def run(job: dict[str, Any]) -> Iterator[str]:
     stopped = threading.Event()
     completed = threading.Event()
@@ -290,8 +253,6 @@ def _run(
         project_mounts = projects.mounts(project_ids, job.get("chat_id", ""))
         projects.claim(project_ids, job.get("chat_id", ""))
         claimed_projects = project_ids
-        if job.get("chat_id") and not daemon.client().networks.get(AGENT_NETWORK).attrs.get("Internal"):
-            raise RuntimeError("Chat agents require an internal Docker network with egress disabled")
         package_runtime = job.get("package_runtime", [])
         if not isinstance(package_runtime, list) or len(package_runtime) > 20:
             raise ValueError("Invalid package runtime configuration")
@@ -339,8 +300,6 @@ def _run(
             _copy_job(container, job)
         if package_runtime:
             _copy_job(container, job, "nautionette-packages.json", package_runtime)
-        if job.get("chat_id") and job.get("internet_allowed") is True:
-            daemon.client().networks.get(AGENT_EGRESS_NETWORK).connect(container)
         with _controls_lock:
             if stopped.is_set():
                 return

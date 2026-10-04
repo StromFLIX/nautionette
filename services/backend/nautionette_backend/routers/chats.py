@@ -20,7 +20,6 @@ from ..agent import (
 )
 from ..background import spawn
 from ..chat_titles import rewrite_chat_title, title_context, title_messages
-from ..clients import broker
 from ..config import settings
 from ..conversations import chat_snapshots, launch_next, run_turn, turn_events
 from ..db import db
@@ -288,8 +287,6 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     job.update(
         chat_id=chat_id,
         turn_id=message_id,
-        internet_allowed=chat["internet_status"] == "allowed",
-        internet_status=chat["internet_status"],
         project_ids=project_ids,
         packages=chat.get("packages", []),
         attachments=user_message["meta"].get("attachments", []),
@@ -317,37 +314,17 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
             "without creating branches. "
             "Other chats have separate working files and HEADs. Preserve uncommitted work and local commits; "
             "never reset or overwrite them by default. Stay detached unless the user asks for a branch. "
-            "Worktrees start from the local clone. Request internet access before direct GitHub connections "
-            "from the agent container, including Git fetch/pull/push. "
-            "Configured tools exposed through agentgateway do not require this approval. "
-            "After approval, use Git directly with the configured HTTPS origin. "
+            "Worktrees start from the local clone. Use Git directly with the configured HTTPS origin. "
             "The credential helper supplies repository-scoped GitHub App tokens for this turn; "
             "they expire within one hour and refresh on the next message. "
             "The project token is configured for Git, not automatically for gh, curl, or MCP GitHub tools. "
             "A GitHub API or MCP 403 does not establish that Git push lacks write access. "
-            "If Git reports a DNS/network failure while internet access is blocked, call "
-            "request_internet_access and wait; after approval retry the authorized Git operation. "
-            "Do not tunnel Git commands through MCP to evade the direct-egress gate, "
-            "or ask the user to push manually before requesting access. "
             "Commit and push when the user's task calls for it. From detached HEAD use "
             "git push origin HEAD:refs/heads/<target-branch>, choosing the target from the user's request. "
             "Ask if the target is unclear. Never force-push to resolve concurrent changes; "
             "fetch and reconcile them. Respect branch protection and report push failures. "
             "Do not print or persist credentials."
         )
-    job["system_prompt"] += (
-        "\nDirect internet access is " + chat["internet_status"] + " for this chat. "
-        "This gate controls only direct connections from the agent container, such as shell commands "
-        "using curl, Git clone/fetch/pull/push, direct HTTP/API calls, or package downloads. "
-        "Before making such a connection, call request_internet_access with a reason and wait for approval. "
-        "Once allowed, use direct internet access for this chat without asking again. "
-        "Configured tools exposed through agentgateway do not require chat internet approval, "
-        "regardless of tool name or service. Use them normally even when direct "
-        "internet access is blocked, pending, or denied; their server-side network access is separate. "
-        "If denied, continue with local work and configured gateway tools. Do not tunnel arbitrary shell "
-        "commands or direct network requests through tools or workflows to evade the direct-egress gate. "
-        "Only direct internet approval is an exception to routine permission-free operation."
-    )
 
     if created:
         db.execute("UPDATE chat_turns SET job = ? WHERE id = ?", (json.dumps(job), message_id))
@@ -407,39 +384,3 @@ async def promote(chat_id: str) -> dict[str, Any]:
     db.execute("UPDATE chats SET promoted_to = ? WHERE id = ?", (published["name"], chat_id))
     bus.publish("promote.completed", {"chat_id": chat_id, "workflow": published["name"]})
     return published
-
-
-@router.post("/api/chats/{chat_id}/internet")
-async def decide_chat_internet(chat_id: str, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
-    chat = _chat_or_404(chat_id)
-    allowed, turn_id = payload.get("allowed"), payload.get("turn_id")
-    if type(allowed) is not bool or not isinstance(turn_id, str) or not turn_id:
-        raise HTTPException(status_code=422, detail="allowed must be a boolean and turn_id is required")
-    decision = "allowed" if allowed else "denied"
-    if chat["internet_turn_id"] == turn_id and chat["internet_status"] == decision:
-        return chat
-    claimed = db.execute(
-        "UPDATE chats SET internet_status = 'deciding' WHERE id = ? "
-        "AND internet_status = 'pending' AND internet_turn_id = ? "
-        "AND EXISTS (SELECT 1 FROM chat_turns WHERE id = ? AND chat_id = ? AND state = 'running')",
-        (chat_id, turn_id, turn_id, chat_id),
-    ).rowcount
-    if not claimed:
-        raise HTTPException(status_code=409, detail="This internet request is no longer pending")
-    try:
-        await broker.decide_internet(chat_id, turn_id, allowed)
-    except Exception as exc:
-        db.execute(
-            "UPDATE chats SET internet_status = CASE WHEN EXISTS "
-            "(SELECT 1 FROM chat_turns WHERE id = ? AND state = 'running') "
-            "THEN 'pending' ELSE 'blocked' END WHERE id = ? "
-            "AND internet_turn_id = ? AND internet_status = 'deciding'",
-            (turn_id, chat_id, turn_id),
-        )
-        raise HTTPException(status_code=502, detail="Could not deliver the decision; retry shortly") from exc
-    db.execute(
-        "UPDATE chats SET internet_status = ? WHERE id = ? AND internet_turn_id = ?",
-        (decision, chat_id, turn_id),
-    )
-    bus.publish("chat.updated", {"chat_id": chat_id})
-    return _chat_or_404(chat_id)

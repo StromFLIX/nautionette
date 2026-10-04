@@ -54,7 +54,7 @@ CORS_ORIGINS=https://app.nautionette.stage.stromflix.com
 
 Use a different Compose project (Coolify normally uses the new application UUID).
 Inspect the final Compose: every staging network and volume must differ from
-production. The broker's `TARGET_NETWORK`, `AGENT_NETWORK`, `AGENT_EGRESS_NETWORK`,
+production. The broker's `TARGET_NETWORK`, `AGENT_NETWORK`,
 `WORKFLOWS_VOLUME` and worker image must match the *rendered* names. Set
 `BROKER_WORKFLOWS_VOLUME=<application-uuid>_workflows` in each Coolify application
 to match the backend's actual mount (including production). Coolify can

@@ -119,8 +119,8 @@ composer and sidebar **New chat** start:
 
 With no remembered settings, defaults apply. Last settings persist across reloads,
 separately for each backend. Opening an old chat does not replace them; choosing
-settings, creating a chat or sending a message does. Internet approval and messages
-are never copied. These device preferences do not alter instance-wide defaults,
+settings, creating a chat or sending a message does. Messages are never copied.
+These device preferences do not alter instance-wide defaults,
 saved agents or existing chats.
 
 **All tools**, **No tools**, and a selected list are distinct. A selected list stays
@@ -324,7 +324,7 @@ The transport tests run real Pi against a local fake gateway, not billable model
 ### Agent runtime limits
 
 Chat turns default to a one-hour wall-clock limit (`AGENT_RUN_TIMEOUT_SECONDS=3600`),
-including tool execution and time waiting for internet approval. The same setting
+including tool execution. The same setting
 is passed to **both backend and Docker broker**: the backend requests this budget,
 and the broker enforces it even when the agent produces no output. Recreate both
 services after changing it. Existing deployments explicitly configured with `900`
@@ -342,53 +342,33 @@ Failed turns retain their partial transcript and persistent project worktrees;
 continue with a new message rather than automatically replaying tools that may
 already have produced external side effects.
 
-### Session internet approval
+### Sandbox networking
 
-Chat Pi containers start on `nautionette-agents`, a Docker `internal: true`
-network with access to the model/tool gateway but no direct internet route or
-connection to the backend and broker networks. Only **direct connections from the
-agent container** require approval: for example, shell commands using `curl`, Git
-clone/fetch/pull/push, direct HTTP/API requests, or package downloads. Before those
-operations, Pi calls `request_internet_access` with its reason. The chat displays
-**Allow for this chat** and **Deny**, and the tool waits while the current turn
-remains active. Pending requests survive client reloads and reconnects, up to the
-configured agent-run timeout.
+Sandboxes have outbound internet access from startup, including Git fetch/pull/push,
+HTTP/API requests and package downloads. There is no network permission tool,
+per-chat decision or approval UI. The model/tool gateway remains unchanged.
 
-The user decision endpoint is `POST /api/chats/{id}/internet` with
-`{turn_id, allowed}`. It is not an MCP tool. Only an authenticated user decision
-for a pending, running turn lets the broker attach its container to the separate
-`nautionette-agent-egress` network. The broker then delivers the decision to the
-waiting tool. Chat containers have no service credential or network-admin
-capabilities; the tool's local decision file is a notification, not authority to
-change networking.
-
-Approval is persisted on the chat in SQLite and applied before starting every
-subsequent turn's container. It is not shared with other chats or workflows.
-Denial remains in effect for that chat; a new chat starts blocked. Unanswered
-requests are cleared when a turn ends or the backend restarts. Here, a session
-means the lifetime of the chat, not the browser tab or an individual Pi process.
-
-This controls **direct Pi egress**, not server-side internet use by configured
-MCP tools, model providers, or workflow activities. Those remain trusted system
-capabilities and are not sandboxed by this gate. Configured tools exposed through
-agentgateway **do not require chat internet approval**, regardless of tool name or
-service, even when direct access is blocked, pending, or denied. Do not tunnel
-arbitrary shell commands or direct network requests through tools or workflows to
-evade the direct-egress gate. Configure distinct `APP_TOKEN` and `INTERNAL_TOKEN`
+Chat containers use the outbound-enabled `nautionette-agent-sandboxes` network,
+shared with agentgateway but not the backend or Docker broker. Workflow containers
+continue to use the service network, which also supports outbound access. Chat
+containers still receive no internal service credential, drop all capabilities,
+and use `no-new-privileges`. Configure distinct `APP_TOKEN` and `INTERNAL_TOKEN`
 values for shared deployments.
 
-After updating, rebuild/recreate backend, docker-broker, frontend-web, and
+After updating, rebuild/recreate backend, docker-broker, frontend-web and
 agentgateway with `docker compose up -d --build backend docker-broker frontend-web agentgateway`.
 The broker rebuilds the changed Pi base and agent images automatically. The new
-networks and images must be in place before using the gate; already running agent
-containers are not retroactively restricted.
+sandbox network name avoids reusing the old internal-only Docker network on upgrade.
+Custom broker deployments must set `AGENT_NETWORK` to an outbound-enabled network
+with agentgateway attached. Existing agent containers must finish or be stopped;
+new turns use the new image and network. Backend startup removes legacy permission
+columns and stale instructions from saved jobs while preserving messages and worktrees.
+Old unused Docker networks can be removed after their containers have stopped.
 
-Focused checks: `uv run pytest tests/backend/test_internet.py tests/broker/test_internet.py`,
-`npx --yes tsx --test tests/agent/*.ts`, and
-`npm --prefix services/frontend run test:e2e -- chat.spec.js --grep internet`.
-The opt-in isolation check uses a local `node:24-bookworm-slim` image and temporary
-containers/networks, cleaned up afterward:
-`NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_internet_docker.py`.
+Focused checks: `uv run pytest tests/backend/test_sandbox_network.py tests/broker/test_sandbox_network.py`.
+The opt-in Docker check uses a local `node:24-bookworm-slim` image, temporary
+containers/networks and outbound HTTPS to example.com:
+`NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_sandbox_network_docker.py`.
 
 ## GitHub Projects
 
@@ -499,15 +479,13 @@ reconcile those changes, never force-push to bypass them. GitHub branch protecti
 and App permissions still apply. Git LFS, submodule authentication, and GitHub
 Enterprise hosts are not part of this integration.
 
-There is no Git proxy or extra Git service. Worktree setup is offline. Agents request
-the existing chat internet approval before contacting GitHub, then use normal Git
-fetch/pull/push directly against the HTTPS origin. The backend supplies fresh,
+There is no Git proxy or extra Git service. Worktree setup is offline. Agents use
+normal Git fetch/pull/push directly against the HTTPS origin. The backend supplies fresh,
 repository-scoped installation tokens for each turn through a Git credential helper.
 Tokens are not saved in Git config or job files; they expire within one hour and are
 revoked when the turn ends (best effort, including failure cleanup). A new message
 obtains fresh tokens. Agents receive these short-lived tokens, never the App private
-key, and must not print or persist credentials. Internet denial leaves local editing
-available but prevents fetching or pushing. The initial repository download from
+key, and must not print or persist credentials. The initial repository download from
 Settings runs on the backend, not inside an agent.
 Project management is user-only and is not exposed through backend MCP.
 

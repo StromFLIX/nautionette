@@ -51,16 +51,6 @@ def test_manual_reminders_survive_old_acknowledgements_and_clear_on_next_visit(c
     assert not client.patch(path, json={**fresh, "clear_manual": True}).json()["unread"]
 
 
-def test_mark_read_does_not_dismiss_internet_approval(client, db):
-    chat = db.create_chat("Approval", "default")
-    db.execute("UPDATE chats SET internet_status = 'pending' WHERE id = ?", (chat["id"],))
-    path = f"/api/chats/{chat['id']}/read-state"
-    assert client.patch(path, json={"unread": True}).json()["unread"]
-    result = client.patch(path, json={"unread": False}).json()
-    assert result["unread"] is False
-    assert result["internet_status"] == "pending"
-
-
 @pytest.mark.parametrize(
     "payload",
     [

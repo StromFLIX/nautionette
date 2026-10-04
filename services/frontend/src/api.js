@@ -129,9 +129,6 @@ export const api = {
   updateChat: (id, payload) => request(`/api/chats/${id}`, { method: 'PATCH', ...json(payload) }),
   regenerateChatTitle: (id) => request(`/api/chats/${id}/title/regenerate`, { method: 'POST' }),
   updateChatReadState: (id, payload) => request(`/api/chats/${id}/read-state`, { method: 'PATCH', ...json(payload) }),
-  decideInternet: (id, turnId, allowed) => request(`/api/chats/${id}/internet`, {
-    method: 'POST', ...json({ turn_id: turnId, allowed })
-  }),
   deleteChat: (id) => request(`/api/chats/${id}`, { method: 'DELETE' }),
 
   workflows: () => request('/api/workflows'),
