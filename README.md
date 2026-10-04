@@ -222,18 +222,29 @@ and Pi agent images. Chat containers use Pi RPC mode for live steering; workflow
 agent calls retain their existing one-shot JSON mode. Validate the real runtime with
 `NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_chat_control_docker.py`.
 
-### Image attachments
+### File attachments
 
-Use **Attach images**, paste a screenshot, or drop images onto the composer. Preview,
-expand, and remove attachments before sending; text is optional for image messages.
-PNG, JPEG, GIF, and WebP are supported, with at most **four images per message**,
-**5 MiB per image**, and **25 megapixels per image**. The backend checks image content
-and MIME type; SVG and other file types are rejected. Known text-only models and
-known-incompatible API routes disable image selection, paste, drop, and sending;
-the backend also rejects image messages (including before the catalog is cached).
-Switching models preserves an attached draft but blocks sending until the images
-are removed or a compatible model is selected. Unknown support is labelled
+Use **Attach files**, paste, or drop files onto the composer. Any file type is accepted,
+including PDFs, CSVs, source files, archives, and files without a known MIME type.
+Attach at most **four files per message**, **5 MiB per file**; files must be nonempty.
+Text is optional. Remove draft attachments before sending, or download files from
+message and queue cards. Downloads are authenticated; non-image files are never
+embedded as executable HTML/SVG or other active content.
+
+PNG, JPEG, GIF, and WebP retain image previews and model vision input, with a
+**25 megapixel** limit. The backend validates these images against their MIME type.
+Known text-only models and incompatible API routes reject vision images, including
+paste/drop and direct API sends before the catalog is cached. Other attachments
+remain usable with every model. Switching models preserves the draft but blocks
+sending incompatible images until removed. Unknown support is labelled
 **Image support unverified** and remains usable—not mislabelled as text-only.
+
+Non-image attachments arrive **unchanged** in the agent's ephemeral workspace under
+`/workspace/attachments/<id>.<extension>`. The prompt maps original filenames to
+safe, unique paths. Uploading does not parse, extract text, perform OCR, unpack,
+or execute files. The agent chooses how to inspect them using its tools; usable
+formats depend on the tooling available in the selected agent environment.
+Scanned and encrypted PDFs are not rejected simply for lacking extractable text.
 
 The model picker reports **Images**, **No images**, or **Images unverified**.
 `/api/catalog` exposes `api`, `api_source`, tri-state `supports_images`, and
@@ -243,26 +254,37 @@ Copilot vision metadata without advertised endpoints is unverified. A provider
 capability declaration is not an end-to-end image test: HTTP 200 can still hide
 image loss, so no automatic or billable vision probes run during discovery.
 
-Images upload before a message enters the durable outbox. Upload failures keep the
+Attachments upload before a message enters the durable outbox. Upload failures keep the
 current draft for retry; successful uploads are reused. Uploading requires connectivity,
 and unsent draft files do not survive page reload. Once uploaded, only attachment IDs
-and metadata enter the outbox and transcript cache—not image bytes. Images in history
+and metadata enter the outbox and transcript cache—not file bytes. Attachments in history
 are fetched through authenticated endpoints, so offline snapshots retain text and
-attachment metadata but cannot load images without a connection.
+attachment metadata but cannot load images or download files without a connection.
 
-`POST /api/chats/{id}/images?name=...` accepts raw image bytes with their image
-`Content-Type` and returns `{id, name, mime_type, size}`. Send the returned IDs as
-`attachment_ids` with a message. `GET /api/chats/{id}/images/{image_id}` retrieves an
-image; `DELETE` discards an upload only while it is unattached. Image bytes live in
-SQLite separately from messages/events and are deleted with the message or chat.
-Unattached uploads older than 24 hours are cleaned up on subsequent uploads.
+`POST /api/chats/{id}/attachments?name=...` accepts raw bytes with their `Content-Type`
+(or `application/octet-stream` if unknown) and returns `{id, name, mime_type, size}`.
+Send the returned IDs as `attachment_ids` with a message.
+`GET /api/chats/{id}/attachments/{attachment_id}` retrieves the original bytes;
+`DELETE` discards an upload only while it is unattached. The legacy `/images` routes
+remain aliases. Bytes live in the existing SQLite `chat_images` table separately
+from messages/events and are deleted with the message or chat. Unattached uploads
+older than 24 hours are cleaned up on subsequent uploads; at most 20 drafts per chat.
 
-Queued image messages wait for their own turn so steering cannot drop attachments.
-Pi receives images through RPC; up to four recent history images are replayed alongside
-current attachments, subject to the history budget. Older omitted images are marked
-in the prompt. Large agent jobs use a private file copied into the container rather
-than exceeding Linux environment-variable limits. Deploy this feature by rebuilding
-the backend, Docker broker, frontend, and Pi images together.
+Queued attachment messages wait for their own turn so steering cannot drop files.
+Pi receives supported images through RPC; other files are written privately to the
+workspace with generated filenames, never overwriting workspace instructions.
+Up to four recent history attachments are replayed alongside current attachments,
+subject to the history budget. Older omitted attachments are marked in the prompt.
+History files are restored for each fresh agent container; switching to a text-only
+model omits only vision images, not other files. File references, not binary contents,
+are charged to text context. All file-bearing jobs and other large jobs use a private
+file copied into the container, never environment variables. Raw bytes are not written
+to `JOB.json`, persisted jobs, snapshots, or events.
+Deploy by rebuilding the backend, Docker broker, frontend, and Pi images together.
+
+File regression checks: `uv run pytest tests/backend/test_chat_files.py tests/backend/test_chat_images.py
+ tests/broker/test_broker.py`, `node --test tests/agent/test_chat_files.mjs tests/agent/test_images.mjs`,
+and `npm --prefix services/frontend run test:e2e -- tests/chat.spec.js --grep 'PDF|files|images'`.
 
 For Copilot, the catalog reads the model's `supported_endpoints` through agentgateway
 before choosing its wire format. Chat jobs pin that choice as `model_api`; the Pi

@@ -6,12 +6,13 @@ import json
 import sqlite3
 import uuid
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from .. import agent_profiles, catalog, chat_images, project_changes, projects
+from .. import agent_profiles, catalog, chat_attachments, project_changes, projects
 from ..agent import (
     agent_job,
     build_history,
@@ -180,26 +181,28 @@ async def delete_chat(chat_id: str) -> dict[str, Any]:
     return {"ok": True}
 
 
-@router.post("/api/chats/{chat_id}/images")
-async def upload_image(chat_id: str, request: Request, name: str = "image") -> dict[str, Any]:
+@router.post("/api/chats/{chat_id}/images", include_in_schema=False)
+@router.post("/api/chats/{chat_id}/attachments")
+async def upload_attachment(chat_id: str, request: Request, name: str = "attachment") -> dict[str, Any]:
     _chat_or_404(chat_id)
     data = bytearray()
     async for chunk in request.stream():
-        if len(data) + len(chunk) > chat_images.MAX_IMAGE_BYTES:
-            raise HTTPException(413, "Images must be at most 5 MiB each")
+        if len(data) + len(chunk) > chat_attachments.MAX_FILE_BYTES:
+            raise HTTPException(413, "Files must be at most 5 MiB each")
         data.extend(chunk)
     return await run_in_threadpool(
-        chat_images.store_image, chat_id, bytes(data), request.headers.get("content-type", ""), name
+        chat_attachments.store_attachment, chat_id, bytes(data), request.headers.get("content-type", ""), name
     )
 
 
-@router.get("/api/chats/{chat_id}/images/{image_id}")
-def get_image(chat_id: str, image_id: str) -> Response:
+@router.get("/api/chats/{chat_id}/images/{image_id}", include_in_schema=False)
+@router.get("/api/chats/{chat_id}/attachments/{image_id}")
+def get_attachment(chat_id: str, image_id: str) -> Response:
     image = db.one(
-        "SELECT data, mime_type FROM chat_images WHERE id = ? AND chat_id = ?", (image_id, chat_id)
+        "SELECT data, name, mime_type FROM chat_images WHERE id = ? AND chat_id = ?", (image_id, chat_id)
     )
     if not image:
-        raise HTTPException(404, "Image not found")
+        raise HTTPException(404, "Attachment not found")
     return Response(
         image["data"],
         media_type=image["mime_type"],
@@ -207,12 +210,18 @@ def get_image(chat_id: str, image_id: str) -> Response:
             "Cache-Control": "private, no-store",
             "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "default-src 'none'; sandbox",
+            **(
+                {"Content-Disposition": f"attachment; filename*=UTF-8''{quote(image['name'], safe='')}"}
+                if not chat_attachments.is_image(image)
+                else {}
+            ),
         },
     )
 
 
-@router.delete("/api/chats/{chat_id}/images/{image_id}")
-def discard_image(chat_id: str, image_id: str) -> dict[str, bool]:
+@router.delete("/api/chats/{chat_id}/images/{image_id}", include_in_schema=False)
+@router.delete("/api/chats/{chat_id}/attachments/{image_id}")
+def discard_attachment(chat_id: str, image_id: str) -> dict[str, bool]:
     _chat_or_404(chat_id)
     db.execute(
         "DELETE FROM chat_images WHERE id = ? AND chat_id = ? AND message_id IS NULL", (image_id, chat_id)
@@ -226,15 +235,22 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     if not isinstance(payload.get("text", ""), str):
         raise HTTPException(422, "text must be a string")
     text = payload.get("text", "").strip()
-    attachment_ids = chat_images.image_ids(payload.get("attachment_ids", []))
+    attachment_ids = chat_attachments.attachment_ids(payload.get("attachment_ids", []))
     if not text and not attachment_ids:
-        raise HTTPException(status_code=400, detail="text or an image is required")
+        raise HTTPException(status_code=400, detail="text or an attachment is required")
     model_id = chat.get("model") or runtime("default_model")
     # Direct API clients must receive the same capability checks as the UI, even
     # after a backend restart before anyone has opened the model picker.
     model_info = await catalog.model_info(model_id)
     effort = _effort(chat.get("reasoning_effort"), model_info)
-    if attachment_ids and model_info.get("supports_images") is False:
+    has_images = any(
+        chat_attachments.is_image(
+            db.one("SELECT mime_type FROM chat_images WHERE id = ? AND chat_id = ?", (attachment_id, chat_id))
+            or {}
+        )
+        for attachment_id in attachment_ids
+    )
+    if has_images and model_info.get("supports_images") is False:
         reason = model_info.get("image_support_reason") or "This model is text-only."
         raise HTTPException(422, f"{reason} Choose an image-capable model/API route to send images.")
 
@@ -263,14 +279,14 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="This chat is still answering; retry shortly.") from exc
     if created and chat["title_state"] == "provisional" and chat["title"] in {"New chat", ""} and not history:
-        preview = summarise_for_title(text or "Image attachment")
+        preview = summarise_for_title(text or "File attachment")
         changed = db.execute(
             "UPDATE chats SET title = ? WHERE id = ? AND title_revision = ? AND title_state = 'provisional'",
             (preview, chat_id, chat["title_revision"]),
         ).rowcount
         if changed:
             spawn(
-                rewrite_chat_title(chat_id, (text or "Image attachment")[:12000], model_id, preview),
+                rewrite_chat_title(chat_id, (text or "File attachment")[:12000], model_id, preview),
                 name=f"chat-title-{chat_id}",
             )
 

@@ -53,7 +53,7 @@ def title_context(messages: list[dict]) -> str:
     selected = messages if len(messages) <= 8 else messages[:2] + messages[-6:]
     context = []
     for message in selected:
-        text = message["content"] or "[Image attachment]"
+        text = message["content"] or "[File attachment]"
         if len(text) > 1400:
             text = text[:1000] + "\n[…]\n" + text[-400:]
         context.append({"role": message["role"], "content": text})

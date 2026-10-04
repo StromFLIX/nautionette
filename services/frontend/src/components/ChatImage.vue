@@ -37,7 +37,7 @@ async function load () {
   const request = new AbortController()
   controller = request
   try {
-    const blob = props.image.file || await api.image(props.chatId, props.image.id, request.signal)
+    const blob = props.image.file || await api.attachment(props.chatId, props.image.id, request.signal)
     if (!request.signal.aborted) url.value = URL.createObjectURL(blob)
   } catch (err) {
     if (!request.signal.aborted) error.value = `Could not load image: ${err.message}`

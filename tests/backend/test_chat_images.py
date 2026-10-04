@@ -4,8 +4,10 @@ import io
 import json
 
 import pytest
-from nautionette_backend import background, chat_images, conversations, runtime
+from nautionette_backend import background, conversations, runtime
+from nautionette_backend import chat_attachments as chat_images
 from nautionette_backend.agent.runner import build_history
+from nautionette_backend.chat_attachments import store_attachment
 from nautionette_backend.integrations.discovery import image_support
 from PIL import Image
 
@@ -43,13 +45,12 @@ def test_upload_and_authenticated_retrieval(client, anonymous, backend, fmt, mim
 @pytest.mark.parametrize(
     "data,mime,status",
     [
-        (b"<svg><script>alert(1)</script></svg>", "image/svg+xml", 415),
         (b"not an image", "image/png", 422),
         (picture(), "image/jpeg", 422),
         (picture()[:24], "image/png", 422),
         (picture("JPEG")[:-10], "image/jpeg", 422),
         (b"", "image/png", 413),
-        (b"x" * (chat_images.MAX_IMAGE_BYTES + 1), "image/png", 413),
+        (b"x" * (chat_images.MAX_FILE_BYTES + 1), "image/png", 413),
     ],
 )
 def test_upload_validation(client, backend, data, mime, status):
@@ -116,7 +117,7 @@ def test_bad_attachment_references_never_accept_a_message(client, backend, ids):
 def test_cross_chat_attachment_cannot_be_used(client, backend):
     first = client.post("/api/chats", json={}).json()["id"]
     second = client.post("/api/chats", json={}).json()["id"]
-    image = chat_images.store_image(first, picture(), "image/png", "image")
+    image = store_attachment(first, picture(), "image/png", "image")
     result = client.post(f"/api/chats/{second}/messages", json={"attachment_ids": [image["id"]]})
     assert result.status_code == 422
     assert backend.db.list_messages(second) == []
@@ -125,7 +126,7 @@ def test_cross_chat_attachment_cannot_be_used(client, backend):
 def test_text_only_model_rejects_images_without_losing_upload(client, backend):
     runtime.cache_catalog({"models": [{"id": "text-only", "supports_images": False}]})
     chat_id = client.post("/api/chats", json={"model": "text-only"}).json()["id"]
-    image = chat_images.store_image(chat_id, picture(), "image/png", "image")
+    image = store_attachment(chat_id, picture(), "image/png", "image")
     result = client.post(f"/api/chats/{chat_id}/messages", json={"attachment_ids": [image["id"]]})
     assert result.status_code == 422 and "text-only" in result.text
     assert (
@@ -152,7 +153,7 @@ def test_cold_catalog_still_rejects_known_unsupported_route(client, backend, mon
 
     monkeypatch.setattr(catalog, "build", build)
     chat_id = client.post("/api/chats", json={"model": "vision/bad-route"}).json()["id"]
-    image = chat_images.store_image(chat_id, picture(), "image/png", "image")
+    image = store_attachment(chat_id, picture(), "image/png", "image")
     result = client.post(f"/api/chats/{chat_id}/messages", json={"attachment_ids": [image["id"]]})
     assert result.status_code == 422
     assert "API route" in result.text and "text-only" not in result.text
@@ -172,7 +173,7 @@ async def test_image_job_pins_catalog_api_and_allows_unknown_capabilities(backen
         chat_id = (await client.post("/api/chats", json={"model": "copilot/gpt-5", "title": "Image"})).json()[
             "id"
         ]
-        image = chat_images.store_image(chat_id, picture(), "image/png", "image")
+        image = store_attachment(chat_id, picture(), "image/png", "image")
         response = await client.post(f"/api/chats/{chat_id}/messages", json={"attachment_ids": [image["id"]]})
         assert response.status_code == 202
         await finish_background()
@@ -182,7 +183,8 @@ async def test_image_job_pins_catalog_api_and_allows_unknown_capabilities(backen
         assert job["images"]
 
 
-async def test_queued_image_waits_for_own_turn_and_survives_history(backend, monkeypatch):
+@pytest.mark.parametrize("mime", ["image/png", "application/pdf"])
+async def test_queued_attachment_waits_for_own_turn_and_survives_history(backend, monkeypatch, mime):
     started, finish = asyncio.Event(), asyncio.Event()
     jobs, commands = [], []
 
@@ -206,7 +208,7 @@ async def test_queued_image_waits_for_own_turn_and_survives_history(backend, mon
             path = f"/api/chats/{chat_id}"
             await client.post(path + "/messages", json={"text": "Start", "message_id": "first"})
             await asyncio.wait_for(started.wait(), 2)
-            image = chat_images.store_image(chat_id, picture(), "image/png", "queued.png")
+            image = store_attachment(chat_id, picture(), mime, "queued")
             response = await client.post(
                 path + "/messages",
                 json={"message_id": "second", "queue": True, "attachment_ids": [image["id"]]},
@@ -216,7 +218,7 @@ async def test_queued_image_waits_for_own_turn_and_survives_history(backend, mon
             assert commands == []
             finish.set()
             await finish_background()
-            assert len(jobs) == 2 and jobs[1]["images"]
+            assert len(jobs) == 2 and jobs[1]["images" if mime == "image/png" else "files"]
             assert jobs[1]["history"][-1]["content"] == "Answered"
     finally:
         finish.set()
@@ -226,7 +228,7 @@ async def test_queued_image_waits_for_own_turn_and_survives_history(backend, mon
 async def test_switch_to_text_only_model_omits_history_images(backend):
     async with chat_client() as client:
         chat_id = (await client.post("/api/chats", json={"title": "Images"})).json()["id"]
-        image = chat_images.store_image(chat_id, picture(), "image/png", "image")
+        image = store_attachment(chat_id, picture(), "image/png", "image")
         await client.post(f"/api/chats/{chat_id}/messages", json={"attachment_ids": [image["id"]]})
         await finish_background()
         runtime.cache_catalog({"models": [{"id": "text-only", "supports_images": False}]})
@@ -239,13 +241,14 @@ async def test_switch_to_text_only_model_omits_history_images(backend):
         assert not any(message.get("images") for message in history)
 
 
-def test_draft_images_can_be_discarded_and_queued_deletion_removes_images(client, backend):
+@pytest.mark.parametrize("mime", ["image/png", "application/pdf"])
+def test_draft_images_can_be_discarded_and_queued_deletion_removes_images(client, backend, mime):
     chat_id = client.post("/api/chats", json={"title": "Images"}).json()["id"]
-    image = chat_images.store_image(chat_id, picture(), "image/png", "image")
+    image = store_attachment(chat_id, picture(), mime, "attachment")
     path = f"/api/chats/{chat_id}/images/{image['id']}"
     assert client.delete(path).status_code == 200
     assert client.get(path).status_code == 404
-    image = chat_images.store_image(chat_id, picture(), "image/png", "image")
+    image = store_attachment(chat_id, picture(), mime, "attachment")
     backend.db.execute("UPDATE chats SET queue_paused = 1 WHERE id = ?", (chat_id,))
     response = client.post(
         f"/api/chats/{chat_id}/messages",
@@ -258,7 +261,12 @@ def test_draft_images_can_be_discarded_and_queued_deletion_removes_images(client
 
 def test_history_retains_only_four_recent_images_and_charges_context():
     messages = [
-        {"role": "user", "content": str(i), "meta": {"attachments": [{"id": str(i)}]}} for i in range(8)
+        {
+            "role": "user",
+            "content": str(i),
+            "meta": {"attachments": [{"id": str(i), "mime_type": "image/png"}]},
+        }
+        for i in range(8)
     ]
     history = build_history(messages)
     assert [m["attachments"][0]["id"] for m in history if m.get("attachments")] == ["4", "5", "6", "7"]

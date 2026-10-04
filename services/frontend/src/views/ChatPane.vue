@@ -68,7 +68,7 @@
             <div>
               <p>{{ message.content }}</p>
               <div class="thread__queued-images">
-                <ChatImage v-for="image in message.meta?.attachments || []" :key="image.id" :image="image" :chat-id="chatId" />
+                <ChatAttachment v-for="attachment in message.meta?.attachments || []" :key="attachment.id" :attachment="attachment" :chat-id="chatId" />
               </div>
             </div>
             <button v-if="!streaming" class="btn btn--icon" aria-label="Remove queued message" :disabled="controlBusy" @click="discardQueued(message.id)">
@@ -137,8 +137,8 @@ import ChatWelcome from '../components/ChatWelcome.vue'
 import Composer from '../components/Composer.vue'
 import ProjectChanges from '../components/ProjectChanges.vue'
 import MessageBubble from '../components/MessageBubble.vue'
-import ChatImage from '../components/ChatImage.vue'
-import { uploadImages } from '../attachments'
+import ChatAttachment from '../components/ChatAttachment.vue'
+import { uploadAttachments } from '../attachments'
 import { avatarStyle, initials } from '../format'
 import { backTo } from '../router'
 import { actions, chatSettings, draftCount, onLiveEvent, store } from '../store'
@@ -375,7 +375,7 @@ async function send () {
   try {
     if (!await settingsSave || version !== generation || id !== chatId.value) return
     const selectedProjects = [...(chat.value?.project_ids || [])]
-    const uploaded = await uploadImages(id, images, api.uploadImage)
+    const uploaded = await uploadAttachments(id, images, api.uploadAttachment)
     if (version !== generation || id !== chatId.value) return
     delivery.enqueue(id, text, selectedProjects, uploaded)
     chatSettings.remember(chat.value)

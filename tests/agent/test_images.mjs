@@ -4,7 +4,10 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 
-const source = readFileSync(new URL('../../images/pi-base/agent-run.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '')
+const source = ['chat-files.mjs', 'agent-run.mjs'].map(name =>
+  readFileSync(new URL(`../../images/pi-base/${name}`, import.meta.url), 'utf8')
+    .replace(/^#!.*\n/, '').replace(/^import .*;\n/gm, '').replace(/^export /gm, '')
+).join('\n')
 
 async function run (job, events = null) {
   const commands = [], output = [], writes = [], removed = []
@@ -12,7 +15,7 @@ async function run (job, events = null) {
   await runInNewContext(source, {
     Buffer, console,
     mkdirSync () {}, existsSync () { return false },
-    writeFileSync (path, value) { writes.push([path, value]) },
+    writeFileSync (path, value, options) { writes.push([path, value, options]) },
     readFileSync (path) { assert.equal(path, '/tmp/nautionette-job.json'); return JSON.stringify(job) },
     unlinkSync (path) { removed.push(path) },
     projectEnvironment () { return {} }, contextUsage () { return null },
@@ -48,6 +51,33 @@ async function run (job, events = null) {
   })
   return { commands, output, writes, removed, spawnArgs, spawnOptions }
 }
+
+test('raw current and historical files reach the workspace, never model bytes or JOB.json', async () => {
+  const bytes = Buffer.from('%PDF-1.7\noriginal\x00\xff', 'latin1')
+  const file = (id, name) => ({ id: id.repeat(32), name, mime_type: 'application/pdf', data: bytes.toString('base64') })
+  const result = await run({ chat_id: 'chat', supports_images: false, prompt: 'Inspect these',
+    files: [file('a', '../../AGENTS.md')],
+    history: [{ role: 'user', content: 'Previous PDF', files: [file('b', 'previous.pdf')] }] })
+  const current = `/workspace/attachments/${'a'.repeat(32)}.md`
+  const previous = `/workspace/attachments/${'b'.repeat(32)}.pdf`
+  for (const path of [current, previous]) {
+    const [, saved, options] = result.writes.find(([name]) => name === path)
+    assert.ok(saved.equals(bytes))
+    assert.equal(options.mode, 0o600)
+    assert.equal(options.flag, 'wx')
+  }
+  const command = result.commands.find(c => c.type === 'prompt')
+  assert.ok(command.message.includes(current))
+  assert.equal(command.images, undefined)
+  assert.equal(command.message.includes(bytes.toString('base64')), false)
+  const history = result.writes.find(([path]) => path.endsWith('history.jsonl'))[1]
+  assert.ok(history.includes(previous))
+  assert.equal(history.includes(bytes.toString('base64')), false)
+  const stored = JSON.parse(result.writes.find(([path]) => path.endsWith('JOB.json'))[1])
+  assert.equal(stored.files[0].path, current)
+  assert.equal(stored.files[0].data, undefined)
+  assert.equal(result.output.at(-1).ok, true)
+})
 
 const image = (data) => ({ type: 'image', mimeType: 'image/png', data })
 test('history has native roles/images and current images reach RPC, never argv or JOB.json', async () => {

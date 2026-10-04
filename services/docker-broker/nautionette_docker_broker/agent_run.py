@@ -148,9 +148,10 @@ def _await_image(tag: str, stopped: threading.Event | None = None) -> Iterator[s
 def _environment(job: dict[str, Any]) -> dict[str, str]:
     environment = dict(AGENT_ENVIRONMENT)
     raw = json.dumps(job, default=str).encode("utf-8")
-    # Linux caps a single environment value at ~128 KiB. Image bytes (and long
-    # transcripts) go through Docker's archive API, never argv or environment.
-    if len(raw) > 32_000:
+    # Linux caps a single environment value at ~128 KiB. File bytes and large
+    # jobs go through Docker's archive API, never argv or environment.
+    has_files = bool(job.get("files")) or any(message.get("files") for message in job.get("history", []))
+    if has_files or len(raw) > 32_000:
         environment["AGENT_JOB_FILE"] = "/tmp/nautionette-job.json"  # noqa: S108 - private container filesystem
     else:
         environment["AGENT_JOB"] = base64.b64encode(raw).decode("ascii")

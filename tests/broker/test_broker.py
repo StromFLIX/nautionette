@@ -472,9 +472,18 @@ def running_agent(agent_images, docker, monkeypatch):
     return container, timers
 
 
-def test_large_jobs_are_copied_before_start_not_put_in_environment(client, running_agent, docker):
+@pytest.mark.parametrize(
+    "job",
+    [
+        {"prompt": "look", "images": [{"type": "image", "mimeType": "image/png", "data": "x" * 200000}]},
+        {"prompt": "look", "files": [{"id": "a" * 32, "name": "report.pdf", "data": "YWJj"}]},
+        {"prompt": "follow up", "history": [{"role": "user", "files": [{"id": "b" * 32, "data": "YWJj"}]}]},
+    ],
+)
+def test_large_jobs_and_files_are_copied_before_start_not_put_in_environment(
+    client, running_agent, docker, job
+):
     container, _ = running_agent
-    job = {"prompt": "look", "images": [{"type": "image", "mimeType": "image/png", "data": "x" * 200000}]}
     events = frames(client.post("/agent/run", headers=HEADERS, json=job))
     assert not any(event["type"] == "error" for event in events)
     environment = docker.containers.create.call_args.kwargs["environment"]

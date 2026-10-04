@@ -10,7 +10,7 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
-from .. import pi_packages
+from .. import chat_attachments, pi_packages
 from ..clients import broker
 from ..config import settings
 from .prompts import CHAT_SYSTEM_PROMPT
@@ -110,17 +110,18 @@ def build_history(
     trimmed = trimmed[-MAX_HISTORY_MESSAGES:]
     total = 0
     out: list[dict[str, Any]] = []
-    remaining_images = 4  # Current-turn images are separate; bound replay bytes and visual context.
+    remaining_attachments = 4  # Current-turn files are separate; bound replay bytes and context.
     for message in reversed(trimmed):
         content = (message.get("content") or "")[:MAX_MESSAGE_CHARS]
         attachments = (message.get("meta") or {}).get("attachments", []) if message["role"] == "user" else []
-        included = attachments[-remaining_images:] if remaining_images else []
-        total += len(content) + len(included) * 8000
+        included = attachments[-remaining_attachments:] if remaining_attachments else []
+        # File bytes are not model context, only their names/paths; images cost visual context.
+        total += len(content) + sum(8000 if chat_attachments.is_image(item) else 512 for item in included)
         if total > max_chars:
             break
-        remaining_images -= len(included)
+        remaining_attachments -= len(included)
         if len(included) < len(attachments):
-            content += f"\n[{len(attachments) - len(included)} older image(s) omitted from context]"
+            content += f"\n[{len(attachments) - len(included)} older attachment(s) omitted from context]"
         entry: dict[str, Any] = {"role": message["role"], "content": content}
         if included:
             entry["attachments"] = included

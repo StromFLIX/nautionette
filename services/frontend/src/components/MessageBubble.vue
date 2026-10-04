@@ -7,7 +7,7 @@
         <span class="chip" :class="`chip--${RUN_TONE[run.status] || ''}`">{{ run.status }}</span>
       </RouterLink>
       <div v-if="meta.attachments?.length" class="bubble__images">
-        <ChatImage v-for="image in meta.attachments" :key="image.id" :image="image" :chat-id="chatId" />
+        <ChatAttachment v-for="attachment in meta.attachments" :key="attachment.id" :attachment="attachment" :chat-id="chatId" />
       </div>
       <template v-for="(part, index) in groupedParts" :key="part.id || index">
         <ToolCallGroup v-if="part.kind === 'tool-group'" :steps="part.steps" :live="live" :current="part === latestToolGroup" :timing="meta.timing">
@@ -49,7 +49,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import ToolCall from './ToolCall.vue'
 import ToolCallGroup from './ToolCallGroup.vue'
-import ChatImage from './ChatImage.vue'
+import ChatAttachment from './ChatAttachment.vue'
 import { groupToolCalls } from '../timeline'
 import { renderMarkdown } from '../markdown'
 import { copyText } from '../clipboard'
