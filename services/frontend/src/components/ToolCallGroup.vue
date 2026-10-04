@@ -2,9 +2,9 @@
   <details class="tool-group" @toggle="open = $event.target.open">
     <summary class="tool-group__summary">
       <svg class="tool-group__indicator" viewBox="0 0 24 24" focusable="false"
-        :role="live ? 'img' : undefined" :aria-label="live ? (running ? 'Tool calls in progress' : 'Response in progress') : undefined" :aria-hidden="live ? undefined : true">
+        :role="active ? 'img' : undefined" :aria-label="active ? (running ? 'Tool calls in progress' : 'Response in progress') : undefined" :aria-hidden="active ? undefined : true">
         <path class="tool-group__indicator-track" d="M8 2H16L22 8V16L16 22H8L2 16V8Z" />
-        <path v-if="live" class="tool-group__indicator-arc" d="M8 2H16L22 8V16L16 22H8L2 16V8Z" pathLength="100" />
+        <path v-if="active" class="tool-group__indicator-arc" d="M8 2H16L22 8V16L16 22H8L2 16V8Z" pathLength="100" />
         <circle v-if="running" class="tool-group__indicator-dot" cx="12" cy="12" r="3" />
       </svg>
       <span class="tool-group__label" aria-live="polite" aria-atomic="true">{{ summary.label }}</span>
@@ -26,13 +26,16 @@ import ActivityTiming from './ActivityTiming.vue'
 const props = defineProps({
   steps: { type: Array, required: true },
   timing: { type: Object, default: null },
-  live: { type: Boolean, default: false }
+  live: { type: Boolean, default: false },
+  current: { type: Boolean, default: false }
 })
 
 const open = ref(false)
 const summary = computed(() => summarizeToolCalls(props.steps))
-// The orbit follows the whole response; the dot only follows tool execution.
+// Keep response activity on the latest group, not every completed disclosure.
+// Earlier groups may still have genuinely pending parallel calls.
 const running = computed(() => props.live && summary.value.pending)
+const active = computed(() => running.value || (props.live && props.current))
 </script>
 
 <style scoped>

@@ -112,6 +112,49 @@ test('dots track individual execution, not model activity; live timings freeze o
   await expect(orbit).toHaveCount(0)
 })
 
+for (const width of [1440, 320]) {
+  test(`model wait and tool input survive reload; earlier groups stay static at ${width}px`, async ({ page, context }) => {
+    const timing = { tools_ms: 1200, model_ms: 20000, tool_input_ms: 30000,
+      thinking_ms: 0, reply_ms: 500, other_ms: 1000, active: 'model', updated_at: Date.now() / 1000 }
+    const steps = [tool('done'), text('Next step.'), tool('latest', 'read')]
+    const data = { messages: [], active_turn: { id: 'active', steps, timing } }
+    await mockChat(context, data)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats/tools')
+    const groups = page.locator('.tool-group')
+    const first = groups.first()
+    await first.locator('summary').click()
+    await expect(first.locator('.tool-group__indicator-arc')).toHaveCount(0)
+    await expect(groups.last().getByLabel('Response in progress')).toBeVisible()
+    // This is still a response-wide timing line even in a completed disclosure.
+    const breakdown = first.getByRole('group', { name: 'Response timing' })
+    await expect(breakdown).toContainText('Tool input 30sOther 1s')
+    await expect(breakdown).not.toContainText('Thinking')
+    const initial = await breakdown.textContent()
+    await expect.poll(() => breakdown.textContent()).not.toBe(initial)
+    Object.assign(timing, { active: null, model_ms: 21000 })
+    data.messages = [{ id: 'saved', role: 'assistant', content: '', meta: { steps, timing } }]
+    data.active_turn = null
+    await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toHaveCount(0)
+    await page.reload()
+    await first.locator('summary').click()
+    await expect(breakdown).toHaveText('Tools 1.2sReply 500msModel wait 21sTool input 30sOther 1s')
+    await expect(groups.locator('.tool-group__indicator-arc')).toHaveCount(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  })
+}
+
+test('earlier groups with genuinely running calls are not hidden by newer groups', async ({ page, context }) => {
+  const steps = [tool('parallel', 'bash', null), text('Checking another thing.'), tool('latest', 'read', null)]
+  const data = { messages: [], active_turn: { id: 'active', steps } }
+  await mockChat(context, data)
+  await page.goto('/chats/tools')
+  await expect(page.getByLabel('Tool calls in progress', { exact: true })).toHaveCount(2)
+  steps[0].ok = true
+  await expect(page.getByLabel('Tool calls in progress', { exact: true })).toHaveCount(1)
+  await expect(page.locator('.tool-group').first().locator('.tool-group__indicator-arc')).toHaveCount(0)
+})
+
 test('restart timing is labeled as the recorded portion rather than inventing downtime', async ({ page, context }) => {
   await mockChat(context, { messages: [{ id: 'interrupted', role: 'assistant', content: 'Interrupted', meta: {
     steps: [tool('old', 'bash', null)],

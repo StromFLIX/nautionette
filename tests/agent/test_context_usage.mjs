@@ -54,18 +54,46 @@ async function runAgent (events, job = {}) {
   return output
 }
 
-test('reported thinking and reply boundaries are forwarded as timing phases', async () => {
+test('model wait starts before provider output; content boundaries distinguish tool input from execution', async () => {
   const events = await runAgent([
-    ...['thinking_start', 'thinking_end', 'text_start', 'text_end', 'toolcall_start'].map(type => ({
+    { type: 'turn_start' },
+    { type: 'message_start', message: { role: 'user' } },
+    { type: 'message_end', message: { role: 'user' } },
+    { type: 'message_start', message: { role: 'assistant' } },
+    ...['thinking_start', 'thinking_end', 'text_start', 'text_end',
+      'toolcall_start', 'toolcall_delta', 'toolcall_delta', 'toolcall_end'].map(type => ({
       type: 'message_update', assistantMessageEvent: { type }
     })),
-    { type: 'message_end', message: message(usage) }
+    { type: 'message_end', message: message(usage) },
+    { type: 'tool_execution_start', toolCallId: '1', toolName: 'write', args: {} },
+    { type: 'message_start', message: { role: 'toolResult' } },
+    { type: 'tool_execution_end', toolCallId: '1', toolName: 'write', result: 'Done' },
+    { type: 'message_end', message: { role: 'toolResult' } },
+    { type: 'turn_end' },
+    { type: 'turn_start' }
   ])
-  assert.deepEqual(events.filter(event => event.type === 'phase'), [
-    { type: 'phase', phase: 'thinking' }, { type: 'phase', phase: 'other' },
-    { type: 'phase', phase: 'reply' }, { type: 'phase', phase: 'other' },
-    { type: 'phase', phase: 'other' }
+  assert.deepEqual(events.map(event => event.type === 'phase' ? event.phase : event.type), [
+    'model', 'model', 'model', 'thinking', 'model', 'reply', 'model',
+    'tool_input', 'model', 'usage', 'tool', 'tool_done', 'other', 'model', 'result'
   ])
+})
+
+test('retry and compaction overhead are not charged to model wait', async () => {
+  const events = await runAgent([
+    { type: 'turn_start' },
+    { type: 'message_end', message: { ...message(usage), stopReason: 'error', errorMessage: 'temporary' } },
+    { type: 'agent_end' },
+    { type: 'auto_retry_start' },
+    { type: 'compaction_start' },
+    { type: 'compaction_end' },
+    { type: 'turn_start' },
+    { type: 'message_end', message: message(usage) },
+    { type: 'auto_retry_end', success: true }
+  ])
+  assert.deepEqual(events.map(event => event.type === 'phase' ? event.phase : event.type), [
+    'model', 'usage', 'agent_end', 'other', 'other', 'other', 'model', 'usage', 'result'
+  ])
+  assert.equal(events.at(-1).ok, true)
 })
 
 test('tool-loop usage is streamed and the final result keeps only the latest request', async () => {

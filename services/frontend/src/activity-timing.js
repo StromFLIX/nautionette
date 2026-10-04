@@ -10,7 +10,8 @@ export function compactDuration (ms) {
 
 export function activityBreakdown (timing, live = false, now = Date.now()) {
   if (!timing) return []
-  return [['tools', 'Tools'], ['thinking', 'Thinking'], ['reply', 'Reply'], ['other', 'Other']]
+  return [['tools', 'Tools'], ['thinking', 'Thinking'], ['reply', 'Reply'],
+    ['model', 'Model wait'], ['tool_input', 'Tool input'], ['other', 'Other']]
     .flatMap(([key, label]) => {
       let ms = timing[`${key}_ms`]
       if (!Number.isFinite(ms) || ms < 0) return []

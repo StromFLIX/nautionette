@@ -223,7 +223,10 @@ test('live narration starts a new group without hiding text or resetting earlier
   await expect(groups).toHaveCount(2)
   await expect(firstSummary).toContainText('Ran 1 shell command')
   await expect(secondSummary).toContainText('Ran 1 tool call')
-  await expect(first.locator('.tool-group__indicator-dot')).toHaveCount(0)
+  await expect(first.locator('.tool-group__indicator-dot, .tool-group__indicator-arc')).toHaveCount(0)
+  await expect(first.getByLabel('Response in progress')).toHaveCount(0)
+  await expect(first.locator('.tool-group__indicator')).toHaveAttribute('aria-hidden', 'true')
+  await expect(groups.locator('.tool-group__indicator-arc')).toHaveCount(1)
   await expect(second.getByLabel('Tool calls in progress')).toBeVisible()
   await expect(secondTimeline).toBeHidden()
   await expect(narration).toBeVisible()
@@ -251,6 +254,13 @@ test('live narration starts a new group without hiding text or resetting earlier
 
   data.active_turn.steps[3].ok = true
   data.active_turn.steps.push(text('Finished.'))
+  await expect(second.getByLabel('Response in progress')).toBeVisible()
+  await expect(groups.locator('.tool-group__indicator-arc')).toHaveCount(1)
+  await expect(first.locator('.tool-group__indicator-arc')).toHaveCount(0)
+  // Reloading a still-live answer must not reanimate completed groups.
+  await page.reload()
+  await expect(groups.locator('.tool-group__indicator-arc')).toHaveCount(1)
+  await expect(first.locator('.tool-group__indicator-arc')).toHaveCount(0)
   data.messages = [{ id: 'saved', role: 'assistant', content: '', meta: { steps: data.active_turn.steps } }]
   data.active_turn = null
   await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toHaveCount(0)
