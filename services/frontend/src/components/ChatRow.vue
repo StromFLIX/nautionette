@@ -4,13 +4,12 @@
       :to="`/chats/${chat.id}`"
       class="row-item" :class="{
         'row-item--active': activeRouteId === chat.id,
-        'row-item--running': chat.answering && !needsInternet,
-        'row-item--attention': needsInternet,
+        'row-item--running': chat.answering,
         'row-item--unread': chat.unread
       }"
     >
       <svg
-        class="chat-status" :class="{ 'chat-status--active': chat.answering && !needsInternet, 'chat-status--attention': needsInternet }"
+        class="chat-status" :class="{ 'chat-status--active': chat.answering }"
         viewBox="0 0 20 20" role="img" :aria-label="statusLabel" focusable="false"
       >
         <title>{{ statusLabel }}</title>
@@ -44,10 +43,7 @@ const props = defineProps({
 })
 defineEmits(['toggle-unread'])
 
-const needsInternet = computed(() => ['pending', 'deciding'].includes(props.chat.internet_status))
-const statusLabel = computed(() => needsInternet.value
-  ? (props.chat.internet_status === 'deciding' ? 'Applying internet decision' : 'Internet approval needed')
-  : props.chat.answering ? 'Active' : 'Inactive')
+const statusLabel = computed(() => props.chat.answering ? 'Active' : 'Inactive')
 const startedAt = computed(() => chatStartedAt(props.chat))
 </script>
 

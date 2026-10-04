@@ -18,10 +18,9 @@ function dateGroup (chat) {
 }
 
 function activityGroup (chat) {
-  if (['pending', 'deciding'].includes(chat.internet_status)) return { key: 'attention', label: 'Needs attention', rank: 0 }
-  if (chat.answering) return { key: 'active', label: 'Active', rank: 1 }
-  if (chat.unread) return { key: 'unread', label: 'Unread', rank: 2 }
-  return { key: 'inactive', label: 'Inactive', rank: 3 }
+  if (chat.answering) return { key: 'active', label: 'Active', rank: 0 }
+  if (chat.unread) return { key: 'unread', label: 'Unread', rank: 1 }
+  return { key: 'inactive', label: 'Inactive', rank: 2 }
 }
 
 /** Group and sort before visibility filtering, so activity cannot reorder projects. */

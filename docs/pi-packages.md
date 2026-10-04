@@ -100,7 +100,7 @@ lifetimes. Orphan volumes are retained because a successful publication may have
 lost its response. There is no automatic artifact garbage collection yet.
 
 Managed local package sources are appended to Pi settings without replacing the
-built-in gateway/internet extensions. Package tools do not change gateway MCP
+built-in gateway extensions. Package tools do not change gateway MCP
 selection/authorization. Native per-call session seeding preserves text/image
 history but does **not** persist extension session entries, auth sessions, caches,
 custom messages or extension state between turns.

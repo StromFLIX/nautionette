@@ -95,12 +95,12 @@ test('settings changes update pending deadlines and disabling clears previous ho
   assert.equal(isActive(oldChat()), false)
 })
 
-test('unread, running, approval and ordinary time-window rules remain independent of retention', t => {
+test('unread, running and ordinary time-window rules remain independent of retention', t => {
   const { selected, preferences, isActive, tick } = setup(t)
   selected.value = 'alpha'
   selected.value = ''
   tick(60_000)
-  for (const flags of [{ unread: true }, { answering: true }, { internet_status: 'pending' }, { internet_status: 'deciding' }]) {
+  for (const flags of [{ unread: true }, { answering: true }]) {
     assert.equal(isActive({ ...oldChat(), ...flags }), true)
     preferences.chatKeepSelectedVisible = false
     assert.equal(isActive({ ...oldChat(), ...flags }), true)

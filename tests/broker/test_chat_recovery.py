@@ -73,7 +73,6 @@ def test_scope_is_verified_by_mount_not_a_copied_label(agents):
     foreign.labels["nautionette.deployment"] = chat_agents.WORKFLOWS_VOLUME
     assert agent_run.chat_inventory() == []
     assert not agent_run.control("chat", "turn", {"type": "stop"})
-    assert not agent_run.decide_internet("chat", "turn", True)
     foreign.kill.assert_not_called()
     foreign.exec_run.assert_not_called()
 

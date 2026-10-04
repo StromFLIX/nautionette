@@ -76,9 +76,8 @@ working target. HTTP servers continue to be checked directly before saving.
 
 A probe allows up to 90 seconds for startup/discovery. Initial npx/uvx downloads
 need outbound network access and can be slow; a failed attempt may leave reusable
-package-cache entries. Configured tools are trusted infrastructure traffic, not
-controlled by a chat's direct-internet permission. Retry after checking the
-command, runtime dependencies and network access. Review gateway logs on the
+package-cache entries. Configured tools are trusted infrastructure traffic.
+Retry after checking the command, runtime dependencies and network access. Review gateway logs on the
 operator side for process diagnostics, treating third-party stderr as potentially
 sensitive. The API deliberately does not echo raw process output or secrets.
 

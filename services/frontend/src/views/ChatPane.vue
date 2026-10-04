@@ -16,10 +16,6 @@
           <template v-if="chat?.promoted_to"> · → {{ chat.promoted_to }}</template>
         </div>
       </div>
-      <span v-if="chat?.internet_status === 'allowed'" class="material-icons internet-indicator" role="img" aria-label="Internet allowed for this chat">
-        public
-        <q-tooltip>Internet allowed for this chat</q-tooltip>
-      </span>
       <RouterLink v-if="chat?.promoted_to" class="btn btn--outline btn--sm" :to="`/workflows/${chat.promoted_to}`">
         <span class="material-icons" style="font-size: 0.9375rem">account_tree</span>
         {{ chat.promoted_to }}
@@ -97,19 +93,6 @@
       <button v-if="chat?.queue_paused && !streaming && !queuedMessages.length" class="btn btn--sm" :disabled="controlBusy" @click="resumeQueue">
         <span class="material-icons" aria-hidden="true">play_arrow</span>Resume chat
       </button>
-      <section v-if="internetPending" class="thread__approval" aria-label="Internet access request" aria-live="polite">
-        <div class="thread__approval-title">Allow internet for this chat?</div>
-        <p class="thread__approval-reason">{{ chat.internet_reason }}</p>
-        <div class="thread__approval-actions">
-          <button class="btn btn--outline btn--sm" :disabled="approvalBusy" @click="decideInternet(false)">
-            <span class="material-icons" aria-hidden="true">block</span>Deny
-          </button>
-          <button class="btn btn--primary btn--sm" :disabled="approvalBusy" @click="decideInternet(true)">
-            <span class="material-icons" aria-hidden="true">public</span>Allow for this chat
-          </button>
-        </div>
-        <p v-if="approvalError" class="thread__approval-error" role="alert">{{ approvalError }}</p>
-      </section>
       <ProjectChanges v-if="chatId && chat?.project_ids?.length" :key="chatId"
         :chat-id="chatId" :project-ids="chat.project_ids" :running="streaming" />
       <Composer
@@ -191,10 +174,6 @@ const creationError = ref('')
 const scroller = ref(null)
 const composer = ref(null)
 const composerKey = ref(0)
-const approvalRequest = ref('')
-const approvalError = ref('')
-const internetPending = computed(() => ['pending', 'deciding'].includes(chat.value?.internet_status))
-const approvalBusy = computed(() => approvalRequest.value === chatId.value || chat.value?.internet_status === 'deciding')
 
 // /chats/new is a local draft, never a backend chat ID.
 const isNewChat = computed(() => route.name === 'chats' && route.params.id === 'new')
@@ -464,22 +443,6 @@ function discardQueued (messageId) {
   chatControl((id) => api.discardQueuedMessage(id, messageId))
 }
 
-async function decideInternet (allowed) {
-  const id = chatId.value
-  const turnId = chat.value?.internet_turn_id
-  if (!turnId || approvalBusy.value) return
-  approvalRequest.value = id
-  approvalError.value = ''
-  try {
-    const updated = await api.decideInternet(id, turnId, allowed)
-    if (chatId.value === id) chat.value = updated
-  } catch (error) {
-    if (chatId.value === id) approvalError.value = error.message
-  } finally {
-    if (approvalRequest.value === id) approvalRequest.value = ''
-  }
-}
-
 async function regenerateTitle () {
   if (titleBusy.value) return
   const id = chatId.value
@@ -532,7 +495,6 @@ watch(() => route.params.id, (id, previous) => {
   controlBusy.value = false
   controlError.value = ''
   titleBusy.value = false
-  approvalError.value = ''
   chat.value = created
   settingsSave = Promise.resolve(true)
   settingsPending.value = 0
@@ -653,50 +615,6 @@ onUnmounted(() => {
 .thread__creation {
   max-width: var(--content-width);
   margin: 0 auto 10px;
-}
-
-.thread__approval {
-  max-width: var(--content-width);
-  margin: 0 auto 10px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.thread__approval-title {
-  font-size: 0.875rem;
-  font-weight: 650;
-}
-
-.thread__approval-reason {
-  max-height: 80px;
-  overflow-y: auto;
-  overflow-wrap: anywhere;
-  margin: 4px 0 10px;
-  font-size: 0.8125rem;
-  color: var(--text-muted);
-}
-
-.thread__approval-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.thread__approval-actions .material-icons {
-  font-size: 1rem;
-}
-
-.thread__approval-error {
-  margin: 8px 0 0;
-  color: var(--danger);
-  font-size: 0.75rem;
-  overflow-wrap: anywhere;
-}
-
-.internet-indicator {
-  flex: none;
-  font-size: 1.125rem;
-  color: var(--success);
 }
 
 .avatar-sm {

@@ -19,7 +19,7 @@ services:
     restart: unless-stopped
     # Let active chat tasks confirm agent/worktree cleanup before Docker kills us.
     stop_grace_period: 120s
-    # The only service in the stack that reaches the outside world.
+    # The application entrypoint, published only on the host loopback interface.
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     environment:
@@ -96,8 +96,7 @@ services:
     environment:
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       TARGET_NETWORK: ${STACK_NAMESPACE:-nautionette}-internal
-      AGENT_NETWORK: ${STACK_NAMESPACE:-nautionette}-agents
-      AGENT_EGRESS_NETWORK: ${STACK_NAMESPACE:-nautionette}-agent-egress
+      AGENT_NETWORK: ${STACK_NAMESPACE:-nautionette}-agent-sandboxes
       # Coolify rewrites service volume names; pass its rendered name there.
       WORKFLOWS_VOLUME: ${BROKER_WORKFLOWS_VOLUME:-${STACK_NAMESPACE:-nautionette}-workflows}
       IMAGE_PREFIX: ${STACK_NAMESPACE:-nautionette}/pi-
@@ -156,7 +155,7 @@ services:
       XAI_API_KEY: ${XAI_API_KEY:-}
     volumes:
       - agentgateway-data:/data
-    networks: [internal, agents, agent-egress]
+    networks: [internal, agents]
     depends_on:
       - workflow-mcp
     <<: *logging
@@ -310,11 +309,10 @@ networks:
   # model provider. Isolation here comes from publishing no ports.
   internal:
     name: ${STACK_NAMESPACE:-nautionette}-internal
+  # Sandboxes have outbound internet and gateway access, not service-network membership.
+  # A new name avoids reusing the old internal-only network during upgrades.
   agents:
-    name: ${STACK_NAMESPACE:-nautionette}-agents
-    internal: true
-  agent-egress:
-    name: ${STACK_NAMESPACE:-nautionette}-agent-egress
+    name: ${STACK_NAMESPACE:-nautionette}-agent-sandboxes
   # Backend to broker only, no outbound.
   control:
     name: ${STACK_NAMESPACE:-nautionette}-control

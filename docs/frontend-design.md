@@ -75,21 +75,19 @@ not reset the selected theme. There is no cross-device account synchronization.
 
 Chat rows are a single line: a small hexagon, title, unread dot when applicable,
 and conversation start time. Active responses use a filled, pulsing hexagon;
-inactive chats use an empty outline. Approval requests retain a warning-colored
-outline and row edge, with an accessible status label and tooltip. The full approval
-controls remain in the conversation. Avatars, latest-message previews and the
+inactive chats use an empty outline. Avatars, latest-message previews and the
 separate **In progress** badge are not shown in the chat list. Workflow and run
 rows retain their existing layouts.
 
 **Group → All / Date / Activity / Project** and **Settings → Workspace → Chat list →
 Group chats by** share the same choices. Date groups use the conversation's local
 calendar start date, with absolute date labels that remain valid across midnight.
-Activity groups have a fixed priority: **Needs attention**, **Active**, **Unread**,
+Activity groups have a fixed priority: **Active**, **Unread**,
 then **Inactive**; a chat moves between these groups only when its state changes.
 Multi-project chats appear once in each project, with **No project** last. Project
 groups sort by their newest conversation start, independently of activity filtering.
-Grouping persists on this device and synchronizes between tabs. Retired Model and
-Internet grouping values fall back to **No grouping**, also the reset default.
+Grouping persists on this device and synchronizes between tabs. Retired grouping
+values fall back to **No grouping**, also the reset default.
 
 Rows always sort by conversation start (`created_at`), newest first, with an ID
 tie-breaker. Messages, streamed progress, tools and read-state changes do not reorder
@@ -97,17 +95,17 @@ rows or change their displayed timestamp. Revealing older chats merges them into
 this same order rather than appending a second list. Missing start times sort last;
 never fall back to mutable activity timestamps. The obsolete `chatOrderBy` preference
 is ignored during migration. Activity-window filtering still uses all activity and
-retains running chats, unread replies and approval requests.
+retains running chats and unread replies.
 
 ### Chat list activity and selection
 
-The activity window always includes unread replies, running chats and pending
-internet approvals. By default, **Keep selected chat visible** also retains the
+The activity window always includes unread replies and running chats.
+By default, **Keep selected chat visible** also retains the
 open chat, even after it is read and regardless of its activity timestamp.
 **Chat visibility grace period** keeps each recently left chat in the list for
 60 seconds by default; returning to it cancels that expiry, and leaving again
 starts a fresh period. Set the duration to 0 for selected-only retention, or turn
-off the switch to restore filtering solely by activity and attention state.
+off the switch to restore filtering solely by activity, running and unread state.
 Both controls are in **Settings → Workspace → Chat list**, saved per device and
 restored to their defaults by **Reset workspace**.
 
@@ -160,8 +158,8 @@ for pending chat configuration PATCHes before accepting a message.
 The device preference `newChatSettings` chooses **Always use last settings** (default)
 or **Always use defaults** for both welcome drafts and sidebar **New chat**.
 `new-chat-settings.js` persists a whitelisted configuration snapshot per backend,
-including null/empty selections and pinned extension revision IDs, never chat content
-or internet approvals. Explicit welcome choices, successful chat configuration saves,
+including null/empty selections and pinned extension revision IDs, never chat content.
+Explicit welcome choices, successful chat configuration saves,
 chat creation and sends update this snapshot; simply viewing history does not.
 A removed agent loses its reference but retains its explicit configuration restrictions.
 

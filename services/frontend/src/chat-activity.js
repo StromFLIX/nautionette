@@ -51,7 +51,7 @@ export function useChatActivity (selectedChatId, preferences, navigation) {
   })
 
   return function isChatActive (chat) {
-    if (chat.unread || chat.answering || ['pending', 'deciding'].includes(chat.internet_status)) return true
+    if (chat.unread || chat.answering) return true
     if (preferences.chatKeepSelectedVisible) {
       if (chat.id === selectedChatId.value) return true
       const timestamp = leftAt.get(chat.id)

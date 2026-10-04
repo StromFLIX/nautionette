@@ -15,8 +15,7 @@ async function fixture (context) {
     { id: 'old', title: 'Old project chat', project_ids: ['project'], updated_at: now - 7200 },
     { id: 'other', title: 'Other project chat', project_ids: ['other'], updated_at: now - 120 },
     { id: 'unread', title: 'Unread old chat', project_ids: [], updated_at: now - 10800, unread: true },
-    { id: 'running', title: 'Running old chat', project_ids: [], updated_at: now - 10800, answering: true },
-    { id: 'approval', title: 'Approval old chat', project_ids: [], updated_at: now - 10800, internet_status: 'pending' }
+    { id: 'running', title: 'Running old chat', project_ids: [], updated_at: now - 10800, answering: true }
   ].map((chat, index) => ({ ...chat, created_at: chat.updated_at - index }))
   await context.route('**/api/chats', route => route.fulfill({ json: { chats } }))
   await context.route('**/api/chats/*', route => {
@@ -98,7 +97,7 @@ for (const width of [1440, 320]) {
   })
 }
 
-test('activity groups distinguish attention, active, unread and inactive without message previews', async ({ page, context }) => {
+test('activity groups distinguish active, unread and inactive without message previews', async ({ page, context }) => {
   const chats = await fixture(context)
   const running = chats.find(chat => chat.id === 'running')
   chats[0].answering = true
@@ -106,7 +105,7 @@ test('activity groups distinguish attention, active, unread and inactive without
   await page.goto('/chats')
   await page.getByRole('button', { name: 'Group', exact: true }).click()
   await grouping(page).getByRole('button', { name: 'Activity', exact: true }).click()
-  await expect(page.locator('.side__group .truncate')).toHaveText(['Needs attention', 'Active', 'Unread', 'Inactive'])
+  await expect(page.locator('.side__group .truncate')).toHaveText(['Active', 'Unread', 'Inactive'])
   const active = page.locator('.side__chat-group').filter({ has: page.locator('.side__group .truncate', { hasText: /^Active$/ }) })
   await expect(active.locator('.row-item__title')).toHaveText(['Recent project chat', 'Running old chat'])
   await expect(page.locator('.side__list')).not.toContainText('This preview must stay out of the list')
@@ -193,7 +192,7 @@ for (const resume of ['visibilitychange', 'focus', 'pageshow', 'navigation', 'in
     await expect(titles(page)).not.toContainText(['Nearly an hour old'])
     await expect(page.getByRole('button', { name: 'Show 2 older', exact: true })).toBeVisible()
     await expect(page.locator('.side__group .truncate')).toHaveText(['StromFLIX/nautionette', 'StromFLIX/other', 'No project'])
-    await expect(titles(page)).toContainText(['Unread old chat', 'Running old chat', 'Approval old chat'])
+    await expect(titles(page)).toContainText(['Unread old chat', 'Running old chat'])
     await expect(activity(page).getByRole('button', { name: '1h', exact: true })).toHaveAttribute('aria-pressed', 'true')
   })
 }

@@ -32,8 +32,8 @@ rather than silently substituting a different effort.
 A pinned tool list does not expand when new tools appear. Unavailable names remain
 saved and removable; only explicit **All** enables future MCP tools. This is MCP
 selection, not a sandbox: built-in file/shell tools remain available, and tool
-filtering does not replace gateway authorization. Project access and internet
-approval remain separate controls.
+filtering does not replace gateway authorization. Project access remains a separate
+control. Sandboxes always have outbound internet access.
 
 See [Managed Pi packages](pi-packages.md) for Settings-based installation,
 resource selection, write-only configuration, runtime compatibility and backup

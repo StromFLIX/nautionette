@@ -4,7 +4,7 @@ export const LAST_CHAT_SETTINGS_KEY = 'nautionette.last-chat-settings.v1'
 const object = value => value && typeof value === 'object' && !Array.isArray(value)
 const strings = value => Array.isArray(value) && value.every(item => typeof item === 'string')
 
-/** Only reusable configuration, never messages, chat IDs or internet approval. */
+/** Only reusable configuration, never messages or chat IDs. */
 export function chatSettingsSnapshot (value) {
   if (!object(value) || typeof value.model !== 'string' || typeof value.agent_set !== 'string' ||
       !(value.tools === null || strings(value.tools)) || !strings(value.project_ids) ||

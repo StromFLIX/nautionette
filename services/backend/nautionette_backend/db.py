@@ -1,4 +1,4 @@
-"""SQLite storage: chats, messages, runs and approvals.
+"""SQLite storage: chats, messages, runs and settings.
 
 PocketBase-shaped in spirit (one file, no server), plain sqlite3 in practice.
 """
@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import settings
+from .migrations import remove_internet_approval
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -167,9 +168,6 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN packages TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE chats ADD COLUMN package_commands TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE chats ADD COLUMN tools TEXT",
-    "ALTER TABLE chats ADD COLUMN internet_status TEXT NOT NULL DEFAULT 'blocked'",
-    "ALTER TABLE chats ADD COLUMN internet_reason TEXT NOT NULL DEFAULT ''",
-    "ALTER TABLE chats ADD COLUMN internet_turn_id TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE chats ADD COLUMN project_ids TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE chats ADD COLUMN last_read_message_id TEXT",
     "ALTER TABLE chats ADD COLUMN marked_unread INTEGER NOT NULL DEFAULT 0",
@@ -223,6 +221,7 @@ class Database:
                     self._conn.execute(statement)
                 except sqlite3.OperationalError:
                     pass  # already applied
+            remove_internet_approval(self._conn)
             # Backfill only legacy rows, never overwrite live message timestamps on restart.
             self._conn.execute(
                 "UPDATE chats SET last_message_at = COALESCE("

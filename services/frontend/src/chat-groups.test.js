@@ -46,20 +46,18 @@ test('date groups use the start date in the local timezone, including midnight a
 
 test('activity groups have explicit priority and sort by start within each state', () => {
   const chats = [
-    { id: 'inactive', created_at: 100, internet_status: 'allowed' },
+    { id: 'inactive', created_at: 100 },
     { id: 'unread', created_at: 90, unread: true },
     { id: 'working-old', created_at: 20, updated_at: 200, answering: true, unread: true },
-    { id: 'working-new', created_at: 30, answering: true },
-    { id: 'approval', created_at: 10, answering: true, unread: true, internet_status: 'pending' },
-    { id: 'deciding', created_at: 15, answering: true, internet_status: 'deciding' }
+    { id: 'working-new', created_at: 30, answering: true }
   ]
   const groups = groupChats(chats, 'activity')
-  assert.deepEqual(groups.map(group => group.label), ['Needs attention', 'Active', 'Unread', 'Inactive'])
+  assert.deepEqual(groups.map(group => group.label), ['Active', 'Unread', 'Inactive'])
   assert.deepEqual(members(groups), [
-    ['attention', ['deciding', 'approval']], ['active', ['working-new', 'working-old']], ['unread', ['unread']], ['inactive', ['inactive']]
+    ['active', ['working-new', 'working-old']], ['unread', ['unread']], ['inactive', ['inactive']]
   ])
   Object.assign(chats[2], { answering: false, unread: false })
-  assert.deepEqual(members(groupChats(chats, 'activity'))[3], ['inactive', ['inactive', 'working-old']])
+  assert.deepEqual(members(groupChats(chats, 'activity'))[2], ['inactive', ['inactive', 'working-old']])
 })
 
 test('project groups use newest start time, include multi-project chats once per group, and keep No project last', () => {
