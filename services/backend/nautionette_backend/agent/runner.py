@@ -10,6 +10,8 @@ import time
 from collections.abc import AsyncIterator
 from typing import Any
 
+from nautionette.agent_limits import chat_timeout_exempt
+
 from .. import chat_attachments, pi_packages
 from ..clients import broker
 from ..config import settings
@@ -163,7 +165,8 @@ async def stream_agent(job: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
     outgoing = dict(job)
     if job.get("packages"):
         outgoing["package_runtime"] = pi_packages.for_run(job["packages"])
-    async for event in broker.run_agent(outgoing, timeout=job.get("timeout_seconds", 900) + 30):
+    timeout = None if chat_timeout_exempt(job) else job.get("timeout_seconds", 900) + 30
+    async for event in broker.run_agent(outgoing, timeout=timeout):
         yield event
 
 

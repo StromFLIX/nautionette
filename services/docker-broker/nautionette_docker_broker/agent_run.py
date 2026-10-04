@@ -12,6 +12,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from docker.errors import NotFound
+from nautionette.agent_limits import chat_timeout_exempt
 from nautionette.pi_packages import configuration, filters, revision_id
 
 from . import chat_agents, daemon, images, packages, projects
@@ -219,7 +220,8 @@ def _timeout_error(timeout: int) -> dict[str, Any]:
         "timeout_seconds": timeout,
         "message": (
             f"agent call exceeded its {timeout}s time limit and was stopped. "
-            "Continue in a new message, or increase AGENT_RUN_TIMEOUT_SECONDS "
+            "Disable agent timeout in Chat options before continuing in a new message, "
+            "or increase AGENT_RUN_TIMEOUT_SECONDS "
             "(workflow calls must also increase their timeout_seconds)."
         ),
     }
@@ -321,9 +323,10 @@ def _run(
             except Exception:  # noqa: BLE001 - it may have exited concurrently
                 daemon.log.exception("could not kill timed-out agent container")
 
-        watchdog = threading.Timer(timeout, expire)
-        watchdog.daemon = True
-        watchdog.start()
+        if not chat_timeout_exempt(job):
+            watchdog = threading.Timer(timeout, expire)
+            watchdog.daemon = True
+            watchdog.start()
         buffer = b""
         for chunk in container.logs(stream=True, follow=True, stdout=True, stderr=False):
             buffer += chunk
@@ -336,8 +339,9 @@ def _run(
             yield buffer.decode("utf-8", "replace").strip() + "\n"
 
         status = container.wait(timeout=30)
-        watchdog.cancel()
-        watchdog.join()
+        if watchdog is not None:
+            watchdog.cancel()
+            watchdog.join()
         code = status.get("StatusCode", 0)
         if stopped.is_set():
             return  # An explicit Stop is not a container failure.

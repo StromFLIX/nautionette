@@ -26,14 +26,16 @@ class BrokerClient:
         response.raise_for_status()
         return response.json().get("agent_sets", [])
 
-    async def run_agent(self, job: dict[str, Any], timeout: float = 900) -> AsyncIterator[dict[str, Any]]:
-        """One container per call. Yields NDJSON events until the container exits."""
+    async def run_agent(
+        self, job: dict[str, Any], timeout: float | None = 900
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Stream until exit; None disables only the read timeout for exempt chats."""
         async with shared().stream(
             "POST",
             f"{self.base_url}/agent/run",
             json=job,
             headers=internal_headers(),
-            timeout=httpx.Timeout(timeout, connect=10),
+            timeout=httpx.Timeout(timeout if timeout is not None else 900, connect=10, read=timeout),
         ) as response:
             if response.status_code >= 400:
                 body = (await response.aread()).decode("utf-8", "replace")

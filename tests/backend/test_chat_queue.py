@@ -266,7 +266,10 @@ async def test_unconsumed_queue_runs_next_with_fresh_history_and_settings(backen
         await background.drain()
 
 
-async def test_stop_preserves_partial_output_pauses_queue_and_rejects_stale_turn(backend, monkeypatch):
+@pytest.mark.parametrize("exempt", [False, True])
+async def test_stop_preserves_partial_output_pauses_queue_and_rejects_stale_turn(
+    backend, monkeypatch, exempt
+):
     started = asyncio.Event()
     stopped = asyncio.Event()
     jobs = []
@@ -287,7 +290,7 @@ async def test_stop_preserves_partial_output_pauses_queue_and_rejects_stale_turn
     monkeypatch.setattr(conversations.broker, "control_agent", control)
     try:
         async with chat_client() as client:
-            chat_id = (await client.post("/api/chats", json={})).json()["id"]
+            chat_id = (await client.post("/api/chats", json={"timeout_exempt": exempt})).json()["id"]
             await client.post(f"/api/chats/{chat_id}/messages", json={"text": "Run", "message_id": "active"})
             await asyncio.wait_for(started.wait(), 2)
             await client.post(

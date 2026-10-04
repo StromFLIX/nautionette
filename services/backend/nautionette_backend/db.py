@@ -161,6 +161,7 @@ _MIGRATIONS = (
     "ALTER TABLE chat_turns ADD COLUMN job TEXT",
     "ALTER TABLE chat_turns ADD COLUMN stop_requested INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE chats ADD COLUMN timeout_exempt INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN model TEXT",
     "ALTER TABLE chats ADD COLUMN reasoning_effort TEXT",
     "ALTER TABLE chats ADD COLUMN agent_id TEXT",
@@ -189,6 +190,7 @@ _EDITABLE_CHAT_COLUMNS = (
     "agent_id",
     "agent_name",
     "packages",
+    "timeout_exempt",
 )
 _EDITABLE_WORKFLOW_COLUMNS = ("disabled", "chat_mode", "chat_id")
 
@@ -298,14 +300,15 @@ class Database:
         agent_id: str | None = None,
         agent_name: str | None = None,
         packages: list[str] | None = None,
+        timeout_exempt: bool = False,
     ) -> dict[str, Any]:
         now = time.time()
         chat_id = uuid.uuid4().hex[:12]
         self.execute(
             "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort,"
             " created_at, updated_at, title_state, project_ids, agent_id, agent_name, packages,"
-            " last_message_at, last_user_message_at)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " last_message_at, last_user_message_at, timeout_exempt)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 chat_id,
                 title,
@@ -322,6 +325,7 @@ class Database:
                 json.dumps(packages or []),
                 now,
                 now,
+                timeout_exempt,
             ),
         )
         return self.get_chat(chat_id)  # type: ignore[return-value]
@@ -353,6 +357,7 @@ class Database:
             (chat_id,),
         )
         if row:
+            row["timeout_exempt"] = bool(row["timeout_exempt"])
             row["unread"] = bool(row["unread"])
             row["tools"] = json.loads(row["tools"]) if row.get("tools") else None
             row["project_ids"] = json.loads(row["project_ids"])
@@ -382,6 +387,7 @@ class Database:
         }
         for row in rows:
             summary = summaries.get(row["id"])
+            row["timeout_exempt"] = bool(row["timeout_exempt"])
             row["unread"] = bool(row["unread"])
             row["answering"] = row["id"] in answering
             row["tools"] = json.loads(row["tools"]) if row.get("tools") else None

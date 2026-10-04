@@ -12,6 +12,7 @@
         <div class="pane-head__title truncate">{{ chat?.title || 'Chat' }}</div>
         <div class="caption dim truncate">
           {{ messages.length }} messages · {{ chat?.agent_name || chat?.agent_set }}
+          <span v-if="chat?.timeout_exempt" title="Agent timeout disabled for newly sent messages in this chat"> · No agent timeout</span>
           <template v-if="reconnecting"> · Reconnecting...</template>
           <template v-if="chat?.promoted_to"> · → {{ chat.promoted_to }}</template>
         </div>
@@ -31,6 +32,16 @@
           </button>
           <button v-close-popup class="pick-menu__item" :disabled="titleBusy || !savedMessages.length" @click="regenerateTitle">
             <span class="material-icons pick__icon" aria-hidden="true">autorenew</span>{{ titleBusy ? 'Regenerating title…' : 'Regenerate title' }}
+          </button>
+          <button v-close-popup class="pick-menu__item" role="menuitemcheckbox" :aria-checked="Boolean(chat?.timeout_exempt)"
+            :disabled="!chat || settingsPending > 0" @click="patch({ timeout_exempt: !chat?.timeout_exempt })">
+            <span class="material-icons pick__icon" aria-hidden="true">{{ chat?.timeout_exempt ? 'timer_off' : 'timer' }}</span>
+            <span class="stack grow">
+              <span>Disable agent timeout</span>
+              <span class="caption dim">New messages only; running and queued unchanged</span>
+            </span>
+            <span v-if="chat?.timeout_exempt" class="material-icons pick-menu__check" aria-hidden="true">check</span>
+            <q-tooltip>Applies to newly sent messages in this chat, not running or queued messages. Stop and tool-specific limits still apply; usage can continue until stopped.</q-tooltip>
           </button>
           <button class="pick-menu__item" @click="remove">
             <span class="material-icons pick__icon" style="color: var(--danger)">delete</span>Delete chat

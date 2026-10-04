@@ -47,6 +47,13 @@ def _effort(value: Any, model: dict[str, Any]) -> str | None:
         raise HTTPException(422, str(exc)) from exc
 
 
+def _timeout_exempt(payload: dict[str, Any]) -> bool:
+    value = payload.get("timeout_exempt", False)
+    if type(value) is not bool:
+        raise HTTPException(422, "timeout_exempt must be a boolean")
+    return value
+
+
 @router.get("/api/chats")
 async def list_chats() -> dict[str, Any]:
     return {"chats": db.list_chats()}
@@ -68,6 +75,7 @@ async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, A
         title=(payload.get("title") or "New chat").strip()[:120],
         agent_id=selected["agent_id"],
         agent_name=selected["agent_name"],
+        timeout_exempt=_timeout_exempt(payload),
         **config,
     )
     if payload.get("title"):
@@ -80,6 +88,8 @@ async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, A
 async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     current = _chat_or_404(chat_id)
     fields: dict[str, Any] = {}
+    if "timeout_exempt" in payload:
+        fields["timeout_exempt"] = _timeout_exempt(payload)
     overrides = {key: payload[key] for key in agent_profiles.CONFIG_KEYS if key in payload}
     for key in ("model", "agent_set"):
         if key in overrides and overrides[key] in (None, ""):
@@ -303,6 +313,7 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     job.update(
         chat_id=chat_id,
         turn_id=message_id,
+        timeout_exempt=chat["timeout_exempt"],
         project_ids=project_ids,
         packages=chat.get("packages", []),
         attachments=user_message["meta"].get("attachments", []),

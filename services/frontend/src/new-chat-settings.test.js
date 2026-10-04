@@ -32,8 +32,8 @@ test('history survives reloads, retains null versus empty lists, and isolates ba
   assert.equal(reloaded.load('server-c'), null)
 })
 
-test('snapshots exclude chat identity and messages, and copy selections', () => {
-  const input = { ...config(), id: 'chat-id', title: 'Private title', messages: ['private'], agent_name: 'Writer' }
+test('snapshots exclude chat identity, messages and timeout exemptions, and copy selections', () => {
+  const input = { ...config(), id: 'chat-id', title: 'Private title', messages: ['private'], agent_name: 'Writer', timeout_exempt: true }
   const saved = chatSettingsSnapshot(input)
   assert.deepEqual(saved, config())
   saved.packages.push('another-revision')

@@ -560,7 +560,8 @@ def test_broker_honours_long_calls_and_preserves_its_ceiling(
     assert timers[0].cancelled
 
 
-def test_stop_does_not_report_a_container_failure(running_agent):
+@pytest.mark.parametrize("exempt", [False, True])
+def test_stop_does_not_report_a_container_failure(running_agent, exempt):
     import threading
 
     container, timers = running_agent
@@ -572,10 +573,47 @@ def test_stop_does_not_report_a_container_failure(running_agent):
 
     container.logs.side_effect = logs
     container.wait.return_value = {"StatusCode": 137}
-    events = [json.loads(line) for line in agent_run._run({}, stopped)]
+    job = {"mode": "interactive", "chat_id": "chat", "turn_id": "turn", "timeout_exempt": exempt}
+    events = [json.loads(line) for line in agent_run._run(job, stopped)]
     assert [event["type"] for event in events] == ["started", "closed"]
-    assert timers[0].cancelled
+    if exempt:
+        assert timers == []
+    else:
+        assert timers[0].cancelled
     container.remove.assert_called_once_with(force=True)
+
+
+@pytest.mark.parametrize("exempt", [False, True])
+@pytest.mark.parametrize("exit_code", [0, 137])
+def test_exempt_chats_skip_watchdog_but_keep_resource_limits_and_cleanup(
+    client, running_agent, docker, exempt, exit_code
+):
+    container, timers = running_agent
+    container.wait.return_value = {"StatusCode": exit_code}
+    container.attrs["State"]["OOMKilled"] = exit_code == 137
+    job = {"mode": "interactive", "chat_id": "chat", "turn_id": "turn", "timeout_exempt": exempt}
+    events = frames(client.post("/agent/run", headers=HEADERS, json=job))
+    assert len(timers) == (0 if exempt else 1)
+    assert [event.get("reason") for event in events if event["type"] == "error"] == (
+        ["oom_killed"] if exit_code else []
+    )
+    assert events[-1] == {"type": "closed"}
+    options = docker.containers.create.call_args.kwargs
+    assert options["mem_limit"] == agent_run.AGENT_MEMORY
+    assert options["pids_limit"] == 512
+    container.kill.assert_not_called()
+    container.remove.assert_called_once_with(force=True)
+    assert ("chat", "turn") not in agent_run._stopped
+
+
+@pytest.mark.parametrize("overrides", [{"mode": "workflow"}, {"chat_id": ""}, {"timeout_exempt": "true"}])
+def test_exemption_cannot_bypass_non_chat_limits(client, running_agent, overrides):
+    _, timers = running_agent
+    job = {"mode": "interactive", "chat_id": "chat", "turn_id": "turn", "timeout_exempt": True}
+    events = frames(client.post("/agent/run", headers=HEADERS, json={**job, **overrides}))
+    assert not any(event["type"] == "error" for event in events)
+    assert len(timers) == 1
+    assert timers[0].seconds == agent_run.RUN_TIMEOUT
 
 
 def test_timeout_stays_explicit_if_kill_or_log_stream_races_with_container_exit(client, running_agent):

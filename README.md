@@ -384,6 +384,20 @@ services after changing it. Existing deployments explicitly configured with `900
 retain their 15-minute limit until that environment value is updated; an already
 running turn keeps its original budget.
 
+For a specific long-running session, open **Chat options → Disable agent timeout**.
+This saved, per-chat exemption removes both the container's wall-clock watchdog and
+the backend's agent-stream read timeout. The header shows **No agent timeout** while
+it is enabled. It applies to messages accepted after the change; already running
+or queued turns keep their original settings. Uncheck it to restore the default
+for future messages. It is never inherited by other chats or agent profiles.
+API clients can set the boolean `timeout_exempt` when creating or patching a chat.
+
+Exempt chats can keep consuming resources and model usage until they finish or you
+press **Stop**. Tool/provider-specific timeouts, image-build limits, memory limits,
+and shutdown/recovery behavior are unchanged. This is not protection against
+service restarts. Deploy the backend, Docker broker, and frontend together to
+make this option available.
+
 Workflow agent calls still default to 900 seconds. For longer calls, set the
 activity's `timeout_seconds`, increase its Temporal `start_to_close_timeout` and
 workflow timeout as needed, and ensure the broker ceiling is at least as large.

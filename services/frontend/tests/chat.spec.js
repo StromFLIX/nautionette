@@ -52,6 +52,7 @@ async function mockChats (context, state) {
       const [, chatId, action] = match
       const data = refreshReadState(state.chats[chatId])
       if (!action && method === 'PATCH') {
+        if (state.settingsFailure) return route.fulfill({ status: 503, json: { detail: 'Settings unavailable' } })
         Object.assign(data.chat, route.request().postDataJSON())
         return route.fulfill({ json: data.chat })
       }
@@ -142,6 +143,39 @@ async function filteredChats (context, preferences = {}) {
 
 const chatRow = (page, id) => page.locator(`#shell-sidebar a[href="/chats/${id}"]`)
 const mainNav = page => page.getByRole('navigation', { name: 'Main navigation' })
+
+test('agent timeout exemption is saved only for the selected chat and can be restored', async ({ page, context }) => {
+  const state = initial()
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+  const toggle = page.getByRole('menuitemcheckbox', { name: 'Disable agent timeout' })
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
+  await toggle.click()
+  await expect(page.locator('.pane-head')).toContainText('No agent timeout')
+  expect(state.chats.alpha.chat.timeout_exempt).toBe(true)
+  expect(state.chats.beta.chat.timeout_exempt).toBeFalsy()
+
+  await page.reload()
+  await expect(page.locator('.pane-head')).toContainText('No agent timeout')
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await toggle.click()
+  await expect(page.locator('.pane-head')).not.toContainText('No agent timeout')
+  expect(state.chats.alpha.chat.timeout_exempt).toBe(false)
+})
+
+test('agent timeout exemption reports failed saves without showing it as enabled', async ({ page, context }) => {
+  const state = initial()
+  state.settingsFailure = true
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+  await page.getByRole('menuitemcheckbox', { name: 'Disable agent timeout' }).click()
+  await expect(page.getByText('Settings unavailable', { exact: true })).toBeVisible()
+  await expect(page.locator('.pane-head')).not.toContainText('No agent timeout')
+  expect(state.chats.alpha.chat.timeout_exempt).toBeFalsy()
+})
 
 test('opening an old unread chat keeps it in the grouped list after acknowledgement without bypassing search', async ({ page, context }) => {
   const state = await filteredChats(context, { chatGroupBy: 'project' })
