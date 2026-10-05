@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -8,21 +8,37 @@ import { test } from 'node:test'
 import { credential, prepareProjects, projectEnvironment } from '../../images/pi-base/project-git.mjs'
 
 const selected = 'a'.repeat(32)
-const job = { chat_id: 'c'.repeat(12), project_ids: [selected], project_credentials: [
+const job = { chat_id: 'c'.repeat(12), project_ids: [selected],
+  project_remotes: { [selected]: 'owner/repository' }, project_credentials: [
   { full_name: 'owner/repository', token: 'turn-secret', expires_at: '2099-01-01T00:00:00Z' },
 ] }
 
-test('Git credentials only match selected HTTPS GitHub repositories and expire', () => {
-  const environment = projectEnvironment(job)
+function credentialEnvironment(t) {
+  const root = mkdtempSync(join(tmpdir(), 'nautionette-credentials-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const credentialsFile = join(root, 'current.json')
+  writeFileSync(credentialsFile, JSON.stringify(job.project_credentials), { mode: 0o600 })
+  return projectEnvironment(job, { credentialsFile })
+}
+
+function replaceCredentials(environment, credentials) {
+  const path = environment.NAUTIONETTE_PROJECT_CREDENTIALS_FILE
+  writeFileSync(`${path}.next`, JSON.stringify(credentials), { mode: 0o600 })
+  renameSync(`${path}.next`, path)
+}
+
+test('Git credentials only match selected HTTPS GitHub repositories and expire', (t) => {
+  const environment = credentialEnvironment(t)
   const request = 'protocol=https\nhost=github.com\npath=owner/repository.git\n\n'
   assert.equal(credential(request, environment), 'username=x-access-token\npassword=turn-secret\n\n')
   assert.equal(credential(request.replace('owner/repository', 'owner/other'), environment), '')
   assert.equal(credential(request.replace('github.com', 'other.example.com'), environment), '')
   assert.equal(credential(request.replace('protocol=https', 'protocol=http'), environment), '')
   assert.equal(credential(request.replace('owner/repository', 'owner/../repository'), environment), '')
-  assert.equal(credential(request, projectEnvironment({ ...job, project_credentials: [
+  replaceCredentials(environment, [
     { ...job.project_credentials[0], expires_at: '2000-01-01T00:00:00Z' },
-  ] })), '')
+  ])
+  assert.equal(credential(request, environment), '')
 })
 
 test('Git settings authorize only mounted safe directories and never persist credentials', () => {
@@ -39,8 +55,8 @@ test('Git settings authorize only mounted safe directories and never persist cre
   assert.ok(entries.some(([key, value]) => key === 'http.followRedirects' && value === 'false'))
 })
 
-test('Git invokes the credential helper for GitHub without network access', () => {
-  const environment = { ...process.env, ...projectEnvironment(job),
+test('Git invokes the credential helper and sees rotation without restarting its parent', (t) => {
+  const environment = { ...process.env, ...credentialEnvironment(t),
     GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' }
   const helper = fileURLToPath(new URL('../../images/pi-base/project-git.mjs', import.meta.url))
   environment.GIT_CONFIG_VALUE_1 = `!node "${helper}"`
@@ -49,9 +65,42 @@ test('Git invokes the credential helper for GitHub without network access', () =
     stdio: ['pipe', 'pipe', 'pipe'],
   })
   assert.match(result, /password=turn-secret/)
+  replaceCredentials(environment, [{ ...job.project_credentials[0], token: 'renewed-secret' }])
+  assert.match(execFileSync('git', ['credential', 'fill'], {
+    env: environment, encoding: 'utf8', input: 'url=https://github.com/owner/repository.git\n\n',
+    stdio: ['pipe', 'pipe', 'pipe'],
+  }), /password=renewed-secret/)
   assert.throws(() => execFileSync('git', ['credential', 'fill'], {
     env: environment, input: 'url=https://github.com/owner/unselected.git\n\n', stdio: 'pipe',
   }))
+})
+
+test('the same environment works across multiple one-hour token lifetimes', (t) => {
+  const environment = credentialEnvironment(t)
+  t.mock.timers.enable({ apis: ['Date'], now: new Date('2026-01-01T00:00:00Z').getTime() })
+  const request = 'protocol=https\nhost=github.com\npath=owner/repository\n\n'
+  for (let hour = 1; hour <= 3; hour++) {
+    replaceCredentials(environment, [{ ...job.project_credentials[0], token: `token-${hour}`,
+      expires_at: new Date(Date.now() + 3600000).toISOString() }])
+    t.mock.timers.tick(3599000)
+    assert.match(credential(request, environment), new RegExp(`password=token-${hour}`))
+    t.mock.timers.tick(2000)
+    assert.equal(credential(request, environment), '')
+  }
+  assert.equal(environment.NAUTIONETTE_PROJECT_CREDENTIALS, undefined)
+  assert.ok(!JSON.stringify(environment).includes('turn-secret'))
+})
+
+test('corrupt or missing files fail closed without printing credentials; rotation cannot expand scope', (t) => {
+  const environment = credentialEnvironment(t)
+  const request = 'protocol=https\nhost=github.com\npath=owner/repository.git\n\n'
+  writeFileSync(environment.NAUTIONETTE_PROJECT_CREDENTIALS_FILE, 'sensitive-invalid-json')
+  assert.throws(() => credential(request, environment), { message: 'Git credentials are unavailable; automatic renewal may be retrying' })
+  rmSync(environment.NAUTIONETTE_PROJECT_CREDENTIALS_FILE)
+  assert.throws(() => credential(request, environment), /unavailable/)
+  replaceCredentials(environment, [{ ...job.project_credentials[0], full_name: 'owner/unselected' }])
+  assert.equal(credential(request.replace('owner/repository', 'owner/unselected'), environment), '')
+  assert.equal(credential(request, environment), '')
 })
 
 for (const empty of [false, true]) {
@@ -78,7 +127,7 @@ for (const empty of [false, true]) {
       git('--git-dir', metadata, 'remote', 'set-url', 'origin', 'https://offline.invalid/unreachable.git')
       const firstRoot = join(root, 'first-container')
       const secondRoot = join(root, 'second-container')
-      const first = { ...job, project_baselines: { [selected]: 'main' } }
+      const first = { ...job, project_remotes: {}, project_baselines: { [selected]: 'main' } }
       const second = { ...first, chat_id: 'd'.repeat(12) }
       prepareProjects(first, { projectsRoot: firstRoot, repositoriesRoot: metadataRoot })
       prepareProjects(second, { projectsRoot: secondRoot, repositoriesRoot: metadataRoot })

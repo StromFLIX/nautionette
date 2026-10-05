@@ -33,6 +33,7 @@ export function gitAuthorship(job) {
 
 export function projectEnvironment(job, {
   hooksRoot = DEFAULT_HOOKS_ROOT, repositoriesRoot = '/project-repositories', includeHooks = true,
+  credentialsFile = '/tmp/nautionette-git-credentials/current.json',
 } = {}) {
   if (!job.project_ids?.length) return {}
   const { author, committer, coauthor } = gitAuthorship(job)
@@ -54,7 +55,8 @@ export function projectEnvironment(job, {
     ]),
   ]
   const environment = {
-    NAUTIONETTE_PROJECT_CREDENTIALS: JSON.stringify(job.project_credentials || []),
+    NAUTIONETTE_PROJECT_CREDENTIALS_FILE: credentialsFile,
+    NAUTIONETTE_PROJECT_REPOSITORIES: JSON.stringify(Object.values(job.project_remotes || {})),
     GIT_AUTHOR_NAME: author.name,
     GIT_AUTHOR_EMAIL: author.email,
     GIT_COMMITTER_NAME: committer.name,
@@ -152,7 +154,18 @@ export function credential(input, environment) {
     return [line.slice(0, position), line.slice(position + 1)]
   }))
   if (fields.protocol !== 'https' || fields.host !== 'github.com') return ''
-  const allowed = JSON.parse(environment.NAUTIONETTE_PROJECT_CREDENTIALS || '[]')
+  const repositories = JSON.parse(environment.NAUTIONETTE_PROJECT_REPOSITORIES || '[]')
+  if (!repositories.some((name) => fields.path === name || fields.path === `${name}.git`)) return ''
+  let allowed
+  try {
+    // Read on every invocation: even a shell/subagent started hours ago sees
+    // the broker's latest atomic replacement, not an inherited token snapshot.
+    allowed = JSON.parse(readFileSync(environment.NAUTIONETTE_PROJECT_CREDENTIALS_FILE, 'utf8'))
+    if (!Array.isArray(allowed)) throw new Error('Invalid credentials')
+  } catch {
+    // JSON/parser errors can include source text. Never expose token bytes.
+    throw new Error('Git credentials are unavailable; automatic renewal may be retrying')
+  }
   const match = allowed.find((entry) =>
     (fields.path === entry.full_name || fields.path === `${entry.full_name}.git`) &&
     Date.parse(entry.expires_at) > Date.now())

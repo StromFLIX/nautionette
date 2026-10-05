@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -66,6 +67,20 @@ async def test_agents_receive_fresh_repository_scoped_tokens_then_revoke_them(db
     assert remote.await_count == 2
     await projects.revoke_credentials(credentials)
     remote.assert_awaited_with("DELETE", "/installation/token", "installation-secret")
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+async def test_failed_or_cancelled_batch_revokes_partially_issued_tokens(db, monkeypatch, cancelled):
+    first = ready_project(db)
+    second = ready_project(db, "owner/other", 456)
+    access = {"token": "first-token", "expires_at": "2099-01-01T00:00:00Z"}
+    error = asyncio.CancelledError() if cancelled else HTTPException(502, "GitHub unavailable")
+    monkeypatch.setattr(projects, "installation_access", AsyncMock(side_effect=[access, error]))
+    revoke = AsyncMock()
+    monkeypatch.setattr(projects, "revoke_credentials", revoke)
+    with pytest.raises(type(error)):
+        await projects.agent_credentials([first, second])
+    revoke.assert_awaited_once_with([{"full_name": "owner/repository", **access}])
 
 
 def test_message_selection_is_idempotent_and_allows_concurrent_chats(db):

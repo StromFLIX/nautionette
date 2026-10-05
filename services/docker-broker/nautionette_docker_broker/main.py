@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import Body, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
-from . import agent_run, daemon, images, monitor, packages, workers
+from . import agent_run, daemon, git_credentials, images, monitor, packages, workers
 from .config import INTERNAL_TOKEN
 
 
@@ -129,6 +129,25 @@ def cleanup_chat_agent(
         daemon.log.exception("Chat agent cleanup failed: chat=%s turn=%s", chat_id, turn_id)
         raise HTTPException(status_code=503, detail="Old chat agent cleanup failed; retry") from exc
     return {"ok": True}
+
+
+@app.post("/agent/project-credentials")
+def refresh_project_credentials(
+    payload: dict[str, Any] = Body(...), x_internal_token: str | None = Header(default=None)
+) -> dict[str, Any]:
+    _check_internal(x_internal_token)
+    chat_id, turn_id = payload.get("chat_id"), payload.get("turn_id")
+    if not isinstance(chat_id, str) or not chat_id or not isinstance(turn_id, str) or not turn_id:
+        raise HTTPException(422, "chat_id and turn_id are required")
+    try:
+        credentials = payload.get("credentials")
+        git_credentials.validate(credentials)
+        return {"ok": agent_run.refresh_project_credentials(chat_id, turn_id, credentials)}
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        # Docker responses can contain sensitive payloads. Do not echo or log them.
+        raise HTTPException(503, "Git credential delivery failed; retry") from exc
 
 
 @app.post("/agent/control")

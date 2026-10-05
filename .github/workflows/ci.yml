@@ -51,7 +51,7 @@ jobs:
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_activity_timing.py
 
       - name: GitHub connections, migrations and project credentials
-        run: uv run pytest tests/backend/test_github_connections.py tests/backend/test_github_setup.py tests/backend/test_projects.py tests/backend/test_project_changes.py tests/broker/test_projects.py
+        run: uv run pytest tests/backend/test_github_connections.py tests/backend/test_github_setup.py tests/backend/test_projects.py tests/backend/test_project_changes.py tests/backend/test_project_credentials.py tests/broker/test_projects.py tests/broker/test_git_credentials.py
 
       - name: Committed workflows still validate
         run: uv run --package nautionette-workflow-mcp python scripts/check_workflows.py
@@ -149,7 +149,7 @@ jobs:
           docker run --rm --network none --user 10001:10001 \
             --env HOME=/workspace --tmpfs /workspace:rw,mode=1777 \
             --volume "$PWD:/source:ro" --entrypoint bash nautionette/pi-agent-default:dev -c \
-            'pi --version && node --test /source/tests/agent/test_chat_files.mjs /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs /source/tests/agent/test_packages_rpc.mjs /source/tests/agent/test_context_usage.mjs'
+            'pi --version && node --test /source/tests/agent/test_chat_files.mjs /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs /source/tests/agent/test_packages_rpc.mjs /source/tests/agent/test_context_usage.mjs /source/tests/agent/test_project_git.mjs'
 
       - name: Development tools work offline as the project user
         run: |
@@ -157,6 +157,16 @@ jobs:
             --env HOME=/workspace --tmpfs /workspace:rw,mode=1777 --shm-size=256m \
             --volume "$PWD/scripts/check-pi-dev-tools.sh:/check-pi-dev-tools.sh:ro" \
             --entrypoint bash nautionette/pi-agent-default:dev /check-pi-dev-tools.sh
+
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Git credential rotation in a live unprivileged container (offline)
+        run: |
+          uv sync --locked --all-packages
+          NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_git_credentials_docker.py
 
       # Publishing is part of CI, so Deploy cannot start before these images
       # exist. PR code never logs in or pushes (including same-repository PRs).

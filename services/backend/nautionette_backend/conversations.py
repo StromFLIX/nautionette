@@ -15,6 +15,7 @@ from .chat_titles import refine_chat_title
 from .clients import broker
 from .db import db
 from .events import bus, sse
+from .project_credentials import TurnCredentials
 from .runtime import history_budget, remember_agent_result, runtime
 
 CHAT_PROGRESS_NOTICE_INTERVAL = 1.0
@@ -134,6 +135,8 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     failure = None
     status = ""
     controller = None
+    credential_renewal = None
+    credentials = TurnCredentials(chat_id, turn_id, job.get("project_ids", []))
     finished = asyncio.Event()
     interrupted = False
     shutdown = False
@@ -183,7 +186,10 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 "Do not amend or rewrite existing commits merely to apply authorship settings.\n"
             )
         job.update(projects.prepare_worktrees(chat_id, job.get("project_ids", [])))
-        job["project_credentials"] = await projects.agent_credentials(job.get("project_ids", []))
+        job["project_credentials"] = await credentials.start()
+        # Owned by this turn (not the global background task set). Cancel and
+        # join it before container cleanup and revocation, including on shutdown.
+        credential_renewal = asyncio.create_task(credentials.maintain(finished))
         agent_requested = True
         async for event in stream_agent(job):
             if not db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
@@ -299,8 +305,11 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     finally:
         timing = timeline.timing.finish()
         timeline.stop_tools()
+        finished.set()
+        if credential_renewal is not None:
+            credential_renewal.cancel()
+            await asyncio.gather(credential_renewal, return_exceptions=True)
         if controller is not None:
-            finished.set()
             if shutdown:
                 controller.cancel()
             await asyncio.gather(controller, return_exceptions=True)
@@ -319,6 +328,8 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 logging.getLogger("nautionette").exception(
                     "Chat agent cleanup failed: chat=%s turn=%s", chat_id, turn_id
                 )
+        job.pop("project_credentials", None)
+        await credentials.revoke()
         if failure is not None or cleanup_failed or shutdown:
             db.execute("UPDATE chats SET queue_paused = 1 WHERE id = ?", (chat_id,))
         content = timeline.text or (f"The agent could not answer: {failure}" if failure else "(no answer)")
@@ -339,7 +350,6 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 refine_chat_title(chat_id, job.get("model") or runtime("default_model")),
                 name=f"chat-title-refine-{chat_id}",
             )
-        await projects.revoke_credentials(job.pop("project_credentials", []))
         if failure is None and not shutdown and not cleanup_failed:
             launch_next(chat_id)
 

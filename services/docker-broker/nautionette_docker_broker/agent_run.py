@@ -15,7 +15,7 @@ from docker.errors import NotFound
 from nautionette.agent_limits import chat_timeout_exempt
 from nautionette.pi_packages import configuration, filters, revision_id
 
-from . import chat_agents, daemon, images, packages, projects
+from . import chat_agents, daemon, git_credentials, images, packages, projects
 from .config import (
     AGENT_ENVIRONMENT,
     AGENT_MEMORY,
@@ -39,6 +39,8 @@ BUILD_POLL_SECONDS = 3
 _controls_lock = threading.Lock()
 _stopped: dict[tuple[str, str], threading.Event] = {}
 _completed: dict[tuple[str, str], threading.Event] = {}
+_credential_scopes: dict[tuple[str, str], set[str]] = {}
+_credential_locks: dict[tuple[str, str], threading.Lock] = {}
 # Fence delayed HTTP requests for a cleaned-up turn, including ones that had
 # not yet registered when cleanup arrived. Bound retention to the call horizon.
 _retired: dict[tuple[str, str], float] = {}
@@ -79,6 +81,31 @@ def cleanup_chat(chat_id: str, turn_id: str) -> None:
         raise RuntimeError("The old chat agent has not released its worktree yet; retry cleanup")
     if chat_agents.containers(chat_id, turn_id):
         raise RuntimeError("The old chat agent is still present; retry cleanup")
+
+
+def refresh_project_credentials(chat_id: str, turn_id: str, credentials: list[dict[str, Any]]) -> bool:
+    # Serialize copy+rename per turn, including retries after a lost HTTP
+    # acknowledgement. A stalled container must not block other chats' renewal.
+    key = (chat_id, turn_id)
+    with _controls_lock:
+        lock = _credential_locks.get(key)
+    if lock is None:
+        return False
+    with lock:
+        with _controls_lock:
+            stopped = _stopped.get(key)
+            scope = _credential_scopes.get(key)
+            if key in _retired or stopped is None or stopped.is_set() or scope is None:
+                return False
+            git_credentials.validate(credentials, scope)
+        containers = chat_agents.containers(chat_id, turn_id, include_stopped=False)
+        if len(containers) != 1:
+            return False
+        try:
+            git_credentials.replace(containers[0], credentials)
+        except NotFound:
+            return False  # Cleanup raced delivery; never target a replacement turn.
+        return True
 
 
 def control(chat_id: str, turn_id: str, command: dict[str, Any]) -> bool:
@@ -210,6 +237,8 @@ def run(job: dict[str, Any]) -> Iterator[str]:
             with _controls_lock:
                 _stopped.pop(key, None)
                 _completed.pop(key, None)
+                _credential_scopes.pop(key, None)
+                _credential_locks.pop(key, None)
         completed.set()
 
 
@@ -269,7 +298,10 @@ def _run(
         package_mounts = packages.mounts([item["installation_id"] for item in package_runtime])
         # Private configuration travels through a mode-0600 file, not Docker env,
         # JOB.json, CLI arguments or the persisted turn. The runner unlinks it.
-        job = {key: value for key, value in job.items() if key != "package_runtime"}
+        credentials = job.get("project_credentials", [])
+        job = {
+            key: value for key, value in job.items() if key not in {"package_runtime", "project_credentials"}
+        }
         environment = _environment(job)
         container = daemon.client().containers.create(
             tag,
@@ -303,6 +335,13 @@ def _run(
             _copy_job(container, job)
         if package_runtime:
             _copy_job(container, job, "nautionette-packages.json", package_runtime)
+        if project_ids:
+            scope = set(job.get("project_remotes", {}).values())
+            git_credentials.prepare(container, credentials, scope)
+            with _controls_lock:
+                key = (job.get("chat_id", ""), job.get("turn_id", ""))
+                _credential_scopes[key] = scope
+                _credential_locks[key] = threading.Lock()
         with _controls_lock:
             if stopped.is_set():
                 return

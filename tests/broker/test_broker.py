@@ -498,6 +498,46 @@ def test_large_jobs_and_files_are_copied_before_start_not_put_in_environment(
     assert calls.index("put_archive") < calls.index("start")
 
 
+@pytest.mark.parametrize("large", [False, True])
+def test_project_tokens_use_private_files_not_docker_environment_or_job_files(
+    client, running_agent, docker, monkeypatch, large
+):
+    import base64
+
+    container, _ = running_agent
+    monkeypatch.setattr(docker, "api", SimpleNamespace(_version="1.45"), raising=False)
+    monkeypatch.setattr(agent_run.projects, "mounts", lambda *args: [])
+    monkeypatch.setattr(agent_run.projects, "claim", lambda *args: None)
+    monkeypatch.setattr(agent_run.projects, "release", lambda *args: None)
+    credentials = [
+        {"full_name": "owner/repo", "token": "private-turn-token", "expires_at": "2099-01-01T00:00:00Z"}
+    ]
+    project = "a" * 32
+    job = {
+        "chat_id": "c" * 12,
+        "turn_id": "credential-turn",
+        "project_ids": [project],
+        "project_remotes": {project: "owner/repo"},
+        "project_credentials": credentials,
+        "prompt": "x" * (40000 if large else 1),
+    }
+    response = client.post("/agent/run", headers=HEADERS, json=job)
+    assert not any(event["type"] == "error" for event in frames(response))
+    environment = docker.containers.create.call_args.kwargs["environment"]
+    assert "private-turn-token" not in json.dumps(environment)
+    if not large:
+        assert "project_credentials" not in json.loads(base64.b64decode(environment["AGENT_JOB"]))
+    for call in container.put_archive.call_args_list:
+        with tarfile.open(fileobj=io.BytesIO(call.args[1])) as tar:
+            for entry in tar.getmembers():
+                if entry.name == "nautionette-job.json":
+                    assert b"private-turn-token" not in tar.extractfile(entry).read()
+    assert len(container.put_archive.call_args_list) == (2 if large else 1)
+    calls = [call[0] for call in container.mock_calls]
+    assert max(index for index, name in enumerate(calls) if name == "put_archive") < calls.index("start")
+    assert (job["chat_id"], job["turn_id"]) not in agent_run._credential_scopes
+
+
 def test_failed_job_copy_does_not_start_the_agent(client, running_agent):
     container, _ = running_agent
     container.put_archive.return_value = False

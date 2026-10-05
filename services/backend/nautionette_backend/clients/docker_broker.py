@@ -91,6 +91,18 @@ class BrokerClient:
         if response.json().get("ok") is not True:
             raise RuntimeError("Old chat agent cleanup was not confirmed")
 
+    async def refresh_project_credentials(
+        self, chat_id: str, turn_id: str, credentials: list[dict[str, Any]]
+    ) -> bool:
+        response = await shared().post(
+            f"{self.base_url}/agent/project-credentials",
+            headers=internal_headers(),
+            json={"chat_id": chat_id, "turn_id": turn_id, "credentials": credentials},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json().get("ok") is True
+
     async def control_agent(self, chat_id: str, turn_id: str, command: dict[str, Any]) -> bool:
         response = await shared().post(
             f"{self.base_url}/agent/control",

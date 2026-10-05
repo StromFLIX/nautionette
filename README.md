@@ -549,11 +549,28 @@ Enterprise hosts are not part of this integration.
 There is no Git proxy or extra Git service. Worktree setup is offline. Agents use
 normal Git fetch/pull/push directly against the HTTPS origin. The backend supplies fresh,
 repository-scoped installation tokens for each turn through a Git credential helper.
-Tokens are not saved in Git config or job files; they expire within one hour and are
-revoked when the turn ends (best effort, including failure cleanup). A new message
-obtains fresh tokens. Agents receive these short-lived tokens, never the App private
-key, and must not print or persist credentials. The initial repository download from
-Settings runs on the backend, not inside an agent.
+GitHub tokens still expire within one hour, but the backend renews them five minutes
+before expiry for as long as that exact turn is running, including timeout-exempt
+sessions. Renewal uses the turn's original project selection, not later chat settings
+or steering messages. The authenticated broker delivers each batch to a root-owned,
+agent-readable private file in the disposable container and atomically replaces it.
+The helper reads that file on every Git invocation, so existing shells and subagents
+see renewed credentials without restarting. Tokens never enter Docker environment
+variables, CLI arguments, Git config, persistent worktrees, or job files; agents never
+receive the App private key and must not print or copy credentials.
+
+Transient GitHub/broker failures retry every 15 seconds. Failed or ambiguous deliveries
+reuse the pending batch rather than minting a token on every retry. Superseded tokens
+expire naturally so in-flight Git operations are not interrupted. Cleanup stops renewal
+before removing the container and revokes all remaining issued tokens (best effort,
+including unacknowledged deliveries and failure/shutdown cleanup). Orphaned, stopped,
+or finished turns cannot renew. If infrastructure stays unavailable past token expiry,
+authenticated Git fails closed until renewal succeeds; local Git work is unaffected.
+
+Deploy the backend, broker and rebuilt agent images together. Existing containers use
+their old helper; this change takes effect on new turns, without changing worktrees or
+commits. The initial repository download from Settings runs on the backend, not inside
+an agent.
 Project management is user-only and is not exposed through backend MCP.
 
 ### Git authorship
@@ -610,9 +627,11 @@ The broker rebuilds the changed Pi images automatically. Project agents run as U
 their image-provided Pi configuration readable so it can be copied into `/workspace`.
 
 Checks: `uv run pytest tests/backend/test_projects.py tests/backend/test_github_setup.py tests/backend/test_github_connections.py
-tests/broker/test_projects.py`, `node --test tests/agent/test_project_git.mjs`, and
+tests/backend/test_project_credentials.py tests/broker/test_git_credentials.py
+ tests/broker/test_projects.py`, `node --test tests/agent/test_project_git.mjs`, and
 `npm --prefix services/frontend run test:e2e -- projects.spec.js`. The opt-in Docker
-check is `NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_projects_docker.py`;
+check is `NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_projects_docker.py
+ tests/broker/test_git_credentials_docker.py`;
 it uses a local `nautionette/pi-base:dev` image and removes its temporary resources.
 
 ## Chats become workflows
