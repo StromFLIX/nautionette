@@ -374,6 +374,35 @@ Regression checks include `tests/backend/test_reasoning.py`,
 and `npm run test:e2e -- tests/chat.spec.js --grep reasoning` in `services/frontend`.
 The transport tests run real Pi against a local fake gateway, not billable models.
 
+### Request buffers and agent capacity
+
+The gateway's global `frontendPolicies.http.maxBufferSize` in
+[`services/agentgateway/config/config.yaml`](services/agentgateway/config/config.yaml)
+is **256 MiB (268,435,456 bytes)** for buffered requests and responses across LLM
+and MCP routes, up from upstream's **2 MiB** default. This is a serialized-byte
+limit, not a model token limit: it includes instructions, tool schemas/results,
+history and base64 images (which add roughly one third to the image size).
+Requests over the ceiling still fail with HTTP 413 / `request_body_too_large`.
+
+Agent containers default to **4 GiB** of memory (`AGENT_MEMORY_LIMIT=4g`, previously
+1 GiB) and a **1 GiB** ephemeral `/workspace` (`AGENT_WORKSPACE_SIZE=1g`, previously
+256 MiB), for larger payloads, attachments and working files. These are per-agent
+ceilings, not reservations; workspace tmpfs usage counts toward the memory limit.
+Size the host for concurrent agents and gateway buffering/JSON parsing, which can
+use several times the payload size per in-flight request.
+
+These limits do **not** enlarge a provider's context window, output-token limit,
+or its own HTTP/image limits. Model-aware history budgeting, upload/image safety
+checks, tool-preview truncation, authentication and timeouts are unchanged.
+
+Deploy the buffer and capacity changes by rebuilding/recreating the gateway and
+broker: `docker compose up -d --build agentgateway docker-broker`. The gateway
+config is baked into its image; restarting the old image is not enough. Explicit
+`AGENT_MEMORY_LIMIT` environment values still win over the new default, so update
+an existing `1g` override if you want 4 GiB. New agent containers use the new caps;
+existing turns keep their original container limits. Do not automatically replay
+failed tool calls; continue affected chats after the new gateway is running.
+
 ### Agent runtime limits
 
 Chat turns default to a one-hour wall-clock limit (`AGENT_RUN_TIMEOUT_SECONDS=3600`),
@@ -403,7 +432,7 @@ activity's `timeout_seconds`, increase its Temporal `start_to_close_timeout` and
 workflow timeout as needed, and ensure the broker ceiling is at least as large.
 
 A watchdog expiry is reported as a **time limit**, Docker-confirmed OOM as **out of
-memory** (with `AGENT_MEMORY_LIMIT`, default `1g`), and other exit-137 failures as
+memory** (with `AGENT_MEMORY_LIMIT`, default `4g`), and other exit-137 failures as
 **SIGKILL with an unconfirmed cause**. Exit 137 alone is not evidence of OOM.
 Failed turns retain their partial transcript and persistent project worktrees;
 continue with a new message rather than automatically replaying tools that may
@@ -1009,7 +1038,10 @@ NAUTIONETTE_TEST_GATEWAY_BINARY=/path/to/agentgateway uv run pytest tests/agentg
 
 It verifies mixed HTTP/stdio discovery, literal arguments and secrets, environment
 isolation, failed-save protection, session cleanup, persistence across gateway restarts,
-and removal. Without the variable it is skipped.
+and removal. The buffer checks also exercise all three LLM API formats past the
+old 2 MiB ceiling, the exact 256 MiB boundary (including chunked requests), and
+large requests/responses through a local fake provider. Without the variable,
+runtime checks are skipped; the checked-in buffer/capacity guards still run.
 
 ## Open points
 

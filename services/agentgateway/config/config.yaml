@@ -10,6 +10,13 @@ config:
   database:
     url: sqlite:///data/agentgateway.db
 
+# Global request AND response buffering for every LLM/MCP route. The upstream
+# 2 MiB default rejects long tool-heavy chats and base64 images before the model
+# sees them. Keep a finite ceiling: 256 MiB (128x the default), not a token limit.
+frontendPolicies:
+  http:
+    maxBufferSize: 268435456
+
 gateways:
   default:
     port: 4000

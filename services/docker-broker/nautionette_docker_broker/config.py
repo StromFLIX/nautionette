@@ -18,7 +18,9 @@ PROJECT_OVERRIDE = os.environ.get("COMPOSE_PROJECT", "").strip()
 RUN_TIMEOUT = max(1, int(os.environ.get("AGENT_RUN_TIMEOUT_SECONDS", "3600")))
 # How long a call will wait for an image that has to be built before it can run.
 IMAGE_BUILD_TIMEOUT = int(os.environ.get("AGENT_IMAGE_BUILD_TIMEOUT_SECONDS", "900"))
-AGENT_MEMORY = os.environ.get("AGENT_MEMORY_LIMIT", "1g")
+AGENT_MEMORY = os.environ.get("AGENT_MEMORY_LIMIT", "4g")
+# Docker tmpfs size syntax; this usage is included in AGENT_MEMORY, not extra RAM.
+AGENT_WORKSPACE_SIZE = os.environ.get("AGENT_WORKSPACE_SIZE", "1g")
 INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "").strip()
 STOP_GRACE = int(os.environ.get("WORKER_STOP_GRACE_SECONDS", "60"))
 RECONCILE_SECONDS = max(1, int(os.environ.get("CONTAINER_RECONCILE_SECONDS", "30")))

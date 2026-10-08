@@ -38,8 +38,8 @@ jobs:
       - name: Format
         run: uv run ruff format --check .
 
-      - name: Deployment, snapshot and agent image safety tests
-        run: uv run pytest tests/test_coolify_release.py tests/test_staging_refresh.py tests/broker/test_broker.py
+      - name: Deployment, snapshot, gateway buffers and agent image safety tests
+        run: uv run pytest tests/test_coolify_release.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py
 
       - name: Model capability and image API guards
         run: uv run pytest tests/backend/test_catalog.py tests/backend/test_model_capabilities.py tests/backend/test_chat_images.py

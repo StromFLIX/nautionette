@@ -20,6 +20,7 @@ from .config import (
     AGENT_ENVIRONMENT,
     AGENT_MEMORY,
     AGENT_NETWORK,
+    AGENT_WORKSPACE_SIZE,
     IMAGE_BUILD_TIMEOUT,
     INTERNAL_TOKEN,
     RUN_TIMEOUT,
@@ -312,11 +313,11 @@ def _run(
             mounts=[*project_mounts, *package_mounts],
             tmpfs=(
                 {
-                    "/workspace": "size=256m,exec,uid=10001,gid=10001",
+                    "/workspace": f"size={AGENT_WORKSPACE_SIZE},exec,uid=10001,gid=10001",
                     "/projects": "size=1m,uid=10001,gid=10001",
                 }
                 if project_ids
-                else {"/workspace": "size=256m,exec"}
+                else {"/workspace": f"size={AGENT_WORKSPACE_SIZE},exec"}
             ),
             user="10001:10001" if project_ids else None,
             mem_limit=AGENT_MEMORY,

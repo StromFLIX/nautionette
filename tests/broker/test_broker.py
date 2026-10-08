@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+import yaml
 from docker.models.containers import ContainerCollection
 from fastapi.testclient import TestClient
 from nautionette_docker_broker import agent_run, config, daemon, images, main, monitor, workers
@@ -384,6 +385,30 @@ def frames(response) -> list[dict]:
     return [json.loads(line) for line in response.text.splitlines() if line.strip()]
 
 
+def test_resource_defaults_match_compose_and_example(repo_root, monkeypatch):
+    monkeypatch.delenv("AGENT_MEMORY_LIMIT", raising=False)
+    monkeypatch.delenv("AGENT_WORKSPACE_SIZE", raising=False)
+    defaults = runpy.run_path(config.__file__)
+    compose = yaml.safe_load((repo_root / "docker-compose.yaml").read_text())
+    environment = compose["services"]["docker-broker"]["environment"]
+    example = (repo_root / ".env.example").read_text().splitlines()
+    for name, key, expected in [
+        ("AGENT_MEMORY_LIMIT", "AGENT_MEMORY", "4g"),
+        ("AGENT_WORKSPACE_SIZE", "AGENT_WORKSPACE_SIZE", "1g"),
+    ]:
+        assert defaults[key] == expected
+        assert environment[name] == "${" + name + ":-" + expected + "}"
+        assert f"{name}={expected}" in example
+
+
+def test_explicit_agent_resource_overrides_are_preserved(monkeypatch):
+    monkeypatch.setenv("AGENT_MEMORY_LIMIT", "6g")
+    monkeypatch.setenv("AGENT_WORKSPACE_SIZE", "2g")
+    configured = runpy.run_path(config.__file__)
+    assert configured["AGENT_MEMORY"] == "6g"
+    assert configured["AGENT_WORKSPACE_SIZE"] == "2g"
+
+
 def test_an_agent_set_nobody_declared_is_refused(client, agent_images):
     response = client.post("/agent/run", headers=HEADERS, json={"agent_set": "made-up"})
     assert frames(response) == [{"type": "error", "message": "unknown agent set 'made-up'"}]
@@ -470,6 +495,45 @@ def running_agent(agent_images, docker, monkeypatch):
 
     monkeypatch.setattr(agent_run.threading, "Timer", Timer)
     return container, timers
+
+
+@pytest.mark.parametrize("with_projects", [False, True])
+@pytest.mark.parametrize("workspace", ["1g", "768m"])
+def test_workspace_capacity_applies_to_all_agents_without_weakening_isolation(
+    client, running_agent, docker, monkeypatch, with_projects, workspace
+):
+    monkeypatch.setattr(agent_run, "AGENT_WORKSPACE_SIZE", workspace)
+    monkeypatch.setattr(docker, "api", SimpleNamespace(_version="1.45"), raising=False)
+    monkeypatch.setattr(agent_run.projects, "mounts", lambda *args: [])
+    monkeypatch.setattr(agent_run.projects, "claim", lambda *args: None)
+    monkeypatch.setattr(agent_run.projects, "release", lambda *args: None)
+    job = {}
+    if with_projects:
+        project = "a" * 32
+        job = {
+            "chat_id": "c" * 12,
+            "turn_id": "capacity",
+            "project_ids": [project],
+            "project_remotes": {project: "owner/repo"},
+            "project_credentials": [
+                {"full_name": "owner/repo", "token": "test-token", "expires_at": "2099-01-01T00:00:00Z"}
+            ],
+        }
+    events = frames(client.post("/agent/run", headers=HEADERS, json=job))
+    assert not any(event["type"] == "error" for event in events)
+    options = docker.containers.create.call_args.kwargs
+    if with_projects:
+        assert options["tmpfs"] == {
+            "/workspace": f"size={workspace},exec,uid=10001,gid=10001",
+            "/projects": "size=1m,uid=10001,gid=10001",
+        }
+        assert options["user"] == "10001:10001"
+    else:
+        assert options["tmpfs"] == {"/workspace": f"size={workspace},exec"}
+    assert options["mem_limit"] == agent_run.AGENT_MEMORY
+    assert options["pids_limit"] == 512
+    assert options["cap_drop"] == ["ALL"]
+    assert options["security_opt"] == ["no-new-privileges:true"]
 
 
 @pytest.mark.parametrize(
