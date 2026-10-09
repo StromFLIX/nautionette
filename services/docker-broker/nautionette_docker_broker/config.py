@@ -39,10 +39,26 @@ WORKER_ENVIRONMENT = {
     "WORKER_GRACE_SECONDS": os.environ.get("WORKER_GRACE_SECONDS", "50"),
 }
 
+# Dynamic workers and ephemeral agents must receive the same telemetry settings.
+TELEMETRY_ENVIRONMENT = {
+    key: os.environ[key]
+    for key in (
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_HEADERS",
+        "OTEL_EXPORTER_OTLP_PROTOCOL",
+        "OTEL_SDK_DISABLED",
+        "APP_ENVIRONMENT",
+        "APP_VERSION",
+    )
+    if key in os.environ
+}
+WORKER_ENVIRONMENT.update(TELEMETRY_ENVIRONMENT)
+
 AGENT_ENVIRONMENT = {
     "AGENTGATEWAY_URL": os.environ.get("AGENT_AGENTGATEWAY_URL", "http://agentgateway:4000"),
     "BACKEND_URL": os.environ.get("AGENT_BACKEND_URL", "http://backend:8080"),
     "PI_OFFLINE": "1",
     "PI_SKIP_VERSION_CHECK": "1",
     "PI_TELEMETRY": "0",
+    **TELEMETRY_ENVIRONMENT,
 }

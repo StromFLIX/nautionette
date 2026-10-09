@@ -904,6 +904,18 @@ Health checks report container status; they do not themselves restart an unhealt
 The broker recovers unhealthy workers as described above. For other services, `restart: unless-stopped`
 restarts exited containers, not containers whose only failure is an unhealthy status.
 
+## OpenTelemetry
+
+Optional, vendor-neutral OTLP/HTTP tracing covers service requests, Temporal
+workflows/activities and agent/model/tool calls. HTTP metrics and payload-free,
+correlated severity logs are exported too. Use your own telemetry backend; none
+is bundled. The optional private collector relay keeps ingestion credentials out
+of agent containers and scrubs payload-bearing trace fields. Staging and production
+have distinct environment and source-version labels.
+
+See [Telemetry configuration and privacy](docs/telemetry.md) for setup, supported
+transports, limits and verification. Exporting is disabled by default.
+
 ## Layout
 
 ```

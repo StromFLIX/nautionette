@@ -16,6 +16,8 @@ from typing import Any
 
 from fastapi import Body, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
+from nautionette.telemetry import instrument_app
+from opentelemetry import propagate
 
 from . import agent_run, daemon, git_credentials, images, monitor, packages, workers
 from .config import INTERNAL_TOKEN
@@ -39,6 +41,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="nautionette docker-broker", docs_url=None, redoc_url=None, lifespan=lifespan)
+instrument_app(app, "nautionette-docker-broker")
 
 
 @app.get("/healthz")
@@ -85,6 +88,12 @@ def agent(
     job: dict[str, Any] = Body(...), x_internal_token: str | None = Header(default=None)
 ) -> StreamingResponse:
     _check_internal(x_internal_token)
+    # Capture before StreamingResponse crosses into its generator/thread boundary.
+    carrier = {}
+    propagate.inject(carrier)
+    job.pop("_trace_context", None)
+    if carrier:
+        job["_trace_context"] = carrier
     return StreamingResponse(agent_run.run(job), media_type="application/x-ndjson")
 
 

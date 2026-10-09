@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI
+from nautionette.telemetry import instrument_app
 
 from . import store, tools
 from .api import router
@@ -57,3 +58,5 @@ app.include_router(router)
 if mcp_app is not None:
     # Mounted last so the REST routes above win; MCP itself answers on /mcp.
     app.mount("/", mcp_app)
+
+instrument_app(app, "nautionette-workflow-mcp")

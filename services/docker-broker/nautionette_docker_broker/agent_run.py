@@ -176,6 +176,8 @@ def _await_image(tag: str, stopped: threading.Event | None = None) -> Iterator[s
 
 def _environment(job: dict[str, Any]) -> dict[str, str]:
     environment = dict(AGENT_ENVIRONMENT)
+    if traceparent := job.get("_trace_context", {}).get("traceparent"):
+        environment["TRACEPARENT"] = traceparent
     raw = json.dumps(job, default=str).encode("utf-8")
     # Linux caps a single environment value at ~128 KiB. File bytes and large
     # jobs go through Docker's archive API, never argv or environment.

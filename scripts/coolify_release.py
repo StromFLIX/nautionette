@@ -235,6 +235,28 @@ def deploy(target: str, commit: str) -> str | None:
     )
     if api.call(f"/applications/{app}").get("git_commit_sha") != commit:
         raise RuntimeError("Coolify did not accept the commit pin; nothing was deployed")
+    # Resource labels must identify the actual tested source, not a stale manual version.
+    api.call(
+        f"/applications/{app}/envs/bulk",
+        "PATCH",
+        {
+            "data": [
+                {
+                    "key": "APP_VERSION",
+                    "value": commit,
+                    "is_buildtime": True,
+                    "is_runtime": True,
+                    "is_literal": True,
+                }
+            ]
+        },
+    )
+    versions = api.call(f"/applications/{app}/envs")
+    if not any(
+        row.get("key") == "APP_VERSION" and row.get("value") == commit and not row.get("is_preview", False)
+        for row in versions
+    ):
+        raise RuntimeError("Coolify did not accept the source version; nothing was deployed")
     queued = api.call("/deploy", "POST", {"uuid": app, "force": False})
     deployments = queued.get("deployments", [])
     if len(deployments) != 1 or deployments[0].get("resource_uuid") != app:

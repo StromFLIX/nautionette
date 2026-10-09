@@ -9,6 +9,7 @@ from dataclasses import replace
 from datetime import timedelta
 from typing import Any
 
+from nautionette.telemetry import temporal_interceptors
 from temporalio.api.enums.v1 import PendingActivityState
 from temporalio.client import (
     Client,
@@ -87,7 +88,9 @@ class TemporalGateway:
         async with self._lock:
             if self._client is None:
                 self._client = await Client.connect(
-                    settings.temporal_address, namespace=settings.temporal_namespace
+                    settings.temporal_address,
+                    namespace=settings.temporal_namespace,
+                    interceptors=temporal_interceptors(),
                 )
                 self.last_error = None
             return self._client

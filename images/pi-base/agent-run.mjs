@@ -13,11 +13,13 @@ import { preparePackages } from "./package-runtime.mjs";
 import { cpSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { prepareProjects, projectEnvironment } from "./project-git.mjs";
 import { contextUsage } from "./context-usage.mjs";
+import { createTelemetry } from "./telemetry.mjs";
 import { createChatControl, listenForChatControl } from "./chat-control.mjs";
 import { createChatRecovery } from "./chat-recovery.mjs";
 import { prepareFiles, fileReferences } from "./chat-files.mjs";
 
 const OUT = process.stdout;
+let telemetry;
 
 function emit(event) {
   OUT.write(JSON.stringify(event) + "\n");
@@ -138,6 +140,9 @@ function explain(error) {
 
 async function main() {
   const job = readJob();
+  telemetry = createTelemetry(job);
+  const toolSpans = new Map();
+  let modelSpan;
   const mode = job.mode ?? "interactive";
   const model = job.model || process.env.AGENT_MODEL || "openai/gpt-4o-mini";
   const workspace = "/workspace";
@@ -179,6 +184,10 @@ async function main() {
     cwd: workspace,
     env: {
       ...process.env,
+      ...(telemetry.traceparent ? {
+        TRACEPARENT: telemetry.traceparent,
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --import=${new URL("./trace-fetch.mjs", import.meta.url).pathname}`,
+      } : {}),
       ...projectEnvironment(job),
       ...packageEnvironment,
       AGENT_MODEL: model,
@@ -209,7 +218,10 @@ async function main() {
   let initialIsExtension = false;
   let context = null;
   let usage = null;
-  const result = (event) => emit({ type: "result", ...event, context, usage });
+  const result = (event) => {
+    telemetry.finish(!event.ok);
+    emit({ type: "result", ...event, context, usage });
+  };
 
   child.stdout.setEncoding("utf8");
   child.stdout.on("data", (chunk) => {
@@ -285,6 +297,10 @@ async function main() {
         emit({ type: "phase", phase: "model" });
         break;
       case "message_start":
+        if (event.message?.role === "assistant") {
+          telemetry.end(modelSpan, true);
+          modelSpan = telemetry.start("gen_ai.chat", { "gen_ai.request.model": model, "gen_ai.operation.name": "chat" });
+        }
         // Also restore the phase after control.receive consumes a steered input
         // and the backend starts a fresh response timeline.
         if (["assistant", "user"].includes(event.message?.role)) {
@@ -308,9 +324,12 @@ async function main() {
         break;
       }
       case "tool_execution_start":
+        toolSpans.set(event.toolCallId, telemetry.start("tool.call", { "gen_ai.tool.name": event.toolName, "gen_ai.operation.name": "execute_tool" }));
         emit({ type: "tool", id: event.toolCallId, name: event.toolName, args: event.args });
         break;
       case "tool_execution_end":
+        telemetry.end(toolSpans.get(event.toolCallId), Boolean(event.isError));
+        toolSpans.delete(event.toolCallId);
         emit({
           type: "tool_done",
           id: event.toolCallId,
@@ -322,6 +341,11 @@ async function main() {
       case "message_end": {
         const message = event.message;
         if (message?.role === "assistant") {
+          telemetry.end(modelSpan, ["error", "aborted"].includes(message.stopReason), {
+            "gen_ai.usage.input_tokens": message.usage?.input || 0,
+            "gen_ai.usage.output_tokens": message.usage?.output || 0,
+          });
+          modelSpan = null;
           context = contextUsage(message, model);
           usage = context ? message.usage : null;
           emit({ type: "usage", context });
@@ -406,6 +430,10 @@ async function main() {
 }
 
 main().catch((error) => {
+  telemetry?.finish(true);
   emit({ type: "result", ok: false, text: "", output: null, error: String(error?.message ?? error) });
   process.exitCode = 1;
+}).finally(async () => {
+  telemetry?.finish(true);
+  await telemetry?.flush();
 });

@@ -43,6 +43,8 @@ ENV PI_OFFLINE=1 \
 
 # The whole contract of a run: AGENT_JOB in, NDJSON out, then the container exits.
 COPY agent-run.mjs /usr/local/lib/nautionette/agent-run.mjs
+COPY telemetry.mjs /usr/local/lib/nautionette/telemetry.mjs
+COPY trace-fetch.mjs /usr/local/lib/nautionette/trace-fetch.mjs
 COPY project-git.mjs /usr/local/lib/nautionette/project-git.mjs
 COPY context-usage.mjs /usr/local/lib/nautionette/context-usage.mjs
 COPY chat-control.mjs /usr/local/lib/nautionette/chat-control.mjs

@@ -122,6 +122,7 @@ def api(monkeypatch):
             self.final_status = "finished"
             self.final_commit = COMMIT
             self.accept_pin = True
+            self.accept_version = True
             self.description = ""
 
         def deployed(self, app, commit):
@@ -136,6 +137,8 @@ def api(monkeypatch):
                 return {"deployments": [{"resource_uuid": "prod", "deployment_uuid": "deploy123"}]}
             if path.startswith("/deployments/"):
                 return {"status": self.final_status, "commit": self.final_commit}
+            if path.endswith("/envs"):
+                return [{"key": "APP_VERSION", "value": COMMIT if self.accept_version else "stale"}]
             return {
                 "description": self.description,
                 "git_branch": "main",
@@ -191,6 +194,21 @@ def test_pins_before_queueing_and_waits_for_verified_result(api):
     writes = [item for item in api.calls if item[1] != "GET"]
     assert writes == [
         ("/applications/prod", "PATCH", {"git_commit_sha": COMMIT, "is_auto_deploy_enabled": False}),
+        (
+            "/applications/prod/envs/bulk",
+            "PATCH",
+            {
+                "data": [
+                    {
+                        "key": "APP_VERSION",
+                        "value": COMMIT,
+                        "is_buildtime": True,
+                        "is_runtime": True,
+                        "is_literal": True,
+                    }
+                ]
+            },
+        ),
         ("/deploy", "POST", {"uuid": "prod", "force": False}),
     ]
 
@@ -199,6 +217,14 @@ def test_rejected_commit_pin_never_queues(api):
     api.already_deployed.add("stage")
     api.accept_pin = False
     with pytest.raises(RuntimeError, match="commit pin"):
+        release.deploy("production", COMMIT)
+    assert not any(path == "/deploy" for path, _, _ in api.calls)
+
+
+def test_rejected_source_version_never_queues(api):
+    api.already_deployed.add("stage")
+    api.accept_version = False
+    with pytest.raises(RuntimeError, match="source version"):
         release.deploy("production", COMMIT)
     assert not any(path == "/deploy" for path, _, _ in api.calls)
 

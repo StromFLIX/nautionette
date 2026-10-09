@@ -41,6 +41,9 @@ jobs:
       - name: Deployment, snapshot, gateway buffers and agent image safety tests
         run: uv run pytest tests/test_coolify_release.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py
 
+      - name: OpenTelemetry privacy boundary
+        run: uv run pytest tests/lib/test_telemetry.py tests/lib/test_telemetry_http.py
+
       - name: Model capability and image API guards
         run: uv run pytest tests/backend/test_catalog.py tests/backend/test_model_capabilities.py tests/backend/test_chat_images.py
 
@@ -109,6 +112,7 @@ jobs:
           - { name: website, context: services/website, file: services/website/Dockerfile }
           - { name: agentgateway, context: services/agentgateway, file: services/agentgateway/Dockerfile }
           - { name: temporal, context: infra/temporal, file: infra/temporal/Dockerfile }
+          - { name: otel-collector, context: infra/otel-collector, file: infra/otel-collector/Dockerfile }
     steps:
       - uses: actions/checkout@v7
 
@@ -149,7 +153,7 @@ jobs:
           docker run --rm --network none --user 10001:10001 \
             --env HOME=/workspace --tmpfs /workspace:rw,mode=1777 \
             --volume "$PWD:/source:ro" --entrypoint bash nautionette/pi-agent-default:dev -c \
-            'pi --version && node --test /source/tests/agent/test_chat_files.mjs /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs /source/tests/agent/test_packages_rpc.mjs /source/tests/agent/test_context_usage.mjs /source/tests/agent/test_project_git.mjs'
+            'pi --version && node --test /source/tests/agent/test_chat_files.mjs /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs /source/tests/agent/test_packages_rpc.mjs /source/tests/agent/test_context_usage.mjs /source/tests/agent/test_project_git.mjs /source/tests/agent/test_telemetry.mjs'
 
       - name: Development tools work offline as the project user
         run: |
@@ -204,4 +208,4 @@ jobs:
       - name: Config resolves
         run: |
           cp .env.example .env
-          docker compose --profile images --profile debug config --quiet
+          docker compose --profile images --profile debug --profile observability config --quiet

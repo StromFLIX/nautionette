@@ -16,6 +16,7 @@ import sys
 from datetime import timedelta
 
 import httpx
+from nautionette.telemetry import configure, flush, temporal_interceptors
 from temporalio.client import Client
 from temporalio.worker import UnsandboxedWorkflowRunner, Worker
 
@@ -60,7 +61,9 @@ async def connect_with_retry() -> Client:
     delay = 1.0
     while True:
         try:
-            return await Client.connect(TEMPORAL_ADDRESS, namespace=TEMPORAL_NAMESPACE)
+            return await Client.connect(
+                TEMPORAL_ADDRESS, namespace=TEMPORAL_NAMESPACE, interceptors=temporal_interceptors()
+            )
         except Exception as exc:  # noqa: BLE001 - Temporal may still be starting
             log.warning("temporal not ready (%s), retrying in %.0fs", exc, delay)
             await asyncio.sleep(delay)
@@ -68,6 +71,7 @@ async def connect_with_retry() -> Client:
 
 
 async def main() -> None:
+    configure("nautionette-worker")
     health.clear()
     client = await connect_with_retry()
     loaded_sources = health.sources(WORKFLOWS_DIR)
@@ -108,6 +112,7 @@ async def main() -> None:
             log.info("shutdown requested, draining for up to %ss", GRACE_SECONDS)
     finally:
         health.clear()
+        await asyncio.to_thread(flush)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from nautionette.telemetry import instrument_app
 
 from . import mcp_servers, pi_packages, runs
 from .backend_mcp import BackendMCP
@@ -85,3 +86,4 @@ for router in ROUTERS[:-1]:
 backend_mcp = BackendMCP(app, ROUTERS[:-1])
 app.mount("/mcp", backend_mcp.http_app)
 app.include_router(ROUTERS[-1])
+instrument_app(app, "nautionette-backend")

@@ -1,5 +1,14 @@
 name: ${STACK_NAMESPACE:-nautionette}
 
+x-telemetry: &telemetry
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+  OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+  OTEL_RESOURCE_ATTRIBUTES: service.namespace=nautionette,deployment.environment=${APP_ENVIRONMENT:-production},deployment.environment.name=${APP_ENVIRONMENT:-production},service.version=${APP_VERSION:-dev}
+  APP_VERSION: ${APP_VERSION:-dev}
+  APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+
 x-logging: &logging
   logging:
     driver: json-file
@@ -23,8 +32,7 @@ services:
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     environment:
-      APP_VERSION: ${APP_VERSION:-dev}
-      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      <<: *telemetry
       APP_TOKEN: ${APP_TOKEN:-}
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
@@ -94,6 +102,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - projects:/projects:ro
     environment:
+      <<: *telemetry
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       TARGET_NETWORK: ${STACK_NAMESPACE:-nautionette}-internal
       AGENT_NETWORK: ${STACK_NAMESPACE:-nautionette}-agent-sandboxes
@@ -146,6 +155,8 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
+      <<: *telemetry
+      OTEL_SERVICE_NAME: nautionette-agentgateway
       # Optional: a key entered in Settings > Agents is stored by agentgateway itself.
       # These let an integration reference $VARIABLE instead of holding the key.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
@@ -172,6 +183,7 @@ services:
     image: ${STACK_NAMESPACE:-nautionette}/workflow-mcp:dev
     restart: unless-stopped
     environment:
+      <<: *telemetry
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       WORKFLOWS_DIR: /workflows
       BACKEND_URL: http://backend:8080
@@ -192,6 +204,7 @@ services:
     deploy:
       replicas: ${WORKER_REPLICAS:-1}
     environment:
+      <<: *telemetry
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
@@ -283,6 +296,24 @@ services:
     profiles: [images]
     entrypoint: ["true"]
     depends_on: [pi-base]
+
+  # -------------------------------------------------------------- observability
+  # Optional locally; enabled in Coolify with COMPOSE_PROFILES=observability.
+  # Only this vendor-neutral relay is reachable from agent sandboxes, not the telemetry database.
+  otel-collector:
+    profiles: [observability]
+    build: ./infra/otel-collector
+    image: ${STACK_NAMESPACE:-nautionette}/otel-collector:dev
+    restart: unless-stopped
+    environment:
+      APP_VERSION: ${APP_VERSION:-dev}
+      APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      OTEL_COLLECTOR_UPSTREAM_ENDPOINT: ${OTEL_COLLECTOR_UPSTREAM_ENDPOINT:-http://127.0.0.1:9}
+      OTEL_COLLECTOR_UPSTREAM_AUTHORIZATION: ${OTEL_COLLECTOR_UPSTREAM_AUTHORIZATION:-}
+    mem_limit: 256m
+    networks: [internal, agents]
+    security_opt: [no-new-privileges:true]
+    <<: *logging
 
   # --------------------------------------------------------------------- debug
   # docker compose --profile debug up -d
