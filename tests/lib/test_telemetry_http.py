@@ -67,3 +67,32 @@ server.shutdown()
         env={**os.environ, "OTEL_SDK_DISABLED": "false", "OTEL_EXPORTER_OTLP_HEADERS": ""},
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_service_without_httpx_does_not_emit_false_instrumentation_errors():
+    script = """
+from nautionette import telemetry
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+def unexpected(*args, **kwargs):
+    raise AssertionError('Must not instrument a missing optional HTTP client')
+
+telemetry.find_spec = lambda name: None
+HTTPXClientInstrumentor.instrument = unexpected
+assert telemetry.configure('test-broker')
+assert telemetry.temporal_interceptors()
+"""
+    result = subprocess.run(  # noqa: S603 - fixed test code, no shell
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        env={
+            **os.environ,
+            "OTEL_SDK_DISABLED": "false",
+            "OTEL_EXPORTER_OTLP_ENDPOINT": "http://127.0.0.1:9",
+            "OTEL_EXPORTER_OTLP_HEADERS": "",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "no installed version was found" not in result.stderr

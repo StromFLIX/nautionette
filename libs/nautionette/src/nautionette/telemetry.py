@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Sequence
+from importlib.util import find_spec
 
 from opentelemetry import metrics, trace
 from opentelemetry._logs import SeverityNumber
@@ -179,9 +180,12 @@ def configure(service: str) -> bool:
         )
     )
     logging.getLogger().addHandler(SafeLoggingHandler(level=logging.INFO, logger_provider=logs))
-    from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+    # HTTPX is not installed in every service image (the Docker broker uses
+    # requests). Do not turn an absent optional client into a false error alert.
+    if find_spec("httpx") is not None:
+        from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
-    HTTPXClientInstrumentor().instrument()
+        HTTPXClientInstrumentor().instrument()
     _providers.extend([provider, meter, logs])
     _initialized = True
     return True
