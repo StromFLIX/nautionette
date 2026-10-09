@@ -61,13 +61,13 @@ _initialized = False
 
 def safe_span(span: ReadableSpan) -> ReadableSpan:
     """Allowlist attributes and drop exception text, status descriptions and baggage."""
+    attrs = span.attributes or {}
+    is_http_server = span.kind == trace.SpanKind.SERVER and any(
+        key in attrs for key in ("http.method", "http.request.method")
+    )
+    method = attrs.get("http.method", attrs.get("http.request.method", "HTTP"))
     return ReadableSpan(
-        name=(
-            f"{(span.attributes or {}).get('http.method', 'HTTP')} "
-            f"{(span.attributes or {}).get('http.route', 'request')}"
-            if span.kind == trace.SpanKind.SERVER
-            else span.name
-        ),
+        name=f"{method} {attrs.get('http.route', 'request')}" if is_http_server else span.name,
         context=span.context,
         parent=span.parent,
         resource=span.resource,

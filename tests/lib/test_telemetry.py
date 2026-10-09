@@ -42,6 +42,22 @@ def test_server_names_never_contain_unmatched_paths_or_query_strings():
     assert safe_span(ReadableSpan("no attrs")).attributes == {}
 
 
+def test_temporal_server_spans_keep_operation_names():
+    for name in ("RunWorkflow:verification", "RunActivity:http_fetch"):
+        raw = ReadableSpan(
+            name,
+            kind=SpanKind.SERVER,
+            attributes={"temporalWorkflowID": "verification-123"},
+        )
+        assert safe_span(raw).name == name
+    http = ReadableSpan(
+        "GET /private?token=secret",
+        kind=SpanKind.SERVER,
+        attributes={"http.request.method": "GET"},
+    )
+    assert safe_span(http).name == "GET request"
+
+
 def test_logging_never_formats_untrusted_text():
     records = []
 
