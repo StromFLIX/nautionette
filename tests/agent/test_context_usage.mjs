@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { contextUsage } from '../../images/pi-base/context-usage.mjs'
 import { createChatRecovery } from '../../images/pi-base/chat-recovery.mjs'
 import { prepareFiles, fileReferences } from '../../images/pi-base/chat-files.mjs'
+import { createTelemetry } from '../../images/pi-base/telemetry.mjs'
 
 const message = (usage) => ({ role: 'assistant', content: [{ type: 'text', text: 'hello' }], usage })
 const usage = { input: 1000, output: 200, cacheRead: 3000, cacheWrite: 400, totalTokens: 4600 }
@@ -33,6 +34,7 @@ async function runAgent (events, job = {}) {
     .replace(/^import .*;\n/gm, '')
   await runInNewContext(source, {
     Buffer, console, contextUsage, createChatRecovery, prepareFiles, fileReferences,
+    createTelemetry: (job) => createTelemetry(job, { OTEL_SDK_DISABLED: 'true' }),
     mkdirSync () {}, writeFileSync () {}, existsSync () { return false },
     projectEnvironment () { return {} },
     preparePackages () {}, randomUUID () { return 'test-session'; },

@@ -186,7 +186,7 @@ async function main() {
       ...process.env,
       ...(telemetry.traceparent ? {
         TRACEPARENT: telemetry.traceparent,
-        NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --import=${new URL("./trace-fetch.mjs", import.meta.url).pathname}`,
+        NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --import=${telemetry.fetchImport}`,
       } : {}),
       ...projectEnvironment(job),
       ...packageEnvironment,

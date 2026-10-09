@@ -1,5 +1,6 @@
 /** Payload-free OTLP/HTTP for short-lived agents. No additional SDK dependencies. */
 import { randomBytes } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 const id = bytes => randomBytes(bytes).toString("hex");
 const now = () => (BigInt(Date.now()) * 1000000n).toString();
@@ -64,6 +65,7 @@ export function createTelemetry(job = {}, env = process.env) {
   const timer = enabled ? setInterval(() => void flush(), 5000) : null;
   timer?.unref();
   return { start, end, traceparent: configured ? traceparent : "", flush,
+    fetchImport: fileURLToPath(new URL("./trace-fetch.mjs", import.meta.url)),
     finish(error = false) {
       if (finished) return;
       finished = true;

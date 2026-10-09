@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { createChatRecovery } from '../../images/pi-base/chat-recovery.mjs'
+import { createTelemetry } from '../../images/pi-base/telemetry.mjs'
 
 const source = ['chat-files.mjs', 'agent-run.mjs'].map(name =>
   readFileSync(new URL(`../../images/pi-base/${name}`, import.meta.url), 'utf8')
@@ -15,6 +16,7 @@ async function run (job, events = null) {
   let spawnArgs, spawnOptions
   await runInNewContext(source, {
     Buffer, console, createChatRecovery,
+    createTelemetry: (job) => createTelemetry(job, { OTEL_SDK_DISABLED: 'true' }),
     mkdirSync () {}, existsSync () { return false },
     writeFileSync (path, value, options) { writes.push([path, value, options]) },
     readFileSync (path) { assert.equal(path, '/tmp/nautionette-job.json'); return JSON.stringify(job) },
