@@ -23,7 +23,8 @@ def validate(credentials: Any, repositories: set[str] | None = None) -> None:
             raise ValueError("Invalid Git credential")
         if (
             not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", item["full_name"])
-            or not re.fullmatch(r"[A-Za-z0-9_\-]+", item["token"])
+            or not item["token"]
+            or any(ord(character) < 32 or ord(character) == 127 for character in item["token"])
             or len(item["token"]) > 1024
             or item["full_name"] in names
         ):

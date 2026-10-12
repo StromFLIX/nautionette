@@ -298,6 +298,9 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         raise
     except Exception as exc:
         failure = str(exc) or type(exc).__name__
+        logging.getLogger("nautionette").exception(
+            "Chat turn failed: chat=%s turn=%s", chat_id, turn_id
+        )
         if db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
             event = {"type": "error", "message": failure}
             timeline.observe(event)

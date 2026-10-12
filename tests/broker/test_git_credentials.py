@@ -44,6 +44,13 @@ def test_private_initial_file_is_not_agent_replaceable():
     container.exec_run.assert_not_called()
 
 
+def test_opaque_token_characters_are_accepted():
+    git_credentials.validate(
+        [CREDENTIALS[0] | {"token": "opaque.token+/=~"}],
+        {"owner/repo"},
+    )
+
+
 def test_refresh_stages_private_data_then_atomically_renames_without_secrets_in_argv(target):
     calls = Mock()
     calls.attach_mock(target.put_archive, "copy")
@@ -151,7 +158,9 @@ def test_credentials_endpoint_requires_internal_auth():
         [],
         CREDENTIALS * 21,
         CREDENTIALS * 2,
+        [CREDENTIALS[0] | {"token": ""}],
         [CREDENTIALS[0] | {"token": "secret\nusername=other"}],
+        [CREDENTIALS[0] | {"token": "secret\x7fvalue"}],
         [CREDENTIALS[0] | {"expires_at": "secret-invalid-date"}],
         [CREDENTIALS[0] | {"expires_at": "2099-01-01T00:00:00"}],
         [CREDENTIALS[0] | {"full_name": "../owner/repo"}],
