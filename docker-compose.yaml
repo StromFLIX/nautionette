@@ -72,6 +72,18 @@ services:
         condition: service_started
       frontend-web:
         condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8080/healthz',timeout=4).read()",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
     <<: *logging
 
   # The promotional site. Static, separate from the app, its own domain.
@@ -86,6 +98,12 @@ services:
       APP_URL: ${APP_URL:-}
       APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
     networks: [edge]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "4", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     <<: *logging
 
   # -------------------------------------------------------------- control plane
@@ -136,6 +154,18 @@ services:
         condition: service_started
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json,sys,urllib.request;sys.exit(json.load(urllib.request.urlopen('http://127.0.0.1:9100/healthz',timeout=4))['status'] != 'ok')",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
     <<: *logging
 
   # ------------------------------------------------------------------- tooling
@@ -172,6 +202,23 @@ services:
     networks: [internal, agents]
     depends_on:
       - workflow-mcp
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/usr/local/bin/busybox",
+          "wget",
+          "-q",
+          "-T",
+          "4",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1:15021/healthz/ready",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
     <<: *logging
 
   # An MCP target behind agentgateway, never called directly by an agent. Holds
@@ -190,6 +237,18 @@ services:
     volumes:
       - workflows:/workflows
     networks: [internal]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=4).read()",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
     <<: *logging
 
   # ----------------------------------------------------------------- execution
@@ -222,6 +281,12 @@ services:
       - temporal
     # Let in-flight activities drain instead of being killed on restart.
     stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD", "python", "-m", "nautionette_worker.health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 360s
+      retries: 3
     <<: *logging
 
   temporal:
@@ -245,6 +310,23 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "temporal",
+          "--address",
+          "127.0.0.1:7233",
+          "--command-timeout",
+          "4s",
+          "operator",
+          "cluster",
+          "health",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
     <<: *logging
 
   postgres:
@@ -274,6 +356,12 @@ services:
     image: ${STACK_NAMESPACE:-nautionette}/frontend:dev
     restart: unless-stopped
     networks: [internal]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "4", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     <<: *logging
 
   # ------------------------------------- agent images: built here, never run here
@@ -313,6 +401,23 @@ services:
     mem_limit: 256m
     networks: [internal, agents]
     security_opt: [no-new-privileges:true]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/usr/local/bin/busybox",
+          "wget",
+          "-q",
+          "-T",
+          "4",
+          "-O",
+          "/dev/null",
+          "http://127.0.0.1:13133/",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
     <<: *logging
 
   # --------------------------------------------------------------------- debug

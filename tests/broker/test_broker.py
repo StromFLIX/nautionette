@@ -401,6 +401,28 @@ def test_resource_defaults_match_compose_and_example(repo_root, monkeypatch):
         assert f"{name}={expected}" in example
 
 
+def test_every_deployed_compose_service_has_a_healthcheck(repo_root):
+    compose = yaml.safe_load((repo_root / "docker-compose.yaml").read_text())
+    deployed = {
+        name
+        for name, service in compose["services"].items()
+        if not set(service.get("profiles", [])) & {"debug", "images"}
+    }
+    assert deployed == {
+        "agentgateway",
+        "backend",
+        "docker-broker",
+        "frontend-web",
+        "otel-collector",
+        "postgres",
+        "temporal",
+        "website",
+        "worker",
+        "workflow-mcp",
+    }
+    assert all(compose["services"][name].get("healthcheck", {}).get("test") for name in deployed)
+
+
 def test_explicit_agent_resource_overrides_are_preserved(monkeypatch):
     monkeypatch.setenv("AGENT_MEMORY_LIMIT", "6g")
     monkeypatch.setenv("AGENT_WORKSPACE_SIZE", "2g")
