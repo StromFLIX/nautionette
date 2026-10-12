@@ -200,6 +200,45 @@ def wait_for_health(target: str, timeout: int) -> None:
             time.sleep(min(10, deadline - now))
 
 
+def wait_for_coolify_health(api: Coolify, app: str, commit: str, timeout: int) -> None:
+    started = time.monotonic()
+    deadline = started + timeout
+    attempt = 0
+    while True:
+        attempt += 1
+        details = api.call(f"/applications/{app}")
+        if details.get("git_commit_sha") != commit:
+            raise RuntimeError("Coolify application revision changed during health verification")
+        status = details.get("status")
+        if status == "running:healthy":
+            return
+        now = time.monotonic()
+        safe_status = (
+            status
+            if status
+            in {
+                "degraded:unhealthy",
+                "exited",
+                "paused:unknown",
+                "restarting:unknown",
+                "running:unknown",
+                "running:unhealthy",
+                "starting:unknown",
+            }
+            else "missing or unrecognized status"
+        )
+        print(
+            f"Coolify health verification, attempt {attempt}, {now - started:.0f}s elapsed: {safe_status}",
+            flush=True,
+        )
+        if now >= deadline:
+            raise RuntimeError(
+                f"Coolify did not report running:healthy after {now - started:.0f}s "
+                f"(budget {timeout}s). Last status: {safe_status}"
+            )
+        time.sleep(min(10, deadline - now))
+
+
 def deploy(target: str, commit: str) -> str | None:
     api = Coolify()
     app = identifier(required("COOLIFY_APPLICATION_UUID"))
@@ -208,6 +247,7 @@ def deploy(target: str, commit: str) -> str | None:
     required("APP_TOKEN")
     timeout = health_timeout()
     if api.deployed(app, commit):
+        wait_for_coolify_health(api, app, commit, timeout)
         wait_for_health(target, timeout)
         return None
     staging = identifier(required("COOLIFY_STAGING_APPLICATION_UUID")) if target == "production" else app
@@ -280,6 +320,7 @@ def deploy(target: str, commit: str) -> str | None:
         f"Coolify deployment {deployment} finished; verifying {target} health (budget {timeout}s).",
         flush=True,
     )
+    wait_for_coolify_health(api, app, commit, timeout)
     wait_for_health(target, timeout)
     return deployment
 

@@ -124,6 +124,7 @@ def api(monkeypatch):
             self.accept_pin = True
             self.accept_version = True
             self.description = ""
+            self.application_status = "running:healthy"
 
         def deployed(self, app, commit):
             return app in self.already_deployed
@@ -145,6 +146,7 @@ def api(monkeypatch):
                 "build_pack": "dockercompose",
                 "git_repository": REPO,
                 "git_commit_sha": COMMIT if self.accept_pin else "HEAD",
+                "status": self.application_status,
             }
 
     fake = Fake()
@@ -168,7 +170,18 @@ def test_untested_release_never_patches_or_deploys(api):
 def test_duplicate_deploy_is_a_noop(api):
     api.already_deployed.add("prod")
     assert release.deploy("production", COMMIT) is None
-    assert api.calls == []
+    assert api.calls == [("/applications/prod", "GET", None)]
+
+
+def test_duplicate_deploy_requires_coolify_healthy_status(api, monkeypatch):
+    api.already_deployed.add("prod")
+    api.application_status = "running:unknown"
+    monkeypatch.setenv("DEPLOY_HEALTH_TIMEOUT_SECONDS", "1")
+    times = iter([0, 1])
+    monkeypatch.setattr(release.time, "monotonic", lambda: next(times))
+    monkeypatch.setattr(release.time, "sleep", lambda _: None)
+    with pytest.raises(RuntimeError, match="running:healthy"):
+        release.deploy("production", COMMIT)
 
 
 def test_active_deployment_is_not_reconfigured(api):
