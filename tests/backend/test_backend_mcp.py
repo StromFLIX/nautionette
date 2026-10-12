@@ -31,7 +31,16 @@ async def test_backend_tools_cover_diagnostics_and_controls_without_proxy_or_aut
     } <= names
     assert "internal_agent_call" not in names
     assert "events_stream" not in names
-    assert not any("chat" in name for name in names)
+    assert {
+        "search_chats",
+        "inspect_chat",
+        "list_chat_sessions",
+        "inspect_chat_messages",
+        "inspect_chat_session_events",
+    } <= names
+    assert "get_chat" not in names
+    assert "create_chat" not in names
+    assert "post_message" not in names
     for tool in tools.tools:
         assert "token" not in tool.input_schema["properties"]
         assert "authorization" not in tool.input_schema["properties"]

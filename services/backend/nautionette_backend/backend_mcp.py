@@ -25,6 +25,7 @@ from .events import bus
 from .security import token_matches
 
 _PREFIXES = (
+    "/api/chat-inspection",
     "/api/workflows",
     "/api/runs",
     "/api/drafts",
@@ -41,6 +42,9 @@ INSTRUCTIONS = (
     "Deploy validated workflows, run them with relevant inputs, inspect run history and results, "
     "and repair and redeploy failures. Use system_status and events_recent to diagnose services; "
     "inspect settings and integration schemas before changing their configuration. "
+    "Find chats with search_chats and list_chat_sessions; use inspect_chat for tool counts, "
+    "inspect_chat_messages for bounded excerpts and inspect_chat_session_events for filtered failures "
+    "and tool args/results. Chat IDs and session IDs are not workflow run IDs. Follow pagination cursors. "
     "The body argument is the HTTP request body. Tools enforce the same validation as the app. "
     "A deployment is ready only when ready=true; inspect worker_restart on failure. "
     "Never claim a run succeeded until its results confirm it. Do not expose credentials."
