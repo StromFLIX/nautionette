@@ -18,6 +18,7 @@ def sessions(backend):
             (
                 json.dumps(
                     {
+                        "model": chat["model"],
                         "project_credentials": [{"token": "SECRET-JOB-TOKEN"}],
                         "system_prompt": "PRIVATE-PROMPT",
                     }
@@ -64,6 +65,16 @@ def test_chat_search_and_session_filters_compose(client, sessions):
     )
     assert "SECRET-JOB-TOKEN" not in json.dumps(listed)
     assert "PRIVATE-PROMPT" not in json.dumps(listed)
+    assert listed[0]["model"] == "copilot/example"
+    assert len(client.get(BASE + "/sessions", params={"model": "other/model"}).json()["sessions"]) == 1
+    assert client.get(BASE + "/sessions", params={"created_before": 1}).json()["sessions"] == []
+    assert client.get(BASE + "/chats", params={"updated_after": 1e12}).json()["chats"] == []
+    tools = client.get(BASE + "/tools", params={"chat_id": first, "session_id": "failed-turn"}).json()
+    assert tools["tools"] == [{"name": "read", "calls": 1}]
+    assert (
+        client.get(BASE + "/tools", params={"chat_id": second, "session_id": "failed-turn"}).status_code
+        == 404
+    )
 
 
 def test_events_are_filtered_bounded_and_cursor_paginated(client, sessions):
@@ -77,6 +88,11 @@ def test_events_are_filtered_bounded_and_cursor_paginated(client, sessions):
     assert following["events"][0]["type"] == "tool_done"
     assert len(following["events"][0]["data"]["text"]) == 100
     assert following["events"][0]["data"]["truncated"] is True
+    continuation = client.get(
+        path, params={"event_types": "tool_done", "include_data": True, "max_chars": 100, "data_offset": 100}
+    ).json()
+    assert continuation["events"][0]["data"]["offset"] == 100
+    assert continuation["events"][0]["data"]["next_offset"] == 200
     errors = client.get(path, params={"event_types": "error,result"}).json()["events"]
     assert len(errors) == 1 and errors[0]["error"]["text"] == "Pi exited (SIGKILL)"
     assert client.get(path, params={"tool": "missing"}).json()["events"] == []
@@ -91,6 +107,11 @@ def test_messages_are_filtered_without_unbounded_metadata(client, sessions):
     message = page["messages"][0]
     assert message["content"]["truncated"] and len(message["content"]["text"]) == 20
     assert "meta" not in message
+    continuation = client.get(
+        path, params={"role": "assistant", "max_chars": 20, "content_offset": 20}
+    ).json()
+    assert continuation["messages"][0]["content"]["text"] == "y" * 20
+    assert continuation["messages"][0]["content"]["next_offset"] == 40
     assert client.get(path, params={"query": "absent"}).json()["messages"] == []
     assert client.get(path, params={"max_chars": 0}).json()["messages"][0]["content"]["text"] == ""
 
@@ -113,6 +134,36 @@ def test_unknown_ids_are_not_workflow_runs(client, suffix):
 @pytest.mark.parametrize("query", ["limit=0", "limit=101", "offset=-1"])
 def test_invalid_pagination(client, query):
     assert client.get(BASE + "/chats?" + query).status_code == 422
+
+
+def test_restart_failures_are_found_even_without_a_result_event(client, backend):
+    chat = db.create_chat("Interrupted", "default")
+    db.accept_chat_message(chat["id"], "Work", "restarted-turn")
+    db.finish_chat_turn(
+        "restarted-turn", "partial", {"error": "The answer was interrupted by a backend restart."}
+    )
+    listed = client.get(BASE + "/sessions", params={"has_error": True}).json()["sessions"]
+    assert listed[0]["id"] == "restarted-turn"
+    event = client.get(BASE + "/sessions/restarted-turn/events").json()["events"][0]
+    assert event["type"] == "done" and "backend restart" in event["error"]["text"]
+
+
+def test_payload_budget_keeps_a_cursor_for_remaining_events(client, sessions):
+    for index in range(30):
+        db.record_chat_progress(
+            "failed-turn", {"type": "error", "message": "z" * 8000, "index": index}, [], ""
+        )
+    page = client.get(
+        BASE + "/sessions/failed-turn/events",
+        params={"event_types": "error", "limit": 100, "max_chars": 4000, "include_data": True},
+    ).json()
+    assert len(page["events"]) == 5 and page["next_after_seq"] is not None
+    assert len(json.dumps(page)) < 45000
+    following = client.get(
+        BASE + "/sessions/failed-turn/events",
+        params={"event_types": "error", "after_seq": page["next_after_seq"], "limit": 100, "max_chars": 4000},
+    ).json()
+    assert following["events"][0]["seq"] > page["events"][-1]["seq"]
 
 
 async def test_mcp_chat_diagnostics_use_real_filtered_api(backend, sessions):

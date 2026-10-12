@@ -250,10 +250,15 @@ test('workflow agents retain their existing one-shot behavior', () => {
 const runner = readFileSync(new URL('../../images/pi-base/agent-run.mjs', import.meta.url), 'utf8')
   .replace(/^import .*;\n/gm, '')
 
-async function runWrapper (events, exitCode = null) {
+async function runWrapper (events, exitCode = null, signal = null, oomCounts = []) {
   const output = []
   await runInNewContext(runner, {
     Buffer, console, createChatControl, createChatRecovery, prepareFiles, fileReferences,
+    createTelemetry () { return { start () {}, end () {}, finish () {}, async flush () {} } },
+    readFileSync () {
+      if (!oomCounts.length) throw new Error('No cgroup v2')
+      return `oom_kill ${oomCounts.shift()}\n`
+    },
     mkdirSync () {}, existsSync () { return false }, writeFileSync () {},
     preparePackages () {}, projectEnvironment () { return {} }, contextUsage () { return null },
     listenForChatControl () { return { close () {} } },
@@ -267,7 +272,7 @@ async function runWrapper (events, exitCode = null) {
         if (JSON.parse(line).type !== 'prompt') return
         setImmediate(() => {
           for (const event of events) child.stdout.emit('data', JSON.stringify(event) + '\n')
-          if (exitCode !== null) child.emit('close', exitCode)
+          if (exitCode !== null || signal !== null) child.emit('close', exitCode, signal)
         })
       }
       child.kill = () => child.emit('close', 0)
@@ -286,6 +291,35 @@ for (const code of [0, 1, 137]) test(`unexpected RPC exit ${code} preserves part
   assert.equal(result.ok, false)
   assert.equal(result.text, 'Partial answer')
   assert.match(result.error, /before completing/)
+})
+
+for (const signal of ['SIGTERM', 'SIGKILL']) test(`unexpected ${signal} reports the signal instead of exit null`, async () => {
+  const output = await runWrapper([
+    { type: 'tool_execution_start', toolCallId: 'unfinished', toolName: 'write', args: {} },
+    { type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'Partial work' } }
+  ], null, signal)
+  const result = output.at(-1)
+  assert.equal(result.ok, false)
+  assert.equal(result.signal, signal)
+  assert.equal(result.exit_code, null)
+  assert.equal(result.reason, 'pi_signal')
+  assert.match(result.error, new RegExp(signal))
+  assert.doesNotMatch(result.error, /exit null|ran out of memory/)
+  assert.match(result.error, /verify unfinished tool outcomes/)
+  assert.equal(result.text, 'Partial work')
+})
+
+test('Pi OOM is diagnosed even when the supervisor survives', async () => {
+  const result = (await runWrapper([], null, 'SIGKILL', [0, 1])).at(-1)
+  assert.equal(result.reason, 'oom_killed')
+  assert.match(result.error, /memory controller recorded an OOM kill/)
+  assert.match(result.error, /AGENT_MEMORY_LIMIT/)
+})
+
+test('SIGKILL without an increased OOM counter is not classified as OOM', async () => {
+  const result = (await runWrapper([], null, 'SIGKILL', [3, 3])).at(-1)
+  assert.equal(result.reason, 'pi_signal')
+  assert.match(result.error, /No container OOM kill was confirmed/)
 })
 
 test('successful overflow recovery cannot leave a stale terminal error in the real wrapper', async () => {

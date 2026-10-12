@@ -17,7 +17,7 @@ const piAvailable = spawnSync('pi', ['--version']).status === 0
 const source = (await readFile(new URL('../../images/pi-base/agent-run.mjs', import.meta.url), 'utf8'))
   .replace(/^import .*;\n/gm, '')
 
-for (const outcome of ['recovered', 'exhausted', 'permanent']) {
+for (const outcome of ['recovered', 'exhausted', 'permanent', 'SIGTERM', 'SIGKILL']) {
   test(`real RPC ${outcome}: completed tool runs once and continuation retains its result`, { skip: !piAvailable, timeout: 30000 }, async () => {
     const dir = await mkdtemp(join(tmpdir(), 'pi-chat-recovery-'))
     const operation = join(dir, 'operation.txt')
@@ -28,6 +28,11 @@ for (const outcome of ['recovered', 'exhausted', 'permanent']) {
       for await (const chunk of req) raw += chunk
       const request = JSON.parse(raw)
       requests.push(request)
+      if (requests.length === 2 && outcome.startsWith('SIG')) {
+        child.kill(outcome)
+        res.destroy()
+        return
+      }
       if (requests.length > 1 && !(outcome === 'recovered' && requests.length === 3)) {
         res.writeHead(outcome === 'permanent' ? 403 : 503, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ error: { message: outcome === 'permanent' ? 'Permission denied' : 'Service unavailable' } }))
@@ -69,6 +74,7 @@ for (const outcome of ['recovered', 'exhausted', 'permanent']) {
       // and the actual Pi subprocess are unchanged; no /workspace files are touched.
       await runInNewContext(source, {
         Buffer, console, createChatControl, createChatRecovery, prepareFiles, fileReferences,
+        createTelemetry () { return { start () {}, end () {}, finish () {}, async flush () {} } },
         mkdirSync () {}, existsSync () { return false }, writeFileSync () {},
         preparePackages () { return {} }, projectEnvironment () { return {} }, contextUsage () { return null },
         listenForChatControl () { return { close () {} } },
@@ -89,13 +95,13 @@ for (const outcome of ['recovered', 'exhausted', 'permanent']) {
       const result = output.at(-1)
       assert.equal(result.type, 'result', stderr)
       assert.equal(result.ok, outcome === 'recovered', JSON.stringify(result) + stderr)
-      assert.equal(requests.length, { recovered: 3, exhausted: 4, permanent: 2 }[outcome])
+      assert.equal(requests.length, { recovered: 3, exhausted: 4, permanent: 2, SIGTERM: 2, SIGKILL: 2 }[outcome])
       assert.equal(await readFile(operation, 'utf8'), 'once\n')
       assert.equal(output.filter(event => event.type === 'tool').length, 1)
       assert.equal(output.filter(event => event.type === 'tool_done').length, 1)
       assert.equal(output.filter(event => event.type === 'input_consumed').length, 0)
       assert.equal(output.filter(event => event.type === 'result').length, 1)
-      assert.equal(output.filter(event => event.type === 'recovery').length, { recovered: 1, exhausted: 2, permanent: 0 }[outcome])
+      assert.equal(output.filter(event => event.type === 'recovery').length, { recovered: 1, exhausted: 2, permanent: 0, SIGTERM: 0, SIGKILL: 0 }[outcome])
       for (const request of requests.slice(2)) {
         assert.ok(request.messages.some(message => message.role === 'tool' && message.tool_call_id === 'write-once' && message.content.includes('operation-complete')))
         assert.ok(request.messages.some(message => message.role === 'user' && JSON.stringify(message.content).includes('automatic recovery notice')))
@@ -104,6 +110,20 @@ for (const outcome of ['recovered', 'exhausted', 'permanent']) {
         assert.equal(result.text, 'Resumed from the completed tool without repeating it.')
         assert.equal(output.some(event => event.type === 'error'), false)
       } else if (outcome === 'exhausted') assert.match(result.error, /stopped after 2 attempt/)
+      else if (outcome.startsWith('SIG')) {
+        // Pi can handle SIGTERM and exit numerically; Node only reports a
+        // signal when the OS actually terminates it. Both remain failures.
+        if (result.signal) {
+          assert.equal(result.signal, outcome)
+          assert.equal(result.reason, 'pi_signal')
+          assert.match(result.error, new RegExp(outcome))
+        } else {
+          assert.equal(outcome, 'SIGTERM')
+          assert.notEqual(result.exit_code, null)
+          assert.equal(result.reason, 'pi_incomplete')
+        }
+        assert.doesNotMatch(result.error, /exit null/)
+      }
     } finally {
       if (child && child.exitCode === null && child.signalCode === null) {
         const closed = once(child, 'close'); child.kill(); await closed

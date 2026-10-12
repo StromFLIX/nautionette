@@ -69,7 +69,9 @@ def _tool_stats(where: str, params: list[Any]) -> dict:
 
 _ERROR = (
     "(json_extract(e.payload, '$.type') = 'error' OR "
-    "(json_extract(e.payload, '$.type') = 'result' AND json_extract(e.payload, '$.ok') = 0))"
+    "(json_extract(e.payload, '$.type') = 'result' AND json_extract(e.payload, '$.ok') = 0) OR "
+    "(json_extract(e.payload, '$.type') = 'done' AND "
+    "COALESCE(json_extract(e.payload, '$.message.meta.error'), '') != ''))"
 )
 
 
@@ -77,6 +79,7 @@ _ERROR = (
 def search_chats(
     query: str | None = Query(None, max_length=200),
     model: str | None = None,
+    updated_after: float | None = Query(None, ge=0, description="Unix timestamp, seconds"),
     tool: str | None = None,
     has_error: bool | None = None,
     offset: int = Query(0, ge=0),
@@ -97,6 +100,9 @@ def search_chats(
     if model:
         clauses.append("c.model = ?")
         params.append(model)
+    if updated_after is not None:
+        clauses.append("c.updated_at >= ?")
+        params.append(updated_after)
     if tool:
         clauses.append(
             "EXISTS (SELECT 1 FROM chat_turns t JOIN chat_turn_events e ON e.turn_id = t.id "
@@ -146,6 +152,9 @@ def inspect_chat(chat_id: str) -> dict:
 def list_chat_sessions(
     chat_id: str | None = None,
     state: Literal["running", "queued", "steered", "completed"] | None = None,
+    model: str | None = None,
+    created_after: float | None = Query(None, ge=0, description="Unix timestamp, seconds"),
+    created_before: float | None = Query(None, ge=0, description="Unix timestamp, seconds"),
     has_error: bool | None = None,
     tool: str | None = None,
     offset: int = Query(0, ge=0),
@@ -164,6 +173,15 @@ def list_chat_sessions(
     if state:
         clauses.append("t.state = ?")
         params.append(state)
+    if model:
+        clauses.append("json_extract(t.job, '$.model') = ?")
+        params.append(model)
+    if created_after is not None:
+        clauses.append("m.created_at >= ?")
+        params.append(created_after)
+    if created_before is not None:
+        clauses.append("m.created_at <= ?")
+        params.append(created_before)
     if has_error is not None:
         clauses.append(
             ("" if has_error else "NOT ")
@@ -177,7 +195,9 @@ def list_chat_sessions(
         params.append(tool)
     where = " AND ".join(clauses) or "1"
     rows = db.query(
-        "SELECT t.id, t.chat_id, t.state, t.stop_requested, m.created_at, c.title "
+        "SELECT t.id, t.chat_id, t.state, t.stop_requested, m.created_at, c.title, "
+        "json_extract(t.job, '$.model') AS model, json_extract(t.job, '$.agent_set') AS agent_set, "
+        "json_extract(t.job, '$.reasoning_effort') AS reasoning_effort "
         "FROM chat_turns t JOIN messages m ON m.id = t.user_id JOIN chats c ON c.id = t.chat_id "
         f"WHERE {where} ORDER BY m.created_at DESC, t.id LIMIT ? OFFSET ?",
         (*params, limit + 1, offset),
@@ -194,9 +214,50 @@ def list_chat_sessions(
     return page
 
 
-def _bounded(value: Any, max_chars: int) -> dict:
+@router.get("/tools")
+def list_chat_tools(
+    chat_id: str | None = None,
+    session_id: str | None = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+) -> dict:
+    """Page through tools used and their call counts, globally or for a chat/session.
+
+    Chat/session summaries include only the top 20 tools; this tool enumerates the
+    complete set without transcripts, arguments or results.
+    """
+    clauses, params = [], []
+    if chat_id:
+        _chat(chat_id)
+        clauses.append("t.chat_id = ?")
+        params.append(chat_id)
+    if session_id:
+        turn = db.one("SELECT chat_id FROM chat_turns WHERE id = ?", (session_id,))
+        if not turn or (chat_id and turn["chat_id"] != chat_id):
+            raise HTTPException(404, "chat session not found")
+        clauses.append("t.id = ?")
+        params.append(session_id)
+    where = " AND ".join(clauses) or "1"
+    rows = db.query(
+        "SELECT json_extract(e.payload, '$.name') AS name, COUNT(*) AS calls "
+        "FROM chat_turn_events e JOIN chat_turns t ON t.id = e.turn_id "
+        f"WHERE {where} AND json_extract(e.payload, '$.type') = 'tool' "
+        "GROUP BY name ORDER BY calls DESC, name LIMIT ? OFFSET ?",
+        (*params, limit + 1, offset),
+    )
+    return _page(rows, offset, limit, "tools")
+
+
+def _bounded(value: Any, max_chars: int, offset: int = 0) -> dict:
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-    return {"text": text[:max_chars], "truncated": len(text) > max_chars, "total_chars": len(text)}
+    excerpt = text[offset : offset + max_chars]
+    return {
+        "text": excerpt,
+        "truncated": len(text) > len(excerpt),
+        "total_chars": len(text),
+        "offset": offset,
+        "next_offset": offset + len(excerpt) if max_chars and offset + len(excerpt) < len(text) else None,
+    }
 
 
 @router.get("/chats/{chat_id}/messages")
@@ -208,6 +269,7 @@ def inspect_chat_messages(
     offset: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=50),
     max_chars: int = Query(500, ge=0, le=4000),
+    content_offset: int = Query(0, ge=0),
 ) -> dict:
     """Read filtered, paginated message excerpts. Raise max_chars to inspect a specific answer.
 
@@ -232,7 +294,7 @@ def inspect_chat_messages(
     effective_limit = min(limit, max(1, 20000 // max(1, max_chars)))
     page = _page(rows, offset, effective_limit, "messages")
     for row in page["messages"]:
-        row["content"] = _bounded(row["content"], max_chars)
+        row["content"] = _bounded(row["content"], max_chars, content_offset)
         row["error"] = _bounded(row["error"], max_chars) if row["error"] else None
     return page
 
@@ -241,9 +303,10 @@ def inspect_chat_messages(
 def inspect_chat_session_events(
     session_id: str,
     after_seq: int = Query(0, ge=0),
-    event_types: str = Query("tool,tool_done,error,result,recovery", max_length=200),
+    event_types: str = Query("tool,tool_done,error,result,recovery,done", max_length=200),
     tool: str | None = None,
     include_data: bool = False,
+    data_offset: int = Query(0, ge=0),
     max_chars: int = Query(500, ge=0, le=4000),
     limit: int = Query(20, ge=1, le=100),
 ) -> dict:
@@ -279,12 +342,20 @@ def inspect_chat_session_events(
             for key in ("type", "id", "name", "ok", "error", "reason", "exit_code", "signal", "attempt")
             if key in payload
         }
+        if payload.get("type") == "done":
+            error = payload.get("message", {}).get("meta", {}).get("error")
+            if error:
+                summary["error"] = error
         if isinstance(summary.get("error"), str):
             summary["error"] = _bounded(summary["error"], max_chars)
         if payload.get("message") and isinstance(payload["message"], str):
             summary["message"] = _bounded(payload["message"], max_chars)
         events.append(
-            {"seq": row["seq"], **summary, **({"data": _bounded(payload, max_chars)} if include_data else {})}
+            {
+                "seq": row["seq"],
+                **summary,
+                **({"data": _bounded(payload, max_chars, data_offset)} if include_data else {}),
+            }
         )
     return {
         "session": turn,

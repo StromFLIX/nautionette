@@ -138,6 +138,18 @@ function explain(error) {
   return error;
 }
 
+function oomKills() {
+  // Docker can OOM-kill Pi while leaving this small supervisor alive. In that
+  // case the container itself may exit 0 and Docker's OOMKilled flag is missed.
+  try {
+    const counters = readFileSync("/sys/fs/cgroup/memory.events", "utf8");
+    const count = counters.match(/^oom_kill\s+(\d+)$/m);
+    return count ? Number(count[1]) : null;
+  } catch {
+    return null; // No cgroup v2 evidence: never assume SIGKILL means OOM.
+  }
+}
+
 async function main() {
   const job = readJob();
   telemetry = createTelemetry(job);
@@ -180,6 +192,7 @@ async function main() {
   if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
   if (!interactive) args.push("--", prompt);
 
+  const initialOomKills = oomKills();
   const child = spawn("pi", args, {
     cwd: workspace,
     env: {
@@ -378,9 +391,9 @@ async function main() {
     child.on("error", (error) => {
       log("failed to start pi:", error.message);
       stderr += `\n${error.message}`;
-      resolve(127);
+      resolve({ code: 127, signal: null });
     });
-    child.on("close", resolve);
+    child.on("close", (code, signal) => resolve({ code, signal: signal || null }));
   });
   if (interactive) {
     send({ type: "set_steering_mode", mode: "one-at-a-time" });
@@ -388,7 +401,7 @@ async function main() {
     const images = job.images || [];
     send({ id: "initial", type: "prompt", message: prompt, ...(images.length ? { images } : {}) });
   }
-  const code = await completion;
+  const { code, signal } = await completion;
   recovery.close();
   control?.close();
   controlServer?.close();
@@ -396,11 +409,26 @@ async function main() {
   const text = (finalText || streamed).trim();
   const unexpectedExit = interactive ? !recovery.settled && !commandCompleted : code !== 0;
   if (recovery.error || unexpectedExit) {
-    const error = explain(recovery.error) || `Pi exited before completing the response (exit ${code}): ${stderr.trim().slice(-1200) || "no final result"}`;
+    const finalOomKills = oomKills();
+    const oomKilled = signal === "SIGKILL" && initialOomKills !== null &&
+      finalOomKills !== null && finalOomKills > initialOomKills;
+    const termination = signal ? `signal ${signal}` : `exit ${code ?? "unknown"}`;
+    const hint = oomKilled
+      ? " The container's memory controller recorded an OOM kill. Reduce memory use or increase AGENT_MEMORY_LIMIT."
+      : signal === "SIGKILL"
+        ? " No container OOM kill was confirmed; check host memory and deployment logs."
+        : signal === "SIGTERM"
+          ? " The Pi process was terminated; check stop requests and service/deployment logs."
+          : "";
+    const error = explain(recovery.error) ||
+      `Pi exited before completing the response (${termination}).${hint} Partial output was retained; verify unfinished tool outcomes before continuing. Diagnostics: ${stderr.trim().slice(-1200) || "no final result"}`;
     result({
       ok: false,
       text,
       output: null,
+      reason: recovery.error ? "pi_error" : oomKilled ? "oom_killed" : signal ? "pi_signal" : "pi_incomplete",
+      exit_code: code,
+      signal,
       error: error + (recovery.attempts ? ` Automatic recovery stopped after ${recovery.attempts} attempt(s); completed work was retained.` : ""),
     });
     return;
