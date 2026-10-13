@@ -64,3 +64,32 @@ async def test_deploy_returns_validation_errors_for_the_agent_to_repair(register
 async def test_invalid_names_are_not_forwarded_to_backend(registered):
     assert "error" in json.loads(await registered["run_workflow"]("../bad"))
     assert json.loads(await registered["write_workflow"]("../bad", "code"))["published"] is False
+    assert "error" in json.loads(await registered["delete_workflow"]("../bad"))
+
+
+async def test_delete_uses_backend_cleanup_instead_of_unlinking_directly(registered, workflows, monkeypatch):
+    calls = []
+    path = workflows / "demo.py"
+    path.write_text("keep until backend cleanup succeeds")
+
+    async def post(route, payload):
+        calls.append((route, payload))
+        return {"name": "demo", "deleted": True}
+
+    monkeypatch.setattr(tools.backend, "post", post)
+    assert json.loads(await registered["delete_workflow"]("demo")) == {"name": "demo", "deleted": True}
+    assert calls == [("/internal/workflows/demo/delete", {})]
+    assert path.exists()
+
+
+async def test_delete_backend_failure_does_not_remove_the_file(registered, workflows, monkeypatch):
+    path = workflows / "demo.py"
+    path.write_text("keep for retry")
+
+    async def post(route, payload):
+        raise httpx.ConnectError("backend unavailable")
+
+    monkeypatch.setattr(tools.backend, "post", post)
+    result = json.loads(await registered["delete_workflow"]("demo"))
+    assert result["ok"] is False
+    assert path.exists()

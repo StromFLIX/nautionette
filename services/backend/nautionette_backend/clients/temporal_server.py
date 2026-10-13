@@ -20,6 +20,7 @@ from temporalio.client import (
     ScheduleState,
     ScheduleUpdate,
 )
+from temporalio.service import RPCError, RPCStatusCode
 
 from ..config import settings
 from ..schedules import schedule_summary
@@ -360,8 +361,13 @@ class TemporalGateway:
         }
 
     async def delete_schedule(self, workflow: str) -> None:
+        """No schedule is already clean; outages and other errors must still surface."""
         client = await self.client()
-        await client.get_schedule_handle(self._schedule_id(workflow)).delete()
+        try:
+            await client.get_schedule_handle(self._schedule_id(workflow)).delete()
+        except RPCError as exc:
+            if exc.status != RPCStatusCode.NOT_FOUND:
+                raise
 
     async def schedules(self) -> list[dict[str, Any]]:
         client = await self.client()

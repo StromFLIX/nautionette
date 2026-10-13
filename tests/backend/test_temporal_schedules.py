@@ -14,6 +14,7 @@ from temporalio.client import (
     ScheduleAlreadyRunningError,
     ScheduleState,
 )
+from temporalio.service import RPCError, RPCStatusCode
 
 
 def field(start, end=None, step=1):
@@ -117,6 +118,31 @@ async def test_timeout_migration_preserves_the_current_schedule_and_is_idempoten
     assert updated.policy == schedule.policy
     await gateway.ensure_schedule_timeout("digest", 12)
     assert client.handle.updates == 1
+
+
+@pytest.mark.parametrize("status", [RPCStatusCode.NOT_FOUND, RPCStatusCode.UNAVAILABLE])
+async def test_delete_schedule_ignores_only_absence(monkeypatch, status):
+    gateway = TemporalGateway()
+    requested = []
+
+    class Client:
+        def get_schedule_handle(self, schedule_id):
+            requested.append(schedule_id)
+            return self
+
+        async def delete(self):
+            raise RPCError("schedule error", status, b"")
+
+    async def connect():
+        return Client()
+
+    monkeypatch.setattr(gateway, "client", connect)
+    if status == RPCStatusCode.NOT_FOUND:
+        await gateway.delete_schedule("digest")
+    else:
+        with pytest.raises(RPCError):
+            await gateway.delete_schedule("digest")
+    assert requested == ["schedule-digest"]
 
 
 class DataConverter:

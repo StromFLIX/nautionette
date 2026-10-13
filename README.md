@@ -798,7 +798,7 @@ An agent that writes code needs a narrow door. `workflow-mcp` is that door: ever
 | `write_workflow` | Validates, deploys, reloads workers, and returns a diff and status. |
 | `run_workflow` | Starts a deployed workflow with its input; returns a workflow ID. |
 | `list_runs` / `read_run` | Finds runs and inspects progress, errors and final results. |
-| `delete_workflow` | Removes a file. Run history stays in Temporal. |
+| `delete_workflow` | Removes the schedule and file, forgets settings, and reloads workers. Run/chat history stays. |
 
 The checks, in order:
 

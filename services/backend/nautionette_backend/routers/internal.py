@@ -15,6 +15,7 @@ from ..events import bus
 from ..gateway_config import attempt
 from ..runtime import remember_agent_result, runtime
 from ..security import require_internal
+from .workflows import delete_workflow
 
 router = APIRouter(dependencies=[Depends(require_internal)])
 
@@ -57,6 +58,12 @@ async def internal_worker_restart() -> dict[str, Any]:
 @router.post("/internal/workflows/{name}/deploy")
 async def internal_deploy_workflow(name: str, payload: WorkflowSource) -> dict[str, Any]:
     return await deploy(name, payload.code, payload.message)
+
+
+@router.post("/internal/workflows/{name}/delete")
+async def internal_delete_workflow(name: str) -> dict[str, Any]:
+    """Use the same schedule/settings/worker cleanup as deletion from the app."""
+    return await delete_workflow(name)
 
 
 @router.post("/internal/workflows/{name}/run")

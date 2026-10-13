@@ -88,12 +88,18 @@ def _register(server: Any) -> None:
         except httpx.HTTPError as exc:
             return _backend_error(exc)
 
-    @server.tool(description="Delete a live workflow file. Run history stays in Temporal.")
-    def delete_workflow(name: str) -> str:
+    @server.tool(
+        description="Delete a workflow and schedule, clean up settings and reload workers. Run history stays."
+    )
+    async def delete_workflow(name: str) -> str:
         try:
-            return json.dumps(store.delete_workflow(name))
+            name = store.check_name(name)
         except store.StoreError as exc:
             return json.dumps({"error": str(exc)})
+        try:
+            return json.dumps(await backend.post(f"/internal/workflows/{name}/delete", {}))
+        except httpx.HTTPError as exc:
+            return _backend_error(exc)
 
     @server.tool(
         description=(

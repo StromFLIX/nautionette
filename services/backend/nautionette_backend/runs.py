@@ -83,14 +83,26 @@ async def discover_scheduled_runs() -> None:
 
 
 async def reconcile_schedule_timeouts() -> None:
-    for schedule in await temporal.schedules():
+    schedules = await temporal.schedules()
+    if not schedules:
+        return
+    # Only a successful authoritative inventory proves a workflow was deleted.
+    # Never remove schedules based on a transient get_workflow failure.
+    deployed = {item["name"] for item in await authoring.list_workflows()}
+    for schedule in schedules:
         name = schedule["workflow"]
+        if schedule.get("id") != f"schedule-{name}":
+            continue  # Do not touch schedules outside the app's naming convention.
         try:
+            if name not in deployed:
+                await temporal.delete_schedule(name)
+                bus.publish("workflow.unscheduled", {"workflow": name, "reason": "workflow deleted"})
+                continue
             workflow = await authoring.get_workflow(name)
             timeout = (workflow.get("manifest") or {}).get("timeout_minutes", 30)
             await temporal.ensure_schedule_timeout(name, timeout)
-        except Exception:  # noqa: BLE001 - deleted workflows or unavailable authoring can retry
-            log.exception("Could not reconcile schedule timeout for %s", name)
+        except Exception:  # noqa: BLE001 - unavailable services can retry on the next pass
+            log.exception("Could not reconcile schedule for %s", name)
 
 
 async def reconcile_schedules() -> None:
