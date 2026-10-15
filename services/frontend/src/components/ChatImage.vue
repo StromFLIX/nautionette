@@ -43,7 +43,9 @@ async function load () {
     if (!request.signal.aborted) error.value = `Could not load image: ${err.message}`
   }
 }
-watch(() => [props.chatId, props.image.id], load, { immediate: true })
+// Snapshots replace attachment objects. Compare the source values, not a freshly
+// allocated array, so unchanged images keep their URL, DOM and open viewer.
+watch([() => props.chatId, () => props.image.id], load, { immediate: true })
 onUnmounted(cleanup)
 </script>
 

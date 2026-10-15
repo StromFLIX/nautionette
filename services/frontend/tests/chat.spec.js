@@ -918,6 +918,81 @@ for (const width of [1440, 320]) {
   })
 }
 
+for (const queued of [false, true]) {
+  test(`${queued ? 'queued' : 'saved'} images and the open viewer stay stable across agent snapshots`, async ({ page, context }) => {
+    const state = initial()
+    const images = ['first', 'second'].map((id) => ({ id, name: `${id}.png`, mime_type: 'image/png', size: png.length }))
+    state.uploads = images.map((image) => ({ chatId: 'alpha', image, bytes: png }))
+    state.chats.alpha.messages = [{ id: 'with-images', role: 'user', content: 'See these screenshots', meta: { queued, attachments: images } }]
+    state.chats.alpha.active_turn = { id: 'running', steps: [{ kind: 'text', text: 'Agent update 0' }] }
+    const downloads = []
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname.startsWith('/api/chats/alpha/attachments/')) downloads.push(request.url())
+    })
+    await mockChats(context, state)
+    await page.goto('/chats/alpha')
+    await expect(page.locator('.msg--assistant')).toContainText('Agent update 0')
+    const thumbnails = page.locator('.thread__body .chat-image__open img')
+    await expect(thumbnails).toHaveCount(2)
+    for (const image of await thumbnails.all()) await expect.poll(() => image.evaluate((el) => el.naturalWidth)).toBe(1)
+    const nodes = await Promise.all([thumbnails.nth(0).elementHandle(), thumbnails.nth(1).elementHandle()])
+    const sizes = await thumbnails.evaluateAll((images) => images.map((el) => [el.clientWidth, el.clientHeight]))
+    const urls = await thumbnails.evaluateAll((images) => images.map((el) => el.src))
+    await page.getByRole('button', { name: 'View first.png', exact: true }).click()
+    const viewer = page.getByRole('dialog').locator('img')
+    await expect(viewer).toBeVisible()
+    await expect.poll(() => viewer.evaluate((el) => el.naturalWidth)).toBe(1)
+
+    for (let update = 1; update <= 3; update++) {
+      // Each SSE snapshot deserializes fresh message/attachment objects.
+      state.chats.alpha.active_turn.steps[0].text = `Agent update ${update}`
+      await expect(page.locator('.msg--assistant')).toContainText(`Agent update ${update}`)
+      expect(downloads).toHaveLength(2)
+      expect(await thumbnails.evaluateAll((images) => images.map((el) => el.src))).toEqual(urls)
+      expect(await thumbnails.evaluateAll((images) => images.map((el) => [el.clientWidth, el.clientHeight]))).toEqual(sizes)
+      for (let index = 0; index < nodes.length; index++) {
+        expect(await thumbnails.nth(index).evaluate((el, original) => el === original, nodes[index])).toBe(true)
+      }
+      await expect(viewer).toHaveAttribute('src', urls[0])
+      await expect.poll(() => viewer.evaluate((el) => el.naturalWidth)).toBe(1)
+    }
+    await page.getByRole('button', { name: 'Close image' }).click()
+    for (const node of nodes) await node.dispose()
+  })
+}
+
+test('failed images are not automatically reloaded by snapshots and can be retried explicitly', async ({ page, context }) => {
+  const state = initial()
+  const image = { id: 'failed', name: 'failed.png', mime_type: 'image/png', size: png.length }
+  state.chats.alpha.messages = [{ id: 'with-image', role: 'user', content: 'See screenshot', meta: { attachments: [image] } }]
+  state.chats.alpha.active_turn = { id: 'running', steps: [{ kind: 'text', text: 'Agent update 0' }] }
+  await mockChats(context, state)
+  let downloads = 0
+  let available = false
+  await context.route('**/api/chats/alpha/attachments/failed', (route) => {
+    downloads++
+    return available
+      ? route.fulfill({ contentType: 'image/png', body: png })
+      : route.fulfill({ status: 503, json: { detail: 'Temporarily unavailable' } })
+  })
+  await page.goto('/chats/alpha')
+  await expect(page.locator('.chat-image')).toContainText('Could not load image: Temporarily unavailable')
+  state.chats.alpha.active_turn.steps[0].text = 'Agent update 1'
+  await expect(page.locator('.msg--assistant')).toContainText('Agent update 1')
+  expect(downloads).toBe(1)
+  available = true
+  await page.getByRole('button', { name: 'Retry image', exact: true }).click()
+  const thumbnail = page.locator('.msg--user img')
+  await expect.poll(() => thumbnail.evaluate((el) => el.naturalWidth)).toBe(1)
+  expect(downloads).toBe(2)
+  await expect(page.getByRole('button', { name: 'Retry image', exact: true })).toHaveCount(0)
+  const url = await thumbnail.getAttribute('src')
+  state.chats.alpha.active_turn.steps[0].text = 'Agent update 2'
+  await expect(page.locator('.msg--assistant')).toContainText('Agent update 2')
+  expect(downloads).toBe(2)
+  await expect(thumbnail).toHaveAttribute('src', url)
+})
+
 test('paste and drop supported images, remove previews, and download other formats', async ({ page, context }) => {
   const state = initial()
   state.models = [{ id: 'test/model', supports_images: true }]
