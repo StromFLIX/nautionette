@@ -50,7 +50,15 @@
       </button>
     </header>
 
-    <div ref="scroller" data-skin-part="conversation" class="thread__body scroll-y grow" @scroll.passive="acknowledgeRead">
+    <div v-if="chatId" class="thread__tabs" role="tablist" aria-label="Chat workspace" @keydown="navigateTabs">
+      <button id="chat-conversation-tab" type="button" role="tab" :aria-selected="activeTab === 'chat'" :tabindex="activeTab === 'chat' ? 0 : -1" aria-controls="chat-conversation-panel" @click="activeTab = 'chat'">Chat</button>
+      <button id="chat-outputs-tab" type="button" role="tab" :aria-selected="activeTab === 'outputs'" :tabindex="activeTab === 'outputs' ? 0 : -1" aria-controls="chat-outputs-panel" @click="activeTab = 'outputs'">Outputs<span v-if="outputs.length" class="thread__output-count">{{ outputs.length }}</span></button>
+    </div>
+
+    <ChatOutputs v-if="chatId && activeTab === 'outputs'" id="chat-outputs-panel" :key="chatId" role="tabpanel" aria-labelledby="chat-outputs-tab"
+      v-model:selected-id="selectedOutputId" v-model:selected-revision="selectedOutputRevision" :chat-id="chatId" :outputs="outputs" :working="streaming" />
+
+    <div v-show="activeTab === 'chat'" id="chat-conversation-panel" ref="scroller" :role="chatId ? 'tabpanel' : undefined" :aria-labelledby="chatId ? 'chat-conversation-tab' : undefined" data-skin-part="conversation" class="thread__body scroll-y grow" @scroll.passive="acknowledgeRead">
       <div class="thread__inner">
         <p v-if="!isNewChat && !messages.length && !activeTurn" class="caption dim" role="status">
           {{ reconnecting ? 'Waiting for connection. No saved messages on this device.' : 'No messages yet.' }}
@@ -60,12 +68,12 @@
           :role="message.role" :content="message.content"
           :meta="message.meta" :created-at="message.created_at" :chat-id="chatId"
           :delivery-state="message.delivery || ''" :delivery-error="message.deliveryError || ''"
-          @retry="delivery.retry(message.id)" @discard="delivery.discard(message.id)"
+          @retry="delivery.retry(message.id)" @discard="delivery.discard(message.id)" @open-output="openOutput"
         />
         <MessageBubble
           v-if="streaming" role="assistant" live
-          :content="liveSteps.length || liveStatus ? '' : '…'" :meta="{ steps: liveSteps, timing: activeTurn?.timing }"
-          :status="liveStatus"
+          :content="liveSteps.length || liveStatus ? '' : '…'" :meta="{ steps: liveSteps, timing: activeTurn?.timing, outputs: liveOutputs }"
+          :chat-id="chatId" :status="liveStatus" @open-output="openOutput"
         />
         <section v-if="queuedMessages.length" class="thread__queue" aria-label="Queued messages">
           <div class="thread__queue-heading caption dim" role="status">
@@ -91,7 +99,7 @@
       </div>
     </div>
 
-    <div class="thread__foot scroll-y">
+    <div v-show="activeTab === 'chat'" class="thread__foot scroll-y">
       <p v-if="isNewChat && starting" class="thread__creation caption dim" role="status">Creating chat… You can start typing.</p>
       <p v-if="creationError" class="thread__creation caption" role="alert">
         {{ creationError }}
@@ -149,6 +157,7 @@ import Composer from '../components/Composer.vue'
 import ProjectChanges from '../components/ProjectChanges.vue'
 import MessageBubble from '../components/MessageBubble.vue'
 import ChatAttachment from '../components/ChatAttachment.vue'
+import ChatOutputs from '../components/ChatOutputs.vue'
 import { uploadAttachments } from '../attachments'
 import { avatarStyle, initials } from '../format'
 import { backTo } from '../router'
@@ -167,6 +176,26 @@ const router = useRouter()
 
 const chat = ref(null)
 const savedMessages = ref([])
+const outputs = ref([])
+const activeTab = ref('chat')
+const selectedOutputId = ref('')
+const selectedOutputRevision = ref(null)
+
+function openOutput (output) {
+  selectedOutputId.value = output.id
+  const current = outputs.value.find(item => item.id === output.id)
+  selectedOutputRevision.value = current?.revision === output.revision ? null : output.revision
+  activeTab.value = 'outputs'
+}
+function navigateTabs (event) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+  event.preventDefault()
+  activeTab.value = event.key === 'Home' ? 'chat' : event.key === 'End' ? 'outputs' : activeTab.value === 'chat' ? 'outputs' : 'chat'
+  nextTick(() => document.getElementById(activeTab.value === 'chat' ? 'chat-conversation-tab' : 'chat-outputs-tab')?.focus())
+}
+watch(activeTab, (tab) => {
+  if (tab === 'chat') nextTick(() => { scrollDown('instant'); acknowledgeRead() })
+})
 const draft = ref('')
 const attachments = ref([])
 const sendingDraft = ref(false)
@@ -179,6 +208,12 @@ const titleBusy = ref(false)
 const settingsPending = ref(0)
 const stopping = computed(() => controlBusy.value || Boolean(activeTurn.value?.stop_requested))
 const liveSteps = computed(() => activeTurn.value?.steps || [])
+const liveOutputs = computed(() => {
+  // Steering saves an answer segment without ending the container's turn. Do
+  // not repeat its published cards beneath the next live answer segment.
+  const saved = new Set(savedMessages.value.flatMap(message => (message.meta?.outputs || []).map(output => `${output.id}:${output.revision}`)))
+  return outputs.value.filter(output => output.turn_id === activeTurn.value?.id && !saved.has(`${output.id}:${output.revision}`))
+})
 const liveStatus = computed(() => activeTurn.value?.stop_requested ? 'Stopping...' : activeTurn.value?.status || '')
 const starting = ref(false)
 const creationError = ref('')
@@ -214,7 +249,7 @@ const readError = ref('')
 
 async function acknowledgeRead () {
   const el = scroller.value
-  if (readSuspended || !chatId.value || !chat.value || reconnecting.value || document.visibilityState !== 'visible' || !el ||
+  if (activeTab.value !== 'chat' || readSuspended || !chatId.value || !chat.value || reconnecting.value || document.visibilityState !== 'visible' || !el ||
       el.scrollHeight - el.scrollTop - el.clientHeight > 100) return
   const id = chatId.value
   const revision = chat.value.read_revision
@@ -254,9 +289,10 @@ async function markUnread () {
 
 function applySnapshot (data, cached = false) {
   const el = scroller.value
-  const atBottom = !savedMessages.value.length || !el || el.scrollHeight - el.scrollTop - el.clientHeight < 100
+  const atBottom = activeTab.value === 'chat' && (!savedMessages.value.length || !el || el.scrollHeight - el.scrollTop - el.clientHeight < 100)
   chat.value = data.chat
   savedMessages.value = data.messages
+  outputs.value = data.outputs || []
   activeTurn.value = data.active_turn || null
   if (!cached) {
     chatCache.put(data)
@@ -308,7 +344,7 @@ function connectChat () {
 function scrollDown (behavior = 'smooth') {
   nextTick(() => {
     const el = scroller.value
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'instant' : behavior })
+    if (el && activeTab.value === 'chat') el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'instant' : behavior })
   })
 }
 
@@ -510,6 +546,10 @@ watch(() => route.params.id, (id, previous) => {
   settingsSave = Promise.resolve(true)
   settingsPending.value = 0
   savedMessages.value = []
+  outputs.value = []
+  activeTab.value = 'chat'
+  selectedOutputId.value = ''
+  selectedOutputRevision.value = null
   activeTurn.value = null
   if (!created) {
     composerKey.value++
@@ -569,6 +609,11 @@ onUnmounted(() => {
   min-width: 0;
   overflow: hidden;
 }
+
+.thread__tabs { display: flex; flex: none; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.thread__tabs > button { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font: inherit; font-size: 0.875rem; line-height: 1; cursor: pointer; }
+.thread__tabs > button[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--accent); }
+.thread__output-count { padding: 0 6px; border-radius: var(--radius-pill); background: var(--surface-active); color: var(--text); font-size: 0.75rem; }
 
 .thread__body {
   padding: 18px 0;

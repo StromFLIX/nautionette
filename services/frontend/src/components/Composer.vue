@@ -1,5 +1,5 @@
 <template>
-  <div class="composer" data-skin-part="composer" :class="[`composer--${variant}`, { 'composer--focus': focused, 'composer--running': running }]"
+  <div class="composer" data-skin-part="composer" :class="[`composer--${variant}`, { 'composer--focus': focused, 'composer--running': running, 'composer--expanded': configurationOpen }]"
     @dragover.prevent @drop.prevent="drop" @paste="paste">
     <div v-if="attachments.length" class="composer__attachments">
       <div v-for="image in attachments" :key="image.id" class="composer__attachment">
@@ -230,6 +230,9 @@ defineExpose({ focus: () => input.value?.focus() })
 .composer { position: relative; min-width: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-input); transition: border-color var(--transition), box-shadow var(--transition); }
 /* On short viewports the draft and advanced controls scroll, not the primary actions. */
 .composer--docked { display: flex; flex-direction: column; max-height: 100%; }
+/* The extra tab row can leave less than the input + actions + one control.
+   Scroll that minimum as a unit instead of overflowing a fractionally clipped box. */
+.composer--docked.composer--expanded { min-height: calc(var(--chat-font-size) * 1.6 + max(2rem, 44px) + max(2rem, 44px) + 54px); }
 .composer--docked .composer__input { flex: 0 1 auto; min-height: calc(var(--chat-font-size) * 1.6 + 28px); }
 /* Leave room for a complete control plus the border in the scrollable area. */
 .composer--docked .composer__configuration { min-height: calc(max(2rem, 44px) + 1px); }

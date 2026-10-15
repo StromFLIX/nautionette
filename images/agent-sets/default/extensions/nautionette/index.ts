@@ -11,6 +11,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { modelApi } from "./model-api.ts";
 import { reasoningConfig, reasoningPayload } from "./reasoning.ts";
 import { allowedTools } from "./tool-selection.ts";
+import { isOutputTransportTool, loadOutputGrant, registerOutputTools } from "./outputs.ts";
 
 const GATEWAY = (process.env.AGENTGATEWAY_URL ?? "http://agentgateway:4000").replace(/\/$/, "");
 const MODEL = process.env.AGENT_MODEL ?? "openai/gpt-4o-mini";
@@ -24,7 +25,7 @@ type JsonRpcResult = Record<string, any>;
 let messageId = 0;
 let sessionId: string | undefined;
 
-async function rpc(method: string, params: Record<string, unknown> = {}): Promise<JsonRpcResult> {
+async function rpc(method: string, params: Record<string, unknown> = {}, signal?: AbortSignal): Promise<JsonRpcResult> {
   const isNotification = method.startsWith("notifications/");
   const body: Record<string, unknown> = { jsonrpc: "2.0", method, params };
   if (!isNotification) body.id = ++messageId;
@@ -36,7 +37,7 @@ async function rpc(method: string, params: Record<string, unknown> = {}): Promis
   };
   if (sessionId) headers["mcp-session-id"] = sessionId;
 
-  const response = await fetch(MCP_URL, { method: "POST", headers, body: JSON.stringify(body) });
+  const response = await fetch(MCP_URL, { method: "POST", headers, body: JSON.stringify(body), signal });
   const returned = response.headers.get("mcp-session-id");
   if (returned) sessionId = returned;
   if (isNotification) return {};
@@ -106,6 +107,10 @@ export default async function (pi: ExtensionAPI) {
     return reasoningPayload(event.payload as Record<string, any>, api, reasoning);
   });
 
+  // Local first-party tools hold a private, turn-scoped capability. The raw
+  // transports must never be declared to the model or gated by MCP selection.
+  registerOutputTools(pi, rpc, loadOutputGrant());
+
   // Tools are discovered, not hard-coded: federate a new MCP server behind the
   // gateway and this agent set picks it up on its next run.
   try {
@@ -117,7 +122,7 @@ export default async function (pi: ExtensionAPI) {
     await rpc("notifications/initialized");
     const listed = await rpc("tools/list");
     const all: any[] = listed.tools ?? [];
-    const tools = ALLOWED === null ? all : all.filter((tool) => ALLOWED.has(tool.name));
+    const tools = all.filter((tool) => !isOutputTransportTool(tool.name) && (ALLOWED === null || ALLOWED.has(tool.name)));
 
     for (const tool of tools) {
       pi.registerTool({

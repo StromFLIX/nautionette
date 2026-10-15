@@ -18,6 +18,7 @@
         </div>
         <div v-else-if="part.kind === 'text' && part.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(part.text)" />
       </template>
+      <OutputCard v-for="output in meta.outputs || []" :key="`${output.id}:${output.revision}`" :chat-id="chatId" :output="output" compact @open="$emit('open-output', $event)" />
       <div v-if="status" class="bubble__status caption">
         <span class="material-icons bubble__spinner">autorenew</span>{{ status }}
       </div>
@@ -53,6 +54,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import ToolCall from './ToolCall.vue'
 import ToolCallGroup from './ToolCallGroup.vue'
 import ChatAttachment from './ChatAttachment.vue'
+import OutputCard from './OutputCard.vue'
 import { groupToolCalls } from '../timeline'
 import { renderMarkdown } from '../markdown'
 import { copyText } from '../clipboard'
@@ -70,7 +72,7 @@ const props = defineProps({
   deliveryState: { type: String, default: '' },
   deliveryError: { type: String, default: '' }
 })
-defineEmits(['retry', 'discard'])
+defineEmits(['retry', 'discard', 'open-output'])
 
 const showSent = ref(false)
 let sentTimer

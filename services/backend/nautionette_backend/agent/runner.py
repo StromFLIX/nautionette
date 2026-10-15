@@ -12,7 +12,7 @@ from typing import Any
 
 from nautionette.agent_limits import chat_timeout_exempt
 
-from .. import chat_attachments, pi_packages
+from .. import chat_attachments, chat_outputs, pi_packages
 from ..clients import broker
 from ..config import settings
 from .prompts import CHAT_SYSTEM_PROMPT
@@ -166,8 +166,11 @@ async def stream_agent(job: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
     if job.get("packages"):
         outgoing["package_runtime"] = pi_packages.for_run(job["packages"])
     timeout = None if chat_timeout_exempt(job) else job.get("timeout_seconds", 900) + 30
-    async for event in broker.run_agent(outgoing, timeout=timeout):
-        yield event
+    with chat_outputs.publication_grant(job.get("chat_id", ""), job.get("turn_id", "")) as grant:
+        if grant:
+            outgoing["output_publication"] = grant
+        async for event in broker.run_agent(outgoing, timeout=timeout):
+            yield event
 
 
 async def call_agent(job: dict[str, Any]) -> dict[str, Any]:

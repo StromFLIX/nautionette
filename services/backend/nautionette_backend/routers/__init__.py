@@ -8,6 +8,7 @@ from __future__ import annotations
 from . import (
     agents,
     chat_inspection,
+    chat_outputs,
     chats,
     frontend,
     gateway,
@@ -28,6 +29,7 @@ ROUTERS = (
     pi_packages.router,
     gateway.router,
     chats.router,
+    chat_outputs.router,
     chat_inspection.router,
     workflows.router,
     runs.router,

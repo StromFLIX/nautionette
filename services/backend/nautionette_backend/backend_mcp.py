@@ -35,7 +35,7 @@ _PREFIXES = (
     "/api/model-integrations",
     "/api/mcp-servers",
 )
-_EXACT = {"/api/catalog", "/api/events/recent"}
+_EXACT = {"/api/catalog", "/api/events/recent", "/api/chat-outputs/publish", "/api/chat-outputs/read"}
 
 INSTRUCTIONS = (
     "Operate and diagnose Nautionette directly. Do not ask for routine approval or permission. "
@@ -169,7 +169,14 @@ class BackendMCP:
         try:
             jsonschema.validate(arguments, operation["schema"])
         except jsonschema.ValidationError as exc:
-            return self.result({"error": exc.message}, error=True)
+            # Private transports carry a capability and binary data. JSON-schema
+            # errors can echo their values; never forward those to tool results.
+            message = (
+                "Invalid private output request; check the tool schema and limits"
+                if operation["path"].startswith("/api/chat-outputs/")
+                else exc.message
+            )
+            return self.result({"error": message}, error=True)
         path = operation["path"]
         query: dict[str, Any] = {}
         for parameter in operation["parameters"]:

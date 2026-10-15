@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from . import agent_profiles
+from .chat_outputs import RESERVED_TOOL_NAMES
 from .clients import broker, gateway
 from .config import settings
 from .db import db
@@ -92,7 +93,9 @@ async def model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
 async def tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Federated tools, each attributed to the MCP server it came from."""
     targets = config.get("targets") or []
-    federated = await attempt(gateway.mcp_tools(), [])
+    federated = [
+        tool for tool in await attempt(gateway.mcp_tools(), []) if tool["name"] not in RESERVED_TOOL_NAMES
+    ]
 
     def prefixed(name: str) -> str:
         """agentgateway names a federated tool after the target it came from."""

@@ -114,6 +114,11 @@ export const api = {
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
   chat: (id, signal = AbortSignal.timeout(15000)) => request(`/api/chats/${id}`, { signal }),
   projectChanges: (id, signal) => request(`/api/chats/${encodeURIComponent(id)}/project-changes`, { signal }),
+  outputRevisions: (chatId, outputId, signal) => request(`/api/chats/${encodeURIComponent(chatId)}/outputs/${encodeURIComponent(outputId)}/revisions`, { signal }),
+  outputFile: (chatId, outputId, revision, fileId, { preview = false, signal } = {}) => request(
+    `/api/chats/${encodeURIComponent(chatId)}/outputs/${encodeURIComponent(outputId)}/revisions/${revision}/files/${encodeURIComponent(fileId)}${preview ? '?preview=true' : ''}`,
+    { responseType: 'blob', signal }
+  ),
   uploadAttachment: (id, file) => request(`/api/chats/${id}/attachments?name=${encodeURIComponent(file.name)}`, {
     method: 'POST', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' }, signal: AbortSignal.timeout(60000)
   }),

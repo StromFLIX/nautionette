@@ -79,7 +79,10 @@ async def test_stream_runner_passes_the_correct_timeout_to_broker(live, monkeypa
     job.update(chat_id="chat", turn_id="turn", timeout_exempt=exempt)
     events = [event async for event in agent.stream_agent(job)]
     assert events == [{"type": "result", "ok": True}]
-    assert calls == [(job, None if exempt else 3630)]
+    assert len(calls) == 1 and calls[0][1] == (None if exempt else 3630)
+    outgoing = dict(calls[0][0])
+    assert outgoing.pop("output_publication")["grant"]
+    assert outgoing == job  # Private publication configuration never mutates the saved job.
     # Workflow budgets are not affected even if the flag is accidentally copied.
     job["mode"] = "workflow"
     _ = [event async for event in agent.stream_agent(job)]

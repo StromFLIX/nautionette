@@ -579,7 +579,11 @@ def test_large_jobs_and_files_are_copied_before_start_not_put_in_environment(
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         entry = tar.getmembers()[0]
         assert entry.name == "nautionette-job.json" and entry.mode == 0o600
-        assert json.loads(tar.extractfile(entry).read()) == job
+        copied = json.loads(tar.extractfile(entry).read())
+        trace = copied.pop("_trace_context", None)
+        if trace:
+            assert trace.get("traceparent")  # Installed backend tracing may propagate into broker tests.
+        assert copied == job
     calls = [call[0] for call in container.mock_calls]
     assert calls.index("put_archive") < calls.index("start")
 
@@ -622,6 +626,40 @@ def test_project_tokens_use_private_files_not_docker_environment_or_job_files(
     calls = [call[0] for call in container.mock_calls]
     assert max(index for index, name in enumerate(calls) if name == "put_archive") < calls.index("start")
     assert (job["chat_id"], job["turn_id"]) not in agent_run._credential_scopes
+
+
+@pytest.mark.parametrize("large", [False, True])
+def test_output_capability_uses_a_private_file_not_job_or_environment(client, running_agent, docker, large):
+    container, _ = running_agent
+    capability = {"grant": "test-output-capability-not-a-service-token"}
+    job = {
+        "chat_id": "output-private-chat",
+        "turn_id": "output-private-turn",
+        "prompt": "x" * (40000 if large else 1),
+        "output_publication": capability,
+    }
+    response = client.post("/agent/run", headers=HEADERS, json=job)
+    assert not any(event["type"] == "error" for event in frames(response))
+    environment = docker.containers.create.call_args.kwargs["environment"]
+    assert capability["grant"] not in json.dumps(environment)
+    if not large:
+        import base64
+
+        assert "output_publication" not in json.loads(base64.b64decode(environment["AGENT_JOB"]))
+    found = False
+    for call in container.put_archive.call_args_list:
+        with tarfile.open(fileobj=io.BytesIO(call.args[1])) as tar:
+            entry = tar.getmembers()[0]
+            data = tar.extractfile(entry).read()
+            if entry.name == "nautionette-outputs.json":
+                found = True
+                assert entry.mode == 0o600
+                assert json.loads(data) == capability
+            else:
+                assert capability["grant"].encode() not in data
+    assert found
+    calls = [call[0] for call in container.mock_calls]
+    assert max(index for index, name in enumerate(calls) if name == "put_archive") < calls.index("start")
 
 
 def test_failed_job_copy_does_not_start_the_agent(client, running_agent):

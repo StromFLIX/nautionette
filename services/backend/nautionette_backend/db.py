@@ -11,7 +11,8 @@ import sqlite3
 import threading
 import time
 import uuid
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,38 @@ CREATE TABLE IF NOT EXISTS chat_images (
     created_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS chat_images_chat ON chat_images(chat_id);
+CREATE TABLE IF NOT EXISTS chat_outputs (
+    id TEXT PRIMARY KEY,
+    chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+    current_revision INTEGER NOT NULL,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chat_outputs_chat ON chat_outputs(chat_id, updated_at);
+CREATE TABLE IF NOT EXISTS chat_output_revisions (
+    output_id TEXT NOT NULL REFERENCES chat_outputs(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL,
+    turn_id TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    request_hash TEXT NOT NULL,
+    manifest TEXT NOT NULL,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (output_id, revision),
+    UNIQUE (turn_id, request_id)
+);
+CREATE TABLE IF NOT EXISTS chat_output_files (
+    id TEXT PRIMARY KEY,
+    output_id TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    role TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    preview BLOB,
+    FOREIGN KEY (output_id, revision) REFERENCES chat_output_revisions(output_id, revision) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS chat_output_files_revision ON chat_output_files(output_id, revision);
 CREATE TABLE IF NOT EXISTS chat_turns (
     id TEXT PRIMARY KEY,
     chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
@@ -310,6 +343,23 @@ class Database:
     def one(self, sql: str, params: Iterable[Any] = ()) -> dict[str, Any] | None:
         rows = self.query(sql, params)
         return rows[0] if rows else None
+
+    @contextmanager
+    def transaction(self) -> Iterator[sqlite3.Connection]:
+        """Serialize a complete operation and commit or roll it back atomically."""
+        with self._lock, self._conn:
+            yield self._conn
+
+    def list_chat_outputs(self, chat_id: str) -> list[dict[str, Any]]:
+        return [
+            json.loads(row["manifest"])
+            for row in self.query(
+                "SELECT r.manifest FROM chat_outputs o JOIN chat_output_revisions r "
+                "ON r.output_id = o.id AND r.revision = o.current_revision "
+                "WHERE o.chat_id = ? ORDER BY o.updated_at DESC, o.id",
+                (chat_id,),
+            )
+        ]
 
     # ------------------------------------------------------------------- chats
 
@@ -625,7 +675,12 @@ class Database:
             turn["steps"] = json.loads(turn["steps"])
             turn["context"] = json.loads(turn["context"]) if turn["context"] else None
             turn["timing"] = json.loads(turn["timing"]) if turn["timing"] else None
-        return {"chat": self.get_chat(chat_id), "messages": self.list_messages(chat_id), "active_turn": turn}
+        return {
+            "chat": self.get_chat(chat_id),
+            "messages": self.list_messages(chat_id),
+            "active_turn": turn,
+            "outputs": self.list_chat_outputs(chat_id),
+        }
 
     def next_chat_turn(self, chat_id: str) -> dict[str, Any] | None:
         with self._lock, self._conn:
@@ -746,6 +801,20 @@ class Database:
         now = time.time()
         # Keep the latest provider measurement through reloads and interrupted-turn recovery.
         meta = {**meta, "context": json.loads(turn["context"]) if turn["context"] else None}
+        # Bind immutable output revisions to the answer segment which published
+        # them. A later revision must not change an older response's downloads.
+        calls = {step.get("id") for step in meta.get("steps", []) if step.get("kind") == "tool"}
+        outputs = [
+            json.loads(row["manifest"])
+            for row in self._conn.execute(
+                "SELECT manifest, request_id FROM chat_output_revisions "
+                "WHERE turn_id = ? ORDER BY created_at",
+                (turn["id"],),
+            )
+            if row["request_id"] in calls
+        ]
+        if outputs:
+            meta["outputs"] = outputs
         if "timing" not in meta and turn["timing"]:
             # Recovery retains the last measured checkpoint, never backend downtime.
             meta["timing"] = {**json.loads(turn["timing"]), "active": None, "partial": True}

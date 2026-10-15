@@ -368,6 +368,25 @@ frontend, and Docker broker; the broker rebuilds the changed Pi base and
 agent-set images automatically. Existing agent containers retain their old routing
 until the next turn.
 
+### Generated outputs
+
+Each chat has **Chat / Outputs** tabs. The default agent's `publish_output` tool
+publishes local files, raster previews and editable source documents to durable,
+chat-owned storage; `read_output` restores them in a later sandbox. Output cards
+link from replies, downloads are authenticated, and immutable revisions update the
+latest snapshot without stealing focus or marking hidden chat replies as read.
+The browser can disconnect while the agent works.
+
+PNG/JPEG/GIF/WebP have safe, enlarged image previews. PDFs and other file formats
+are downloads; publish generated page images alongside a PDF for mobile previews.
+Original bytes and saved source survive disposable agent containers. This first
+slice uses the existing sandbox: it does not install ArtCraft applications, add
+an editor/WASM viewer, or create dedicated Rust workers.
+
+See [Durable chat outputs](docs/chat-outputs.md) for tool examples, revision and
+restore semantics, storage limits, authorization and deployment checks. Rebuild
+the backend, broker, frontend and default agent image together.
+
 ### Reasoning effort
 
 The reasoning control under **Chat configuration** shows only the selected model's

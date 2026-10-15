@@ -302,8 +302,11 @@ def _run(
         # Private configuration travels through a mode-0600 file, not Docker env,
         # JOB.json, CLI arguments or the persisted turn. The runner unlinks it.
         credentials = job.get("project_credentials", [])
+        output_publication = job.get("output_publication")
         job = {
-            key: value for key, value in job.items() if key not in {"package_runtime", "project_credentials"}
+            key: value
+            for key, value in job.items()
+            if key not in {"package_runtime", "project_credentials", "output_publication"}
         }
         environment = _environment(job)
         container = daemon.client().containers.create(
@@ -338,6 +341,8 @@ def _run(
             _copy_job(container, job)
         if package_runtime:
             _copy_job(container, job, "nautionette-packages.json", package_runtime)
+        if output_publication:
+            _copy_job(container, job, "nautionette-outputs.json", output_publication)
         if project_ids:
             scope = set(job.get("project_remotes", {}).values())
             git_credentials.prepare(container, credentials, scope)
