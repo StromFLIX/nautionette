@@ -29,8 +29,10 @@ for (const outcome of ['recovered', 'exhausted', 'permanent', 'SIGTERM', 'SIGKIL
       const request = JSON.parse(raw)
       requests.push(request)
       if (requests.length === 2 && outcome.startsWith('SIG')) {
+        // Isolate process termination: resetting the model connection here can
+        // win the race and report a model error before Pi handles the signal.
+        child.once('close', () => res.destroy())
         child.kill(outcome)
-        res.destroy()
         return
       }
       if (requests.length > 1 && !(outcome === 'recovered' && requests.length === 3)) {
@@ -120,7 +122,7 @@ for (const outcome of ['recovered', 'exhausted', 'permanent', 'SIGTERM', 'SIGKIL
         } else {
           assert.equal(outcome, 'SIGTERM')
           assert.notEqual(result.exit_code, null)
-          assert.equal(result.reason, 'pi_incomplete')
+          assert.equal(result.reason, 'pi_incomplete', JSON.stringify(result))
         }
         assert.doesNotMatch(result.error, /exit null/)
       }
