@@ -48,7 +48,9 @@ def eligible(config: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any] 
         or issue["number"] <= 0
         or type(repository.get("id")) is not int
         or not isinstance(comment.get("body"), str)
-        or not re.search(r"(?<![\w@-])@" + re.escape(slug) + r"\[bot\](?![\w-])", comment["body"], re.I)
+        or not re.search(
+            r"(?<![\w@-])@" + re.escape(slug) + r"(?:\[bot\])?(?![\w\[\]-])", comment["body"], re.I
+        )
     ):
         return None
     return db.one(

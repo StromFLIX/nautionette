@@ -30,14 +30,28 @@ work in this version.
 Example (replace the name with the actual slug shown in Projects):
 
 ```text
-@nautionette-abc123[bot] Fix this issue, add regression tests, and open a PR.
+@nautionette-abc123 Fix this issue, add regression tests, and open a PR.
 ```
 
 Follow up on the same issue:
 
 ```text
-@nautionette-abc123[bot] Also cover the timeout case in the tests.
+@nautionette-abc123 Also cover the timeout case in the tests.
 ```
+
+Type the mention manually if GitHub does not offer the App in autocomplete.
+Both `@slug` and `@slug[bot]` are accepted; autocomplete or a rendered profile link
+is not needed. GitHub delivers **issue_comment** events for all new comments on
+installed repositories, not only recognized mentions.
+
+If nothing arrives, open the **connected App's** GitHub settings (not a different
+new App), check **Permissions & events > Issues: read and write > Issue comment**,
+and approve the installation permission update. Under **Advanced > Recent
+Deliveries**, check whether the comment generated a delivery and its response.
+The webhook URL must point to this instance's
+`/api/projects/github-app/webhook`. Redeliver a failed delivery after fixing setup,
+or post a new comment; editing an old comment does not trigger work. Upgrading
+Nautionette does not update existing GitHub App subscriptions.
 
 The App acknowledges each accepted request with a link to the same chat, then
 submits it through the regular chat pipeline. The agent receives the current issue

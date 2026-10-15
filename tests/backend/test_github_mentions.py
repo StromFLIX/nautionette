@@ -65,6 +65,47 @@ def test_settings_are_authenticated_and_strict(client, anonymous, mention_setup)
 
 
 @pytest.mark.parametrize(
+    "body",
+    [
+        "@nautionette-test Please fix this.",
+        "@nautionette-test[bot] Please fix this.",
+        "Please fix, @NAUTIONETTE-TEST!",
+    ],
+)
+def test_typed_mentions_are_accepted_and_recorded(db, anonymous, mention_setup, monkeypatch, body):
+    config, payload, _ = mention_setup
+    payload["comment"]["body"] = body
+    publish = Mock()
+    monkeypatch.setattr(github_mentions.bus, "publish", publish)
+    result = send_webhook(anonymous, payload, event="issue_comment").json()
+    assert result["accepted"]
+    assert projects.app_config(config["id"])["webhook"]["event"] == "issue_comment"
+    publish.assert_called_once()
+    assert publish.call_args.args[0] == "projects.github_event"
+    assert publish.call_args.args[1]["result"] == result
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "@nautionette-test-other fix",
+        "@nautionette-test[bot]-other fix",
+        "@nautionette-test[other] fix",
+        "@nautionette-testing fix",
+        "someone@nautionette-test fix",
+        "@@nautionette-test fix",
+    ],
+)
+def test_partial_mentions_stay_ineligible(db, anonymous, mention_setup, body):
+    config, payload, _ = mention_setup
+    payload["comment"]["body"] = body
+    assert send_webhook(anonymous, payload, event="issue_comment").json()["ignored"]
+    assert not db.query("SELECT * FROM github_mentions")
+    # Ignored comments still update receipt diagnostics, without storing comment content.
+    assert projects.app_config(config["id"])["webhook"]["event"] == "issue_comment"
+
+
+@pytest.mark.parametrize(
     "change",
     [
         "outsider",

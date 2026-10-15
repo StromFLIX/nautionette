@@ -22,7 +22,7 @@
         <label class="project-form__wide">Authorized GitHub user IDs
           <input v-model="mentionForms[connection.id].ids" class="field" placeholder="123456, 789012" :aria-label="`Authorized GitHub user IDs for ${connection.slug}`" />
         </label>
-        <p class="caption dim project-form__wide">Empty disables mentions. These users can run the default agent with its tools and this repository's write access. Use numeric IDs, not usernames. Mention @{{ connection.slug }}[bot] in a new issue comment; follow-up mentions continue the same chat. Only added, ready repositories are accepted.</p>
+        <p class="caption dim project-form__wide">Empty disables mentions. These users can run the default agent with its tools and this repository's write access. Use numeric IDs, not usernames. Type @{{ connection.slug }} in a new issue comment (GitHub autocomplete is not required; the [bot] suffix is optional). Follow-up mentions continue the same chat. Only added, ready repositories are accepted. Existing Apps must enable Issues: read/write and the Issue comment event in GitHub App settings, then approve the installation update.</p>
         <label class="project-form__wide"><span><input v-model="mentionForms[connection.id].acknowledge" type="checkbox" /> Reply on GitHub with the chat link</span></label>
         <p class="caption dim project-form__wide">The link requires instance sign-in but reveals your instance URL. Existing Apps need Issues: read and write permission and the Issue comment webhook event enabled in GitHub App settings, then installation approval.</p>
         <button class="btn btn--sm" :disabled="Boolean(busy)">Save mention access</button>

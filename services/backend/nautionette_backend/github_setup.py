@@ -297,7 +297,9 @@ def webhook(body: bytes, signature: str, event: str, delivery: str) -> dict[str,
     if event == "issue_comment":
         from .github_mentions import accept
 
-        return accept(config, payload)
+        result = accept(config, payload)
+        record_webhook(config, event, payload, result)
+        return result
     db.execute("DELETE FROM github_webhook_deliveries WHERE received_at < ?", (time.time() - 7 * 86400,))
     if not db.execute(
         "INSERT OR IGNORE INTO github_webhook_deliveries VALUES (?,?)",
@@ -323,6 +325,14 @@ def webhook(body: bytes, signature: str, event: str, delivery: str) -> dict[str,
             "WHERE repository_id = ? AND connection_id = ?",
             (full_name, repository.get("default_branch"), repository.get("id"), config["id"]),
         )
+    record_webhook(config, event, payload)
+    return {"ok": True}
+
+
+def record_webhook(
+    config: dict[str, Any], event: str, payload: dict[str, Any], result: dict[str, Any] | None = None
+):
+    """Record verified deliveries, including accepted and ignored issue comments."""
     if config.get("id"):
         config["webhook"] = {"last_received_at": time.time(), "event": event}
         db.execute(
@@ -334,8 +344,8 @@ def webhook(body: bytes, signature: str, event: str, delivery: str) -> dict[str,
         {
             "event": event,
             "action": payload.get("action", ""),
-            "repository_id": repository.get("id"),
+            "repository_id": (payload.get("repository") or {}).get("id"),
             "connection_id": config.get("id", ""),
+            **({"result": result} if result is not None else {}),
         },
     )
-    return {"ok": True}
