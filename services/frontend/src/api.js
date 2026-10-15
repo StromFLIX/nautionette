@@ -104,6 +104,7 @@ export const api = {
 
   projects: () => request('/api/projects'),
   projectApp: () => request('/api/projects/github-app'),
+  configureMentions: (id, payload) => request(`/api/projects/github-app/${encodeURIComponent(id)}/mentions`, { method: 'PUT', ...json(payload) }),
   connectProjectApp: (payload) => request('/api/projects/github-app/connect', { method: 'POST', ...json(payload) }),
   projectRepositories: (page = 1, connectionId = '') => request(`/api/projects/repositories?page=${page}&connection_id=${encodeURIComponent(connectionId)}`),
   addProject: (fullName, connectionId = '') => request('/api/projects', { method: 'POST', ...json({ full_name: fullName, connection_id: connectionId }) }),

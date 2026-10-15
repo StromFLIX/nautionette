@@ -494,8 +494,8 @@ project bindings migrate automatically on backend startup, without changing chec
 chat selections, or unpushed work. The manual App configuration API also adds or updates
 only the matching App/installation rather than replacing other accounts.
 
-The App manifest registers the webhook and callback URLs, Contents/Workflows write
-permissions, and Metadata read access. GitHub generates the private key and webhook
+The App manifest registers the webhook and callback URLs, Contents/Workflows/Issues write
+permissions, Metadata read access, and push/repository/issue-comment events. GitHub generates the private key and webhook
 secret; Nautionette exchanges the registration code server-side. No IDs or PEM uploads
 are needed. An unfinished registration can resume with **Complete installation**;
 organization approval may be required. **Repository access** reopens GitHub's chooser.
@@ -523,6 +523,21 @@ or placed in an agent. The webhook secret is also backend-only. Protect the
 backend-data volume and its backups, configure `APP_TOKEN` and `INTERNAL_TOKEN`, and
 use HTTPS outside local development. The App belongs to your GitHub account or
 organization; this is App registration, not a third-party OAuth service.
+
+### Issue mentions
+
+Authorize numeric GitHub user IDs per connection under **Settings > Projects**, then
+comment `@your-app-slug[bot] <request>` on an issue in an added, ready repository.
+Nautionette creates a visible chat, acknowledges with its authenticated chat link,
+and runs the default agent. Follow-up mentions on the same issue continue that chat,
+including through the normal queue while it is busy. Unlisted users and bot comments
+cannot trigger work. Mention access is disabled until an allowlist is saved; GitHub
+acknowledgements can be disabled separately.
+
+Existing Apps must enable **Issues: read and write** and the **Issue comment** event
+in GitHub App settings and approve the installation permission change. See
+[GitHub issue mentions](docs/github-mentions.md) for setup, security boundaries,
+deduplication/retry behavior, and API configuration.
 
 ### Per-Chat Worktrees
 

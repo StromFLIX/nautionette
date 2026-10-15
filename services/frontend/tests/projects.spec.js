@@ -95,6 +95,50 @@ async function mockProjects (context) {
   return state
 }
 
+for (const width of [1440, 320]) {
+  test(`mention access is explicit, validated and scoped per connection at ${width}px`, async ({ page, context }) => {
+    const state = await mockProjects(context)
+    state.app = { configured: true, connections: [
+      { ...teamConnection, mention_user_ids: [42], mention_acknowledge: true, mention_inbox: { pending: 2, retrying: 1 } },
+      { ...personalConnection, mention_user_ids: [], mention_acknowledge: false }
+    ] }
+    const errors = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    const saved = []
+    await context.route('**/api/projects/github-app/*/mentions', async (route) => {
+      expect(route.request().method()).toBe('PUT')
+      saved.push({ id: new URL(route.request().url()).pathname.split('/')[4], ...route.request().postDataJSON() })
+      await route.fulfill({ json: {} })
+    })
+    await page.setViewportSize({ width, height: 1000 })
+    await page.goto('/settings/projects')
+    await expect(page.getByRole('heading', { name: 'Projects', exact: true })).toBeVisible({ timeout: 20000 })
+    const team = page.locator('.project-connection').filter({ hasText: 'Installation 10' })
+    const personal = page.locator('.project-connection').filter({ hasText: 'Installation 20' })
+    const ids = team.getByRole('textbox', { name: 'Authorized GitHub user IDs for team-app' })
+    await expect(ids).toHaveValue('42')
+    await expect(team.getByText('2 mention request(s) pending;', { exact: false })).toBeVisible()
+    await expect(personal.getByRole('textbox')).toHaveValue('')
+    await expect(personal.getByRole('checkbox')).not.toBeChecked()
+    await ids.fill('some-username')
+    await team.getByRole('button', { name: 'Save mention access' }).click()
+    await expect(page.getByRole('alert')).toContainText('positive numeric GitHub user IDs')
+    expect(saved).toHaveLength(0)
+    await ids.fill('42, 99')
+    await team.getByRole('checkbox').uncheck()
+    await team.getByRole('button', { name: 'Save mention access' }).click()
+    await expect.poll(() => saved.length).toBe(1)
+    expect(saved[0]).toEqual({ id: '1-10', user_ids: [42, 99], acknowledge: false })
+    await ids.fill('')
+    await team.getByRole('button', { name: 'Save mention access' }).click()
+    await expect.poll(() => saved.length).toBe(2)
+    expect(saved[1].user_ids).toEqual([])
+    await expect(personal.getByRole('textbox')).toHaveValue('')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    expect(errors).toEqual([])
+  })
+}
+
 for (const instanceUrl of ['', 'https://instance.example.com']) {
   test(`public instance URL defaults to ${instanceUrl || 'the current browser origin'}`, async ({ page, context }) => {
     await mockProjects(context)

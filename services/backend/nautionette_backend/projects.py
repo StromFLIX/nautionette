@@ -69,6 +69,13 @@ def app_status(connection_id: str = "") -> dict[str, Any]:
         "automatic": bool(config.get("webhook_secret")),
         "public_url": config.get("public_url", ""),
         "webhook": config.get("webhook", {}),
+        "mention_user_ids": config.get("mention_user_ids", []),
+        "mention_acknowledge": config.get("mention_acknowledge", True),
+        "mention_inbox": db.one(
+            "SELECT COUNT(*) AS pending, COALESCE(SUM(attempts > 0), 0) AS retrying "
+            "FROM github_mentions WHERE connection_id = ? AND state IN ('pending', 'acknowledged')",
+            (config.get("id", ""),),
+        ),
         "install_url": f"https://github.com/apps/{config['slug']}/installations/new"
         if config.get("slug")
         else "",

@@ -154,8 +154,13 @@ def start(state: str) -> dict[str, Any]:
             "setup_on_update": True,
             "request_oauth_on_install": False,
             "hook_attributes": {"url": f"{origin}{BASE_PATH}/webhook", "active": True},
-            "default_permissions": {"contents": "write", "metadata": "read", "workflows": "write"},
-            "default_events": ["push", "repository"],
+            "default_permissions": {
+                "contents": "write",
+                "metadata": "read",
+                "workflows": "write",
+                "issues": "write",
+            },
+            "default_events": ["push", "repository", "issue_comment"],
         },
     }
 
@@ -269,7 +274,14 @@ def webhook(body: bytes, signature: str, event: str, delivery: str) -> dict[str,
             raise ValueError
     except (ValueError, UnicodeError) as exc:
         raise HTTPException(400, "Invalid GitHub webhook payload") from exc
-    if event not in {"ping", "installation", "installation_repositories", "repository", "push"}:
+    if event not in {
+        "ping",
+        "installation",
+        "installation_repositories",
+        "repository",
+        "push",
+        "issue_comment",
+    }:
         return {"ok": True, "ignored": True}
     # An App can have multiple installations sharing the same signing secret.
     config = next(
@@ -282,6 +294,10 @@ def webhook(body: bytes, signature: str, event: str, delivery: str) -> dict[str,
     )
     if not config:
         return {"ok": True, "ignored": True}
+    if event == "issue_comment":
+        from .github_mentions import accept
+
+        return accept(config, payload)
     db.execute("DELETE FROM github_webhook_deliveries WHERE received_at < ?", (time.time() - 7 * 86400,))
     if not db.execute(
         "INSERT OR IGNORE INTO github_webhook_deliveries VALUES (?,?)",

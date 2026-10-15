@@ -146,6 +146,19 @@ CREATE TABLE IF NOT EXISTS github_app_setups (
     organization TEXT NOT NULL,
     config TEXT NOT NULL DEFAULT '{}'
 );
+CREATE TABLE IF NOT EXISTS github_issue_chats (
+    thread_key TEXT PRIMARY KEY,
+    chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS github_mentions (
+    id TEXT PRIMARY KEY,
+    connection_id TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    retry_at REAL NOT NULL DEFAULT 0,
+    error TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
     id TEXT PRIMARY KEY,
     received_at REAL NOT NULL
@@ -312,9 +325,10 @@ class Database:
         agent_name: str | None = None,
         packages: list[str] | None = None,
         timeout_exempt: bool = False,
+        chat_id: str | None = None,
     ) -> dict[str, Any]:
         now = time.time()
-        chat_id = uuid.uuid4().hex[:12]
+        chat_id = chat_id or uuid.uuid4().hex[:12]
         self.execute(
             "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort,"
             " created_at, updated_at, title_state, project_ids, agent_id, agent_name, packages,"

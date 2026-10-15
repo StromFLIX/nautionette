@@ -17,6 +17,16 @@
       </div>
       <span class="caption dim">{{ connection.slug }} · Installation {{ connection.installation_id }}</span>
       <span v-if="connection.automatic" class="caption dim">{{ connection.webhook?.last_received_at ? `Webhook received ${new Date(connection.webhook.last_received_at * 1000).toLocaleString()}` : 'Awaiting first webhook' }}</span>
+      <p v-if="connection.mention_inbox?.pending" class="caption" role="status">{{ connection.mention_inbox.pending }} mention request(s) pending; {{ connection.mention_inbox.retrying }} retrying after a failure. Check App permissions and system events, then refresh to update.</p>
+      <form v-if="connection.automatic" class="project-form" @submit.prevent="saveMentions(connection)">
+        <label class="project-form__wide">Authorized GitHub user IDs
+          <input v-model="mentionForms[connection.id].ids" class="field" placeholder="123456, 789012" :aria-label="`Authorized GitHub user IDs for ${connection.slug}`" />
+        </label>
+        <p class="caption dim project-form__wide">Empty disables mentions. These users can run the default agent with its tools and this repository's write access. Use numeric IDs, not usernames. Mention @{{ connection.slug }}[bot] in a new issue comment; follow-up mentions continue the same chat. Only added, ready repositories are accepted.</p>
+        <label class="project-form__wide"><span><input v-model="mentionForms[connection.id].acknowledge" type="checkbox" /> Reply on GitHub with the chat link</span></label>
+        <p class="caption dim project-form__wide">The link requires instance sign-in but reveals your instance URL. Existing Apps need Issues: read and write permission and the Issue comment webhook event enabled in GitHub App settings, then installation approval.</p>
+        <button class="btn btn--sm" :disabled="Boolean(busy)">Save mention access</button>
+      </form>
       <button v-if="connection.automatic" class="btn btn--sm" :aria-label="`Repository access for ${connection.account || connection.slug}`" :disabled="Boolean(busy) || appLoading" @click="connectApp(connection)">
         <span class="material-icons">open_in_new</span>Repository access
       </button>
@@ -114,6 +124,20 @@ const $q = useQuasar()
 const route = useRoute()
 const app = ref({ configured: false, connections: [] })
 const selectedConnection = ref('')
+const mentionForms = reactive({})
+
+async function saveMentions (connection) {
+  busy.value = `mentions-${connection.id}`
+  error.value = ''
+  try {
+    const form = mentionForms[connection.id]
+    const parts = form.ids.trim() ? form.ids.trim().split(/[\s,]+/) : []
+    if (parts.some((value) => !/^[1-9][0-9]*$/.test(value) || !Number.isSafeInteger(Number(value)))) throw new Error('Enter positive numeric GitHub user IDs, separated by commas.')
+    await api.configureMentions(connection.id, { user_ids: parts.map(Number), acknowledge: form.acknowledge })
+    $q.notify({ type: 'positive', message: 'GitHub mention access saved.' })
+  } catch (failure) { error.value = failure.message }
+  finally { busy.value = '' }
+}
 const availableConnections = computed(() => (app.value.connections || []).filter((connection) => connection.configured))
 function connectionLabel (id) {
   const connection = (app.value.connections || []).find((item) => item.id === id)
@@ -172,6 +196,9 @@ async function loadApp () {
   appLoading.value = true
   try {
     app.value = await api.projectApp()
+    for (const connection of app.value.connections || []) {
+      mentionForms[connection.id] = { ids: (connection.mention_user_ids || []).join(', '), acknowledge: connection.mention_acknowledge !== false }
+    }
     if (app.value.public_url) form.public_url = app.value.public_url
     if (!availableConnections.value.some((connection) => connection.id === selectedConnection.value)) {
       selectedConnection.value = availableConnections.value[0]?.id || ''

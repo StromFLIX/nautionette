@@ -21,6 +21,8 @@ from ..conftest import APP_TOKEN, INTERNAL_TOKEN
 from .fakes import FakeAuthoring, FakeBroker, FakeGateway, FakeModelCatalog, FakeTemporal
 
 _TABLES = (
+    "github_issue_chats",
+    "github_mentions",
     "messages",
     "chats",
     "project_leases",

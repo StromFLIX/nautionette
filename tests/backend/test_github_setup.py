@@ -40,6 +40,8 @@ def test_manifest_registers_permissions_callbacks_and_webhooks_without_secrets(c
         "active": True,
     }
     assert manifest["default_permissions"]["contents"] == "write"
+    assert manifest["default_permissions"]["issues"] == "write"
+    assert "issue_comment" in manifest["default_events"]
     assert manifest["public"] is False
     assert manifest["setup_on_update"] is True
     assert "private_key" not in json.dumps(manifest)

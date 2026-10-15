@@ -61,6 +61,10 @@ async def list_chats() -> dict[str, Any]:
 
 @router.post("/api/chats")
 async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    return await new_chat(payload)
+
+
+async def new_chat(payload: dict[str, Any], *, chat_id: str | None = None) -> dict[str, Any]:
     selected = agent_profiles.for_chat(payload.get("agent_id", runtime("default_agent_id")))
     overrides = {key: payload[key] for key in agent_profiles.CONFIG_KEYS if key in payload}
     for key in ("model", "agent_set"):
@@ -72,6 +76,7 @@ async def create_chat(payload: dict[str, Any] = Body(default={})) -> dict[str, A
     if config["reasoning_effort"] is not None:
         _effort(config["reasoning_effort"], await catalog.model_info(config["model"]))
     chat = db.create_chat(
+        chat_id=chat_id,
         title=(payload.get("title") or "New chat").strip()[:120],
         agent_id=selected["agent_id"],
         agent_name=selected["agent_name"],
@@ -241,6 +246,13 @@ def discard_attachment(chat_id: str, image_id: str) -> dict[str, bool]:
 
 @router.post("/api/chats/{chat_id}/messages", response_model=None)
 async def send_message(chat_id: str, request: Request, payload: dict[str, Any] = Body(...)):
+    return await submit_message(
+        chat_id, payload, stream="application/json" not in request.headers.get("accept", "")
+    )
+
+
+async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool = False):
+    """Submit through the normal chat pipeline, including its durable follow-up queue."""
     chat = _chat_or_404(chat_id)
     if not isinstance(payload.get("text", ""), str):
         raise HTTPException(422, "text must be a string")
@@ -326,7 +338,7 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
             "format": model_info.get("reasoning_format", "openai"),
         },
     )
-    if created and project_ids:
+    if project_ids:
         selected_projects = [
             db.one("SELECT * FROM projects WHERE id = ?", (project_id,)) for project_id in project_ids
         ]
@@ -354,14 +366,18 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
             "Do not print or persist credentials."
         )
 
-    if created:
+    # A retry can repair a process exit between acceptance and job persistence.
+    if created or db.one(
+        "SELECT id FROM chat_turns WHERE id = ? AND job IS NULL AND state IN ('running', 'queued')",
+        (message_id,),
+    ):
         db.execute("UPDATE chat_turns SET job = ? WHERE id = ?", (json.dumps(job), message_id))
         if not user_message["meta"].get("queued"):
             spawn(run_turn(message_id, chat_id, job), name=f"chat-{message_id}")
         else:
             launch_next(chat_id)
         bus.publish("chat.message", {"chat_id": chat_id})
-    if payload.get("queue") is True or "application/json" in request.headers.get("accept", ""):
+    if payload.get("queue") is True or not stream:
         return JSONResponse({"message": user_message, "turn_id": message_id}, status_code=202)
     return StreamingResponse(turn_events(message_id), media_type="text/event-stream", headers=SSE_HEADERS)
 

@@ -4,11 +4,11 @@ import html
 import json
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
-from .. import github_setup
+from .. import github_mentions, github_setup
 from ..security import require_user
 
 router = APIRouter()
@@ -30,6 +30,13 @@ def failure_response(error: HTTPException) -> HTMLResponse:
         f'<p>{html.escape(str(error.detail))}</p><a href="/settings/projects">Return to Projects</a></html>',
         status_code=error.status_code,
         headers=HEADERS | {"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'"},
+    )
+
+
+@router.put(github_setup.BASE_PATH + "/{connection_id}/mentions", dependencies=[Depends(require_user)])
+async def configure_mentions(connection_id: str, payload: dict = Body(...)):
+    return github_mentions.configure(
+        connection_id, payload.get("user_ids"), payload.get("acknowledge", True)
     )
 
 
