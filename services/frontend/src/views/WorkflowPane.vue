@@ -139,7 +139,23 @@
               {{ key }}
               <span v-if="(workflow.manifest?.inputs?.required || []).includes(key)" class="dim">*</span>
             </label>
+            <select
+              v-if="schema.type === 'boolean'"
+              :id="`workflow-input-${key}`" v-model="inputs[key]" class="field"
+              :title="schema.description || ''"
+            >
+              <option :value="undefined">{{ schema.default === undefined ? 'Not set' : `Use default (${schema.default})` }}</option>
+              <option :value="true">true</option>
+              <option :value="false">false</option>
+            </select>
             <input
+              v-else-if="schema.type === 'integer' || schema.type === 'number'"
+              :id="`workflow-input-${key}`" v-model.number="inputs[key]" class="field" type="number"
+              :step="schema.type === 'integer' ? 1 : 'any'" :min="schema.minimum" :max="schema.maximum"
+              :placeholder="schema.description || String(schema.default ?? schema.type)"
+            />
+            <input
+              v-else
               :id="`workflow-input-${key}`" v-model="inputs[key]" class="field"
               :placeholder="schema.description || schema.type || ''"
             />
@@ -251,7 +267,7 @@
 
         <section class="block">
           <div class="section-label">Trigger</div>
-          <TriggerSnippet class="block__panel" :workflow="workflow.name" :inputs="inputs" />
+          <TriggerSnippet class="block__panel" :workflow="workflow.name" :inputs="payload()" />
         </section>
       </template>
 
