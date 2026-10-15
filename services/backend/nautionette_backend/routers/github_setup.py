@@ -35,9 +35,7 @@ def failure_response(error: HTTPException) -> HTMLResponse:
 
 @router.put(github_setup.BASE_PATH + "/{connection_id}/mentions", dependencies=[Depends(require_user)])
 async def configure_mentions(connection_id: str, payload: dict = Body(...)):
-    return github_mentions.configure(
-        connection_id, payload.get("user_ids"), payload.get("acknowledge", True)
-    )
+    return github_mentions.configure(connection_id, payload.get("user_ids"), payload.get("acknowledge", True))
 
 
 @router.post(github_setup.BASE_PATH + "/connect", dependencies=[Depends(require_user)])

@@ -95,6 +95,7 @@ jobs:
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
           tests/copilot-login.spec.js tests/tool-calls.spec.js tests/activity-timing.spec.js
+          tests/workflow-inputs.spec.js
           --workers=1 --reporter=dot,github
 
   images:
