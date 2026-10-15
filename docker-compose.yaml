@@ -26,8 +26,9 @@ services:
       dockerfile: services/backend/Dockerfile
     image: ${STACK_NAMESPACE:-nautionette}/backend:dev
     restart: unless-stopped
-    # Let active chat tasks confirm agent/worktree cleanup before Docker kills us.
-    stop_grace_period: 120s
+    # Active turns drain while HTTP/MCP is still serving, then clean up agents.
+    # Keep this longer than BACKEND_CHAT_DRAIN_SECONDS (including cleanup headroom).
+    stop_grace_period: ${BACKEND_STOP_GRACE_PERIOD:-3720s}
     # The application entrypoint, published only on the host loopback interface.
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
@@ -53,6 +54,7 @@ services:
       GITHUB_APP_PUBLIC_URL: ${GITHUB_APP_PUBLIC_URL:-}
       DEFAULT_AGENT_SET: ${DEFAULT_AGENT_SET:-default}
       AGENT_RUN_TIMEOUT_SECONDS: ${AGENT_RUN_TIMEOUT_SECONDS:-3600}
+      BACKEND_CHAT_DRAIN_SECONDS: ${BACKEND_CHAT_DRAIN_SECONDS:-3600}
       AGENT_MODEL: ${AGENT_MODEL:-openai/gpt-4o-mini}
       # Set to any non-empty value when a provider key is configured; the app
       # also flips it on by itself after the first agent call that works.

@@ -57,6 +57,8 @@ def db(monkeypatch: pytest.MonkeyPatch):
     runtime.model_windows.clear()
     # A request's own watcher is left behind on a loop that has already closed.
     background._running.clear()
+    background._chat_turns.clear()
+    monkeypatch.setattr(background, "_draining", False)
     monkeypatch.setattr(runtime, "_agent_answered", False)
     return database
 

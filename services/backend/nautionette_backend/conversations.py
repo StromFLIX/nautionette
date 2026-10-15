@@ -10,7 +10,7 @@ from typing import Any
 
 from . import chat_attachments, git_authorship, projects
 from .agent import Timeline, build_history, stream_agent
-from .background import spawn
+from .background import is_draining, spawn
 from .chat_titles import refine_chat_title
 from .clients import broker
 from .db import db
@@ -66,9 +66,25 @@ async def recover_chat_agents() -> None:
 
 
 def launch_next(chat_id: str) -> None:
+    if is_draining():
+        return
     turn = db.next_chat_turn(chat_id)
     if turn:
-        spawn(run_turn(turn["id"], chat_id, json.loads(turn["job"])), name=f"chat-{turn['id']}")
+        spawn(
+            run_turn(turn["id"], chat_id, json.loads(turn["job"])),
+            name=f"chat-{turn['id']}",
+            chat_turn=True,
+        )
+
+
+def resume_chat_queues() -> None:
+    """Only untouched inputs in unpaused chats are safe to launch after restart.
+
+    recover_interrupted must run first: a chat with an uncertain running turn
+    (including unacknowledged steering) stays paused for explicit verification.
+    """
+    for row in db.query("SELECT DISTINCT chat_id FROM chat_turns WHERE state = 'queued'"):
+        launch_next(row["chat_id"])
 
 
 async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished: asyncio.Event) -> None:
@@ -80,13 +96,14 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
         try:
             if turn["stop_requested"]:
                 await broker.control_agent(chat_id, turn_id, {"id": f"stop-{turn_id}", "type": "stop"})
-            else:
+            elif not is_draining():
                 queued = db.query(
                     "SELECT * FROM chat_turns WHERE chat_id = ? AND state = 'queued' ORDER BY rowid",
                     (chat_id,),
                 )
                 for pending in queued:
-                    if not pending["job"]:
+                    # A prior control delivery may have yielded during SIGTERM.
+                    if is_draining() or not pending["job"]:
                         break
                     candidate = json.loads(pending["job"])
                     # Attachment messages run as their own durable turn. Never send a text-only
@@ -294,7 +311,11 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
             )
     except asyncio.CancelledError:
         shutdown = True
-        failure = "The answer was interrupted by a backend shutdown."
+        failure = (
+            "The answer was interrupted by a backend shutdown before it could finish draining. "
+            "Partial work was retained and the queue is paused. "
+            "Verify unfinished tools before retrying; they were not automatically replayed."
+        )
         raise
     except Exception as exc:
         failure = str(exc) or type(exc).__name__
@@ -358,7 +379,7 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
 def recover_interrupted() -> None:
     db.execute(
         "UPDATE chats SET queue_paused = 1 WHERE id IN "
-        "(SELECT chat_id FROM chat_turns WHERE state IN ('running', 'queued'))"
+        "(SELECT chat_id FROM chat_turns WHERE state = 'running')"
     )
     db.execute(
         "UPDATE projects SET status = 'failed', error = 'Download interrupted; retry' "
@@ -366,7 +387,11 @@ def recover_interrupted() -> None:
     )
     for turn in db.query("SELECT * FROM chat_turns WHERE state = 'running'"):
         steps = json.loads(turn["steps"])
-        failure = "The answer was interrupted by a backend restart."
+        failure = (
+            "The answer was interrupted by a backend restart before completion could be confirmed. "
+            "Partial work was retained and the queue is paused. "
+            "Verify unfinished tools before retrying; they were not automatically replayed."
+        )
         content = "".join(step.get("text", "") for step in steps if step.get("kind") == "text")
         db.finish_chat_turn(turn["id"], content or failure, {"steps": steps, "error": failure})
 

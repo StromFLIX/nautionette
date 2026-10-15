@@ -38,6 +38,9 @@ class Settings:
         # Interactive turns use the broker's wall-clock ceiling. Workflow calls
         # keep their separate, explicit per-activity timeout (default 900s).
         self.agent_run_timeout_seconds = max(1, int(os.environ.get("AGENT_RUN_TIMEOUT_SECONDS", "3600")))
+        # Keep HTTP/MCP serving during this bounded chat drain. The orchestrator
+        # must allow additional time for connection shutdown and agent cleanup.
+        self.backend_chat_drain_seconds = max(0, int(os.environ.get("BACKEND_CHAT_DRAIN_SECONDS", "3600")))
         self.default_agent_set = os.environ.get("DEFAULT_AGENT_SET", "default")
         self.agent_model = os.environ.get("AGENT_MODEL", "openai/gpt-4o-mini")
         self.model_key_present = bool(os.environ.get("MODEL_KEY_PRESENT", "").strip())

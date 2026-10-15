@@ -19,7 +19,7 @@ from ..agent import (
     promote_chat,
     summarise_for_title,
 )
-from ..background import spawn
+from ..background import is_draining, spawn
 from ..chat_titles import rewrite_chat_title, title_context, title_messages
 from ..config import settings
 from ..conversations import chat_snapshots, launch_next, run_turn, turn_events
@@ -251,8 +251,18 @@ async def send_message(chat_id: str, request: Request, payload: dict[str, Any] =
     )
 
 
+def _require_chat_admission() -> None:
+    if is_draining():
+        raise HTTPException(
+            503,
+            "Backend is draining active chat turns for restart; retry shortly.",
+            headers={"Retry-After": "5"},
+        )
+
+
 async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool = False):
     """Submit through the normal chat pipeline, including its durable follow-up queue."""
+    _require_chat_admission()
     chat = _chat_or_404(chat_id)
     if not isinstance(payload.get("text", ""), str):
         raise HTTPException(422, "text must be a string")
@@ -287,6 +297,9 @@ async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool 
     project_ids = payload.get("project_ids", default_selection)
     if not existing:
         project_ids = projects.selection(project_ids)
+    # Model discovery above may have yielded while a shutdown signal arrived.
+    # From this fence through job persistence/task registration there is no await.
+    _require_chat_admission()
     try:
         user_message, created = db.accept_chat_message(
             chat_id,
@@ -373,7 +386,7 @@ async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool 
     ):
         db.execute("UPDATE chat_turns SET job = ? WHERE id = ?", (json.dumps(job), message_id))
         if not user_message["meta"].get("queued"):
-            spawn(run_turn(message_id, chat_id, job), name=f"chat-{message_id}")
+            spawn(run_turn(message_id, chat_id, job), name=f"chat-{message_id}", chat_turn=True)
         else:
             launch_next(chat_id)
         bus.publish("chat.message", {"chat_id": chat_id})
@@ -395,6 +408,7 @@ async def stop_chat(chat_id: str, payload: dict[str, Any] = Body(...)) -> dict[s
 
 @router.post("/api/chats/{chat_id}/queue/resume")
 async def resume_chat_queue(chat_id: str) -> dict[str, Any]:
+    _require_chat_admission()
     _chat_or_404(chat_id)
     if db.one("SELECT 1 FROM chat_turns WHERE chat_id = ? AND state = 'running'", (chat_id,)):
         raise HTTPException(status_code=409, detail="Wait for the current turn to stop")

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from .. import runs
+from ..background import is_draining
 from ..clients import authoring, broker, gateway, temporal
 from ..config import settings
 from ..events import bus
@@ -22,7 +23,12 @@ SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 @router.get("/healthz")
 async def healthz() -> dict[str, Any]:
-    return {"status": "ok", "version": settings.version, "environment": settings.environment}
+    return {
+        "status": "ok",
+        "version": settings.version,
+        "environment": settings.environment,
+        "chat_draining": is_draining(),
+    }
 
 
 @router.get("/api/system", dependencies=[Depends(require_user)])

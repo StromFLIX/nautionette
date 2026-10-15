@@ -219,20 +219,50 @@ rebuilding the **Pi base/agent images, backend and frontend**; existing live con
 continue using their original runner.
 
 Interactive generation is independent of client connections, but is not a Temporal
-workflow. On backend restart, unfinished turns retain their partial output and
-become explicitly interrupted answers; pending messages remain queued and paused
-until explicitly resumed. Tools are not automatically rerun because
-their external side effects may already have happened. Run one backend process per
-SQLite database; startup recovery assumes ownership of its unfinished turns.
+workflow. The packaged backend uses `python -m nautionette_backend.server` to
+**drain active turns on SIGTERM/SIGINT before closing HTTP/MCP**. Active agents
+keep their streams, tool access, controls and credential renewal until completion;
+new chat submissions and queue-resume requests get `503` with `Retry-After: 5`.
+No new queued turn or steering delivery starts during draining (already-delivered
+steering may still be consumed). The read-only `/healthz` stays healthy and exposes
+`chat_draining: true`. After the active turn and its agent cleanup finish, untouched
+queued messages stay durable and resume automatically after the new backend's
+listener opens. Successful output is saved once, not generated again.
 
-Shutdown waits for each active chat agent to be removed and its worktree claim
-released (the backend has a 120-second Compose stop grace period). After a crash,
-startup recovery reconciles surviving chat agents against their exact database
-turn state, including agents whose turns were already finished. Recovery retries
-if the broker is still starting. Each new turn also requires successful cleanup
-before preparing its project worktrees. Cleanup failures pause the affected queue
-and report a retryable error; retrying the message retries cleanup. Existing edits,
-local commits, and worktree locks are preserved—never delete or bypass the locks.
+`BACKEND_CHAT_DRAIN_SECONDS` bounds the wait (default `3600`; `0` skips waiting).
+`BACKEND_STOP_GRACE_PERIOD` defaults to `3720s` in Compose to leave cleanup headroom;
+keep it **longer than the drain window**, including time to close SSE connections
+and remove agents. A second termination signal skips the remaining wait, not cleanup.
+Rebuild the backend image and recreate the service to use this entrypoint. Running
+plain `uvicorn nautionette_backend.main:app` bypasses pre-listener-shutdown draining
+and automatic queue startup. Keep the broker, gateway, MCP services and networks
+available throughout the drain; when replacing the whole stack, drain/stop the
+backend before replacing its dependencies. Deployment-platform stop deadlines
+must also honor the configured grace period.
+
+If the deadline expires, or the process crashes/is killed, unfinished turns retain
+partial output and become explicitly interrupted answers with instructions to
+verify unfinished tools. Their queues stay paused until explicitly resumed. Tools
+are **not automatically replayed**: external side effects may already have happened,
+and graceful draining does not provide crash-safe reattachment or exactly-once
+execution for arbitrary tools. Manually paused queues remain paused. Run one backend
+process per SQLite database; startup recovery assumes ownership of unfinished turns.
+
+Shutdown still waits for each active chat agent to be removed and its worktree
+claim released. After a crash, startup recovery reconciles surviving chat agents
+against their exact database turn state, including agents whose turns were already
+finished. Recovery retries if the broker is still starting. Each new turn also
+requires successful cleanup before preparing its project worktrees. Cleanup failures
+pause the affected queue and report a retryable error; retrying the message retries
+cleanup. Existing edits, local commits, and worktree locks are preserved—never delete
+or bypass the locks.
+
+Restart regressions run without Docker or a provider:
+`uv run pytest tests/backend/test_chat_draining.py tests/backend/test_chat_restart_process.py`.
+The process tests use the real server/lifespan/SQLite/turn pipeline, a real read-only
+child tool and an open SSE stream, with model and Docker infrastructure faked. They
+exercise SIGTERM plus restart and queued follow-up (one tool launch per turn, no
+duplicated output), and SIGKILL recovery without unsafe replay.
 
 Broker inventory and cleanup are internal authenticated verbs, scoped by the
 actual deployment workflows-volume mount plus chat/turn IDs. This includes legacy
@@ -1039,7 +1069,7 @@ Working on the Python services:
 uv sync                                 # one workspace, one lock file
 uv run pytest                           # every service, no Docker and no network
 uv run ruff check . && uv run ruff format .
-uv run --package nautionette-backend uvicorn nautionette_backend.main:app --reload
+uv run --package nautionette-backend python -m nautionette_backend.server
 ```
 
 The suite in `tests/` covers all four services. Everything outside a process is faked:
