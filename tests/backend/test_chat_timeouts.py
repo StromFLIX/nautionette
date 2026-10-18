@@ -5,7 +5,7 @@ import json
 
 import httpx
 import pytest
-from nautionette_backend import agent, conversations
+from nautionette_backend import agent, artcraft, conversations
 from nautionette_backend.clients.docker_broker import BrokerClient
 from nautionette_backend.db import Database
 
@@ -82,6 +82,8 @@ async def test_stream_runner_passes_the_correct_timeout_to_broker(live, monkeypa
     assert len(calls) == 1 and calls[0][1] == (None if exempt else 3630)
     outgoing = dict(calls[0][0])
     assert outgoing.pop("output_publication")["grant"]
+    assert outgoing.pop("artcraft") == artcraft.for_run()
+    assert "artcraft" not in job
     assert outgoing == job  # Private publication configuration never mutates the saved job.
     # Workflow budgets are not affected even if the flag is accidentally copied.
     job["mode"] = "workflow"

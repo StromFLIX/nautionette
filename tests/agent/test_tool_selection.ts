@@ -21,9 +21,10 @@ test("JSON takes precedence over legacy CSV and malformed values fail closed", (
 
 for (const selection of [null, [], ["search"], ["unavailable"], ["search", "read"]]) {
   test(`the actual extension registers only ${JSON.stringify(selection)} MCP tools`, async () => {
-    const keys = ["NAUTIONETTE_TOOLS_JSON", "NAUTIONETTE_TOOLS", "NAUTIONETTE_MODEL_API", "AGENT_MODEL"];
+    const keys = ["NAUTIONETTE_TOOLS_JSON", "NAUTIONETTE_TOOLS", "NAUTIONETTE_MODEL_API", "AGENT_MODEL", "NAUTIONETTE_ARTCRAFT_JSON"];
     const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
     const originalFetch = globalThis.fetch;
+    process.env.NAUTIONETTE_ARTCRAFT_JSON = "[]"; // This test isolates the remote-MCP allowlist.
     process.env.NAUTIONETTE_TOOLS_JSON = JSON.stringify(selection);
     process.env.NAUTIONETTE_TOOLS = "search,read";
     process.env.NAUTIONETTE_MODEL_API = "openai-completions";

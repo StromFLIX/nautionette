@@ -19,7 +19,7 @@ from fastapi.responses import StreamingResponse
 from nautionette.telemetry import instrument_app
 from opentelemetry import propagate
 
-from . import agent_run, daemon, git_credentials, images, monitor, packages, workers
+from . import agent_run, artcraft, daemon, git_credentials, images, monitor, packages, workers
 from .config import INTERNAL_TOKEN
 
 
@@ -110,6 +110,23 @@ def install_package(
         raise HTTPException(422, str(exc)) from exc
     except Exception as exc:
         raise HTTPException(503, "Package installer unavailable or timed out; retry") from exc
+
+
+@app.post("/artcraft/install")
+def install_artcraft(
+    payload: dict[str, Any] = Body(...), x_internal_token: str | None = Header(default=None)
+) -> dict[str, str]:
+    _check_internal(x_internal_token)
+    if set(payload) != {"installation_id", "release"}:
+        raise HTTPException(422, "Provide an installation ID and fixed ArtCraft release")
+    try:
+        return artcraft.install(payload["installation_id"], payload["release"])
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            503, "ArtCraft installer unavailable or timed out; previous version unchanged"
+        ) from exc
 
 
 @app.post("/worker/restart")

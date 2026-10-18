@@ -15,7 +15,7 @@ from docker.errors import NotFound
 from nautionette.agent_limits import chat_timeout_exempt
 from nautionette.pi_packages import configuration, filters, revision_id
 
-from . import chat_agents, daemon, git_credentials, images, packages, projects
+from . import artcraft, chat_agents, daemon, git_credentials, images, packages, projects
 from .config import (
     AGENT_ENVIRONMENT,
     AGENT_MEMORY,
@@ -299,6 +299,7 @@ def _run(
             if not isinstance(root, str) or not root or root.startswith("/") or ".." in root.split("/"):
                 raise ValueError("Invalid package artifact root")
         package_mounts = packages.mounts([item["installation_id"] for item in package_runtime])
+        app_mounts = artcraft.mounts(job.get("artcraft", []))
         # Private configuration travels through a mode-0600 file, not Docker env,
         # JOB.json, CLI arguments or the persisted turn. The runner unlinks it.
         credentials = job.get("project_credentials", [])
@@ -315,7 +316,7 @@ def _run(
             environment=environment,
             network=AGENT_NETWORK if job.get("chat_id") else TARGET_NETWORK,
             volumes={WORKFLOWS_VOLUME: {"bind": "/workflows", "mode": "ro"}},
-            mounts=[*project_mounts, *package_mounts],
+            mounts=[*project_mounts, *package_mounts, *app_mounts],
             tmpfs=(
                 {
                     "/workspace": f"size={AGENT_WORKSPACE_SIZE},exec,uid=10001,gid=10001",

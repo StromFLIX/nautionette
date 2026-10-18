@@ -43,6 +43,7 @@ for (const [model, api, images] of [
           registration = config;
         },
         on() {},
+        registerTool() {}, // Native first-party tools are independent of provider selection.
       });
       assert.equal(registration.api, api);
       assert.equal(registration.models[0].id, model);

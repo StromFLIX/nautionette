@@ -17,6 +17,7 @@ COPY services/docker-broker/pyproject.toml services/docker-broker/
 COPY services/workflow-mcp/pyproject.toml services/workflow-mcp/
 COPY services/worker/pyproject.toml services/worker/
 COPY libs/ libs/
+COPY images/pi-base/artcraft/catalog.json /etc/nautionette/artcraft-catalog.json
 COPY services/backend/ services/backend/
 RUN uv sync --locked --no-dev --package nautionette-backend
 

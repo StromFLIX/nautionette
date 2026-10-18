@@ -41,6 +41,9 @@ jobs:
       - name: Deployment, snapshot, gateway buffers and agent image safety tests
         run: uv run pytest tests/test_coolify_release.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py
 
+      - name: Native creative app release contracts, installer isolation and Settings
+        run: uv run pytest tests/lib/test_artcraft.py tests/broker/test_artcraft.py tests/backend/test_artcraft.py
+
       - name: OpenTelemetry privacy boundary
         run: uv run pytest tests/lib/test_telemetry.py tests/lib/test_telemetry_http.py
 
@@ -98,7 +101,7 @@ jobs:
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
           tests/copilot-login.spec.js tests/tool-calls.spec.js tests/activity-timing.spec.js
-          tests/workflow-inputs.spec.js tests/outputs.spec.js
+          tests/workflow-inputs.spec.js tests/outputs.spec.js tests/creative-apps.spec.js
           --workers=1 --reporter=dot,github
 
   images:
@@ -155,9 +158,9 @@ jobs:
       - name: Pi image transport and package RPC compatibility (offline)
         run: |
           docker run --rm --network none --user 10001:10001 \
-            --env HOME=/workspace --tmpfs /workspace:rw,mode=1777 \
+            --env HOME=/workspace --env ARTCRAFT_REQUIRE_NATIVE=1 --tmpfs /workspace:rw,mode=1777 \
             --volume "$PWD:/source:ro" --entrypoint bash nautionette/pi-agent-default:dev -c \
-            'pi --version && node --test /source/tests/agent/test_chat_files.mjs /source/tests/agent/test_outputs.mjs /source/tests/agent/test_outputs_rpc.mjs /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs /source/tests/agent/test_packages_rpc.mjs /source/tests/agent/test_context_usage.mjs /source/tests/agent/test_chat_control.mjs /source/tests/agent/test_chat_recovery.mjs /source/tests/agent/test_chat_recovery_rpc.mjs /source/tests/agent/test_project_git.mjs /source/tests/agent/test_telemetry.mjs'
+            'pi --version && node --test /source/tests/agent/test_artcraft.mjs /source/tests/agent/test_artcraft_native.mjs /source/tests/agent/test_artcraft_rpc.mjs /source/tests/agent/test_chat_files.mjs /source/tests/agent/test_outputs.mjs /source/tests/agent/test_outputs_rpc.mjs /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs /source/tests/agent/test_packages_rpc.mjs /source/tests/agent/test_context_usage.mjs /source/tests/agent/test_chat_control.mjs /source/tests/agent/test_chat_recovery.mjs /source/tests/agent/test_chat_recovery_rpc.mjs /source/tests/agent/test_project_git.mjs /source/tests/agent/test_telemetry.mjs'
 
       - name: Development tools work offline as the project user
         run: |

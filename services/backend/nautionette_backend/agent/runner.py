@@ -12,7 +12,7 @@ from typing import Any
 
 from nautionette.agent_limits import chat_timeout_exempt
 
-from .. import chat_attachments, chat_outputs, pi_packages
+from .. import artcraft, chat_attachments, chat_outputs, pi_packages
 from ..clients import broker
 from ..config import settings
 from .prompts import CHAT_SYSTEM_PROMPT
@@ -162,7 +162,7 @@ def agent_job(
 async def stream_agent(job: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
     # Resolve private configuration only in the outgoing call, never in persisted
     # jobs/history, profile snapshots or public API responses.
-    outgoing = dict(job)
+    outgoing = {**job, "artcraft": artcraft.for_run()}
     if job.get("packages"):
         outgoing["package_runtime"] = pi_packages.for_run(job["packages"])
     timeout = None if chat_timeout_exempt(job) else job.get("timeout_seconds", 900) + 30

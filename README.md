@@ -379,13 +379,32 @@ The browser can disconnect while the agent works.
 
 PNG/JPEG/GIF/WebP have safe, enlarged image previews. PDFs and other file formats
 are downloads; publish generated page images alongside a PDF for mobile previews.
-Original bytes and saved source survive disposable agent containers. This first
-slice uses the existing sandbox: it does not install ArtCraft applications, add
-an editor/WASM viewer, or create dedicated Rust workers.
+Original bytes and saved source survive disposable agent containers. Publication
+uses the existing sandbox; it adds no editor/WASM viewer or dedicated Rust workers.
 
 See [Durable chat outputs](docs/chat-outputs.md) for tool examples, revision and
 restore semantics, storage limits, authorization and deployment checks. Rebuild
 the backend, broker, frontend and default agent image together.
+
+### Native creative apps
+
+The default agent image bundles all 13 ArtCraft native CLIs: PhotoCraft,
+VectorCraft, FilmCraft, LightCraft, PdfCraft, EffectCraft, DesignCraft, FigCraft,
+WordCraft, SoundCraft, DeckCraft, CADCraft and GridCraft. Agents discover and use
+headless tools through `craft_apps`, `craft_tools` and `craft_call`; no browser
+connection or manual MCP setup is required. Ask for a deliverable, then find its
+published source, exports and preview under **Outputs**. Later turns can restore
+and revise the source.
+
+**Settings → Creative apps** enables/disables apps, discovers upstream releases,
+installs an exact version with checksum/MCP verification, and restores bundled
+versions. New agent runs get the updated selection; running containers retain
+their pinned binaries. Failed updates keep the working version. Engines start on
+demand and share the existing sandbox's resource/security boundary; desktop-only
+commands and embedded interactive editors are not included.
+
+See [Native creative applications](docs/creative-apps.md) for lifecycle, update
+isolation, limits, tests and deployment details.
 
 ### Reasoning effort
 

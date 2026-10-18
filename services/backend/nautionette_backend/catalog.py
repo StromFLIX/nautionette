@@ -12,6 +12,7 @@ import contextlib
 from typing import Any
 
 from fastapi import HTTPException
+from nautionette.artcraft import TOOL_NAMES as CRAFT_TOOL_NAMES
 
 from . import agent_profiles
 from .chat_outputs import RESERVED_TOOL_NAMES
@@ -94,7 +95,9 @@ async def tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], li
     """Federated tools, each attributed to the MCP server it came from."""
     targets = config.get("targets") or []
     federated = [
-        tool for tool in await attempt(gateway.mcp_tools(), []) if tool["name"] not in RESERVED_TOOL_NAMES
+        tool
+        for tool in await attempt(gateway.mcp_tools(), [])
+        if tool["name"] not in RESERVED_TOOL_NAMES | CRAFT_TOOL_NAMES
     ]
 
     def prefixed(name: str) -> str:

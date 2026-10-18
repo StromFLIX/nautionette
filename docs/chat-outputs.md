@@ -6,11 +6,12 @@ are owned by the chat, not the disposable container, and survive later turns and
 backend restarts. There is no browser application, editor, WASM dependency, or
 browser acknowledgement in the execution path.
 
-This is an application-independent publication foundation. It does **not** add
-CADCraft, FigCraft, PDF converters, dedicated Rust workers, a worker pool, or
-interactive document synchronization. Application tools can produce files and use
-this same publication boundary later. A `source_app` label does not install or run
-that application.
+This is an application-independent publication foundation. The separate
+[native creative apps integration](creative-apps.md) now supplies the ArtCraft
+CLIs, which produce files through this same publication boundary. Publication
+itself does not execute an app: a `source_app` label is metadata, not an invocation.
+Dedicated Rust workers, a worker pool and interactive document synchronization
+are not included.
 
 ## Agent tools
 
@@ -169,4 +170,5 @@ PNG, restore the preview and pass its pixels through the normal image-reading
 path. It needs `pi` installed (CI runs it inside the agent image). Browser tests
 cover desktop/mobile downloads, previews, revision updates/history, selection,
 keyboard controls, errors, retained drafts and hidden-reply read state. These are
-not a live CADCraft export or a Docker-worker load test.
+not a live CADCraft export or a Docker-worker load test. The separate creative-app
+tests also exercise real native CAD exports and source revisions.

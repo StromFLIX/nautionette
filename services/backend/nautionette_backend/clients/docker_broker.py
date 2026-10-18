@@ -63,6 +63,16 @@ class BrokerClient:
         response.raise_for_status()
         return response.json()
 
+    async def install_artcraft(self, installation_id: str, release: dict[str, str]) -> dict[str, str]:
+        response = await shared().post(
+            f"{self.base_url}/artcraft/install",
+            headers=internal_headers(),
+            json={"installation_id": installation_id, "release": release},
+            timeout=360,
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def restart_worker(self) -> dict[str, Any]:
         response = await shared().post(
             f"{self.base_url}/worker/restart", headers=internal_headers(), timeout=120

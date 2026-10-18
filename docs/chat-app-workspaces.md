@@ -1,6 +1,10 @@
 # Investigation: on-demand application workspaces inside a chat
 
-Status: research and proposed design, **not implemented or deployed**.
+Status: historical research and proposed full workspace design. The narrower
+output-only integration and native CLI catalog are now implemented; see
+[chat outputs](chat-outputs.md) and [creative apps](creative-apps.md). Browser
+WASM editors, shared live documents and separate application workers below
+remain proposals, not implemented features.
 
 Investigated against Nautionette `9d9cf1a` and public ArtCraft sources/releases on
 2026-10-15. Smoke tests ran in disposable research space, not against production.

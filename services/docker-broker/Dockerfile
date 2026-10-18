@@ -18,6 +18,7 @@ RUN mkdir -p /projects && chown 10001:10001 /projects
 
 # The broker carries the build contexts so pruned Pi images can be rebuilt.
 COPY images/ /agent-images/
+COPY images/pi-base/artcraft/catalog.json /etc/nautionette/artcraft-catalog.json
 
 # Runs as root: it needs the Docker socket. The API surface stays fixed instead.
 EXPOSE 9100
