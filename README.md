@@ -135,6 +135,21 @@ configuration; profiles do not automatically change deployed workflows.
 See [Agent configuration](docs/agent-configuration.md) for API semantics, migration
 and deployment requirements.
 
+## Saving chat files on Android
+
+**Download** in Outputs (and file attachments) opens Android's **Save to** picker.
+Choose Downloads or another document provider and confirm **Save**. The app reports
+success only after the bytes are written; cancelling or a storage error stays
+visible and lets you retry. Files are fetched with your existing authentication,
+not opened in the app's WebView or handed to an unauthenticated download URL.
+No broad storage permission is needed. Browser downloads work as before.
+
+This requires the updated APK, not just a server deployment. The **Android** GitHub
+Actions run publishes the `nautionette-apk` artifact for every push to `main`.
+Install that APK to get the native save bridge. For a manual device check, save a
+PDF, an editable source and a preview from Outputs; verify their bytes and names
+in the selected destination, then check cancellation and retry.
+
 ## Chat delivery and recovery
 
 Web and Android use the same thin client. The backend owns accepted messages,

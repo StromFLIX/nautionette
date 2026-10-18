@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==', 'base64')
-const pdf = Buffer.from('%PDF-generated-output')
+const pdf = Buffer.concat([Buffer.from('%PDF-generated-output'), Buffer.from([0, 128, 255])])
 function output (revision = 1, overrides = {}) {
   return {
     id: 'a'.repeat(32), revision, title: 'Mounting bracket', summary: 'Drawing and editable source.', source_app: 'CADCraft', turn_id: 'turn', created_at: Date.now() / 1000,
@@ -58,6 +58,27 @@ async function fixture (context, { empty = false, inline = false } = {}) {
   return state
 }
 
+async function mockNativeDownloads (context, { available = true } = {}) {
+  await context.addInitScript(({ available }) => {
+    if (window !== window.top) return
+    localStorage.setItem('nautionette.server', location.origin)
+    window.androidBridge = {}
+    window.nativeSaves = []
+    window.saveOutcome = 'pending'
+    window.Capacitor = {
+      isNativePlatform: () => true,
+      PluginHeaders: available ? [{ name: 'NautionetteDownloads', methods: [{ name: 'save', rtype: 'promise' }] }] : [],
+      nativePromise: async (plugin, method, options) => {
+        if (plugin !== 'NautionetteDownloads' || method !== 'save') throw new Error('Unexpected native call')
+        window.nativeSaves.push(options)
+        if (window.saveOutcome === 'pending') return new Promise((resolve, reject) => { window.finishSave = resolve; window.failSave = reject })
+        if (window.saveOutcome === 'failed') throw new Error('Storage is full')
+        return { cancelled: window.saveOutcome === 'cancelled' }
+      }
+    }
+  }, { available })
+}
+
 const outputsTab = page => page.getByRole('tab', { name: /Outputs/ })
 const outputPanel = page => page.getByRole('tabpanel', { name: /Outputs/ })
 
@@ -96,6 +117,68 @@ for (const width of [1440, 390]) {
     expect(errors).toEqual([])
   })
 }
+
+test('Android saves authenticated output bytes with the native picker and waits for completion', async ({ page, context }) => {
+  const state = await fixture(context)
+  await mockNativeDownloads(context)
+  await page.setViewportSize({ width: 390, height: 900 })
+  let browserDownloads = 0
+  page.on('download', () => browserDownloads++)
+  await page.goto('/chats/alpha')
+  await outputsTab(page).click()
+  const panel = outputPanel(page).locator('.output-card')
+  const download = panel.getByRole('button', { name: 'Download bracket.pdf', exact: true })
+  await download.click()
+  await expect.poll(() => page.evaluate(() => window.nativeSaves)).toEqual([
+    { name: 'bracket.pdf', mimeType: 'application/pdf', base64: pdf.toString('base64') }
+  ])
+  await expect(download).toBeDisabled()
+  await expect(panel.getByRole('status')).toHaveCount(0)
+  await page.evaluate(() => window.finishSave({ cancelled: false }))
+  await expect(panel.getByRole('status')).toHaveText('Saved bracket.pdf to your selected location.')
+  await expect(download).toBeEnabled()
+  expect(state.files.find(file => !file.preview).authorization).toBe('Bearer output-test-token')
+  // Editable source and preview files must use the same path, not navigate/open in WebView.
+  await page.evaluate(() => { window.saveOutcome = 'saved' })
+  await panel.getByRole('button', { name: 'Download bracket.dxf', exact: true }).click()
+  await expect(panel.getByRole('status')).toContainText('Saved bracket.dxf')
+  await panel.getByRole('button', { name: 'Download preview.png', exact: true }).click()
+  await expect(panel.getByRole('status')).toContainText('Saved preview.png')
+  expect((await page.evaluate(() => window.nativeSaves)).map(file => file.mimeType)).toEqual(['application/pdf', 'image/vnd.dxf', 'image/png'])
+  expect(browserDownloads).toBe(0)
+})
+
+test('Android cancellation and write errors are visible and allow retry', async ({ page, context }) => {
+  await fixture(context)
+  await mockNativeDownloads(context)
+  await page.goto('/chats/alpha')
+  await outputsTab(page).click()
+  const panel = outputPanel(page).locator('.output-card')
+  const download = panel.getByRole('button', { name: 'Download bracket.pdf', exact: true })
+  await page.evaluate(() => { window.saveOutcome = 'cancelled' })
+  await download.click()
+  await expect(panel.getByRole('status')).toHaveText('Save cancelled. No file was downloaded.')
+  await page.evaluate(() => { window.saveOutcome = 'failed' })
+  await download.click()
+  await expect(panel.getByRole('alert')).toContainText('Storage is full')
+  await expect(panel.getByRole('status')).toHaveCount(0)
+  await expect(download).toBeEnabled()
+  await page.evaluate(() => { window.saveOutcome = 'saved' })
+  await download.click()
+  await expect(panel.getByRole('status')).toContainText('Saved bracket.pdf')
+  await expect(panel.getByRole('alert')).toHaveCount(0)
+})
+
+test('Android without the save plugin reports an error rather than silently using a blob link', async ({ page, context }) => {
+  await fixture(context)
+  await mockNativeDownloads(context, { available: false })
+  await page.goto('/chats/alpha')
+  await outputsTab(page).click()
+  const panel = outputPanel(page).locator('.output-card')
+  await panel.getByRole('button', { name: 'Download bracket.pdf', exact: true }).click()
+  await expect(panel.getByRole('alert')).toContainText('Could not download file')
+  await expect(panel.getByRole('status')).toHaveCount(0)
+})
 
 test('empty state and new publications do not steal chat focus', async ({ page, context }) => {
   const state = await fixture(context, { empty: true })

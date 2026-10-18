@@ -22,6 +22,7 @@
       </li>
     </ul>
     <p v-if="error" class="caption" role="alert">{{ error }}</p>
+    <p v-if="status" class="caption" role="status">{{ status }}</p>
   </article>
 </template>
 
@@ -29,6 +30,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import OutputImage from './OutputImage.vue'
 import { api } from '../api'
+import { saveDownload } from '../file-download'
 
 const props = defineProps({
   chatId: { type: String, required: true },
@@ -44,12 +46,14 @@ const previews = computed(() => {
 const formatSize = size => size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MiB` : `${Math.max(1, Math.ceil(size / 1024))} KiB`
 const loadingFile = ref('')
 const error = ref('')
+const status = ref('')
 let controller, url
 function cleanup () {
   controller?.abort()
   if (url) URL.revokeObjectURL(url)
   url = ''
   loadingFile.value = ''
+  status.value = ''
 }
 async function download (file) {
   cleanup()
@@ -62,14 +66,14 @@ async function download (file) {
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(60000)])
     })
     if (request.signal.aborted) return
-    // Never navigate to or embed generated HTML/SVG/PDF in the app origin.
-    url = URL.createObjectURL(new Blob([blob], { type: 'application/octet-stream' }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = file.name
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
+    const result = await saveDownload(blob, file.name, file.mime_type, request.signal)
+    if (request.signal.aborted) {
+      if (result.url) URL.revokeObjectURL(result.url)
+      return
+    }
+    url = result.url
+    if (result.cancelled === false) status.value = `Saved ${file.name} to your selected location.`
+    if (result.cancelled === true) status.value = 'Save cancelled. No file was downloaded.'
   } catch (err) {
     if (!request.signal.aborted) error.value = `Could not download file: ${err.message}. Try again.`
   } finally {
