@@ -32,8 +32,10 @@ SERVICES = {
     "website",
     "temporal",
     "postgres",
+    "maxio",
 }
 START_ORDER = [
+    "maxio",
     "postgres",
     "temporal",
     "workflow-mcp",
@@ -53,6 +55,7 @@ STOP_ORDER = [
     "frontend-web",
     "website",
     "temporal",
+    "maxio",
     "postgres",
 ]
 DATASETS = {
@@ -62,6 +65,7 @@ DATASETS = {
     "workflows": ("backend", "/workflows"),
     "artifacts": ("backend", "/artifacts"),
     "projects": ("backend", "/projects"),
+    "maxio-data": ("maxio", "/data"),
 }
 
 
@@ -130,6 +134,11 @@ def inventory(rows: list[dict], app: str, environment: str) -> dict:
     volumes = {name: volume(groups[svc][0], dest) for name, (svc, dest) in DATASETS.items()}
     if len(set(volumes.values())) != len(DATASETS):
         raise RuntimeError("Datasets unexpectedly share volumes")
+    if volume(backend, "/output-storage") != volumes["maxio-data"]:
+        raise RuntimeError("Backend capacity mount is not this stack's MaxIO volume")
+    backing_mount = next(m for m in backend["Mounts"] if m["Destination"] == "/output-storage")
+    if backing_mount.get("RW") is not False:
+        raise RuntimeError("Backend MaxIO capacity mount must be read-only")
     broker = groups["docker-broker"][0]
     if env(broker).get("WORKFLOWS_VOLUME") != volumes["workflows"]:
         raise RuntimeError("Broker workflow volume is not the backend workflow volume")
@@ -144,6 +153,7 @@ def inventory(rows: list[dict], app: str, environment: str) -> dict:
         "copy_image": backend["Image"],
         "worker_image": groups["worker"][0]["Image"],
         "postgres_image": groups["postgres"][0]["Image"],
+        "maxio_image": groups["maxio"][0]["Image"],
         "containers": [
             {"id": r["Id"], "service": service(r), "restart": r["HostConfig"]["RestartPolicy"]}
             for r in members
@@ -157,6 +167,8 @@ def assert_isolated(rows: list[dict], production: dict, staging: dict) -> None:
         raise RuntimeError("Production and staging are not isolated")
     if production["postgres_image"] != staging["postgres_image"]:
         raise RuntimeError("Physical PostgreSQL copy requires the same Postgres image ID")
+    if production["maxio_image"] != staging["maxio_image"]:
+        raise RuntimeError("Physical MaxIO copy requires the same MaxIO image ID")
     for stack, forbidden in [(production, target), (staging, source)]:
         owned = {r["id"] for r in stack["containers"]}
         for row in rows:
@@ -185,6 +197,23 @@ def assert_password_compatible(rows: list[dict], production: dict, staging: dict
     if any(pg_env[0].get(k) != pg_env[1].get(k) for k in ("POSTGRES_USER", "POSTGRES_PASSWORD")):
         raise RuntimeError(
             "PostgreSQL role configuration differs; physical restore would break staging login"
+        )
+    maxio_env = [
+        env(
+            next(
+                r
+                for r in rows
+                if r["Id"] == next(c["id"] for c in stack["containers"] if c["service"] == "maxio")
+            )
+        )
+        for stack in (production, staging)
+    ]
+    if any(
+        maxio_env[0].get(key) != maxio_env[1].get(key)
+        for key in ("MAXIO_DEFAULT_BUCKETS", "MAXIO_MASTER_KEY")
+    ):
+        raise RuntimeError(
+            "MaxIO bucket/key configuration differs; physical restore would break staging outputs"
         )
 
 
@@ -226,6 +255,8 @@ assert s['environment'] == os.environ['APP_ENVIRONMENT'] == EXPECTED
 assert s['auth_enabled'] is True
 assert {c['name'] for c in s['components']} == {'temporal', 'broker', 'agentgateway', 'workflow-mcp'}
 assert all(c['status'] == 'ok' for c in s['components'])
+r = urllib.request.Request('http://127.0.0.1:8080/api/settings/storage', headers=headers)
+assert json.load(urllib.request.urlopen(r, timeout=15))['health']['status'] == 'ok'
 """.replace("EXPECTED", repr(expected))
     for attempt in range(attempts):
         try:

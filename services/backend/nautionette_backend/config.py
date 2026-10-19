@@ -31,6 +31,18 @@ class Settings:
         self.data_dir = os.environ.get("DATA_DIR", "/data")
         self.artifacts_dir = os.environ.get("ARTIFACTS_DIR", "/data/artifacts")
 
+        # Server-only S3 credentials. Agent tools receive only narrowly scoped,
+        # short-lived binary transfer URLs, never these values.
+        self.output_s3_endpoint = os.environ.get("OUTPUT_S3_ENDPOINT", "http://maxio:9000").strip()
+        self.output_s3_bucket = os.environ.get("OUTPUT_S3_BUCKET", "nautionette-outputs").strip()
+        self.output_s3_region = os.environ.get("OUTPUT_S3_REGION", "us-east-1").strip()
+        self.output_s3_access_key = os.environ.get("OUTPUT_S3_ACCESS_KEY", "").strip()
+        self.output_s3_secret_key = os.environ.get("OUTPUT_S3_SECRET_KEY", "").strip()
+        # Read-only mount of MaxIO's actual backing volume, not the container's
+        # overlay filesystem. Leave empty for an independently hosted S3 service.
+        self.output_storage_disk_path = os.environ.get("OUTPUT_STORAGE_DISK_PATH", "").strip()
+        self.public_url = os.environ.get("APP_URL", "").strip().rstrip("/")
+
         # Auth. Empty token means open mode, which is only sane on a laptop.
         self.app_token = os.environ.get("APP_TOKEN", "").strip()
         self.internal_token = os.environ.get("INTERNAL_TOKEN", "").strip()

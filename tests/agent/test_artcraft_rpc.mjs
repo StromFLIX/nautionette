@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { loadCraftConfig } from '../../images/agent-sets/default/extensions/nautionette/artcraft.ts'
+import { outputTransport } from './output_fixture.mjs'
 
 const source = fileURLToPath(new URL('../../images/agent-sets/default/extensions/nautionette/', import.meta.url))
 const config = loadCraftConfig({ catalogFile: fileURLToPath(new URL('../../images/pi-base/artcraft/catalog.json', import.meta.url)), selection: undefined })
@@ -38,7 +39,15 @@ for (const selection of [null, []]) {
         { path: join(cwd, 'plate.dxf'), role: 'source' }, { path: join(cwd, 'plate.png'), role: 'preview' }
       ] }]
     ]
-    const requests = [], events = [], publications = [], errors = []
+    const requests = [], events = [], errors = []
+    const transfer = await outputTransport({ onPublish: args => {
+      assert.equal(args.request_id, 'call-5')
+      assert.deepEqual(args.files.map(file => file.role), ['source', 'preview'])
+      const dxf = Buffer.from(args.files[0].data, 'base64').toString()
+      assert.equal((dxf.match(/\nCIRCLE\r?\n/g) || []).length, 4)
+      assert.deepEqual(Buffer.from(args.files[1].data, 'base64').subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    } })
+    const publications = transfer.records
     const server = createServer(async (req, res) => {
       try {
         let raw = ''; for await (const chunk of req) raw += chunk
@@ -47,19 +56,12 @@ for (const selection of [null, []]) {
           let result = {}
           if (body.method === 'tools/list') result = { tools: [
             { name: 'craft_call', description: 'Remote shadow must not register', inputSchema: { type: 'object' } },
+            { name: 'backend_prepare_chat_output', inputSchema: { type: 'object' } },
             { name: 'backend_publish_chat_output', inputSchema: { type: 'object' } }
           ] }
           if (body.method === 'tools/call') {
-            assert.equal(body.params.name, 'backend_publish_chat_output')
-            const args = body.params.arguments.body
-            assert.equal(args.grant, grant)
-            assert.equal(args.request_id, 'call-5')
-            assert.deepEqual(args.files.map(file => file.role), ['source', 'preview'])
-            const dxf = Buffer.from(args.files[0].data, 'base64').toString()
-            assert.equal((dxf.match(/\nCIRCLE\r?\n/g) || []).length, 4)
-            assert.deepEqual(Buffer.from(args.files[1].data, 'base64').subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-            publications.push(args)
-            result = { content: [{ type: 'text', text: JSON.stringify({ id: 'a'.repeat(32), revision: 1, title: args.title, files: [] }) }] }
+            assert.equal(body.params.arguments.body.grant, grant)
+            result = await transfer.rpc(body.method, body.params, AbortSignal.timeout(20000))
           }
           res.setHeader('content-type', 'application/json')
           res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result })); return
@@ -120,6 +122,7 @@ for (const selection of [null, []]) {
     } finally {
       if (child && child.exitCode === null && child.signalCode === null) { const closed = once(child, 'close'); child.kill(); await closed }
       server.closeAllConnections(); await new Promise(resolve => server.close(resolve))
+      await transfer.close()
       await rm(cwd, { force: true, recursive: true })
     }
   })

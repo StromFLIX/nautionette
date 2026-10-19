@@ -51,6 +51,13 @@ services:
       DATA_DIR: /data
       ARTIFACTS_DIR: /artifacts
       PROJECTS_DIR: /projects
+      APP_URL: ${APP_URL:-}
+      OUTPUT_S3_ENDPOINT: http://maxio:9000
+      OUTPUT_S3_BUCKET: ${OUTPUT_S3_BUCKET:-nautionette-outputs}
+      OUTPUT_S3_REGION: ${OUTPUT_S3_REGION:-us-east-1}
+      OUTPUT_S3_ACCESS_KEY: ${MAXIO_ACCESS_KEY:?Set MAXIO_ACCESS_KEY}
+      OUTPUT_S3_SECRET_KEY: ${MAXIO_SECRET_KEY:?Set MAXIO_SECRET_KEY to a strong random secret}
+      OUTPUT_STORAGE_DISK_PATH: /output-storage
       GITHUB_APP_PUBLIC_URL: ${GITHUB_APP_PUBLIC_URL:-}
       DEFAULT_AGENT_SET: ${DEFAULT_AGENT_SET:-default}
       AGENT_RUN_TIMEOUT_SECONDS: ${AGENT_RUN_TIMEOUT_SECONDS:-3600}
@@ -64,7 +71,9 @@ services:
       - artifacts:/artifacts
       - backend-data:/data
       - projects:/projects
-    networks: [edge, internal, control]
+      # Measure the actual MaxIO backing filesystem without write access to it.
+      - maxio-data:/output-storage:ro
+    networks: [edge, internal, control, outputs]
     depends_on:
       temporal:
         condition: service_started
@@ -74,6 +83,8 @@ services:
         condition: service_started
       frontend-web:
         condition: service_started
+      maxio:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -250,6 +261,31 @@ services:
       interval: 30s
       timeout: 5s
       start_period: 15s
+      retries: 5
+    <<: *logging
+
+  # Private S3-compatible binary storage. No host ports or public console.
+  # Sandboxes have only expiring, size/checksum-bound object URLs, not credentials.
+  # MaxIO is early upstream software; pin it and back up this volume with SQLite.
+  maxio:
+    image: ghcr.io/coollabsio/maxio:${MAXIO_VERSION:-0.4.2}
+    restart: unless-stopped
+    environment:
+      MAXIO_ACCESS_KEY: ${MAXIO_ACCESS_KEY:?Set MAXIO_ACCESS_KEY}
+      MAXIO_SECRET_KEY: ${MAXIO_SECRET_KEY:?Set MAXIO_SECRET_KEY to a strong random secret}
+      MAXIO_REGION: ${OUTPUT_S3_REGION:-us-east-1}
+      MAXIO_DEFAULT_BUCKETS: ${OUTPUT_S3_BUCKET:-nautionette-outputs}
+      MAXIO_DATA_DIR: /data
+    volumes:
+      - maxio-data:/data
+    networks: [outputs, agents]
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "maxio", "healthcheck", "--url", "http://127.0.0.1:9000/healthz", "--timeout-ms", "2000"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
       retries: 5
     <<: *logging
 
@@ -450,10 +486,16 @@ networks:
   # model provider. Isolation here comes from publishing no ports.
   internal:
     name: ${STACK_NAMESPACE:-nautionette}-internal
-  # Sandboxes have outbound internet and gateway access, not service-network membership.
+  # Sandboxes have outbound internet, gateway access and signed MaxIO transfers,
+  # not membership in the backend's service networks.
   # A new name avoids reusing the old internal-only network during upgrades.
   agents:
     name: ${STACK_NAMESPACE:-nautionette}-agent-sandboxes
+  # Backend to private object storage. Not reachable by sandbox network members
+  # except MaxIO itself, which also serves signed transfers on the agents network.
+  outputs:
+    name: ${STACK_NAMESPACE:-nautionette}-outputs
+    internal: true
   # Backend to broker only, no outbound.
   control:
     name: ${STACK_NAMESPACE:-nautionette}-control
@@ -471,5 +513,6 @@ volumes:
     name: ${STACK_NAMESPACE:-nautionette}-projects
   artifacts:
   backend-data:
+  maxio-data:
   agentgateway-data:
   postgres-data:

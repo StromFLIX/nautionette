@@ -10,10 +10,10 @@ import jsonschema
 from anyio import CapacityLimiter
 from anyio.lowlevel import RunVar
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from .. import chat_outputs
+from .. import chat_outputs, output_storage
 from ..db import db
 from ..events import bus
 from ..security import require_user
@@ -40,7 +40,9 @@ def _parse(raw: bytearray, schema: dict[str, Any]) -> dict[str, Any]:
     except (ValueError, jsonschema.ValidationError) as exc:
         # Validation errors can contain the supplied capability or file bytes.
         # Neither may appear in logs, tool results or model context.
-        raise HTTPException(422, "Invalid output request; check the tool's schema and limits") from exc
+        raise output_storage.failure(
+            "invalid_output_request", "Invalid output request; check the tool's schema and limits.", 422
+        ) from exc
     return payload
 
 
@@ -48,7 +50,12 @@ async def _payload(request: Request, schema: dict[str, Any], limit: int) -> dict
     raw = bytearray()
     async for chunk in request.stream():
         if len(raw) + len(chunk) > limit:
-            raise HTTPException(413, "Output request is too large")
+            raise output_storage.failure(
+                "output_request_too_large",
+                "Output control request exceeds its transport safety limit. "
+                "Rebuild the agent image to use metadata-only binary transfers.",
+                413,
+            )
         raw.extend(chunk)
     # Large JSON/base64 payloads must not stall the chat streaming loop.
     return await run_in_threadpool(_parse, raw, schema)
@@ -56,6 +63,17 @@ async def _payload(request: Request, schema: dict[str, Any], limit: int) -> dict
 
 def _body(schema: dict[str, Any]) -> dict[str, Any]:
     return {"requestBody": {"required": True, "content": {"application/json": {"schema": schema}}}}
+
+
+@router.post("/api/chat-outputs/prepare", openapi_extra=_body(chat_outputs.PREPARE_SCHEMA))
+async def prepare_chat_output(request: Request) -> dict[str, Any]:
+    """Private output control transport: reserve quota and prepare binary uploads.
+
+    Transfer URLs and capabilities must stay inside the local publish_output tool.
+    """
+    async with _limiter():
+        payload = await _payload(request, chat_outputs.PREPARE_SCHEMA, 65_536)
+        return await run_in_threadpool(chat_outputs.prepare, payload)
 
 
 @router.post("/api/chat-outputs/publish", openapi_extra=_body(chat_outputs.PUBLISH_SCHEMA))
@@ -101,20 +119,34 @@ def list_output_revisions(chat_id: str, output_id: str) -> dict[str, Any]:
 def get_output_file(
     chat_id: str, output_id: str, revision: int, file_id: str, preview: bool = False
 ) -> Response:
-    stored = chat_outputs.file(chat_id, output_id, revision, file_id)
-    if preview and stored["preview"] is None:
+    stored = chat_outputs.file_metadata(chat_id, output_id, revision, file_id)
+    if preview and stored["preview"] is None and not stored["preview_key"]:
         raise HTTPException(404, "This file has no image preview")
-    # Originals are always downloads. Only validated, decoded/re-encoded raster
-    # previews can be embedded; HTML, SVG and PDFs never execute in the app origin.
-    return Response(
-        stored["preview"] if preview else stored["data"],
-        media_type="image/png" if preview else "application/octet-stream",
-        headers={
-            "Cache-Control": "private, no-store",
-            "X-Content-Type-Options": "nosniff",
-            "Content-Security-Policy": "default-src 'none'; sandbox",
-            "Content-Disposition": (
-                "inline" if preview else f"attachment; filename*=UTF-8''{quote(stored['name'], safe='')}"
-            ),
-        },
+    # Never redirect user downloads to S3. Preserve chat authorization and the
+    # download-only boundary even when the original is HTML/SVG/PDF.
+    headers = {
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; sandbox",
+        "Content-Disposition": "inline"
+        if preview
+        else f"attachment; filename*=UTF-8''{quote(stored['name'], safe='')}",
+    }
+    media_type = "image/png" if preview else "application/octet-stream"
+    key = stored["preview_key"] if preview else stored["object_key"]
+    if not key:
+        return Response(
+            stored["preview"] if preview else stored["data"], media_type=media_type, headers=headers
+        )
+    body, size = output_storage.get_store().open(key)
+
+    def chunks():
+        try:
+            while chunk := body.read(1024 * 1024):
+                yield chunk
+        finally:
+            body.close()
+
+    return StreamingResponse(
+        chunks(), media_type=media_type, headers={**headers, "Content-Length": str(size)}
     )

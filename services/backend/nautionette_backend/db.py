@@ -18,6 +18,7 @@ from typing import Any
 
 from .config import settings
 from .migrations import remove_internet_approval
+from .output_ids import publication_request_id
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -77,11 +78,49 @@ CREATE TABLE IF NOT EXISTS chat_output_files (
     mime_type TEXT NOT NULL,
     role TEXT NOT NULL,
     size INTEGER NOT NULL,
-    data BLOB NOT NULL,
+    data BLOB,
     preview BLOB,
+    object_key TEXT,
+    preview_key TEXT,
+    preview_size INTEGER NOT NULL DEFAULT 0,
+    sha256 TEXT,
     FOREIGN KEY (output_id, revision) REFERENCES chat_output_revisions(output_id, revision) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS chat_output_files_revision ON chat_output_files(output_id, revision);
+-- An object is registered BEFORE contacting S3. Cascades enqueue deletion in
+-- the same metadata transaction, so a crash or unavailable S3 cannot leak it.
+CREATE TABLE IF NOT EXISTS output_storage_objects (
+    key TEXT PRIMARY KEY,
+    size INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    state TEXT NOT NULL,
+    delete_after REAL NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS chat_output_uploads (
+    id TEXT PRIMARY KEY,
+    chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+    turn_id TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    request_hash TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    reserved_bytes INTEGER NOT NULL,
+    expires_at REAL NOT NULL,
+    UNIQUE(turn_id, request_id)
+);
+CREATE TABLE IF NOT EXISTS chat_output_upload_files (
+    upload_id TEXT NOT NULL REFERENCES chat_output_uploads(id) ON DELETE CASCADE,
+    object_key TEXT NOT NULL,
+    PRIMARY KEY(upload_id, object_key)
+);
+CREATE TRIGGER IF NOT EXISTS output_upload_file_deleted AFTER DELETE ON chat_output_upload_files BEGIN
+    UPDATE output_storage_objects SET state = 'delete' WHERE key = OLD.object_key;
+END;
+CREATE TABLE IF NOT EXISTS output_cleanup_plans (
+    id TEXT PRIMARY KEY,
+    items TEXT NOT NULL,
+    expires_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS chat_turns (
     id TEXT PRIMARY KEY,
     chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
@@ -225,6 +264,11 @@ _MIGRATIONS = (
     # Legacy titles have no provenance: protect them rather than guessing which were manual.
     "ALTER TABLE chats ADD COLUMN title_state TEXT NOT NULL DEFAULT 'manual'",
     "ALTER TABLE chats ADD COLUMN title_revision INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE chat_outputs ADD COLUMN next_revision INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE chat_output_files ADD COLUMN object_key TEXT",
+    "ALTER TABLE chat_output_files ADD COLUMN preview_key TEXT",
+    "ALTER TABLE chat_output_files ADD COLUMN preview_size INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE chat_output_files ADD COLUMN sha256 TEXT",
 )
 
 _EDITABLE_CHAT_COLUMNS = (
@@ -258,6 +302,7 @@ def _dump_tools(tools: list[str] | None) -> str | None:
 class Database:
     def __init__(self, path: str) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self.path = path
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
@@ -270,6 +315,35 @@ class Database:
                     self._conn.execute(statement)
                 except sqlite3.OperationalError:
                     pass  # already applied
+            self._conn.execute(
+                "UPDATE chat_outputs SET next_revision = MAX(next_revision, "
+                "COALESCE((SELECT MAX(revision) + 1 FROM chat_output_revisions "
+                "WHERE output_id = chat_outputs.id), 1))"
+            )
+            # Old installations required a BLOB. Rebuild only that table so a
+            # verified S3 migration can release bytes with NULL, not retain them.
+            columns = self._conn.execute("PRAGMA table_info(chat_output_files)").fetchall()
+            if any(column["name"] == "data" and column["notnull"] for column in columns):
+                self._conn.execute("ALTER TABLE chat_output_files RENAME TO chat_output_files_legacy")
+                self._conn.execute(
+                    "CREATE TABLE chat_output_files (id TEXT PRIMARY KEY, output_id TEXT NOT NULL, "
+                    "revision INTEGER NOT NULL, name TEXT NOT NULL, "
+                    "mime_type TEXT NOT NULL, role TEXT NOT NULL, "
+                    "size INTEGER NOT NULL, data BLOB, preview BLOB, object_key TEXT, preview_key TEXT, "
+                    "preview_size INTEGER NOT NULL DEFAULT 0, sha256 TEXT, "
+                    "FOREIGN KEY (output_id, revision) REFERENCES chat_output_revisions(output_id, revision) "
+                    "ON DELETE CASCADE)"
+                )
+                self._conn.execute("INSERT INTO chat_output_files SELECT * FROM chat_output_files_legacy")
+                self._conn.execute("DROP TABLE chat_output_files_legacy")
+                self._conn.execute(
+                    "CREATE INDEX chat_output_files_revision ON chat_output_files(output_id, revision)"
+                )
+            self._conn.executescript(
+                "CREATE TRIGGER IF NOT EXISTS output_file_deleted AFTER DELETE ON chat_output_files BEGIN "
+                "UPDATE output_storage_objects SET state = 'delete', delete_after = 0 "
+                "WHERE key IN (OLD.object_key, OLD.preview_key); END;"
+            )
             remove_internet_approval(self._conn)
             # Backfill only legacy rows, never overwrite live message timestamps on restart.
             self._conn.execute(
@@ -349,6 +423,13 @@ class Database:
         """Serialize a complete operation and commit or roll it back atomically."""
         with self._lock, self._conn:
             yield self._conn
+
+    def compact(self) -> None:
+        """Explicitly reclaim pages freed by legacy output migration/cleanup."""
+        with self._lock:
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            self._conn.execute("VACUUM")
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def list_chat_outputs(self, chat_id: str) -> list[dict[str, Any]]:
         return [
@@ -803,7 +884,11 @@ class Database:
         meta = {**meta, "context": json.loads(turn["context"]) if turn["context"] else None}
         # Bind immutable output revisions to the answer segment which published
         # them. A later revision must not change an older response's downloads.
-        calls = {step.get("id") for step in meta.get("steps", []) if step.get("kind") == "tool"}
+        calls = {
+            publication_request_id(step["id"])
+            for step in meta.get("steps", [])
+            if step.get("kind") == "tool" and isinstance(step.get("id"), str)
+        }
         outputs = [
             json.loads(row["manifest"])
             for row in self._conn.execute(

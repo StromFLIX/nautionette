@@ -19,6 +19,7 @@ from . import (
     projects,
     runs,
     settings,
+    storage,
     system,
     workflows,
 )
@@ -26,6 +27,7 @@ from . import (
 ROUTERS = (
     system.router,
     settings.router,
+    storage.router,
     agents.router,
     pi_packages.router,
     artcraft.router,

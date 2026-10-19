@@ -13,12 +13,13 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from nautionette_backend import background, clients, main, runtime
+from nautionette_backend import background, clients, main, output_storage, runtime
 from nautionette_backend.db import db as database
 from nautionette_backend.integrations.registry import INITIALIZED_SETTING
 
 from ..conftest import APP_TOKEN, INTERNAL_TOKEN
 from .fakes import FakeAuthoring, FakeBroker, FakeGateway, FakeModelCatalog, FakeTemporal
+from .output_fakes import MemoryS3
 
 _TABLES = (
     "github_issue_chats",
@@ -37,6 +38,9 @@ _TABLES = (
     "pi_package_revisions",
     "pi_package_installations",
     "workflow_settings",
+    "chat_output_uploads",
+    "output_storage_objects",
+    "output_cleanup_plans",
 )
 
 
@@ -61,6 +65,13 @@ def db(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(background, "_draining", False)
     monkeypatch.setattr(runtime, "_agent_answered", False)
     return database
+
+
+@pytest.fixture(autouse=True)
+def output_store(monkeypatch: pytest.MonkeyPatch):
+    store = MemoryS3()
+    monkeypatch.setattr(output_storage, "get_store", lambda: store)
+    return store
 
 
 @pytest.fixture

@@ -35,7 +35,13 @@ _PREFIXES = (
     "/api/model-integrations",
     "/api/mcp-servers",
 )
-_EXACT = {"/api/catalog", "/api/events/recent", "/api/chat-outputs/publish", "/api/chat-outputs/read"}
+_EXACT = {
+    "/api/catalog",
+    "/api/events/recent",
+    "/api/chat-outputs/prepare",
+    "/api/chat-outputs/publish",
+    "/api/chat-outputs/read",
+}
 
 INSTRUCTIONS = (
     "Operate and diagnose Nautionette directly. Do not ask for routine approval or permission. "
@@ -47,7 +53,9 @@ INSTRUCTIONS = (
     "and tool args/results. Chat IDs and session IDs are not workflow run IDs. Follow pagination cursors. "
     "The body argument is the HTTP request body. Tools enforce the same validation as the app. "
     "A deployment is ready only when ready=true; inspect worker_restart on failure. "
-    "Never claim a run succeeded until its results confirm it. Do not expose credentials."
+    "Never claim a run succeeded until its results confirm it. Do not expose credentials. "
+    "Output quota errors include a settings_url to Settings → Storage. Return that link and the actual "
+    "usage/limit instead of repeatedly retrying or calling a transport failure a file-generation failure."
 )
 
 
@@ -172,7 +180,8 @@ class BackendMCP:
             # Private transports carry a capability and binary data. JSON-schema
             # errors can echo their values; never forward those to tool results.
             message = (
-                "Invalid private output request; check the tool schema and limits"
+                "Invalid private output request; check the tool schema and limits. "
+                "Manage storage at /settings/storage"
                 if operation["path"].startswith("/api/chat-outputs/")
                 else exc.message
             )

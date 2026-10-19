@@ -42,6 +42,8 @@ jobs:
             echo "APP_TOKEN=$(openssl rand -hex 24)"
             echo "INTERNAL_TOKEN=$(openssl rand -hex 24)"
             echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
+            echo "MAXIO_ACCESS_KEY=nautionette-smoke"
+            echo "MAXIO_SECRET_KEY=$(openssl rand -hex 32)"
             echo "OPENROUTER_API_KEY=${OPENROUTER_API_KEY}"
             echo "AGENT_MODEL=${AGENT_MODEL}"
             echo "MODEL_KEY_PRESENT=1"

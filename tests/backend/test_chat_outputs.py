@@ -276,7 +276,7 @@ def test_read_output_restores_original_bytes_for_a_later_turn(client, db, output
 
 def test_quotas_and_request_bytes_are_bounded(client, db, output_scope, monkeypatch):
     _, grant = output_scope
-    monkeypatch.setattr(chat_outputs, "MAX_CHAT_BYTES", 1)
+    db.set_setting("output_storage_policy", {"chat_limit_bytes": 1})
     assert client.post("/api/chat-outputs/publish", json=payload(grant)).status_code == 413
     assert db.query("SELECT * FROM chat_outputs") == []
     monkeypatch.setattr(chat_outputs, "MAX_REQUEST_BYTES", 8)
@@ -362,7 +362,7 @@ def test_private_transports_and_reserved_local_names_are_not_selectable_mcp_tool
 async def test_mcp_exposes_only_the_two_scoped_transports(backend, output_scope):
     chat_id, grant = output_scope
     names = {tool.name for tool in (await main.backend_mcp.list_tools(None, None)).tools}
-    assert {"publish_chat_output", "read_chat_output"} <= names
+    assert {"prepare_chat_output", "publish_chat_output", "read_chat_output"} <= names
     assert not {"list_chat_outputs", "get_output_file", "list_output_revisions"} & names
     result = await main.backend_mcp.call("publish_chat_output", {"body": payload(grant)})
     assert not result.is_error

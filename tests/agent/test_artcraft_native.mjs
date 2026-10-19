@@ -8,6 +8,7 @@ import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { loadCraftConfig, registerCraftTools } from '../../images/agent-sets/default/extensions/nautionette/artcraft.ts'
 import { registerOutputTools } from '../../images/agent-sets/default/extensions/nautionette/outputs.ts'
+import { outputTransport } from './output_fixture.mjs'
 
 const catalogFile = fileURLToPath(new URL('../../images/pi-base/artcraft/catalog.json', import.meta.url))
 const config = loadCraftConfig({ catalogFile, selection: undefined })
@@ -47,31 +48,11 @@ test('every bundled ArtCraft app exposes real headless MCP tool schemas without 
 })
 
 test('real CAD -> published editable source/PNG -> fresh turn restoration -> revised 6mm holes', { skip: !available, timeout: 120000 }, async t => {
-  const cwd = await workspace(t), revisions = []
+  const cwd = await workspace(t)
+  const transfer = await outputTransport()
+  t.after(transfer.close)
+  const rpc = transfer.rpc, revisions = transfer.records
   const outputId = 'a'.repeat(32)
-  const rpc = async (_method, params) => {
-    const args = params.arguments.body
-    assert.ok(args.grant)
-    let value
-    if (params.name === 'backend_publish_chat_output') {
-      if (revisions.length) assert.equal(args.expected_revision, revisions.length)
-      const revision = revisions.length + 1
-      value = { id: outputId, revision, title: args.title, files: args.files.map((file, index) => ({
-        id: String(index + 1).repeat(32), name: file.name, mime_type: file.mime_type, role: file.role,
-        size: Buffer.from(file.data, 'base64').length
-      })) }
-      revisions.push({ output: value, data: args.files.map(file => file.data) })
-    } else {
-      assert.equal(params.name, 'backend_read_chat_output')
-      const record = revisions[(args.revision || revisions.length) - 1]
-      value = { output: record.output }
-      if (args.file_id) {
-        const index = record.output.files.findIndex(file => file.id === args.file_id)
-        value = { output_id: outputId, revision: record.output.revision, file: { ...record.output.files[index], data: record.data[index] } }
-      }
-    }
-    return { content: [{ type: 'text', text: JSON.stringify(value) }] }
-  }
   const firstDir = join(cwd, 'turn1'); await mkdir(firstDir)
   const first = agent(firstDir, rpc); t.after(first.close)
   await first.native('cadcraft', 'new_drawing', { metric: true })
@@ -92,7 +73,7 @@ test('real CAD -> published editable source/PNG -> fresh turn restoration -> rev
     { path: source, role: 'source' }, { path: preview, role: 'preview' }
   ] }))
   assert.equal(publication.output.revision, 1)
-  const originalSource = revisions[0].data[0]
+  const originalSource = revisions[0].files[0].data
   await first.close()
   await rm(firstDir, { recursive: true }) // Prove that publication is not a link to sandbox files.
 
@@ -115,9 +96,9 @@ test('real CAD -> published editable source/PNG -> fresh turn restoration -> rev
   const revised = parse(await next.call('publish_output', { title: 'Mounting plate', source_app: 'CADCraft', output_id: outputId, expected_revision: 1,
     files: [{ path: revisedSource, role: 'source' }, { path: revisedPreview, role: 'preview' }] }))
   assert.equal(revised.output.revision, 2)
-  assert.equal(revisions[0].data[0], originalSource)
-  assert.notEqual(revisions[1].data[0], originalSource)
-  assert.deepEqual(Buffer.from(revisions[1].data[1], 'base64').subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+  assert.equal(revisions[0].files[0].data, originalSource)
+  assert.notEqual(revisions[1].files[0].data, originalSource)
+  assert.deepEqual(Buffer.from(revisions[1].files[1].data, 'base64').subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
 })
 
 test('WordCraft creates editable DOCX and PDF/PNG exports; GridCraft preserves spreadsheet formulas', { skip: !available, timeout: 120000 }, async t => {

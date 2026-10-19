@@ -34,6 +34,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import OutputCard from './OutputCard.vue'
 import { api } from '../api'
+import { onLiveEvent } from '../store'
 
 const props = defineProps({
   chatId: { type: String, required: true },
@@ -72,14 +73,26 @@ async function loadHistory () {
   error.value = ''
   try {
     const data = await api.outputRevisions(props.chatId, selected.value.id, AbortSignal.any([request.signal, AbortSignal.timeout(15000)]))
-    if (!request.signal.aborted) history.value = data.revisions
+    if (!request.signal.aborted) {
+      history.value = data.revisions
+      if (revision.value !== null && !data.revisions.some(item => item.revision === revision.value)) {
+        revision.value = null
+        error.value = 'That revision was removed in Storage. Showing the latest retained snapshot.'
+      }
+    }
   } catch (err) {
     if (!request.signal.aborted) error.value = `Could not load revisions: ${err.message}. Try again.`
   } finally {
     if (!request.signal.aborted) loading.value = false
   }
 }
-onUnmounted(() => controller?.abort())
+const unsubscribe = onLiveEvent(event => {
+  if (event.kind === 'chat.output.deleted' && event.chat_id === props.chatId && selected.value) {
+    history.value = []
+    loadHistory()
+  }
+})
+onUnmounted(() => { controller?.abort(); unsubscribe() })
 </script>
 
 <style scoped>

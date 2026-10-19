@@ -135,8 +135,17 @@ invalid tags, drafts, prereleases and healthy duplicate deployments cause no dep
 Test staging, then publish a **non-prerelease** GitHub release (e.g. `v1.2.3`) tagged
 at that tested commit. The Action resolves the tag to a full SHA, checks staging,
 pins Coolify, verifies the queued deployment's actual commit, and checks authenticated
-component health. It never means "deploy whatever is now on main". It promotes
-source commits, not identical prebuilt image digests. No data copy happens on release.
+component health and output storage connectivity. It never means "deploy whatever
+is now on main". It promotes source commits, not identical prebuilt image digests.
+No data copy happens on release.
+
+Before queueing a deployment, the Action provisions random `MAXIO_ACCESS_KEY` and
+`MAXIO_SECRET_KEY` values only if missing/blank in that Coolify application, then
+reads back to verify persistence. Values are never logged. Existing credentials
+are preserved; preview credentials are not reused. Staging and production get
+independent values. The existing Coolify environment-read/write permission used
+for `APP_VERSION` covers this step; no additional GitHub secret is required.
+Manual Compose deployments must still supply these credentials explicitly.
 
 A newer staging commit supersedes the previous release candidate. Publishing a
 release for an older commit is rejected instead of silently deploying untested code.
@@ -203,7 +212,7 @@ still take time. Verify a cold-pull staging deployment before measuring the gain
 
 1. Keep operation `refresh` and **dry_run=true** first. This checks authenticated
    health, actual container/volume ownership, separate networks, PostgreSQL image
-   and role compatibility, and free disk. No service is stopped or data copied.
+   and role compatibility, matching MaxIO image/bucket/key configuration, and free disk. No service is stopped or data copied.
 2. Finish/stop agent calls in both environments before a real refresh. Unexpected
    active agents/other containers mounting these volumes cause a refusal, not a kill.
 3. Plan a maintenance window: a physical, cross-volume consistent snapshot pauses
@@ -220,7 +229,8 @@ The real run:
    restart policies and actual volume mappings are recorded privately and durably.
 3. Stops staging writers and makes a verified `staging-before` backup.
 4. Stops production writers (broker before workers/backend, Temporal before Postgres).
-   PostgreSQL must stop cleanly. Copies all six datasets from **read-only** source
+   PostgreSQL must stop cleanly; MaxIO stops after its writers. Copies all seven
+   datasets from **read-only** source
    mounts into `production-snapshot`, preserving ownership, permissions, dotfiles,
    symlinks and hardlinks. Verifies file bytes and ownership/modes/symlink targets.
 5. Restarts and health-checks production **before** modifying staging volumes.
@@ -233,12 +243,16 @@ The real run:
    this run's Coolify maintenance marker, preserving the original app description.
 
 The datasets are backend SQLite, gateway integrations/credentials, PostgreSQL
-(all Temporal databases), workflow files, artifacts, and projects including caches
-and per-chat worktrees. It does not copy/change Coolify configuration, URLs, service
+(all Temporal databases), workflow files, artifacts, projects including caches
+and per-chat worktrees, and MaxIO output objects including its internal metadata
+and master keys. SQLite-only snapshots no longer contain all output binaries. It does not copy/change Coolify configuration, URLs, service
 INTERNAL_TOKENs, Docker images or release pins. STAGING banners and isolated volume
 names remain. Ensure staging code can read/migrate production's DB schema; incompatible
 schema changes can fail staging health and require a deliberate restore/code repair.
 A physical PostgreSQL refresh requires matching image IDs and role env configuration.
+A physical MaxIO refresh requires matching image IDs, bucket names and any explicit
+master-key configuration; access credentials may differ. The backend's capacity
+mount must be a read-only mount of its own MaxIO volume.
 
 The local data is cloned, **not external accounts**. Copied integrations still use
 real model/email/GitHub/Coolify accounts. Manual staging actions can have real effects.
@@ -291,8 +305,8 @@ Private backups and state remain at:
 /var/lib/nautionette-refresh/runs/RUN-ID/
   state.json
   staging_refresh_host.py
-  staging-before/{six datasets}
-  production-snapshot/{six datasets}
+  staging-before/{seven datasets}
+  production-snapshot/{seven datasets}
 ```
 
 No backups are uploaded to GitHub artifacts. These contain production secrets and

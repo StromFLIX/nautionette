@@ -79,6 +79,17 @@ def main() -> int:
     check("every component is up", not down, ",".join(down))
     check("an agent set is ready", any(a["ready"] for a in system.get("agent_sets", [])))
 
+    storage_response = client.get("/api/settings/storage")
+    storage = storage_response.json() if storage_response.status_code == 200 else {}
+    check("private MaxIO output storage is connected", storage.get("health", {}).get("status") == "ok")
+    check(
+        "MaxIO backing filesystem capacity is measured",
+        any(
+            d.get("available") and d.get("label") == "MaxIO backing filesystem"
+            for d in storage.get("filesystems", [])
+        ),
+    )
+
     chat = client.post("/api/chats", json={"title": "Smoke test"}).json()
     with client.stream(
         "POST",

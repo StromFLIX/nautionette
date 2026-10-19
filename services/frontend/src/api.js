@@ -37,9 +37,10 @@ function headers (extra = {}) {
 }
 
 export class ApiError extends Error {
-  constructor (message, status) {
+  constructor (message, status, detail = null) {
     super(message)
     this.status = status
+    this.detail = detail
   }
 }
 
@@ -49,12 +50,15 @@ async function request (path, options = {}) {
     headers: headers(options.body ? { 'Content-Type': 'application/json', ...options.headers } : options.headers)
   })
   if (!response.ok) {
-    let detail = `${response.status} ${response.statusText}`
+    let detail = `${response.status} ${response.statusText}`, structured = null
     try {
       const body = await response.json()
-      if (body?.detail) detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)
+      if (body?.detail) {
+        structured = body.detail
+        detail = typeof body.detail === 'string' ? body.detail : body.detail.message || JSON.stringify(body.detail)
+      }
     } catch { /* keep the status line */ }
-    throw new ApiError(detail, response.status)
+    throw new ApiError(detail, response.status, structured)
   }
   if (response.status === 204) return null
   return options.responseType === 'blob' ? response.blob() : response.json()
@@ -69,6 +73,13 @@ export const api = {
   events: () => request('/api/events/recent'),
   settings: () => request('/api/settings'),
   saveSettings: (payload) => request('/api/settings', { method: 'PUT', ...json(payload) }),
+  outputStorage: (signal) => request('/api/settings/storage', { signal }),
+  saveOutputStorage: (payload) => request('/api/settings/storage', { method: 'PUT', ...json(payload) }),
+  storedOutputs: (params = {}, signal) => request(`/api/settings/storage/outputs?${new URLSearchParams(params)}`, { signal }),
+  previewOutputCleanup: (payload) => request('/api/settings/storage/cleanup/preview', { method: 'POST', ...json(payload) }),
+  deleteStoredOutputs: (planId) => request('/api/settings/storage/cleanup', { method: 'POST', ...json({ plan_id: planId, confirm: true }) }),
+  maintainOutputStorage: () => request('/api/settings/storage/maintenance', { method: 'POST' }),
+  compactOutputDatabase: () => request('/api/settings/storage/compact', { method: 'POST' }),
   agents: () => request('/api/agents'),
   agent: (id) => request(`/api/agents/${encodeURIComponent(id)}`),
   searchPackages: (query, offset = 0, signal) => request(`/api/pi-packages/search?q=${encodeURIComponent(query)}&offset=${offset}`, { signal }),

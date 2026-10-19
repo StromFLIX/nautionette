@@ -125,6 +125,11 @@ def api(monkeypatch):
             self.accept_version = True
             self.description = ""
             self.application_status = "running:healthy"
+            self.output_envs = [
+                {"key": "MAXIO_ACCESS_KEY", "value": "existing-test-access-key"},
+                {"key": "MAXIO_SECRET_KEY", "value": "existing-test-secret-key"},
+            ]
+            self.accept_output_credentials = True
 
         def deployed(self, app, commit):
             return app in self.already_deployed
@@ -138,8 +143,21 @@ def api(monkeypatch):
                 return {"deployments": [{"resource_uuid": "prod", "deployment_uuid": "deploy123"}]}
             if path.startswith("/deployments/"):
                 return {"status": self.final_status, "commit": self.final_commit}
+            if path.endswith("/envs/bulk"):
+                if self.accept_output_credentials:
+                    for row in payload["data"]:
+                        if row["key"] in {"MAXIO_ACCESS_KEY", "MAXIO_SECRET_KEY"}:
+                            self.output_envs = [
+                                item
+                                for item in self.output_envs
+                                if item["key"] != row["key"] or item.get("is_preview", False)
+                            ] + [row]
+                return {}
             if path.endswith("/envs"):
-                return [{"key": "APP_VERSION", "value": COMMIT if self.accept_version else "stale"}]
+                return [
+                    {"key": "APP_VERSION", "value": COMMIT if self.accept_version else "stale"},
+                    *self.output_envs,
+                ]
             return {
                 "description": self.description,
                 "git_branch": "main",
@@ -226,6 +244,73 @@ def test_pins_before_queueing_and_waits_for_verified_result(api):
     ]
 
 
+def test_deploy_provisions_missing_output_credentials_before_queueing(api, capsys):
+    api.already_deployed.add("stage")
+    api.output_envs = []
+    assert release.deploy("production", COMMIT) == "deploy123"
+    provision = next(
+        item
+        for item in api.calls
+        if item[1] == "PATCH"
+        and item[0].endswith("/envs/bulk")
+        and any(row["key"] == "MAXIO_SECRET_KEY" for row in item[2]["data"])
+    )
+    assert api.calls.index(provision) < next(
+        index for index, item in enumerate(api.calls) if item[0] == "/deploy"
+    )
+    rows = provision[2]["data"]
+    assert {row["key"] for row in rows} == {"MAXIO_ACCESS_KEY", "MAXIO_SECRET_KEY"}
+    output = capsys.readouterr().out
+    for row in rows:
+        assert row["is_literal"] is row["is_runtime"] is row["is_buildtime"] is True
+        assert row["value"] not in output
+        assert len(row["value"]) == (64 if row["key"] == "MAXIO_SECRET_KEY" else 32)
+        int(row["value"], 16)
+
+
+def test_existing_output_credentials_are_never_rotated(api, capsys):
+    before = [dict(row) for row in api.output_envs]
+    release.ensure_output_storage_credentials(api, "prod")
+    assert api.output_envs == before
+    assert all(method == "GET" for _, method, _ in api.calls)
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize("missing_value", [None, "", "  "])
+def test_only_blank_output_credential_is_generated(api, missing_value):
+    api.output_envs[1]["value"] = missing_value
+    release.ensure_output_storage_credentials(api, "prod")
+    writes = [item for item in api.calls if item[1] != "GET"]
+    assert len(writes) == 1
+    assert [row["key"] for row in writes[0][2]["data"]] == ["MAXIO_SECRET_KEY"]
+    assert api.output_envs[0]["value"] == "existing-test-access-key"
+    # Retrying after an ambiguous deployment response reuses the persisted secret.
+    release.ensure_output_storage_credentials(api, "prod")
+    assert sum(method != "GET" for _, method, _ in api.calls) == 1
+
+
+def test_preview_credentials_are_not_reused_for_the_main_deployment(api):
+    api.output_envs = [{**row, "is_preview": True} for row in api.output_envs]
+    release.ensure_output_storage_credentials(api, "prod")
+    live = [row for row in api.output_envs if not row.get("is_preview", False)]
+    assert len(live) == 2
+    assert all(row["value"] not in {"existing-test-access-key", "existing-test-secret-key"} for row in live)
+
+
+def test_failed_output_credential_persistence_never_queues_or_logs_secrets(api, capsys):
+    api.already_deployed.add("stage")
+    api.output_envs = []
+    api.accept_output_credentials = False
+    with pytest.raises(RuntimeError, match="output storage credentials") as caught:
+        release.deploy("production", COMMIT)
+    assert not any(path == "/deploy" for path, _, _ in api.calls)
+    output = str(caught.value) + capsys.readouterr().out
+    for _, method, payload in api.calls:
+        if method == "PATCH" and "data" in payload:
+            for row in payload["data"]:
+                assert row["value"] not in output
+
+
 def test_rejected_commit_pin_never_queues(api):
     api.already_deployed.add("stage")
     api.accept_pin = False
@@ -263,8 +348,10 @@ def health_state(monkeypatch):
     monkeypatch.setenv("APP_TOKEN", "test-token")
 
     def request(url, token):
-        assert url == "https://app.example.test/api/system"
         assert token == "test-token"
+        if url == "https://app.example.test/api/settings/storage":
+            return {"health": {"status": "ok"}}
+        assert url == "https://app.example.test/api/system"
         return state
 
     monkeypatch.setattr(release, "request", request)
@@ -273,6 +360,50 @@ def health_state(monkeypatch):
 
 def test_health_requires_authenticated_environment_and_all_components(health_state):
     release.healthy("production")
+
+
+@pytest.mark.parametrize(
+    "storage",
+    [
+        None,
+        [],
+        {},
+        {"health": None},
+        {"health": {"status": "unavailable", "error": "credential-do-not-log"}},
+        {"health": {"status": "credential-do-not-log"}},
+    ],
+)
+def test_unhealthy_output_storage_fails_the_release_without_echoing_details(
+    health_state, monkeypatch, storage
+):
+    def request(url, token):
+        assert token == "test-token"
+        return health_state if url.endswith("/api/system") else storage
+
+    monkeypatch.setattr(release, "request", request)
+    with pytest.raises(RuntimeError, match="Output storage health check failed") as caught:
+        release.healthy("production")
+    assert "credential-do-not-log" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "error,diagnostic",
+    [
+        (json.JSONDecodeError("credential-do-not-log", "secret", 0), "invalid JSON"),
+        (TimeoutError("credential-do-not-log"), "request timed out"),
+        (RuntimeError("Deployment API returned HTTP 503"), "HTTP 503"),
+    ],
+)
+def test_output_storage_endpoint_failures_fail_verification(health_state, monkeypatch, error, diagnostic):
+    def request(url, token):
+        if url.endswith("/api/system"):
+            return health_state
+        raise error
+
+    monkeypatch.setattr(release, "request", request)
+    with pytest.raises(RuntimeError, match=diagnostic) as caught:
+        release.healthy("production")
+    assert "credential-do-not-log" not in str(caught.value)
 
 
 @pytest.mark.parametrize(

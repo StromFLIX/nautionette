@@ -5,15 +5,16 @@ description = "The only entrypoint: auth, chats, workflows, triggers, streaming"
 requires-python = ">=3.13"
 dependencies = [
   "cryptography>=46.0.0",
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.34",
-    "httpx>=0.28",
-    "temporalio>=1.9",
-    "jsonschema>=4.23",
-    "nautionette",
-    "mcp>=2.1",
-    "pyjwt[crypto]>=2.10",
-    "pillow>=12.2",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.34",
+  "httpx>=0.28",
+  "temporalio>=1.9",
+  "jsonschema>=4.23",
+  "nautionette",
+  "mcp>=2.1",
+  "pyjwt[crypto]>=2.10",
+  "pillow>=12.2",
+  "boto3>=1.40,<2",
 ]
 
 [tool.uv.sources]

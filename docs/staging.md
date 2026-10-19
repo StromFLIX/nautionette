@@ -85,7 +85,8 @@ Production owns these persistent datasets (verify actual mounts on the host):
 
 | Dataset | Must include |
 | --- | --- |
-| `backend-data` | SQLite chats, messages, run index, settings, project metadata, GitHub App configuration |
+| `backend-data` | SQLite chats, messages, output manifests/ownership, run index, settings, project metadata, GitHub App configuration |
+| `maxio-data` | Output originals/sources/previews **and** MaxIO metadata/master keys; back up consistently with `backend-data` |
 | `agentgateway-data` | Runtime model/MCP integrations, stored credentials, gateway databases |
 | `postgres-data` | Temporal execution history, visibility DB, namespaces and schedules |
 | `workflows` | Live workflow Python and dependency files, not just Git seeds |
@@ -99,8 +100,10 @@ The safest exact cross-volume snapshot requires a short maintenance window:
    agent calls. Stop the production broker (otherwise it restarts workers), workers,
    backend, workflow authoring and gateway writers; stop Temporal and then shut
    PostgreSQL down cleanly. Inventory dynamic Pi/worker containers too: stopping
-   only Compose workers does not stop containers the broker has launched.
-3. Snapshot/copy all six datasets from read-only source mounts, preserving numeric
+   only Compose workers does not stop containers the broker has launched. Stop
+   MaxIO after its writers, before copying its volume. The backend's read-only
+   `/output-storage` mount must reference that same environment's MaxIO volume.
+3. Snapshot/copy all seven datasets from read-only source mounts, preserving numeric
    ownership, permissions, dotfiles and symlinks. Keep backups access-restricted or
    encrypted: they contain production data **and integration credentials**. Do not
    upload them to GitHub Actions artifacts or print their contents.
@@ -111,6 +114,13 @@ The safest exact cross-volume snapshot requires a short maintenance window:
    An online alternative needs SQLite's backup API, PostgreSQL logical backups of
    **all** Temporal DBs/roles, and coordination of the other writers; it is not an
    exact cross-database point-in-time copy by simply running `pg_dump`.
+
+Output binaries are no longer covered by SQLite-only backups. Restore MaxIO and
+SQLite together, with matching configured bucket names and compatible pinned MaxIO
+image IDs. Preserve MaxIO's `.maxio-keys.json` (or matching `MAXIO_MASTER_KEY` when
+explicitly configured). Use separate MaxIO access credentials per environment;
+they need not match to restore object data. Keep MaxIO private. See
+[output storage and migration](chat-outputs.md) for verification and disk headroom.
 
 No snapshot/restore operation should be placed in the routine release pipeline.
 
@@ -246,7 +256,10 @@ explicitly stage a rollback candidate first rather than silently deploying untes
 code. Do not refresh staging data as part of a rollback.
 
 Deployments are serialized, pins read back, the queued deployment is polled, its
-actual commit checked, then authenticated component health is checked. After Coolify
+actual commit checked, then authenticated component health and output storage
+connectivity are checked. Missing/blank MaxIO credentials are generated and persisted
+in the target Coolify application before deployment, never copied from another
+environment or logged. Existing nonempty credentials are not rotated. After Coolify
 reports `finished`, allow up to 10 minutes by default for worker images and components
 to become ready; override with `DEPLOY_HEALTH_TIMEOUT_SECONDS` per environment.
 Checks retry every 10 seconds (each HTTP request has a 30-second timeout, so the

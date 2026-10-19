@@ -413,6 +413,7 @@ def test_every_deployed_compose_service_has_a_healthcheck(repo_root):
         "backend",
         "docker-broker",
         "frontend-web",
+        "maxio",
         "otel-collector",
         "postgres",
         "temporal",
@@ -421,6 +422,34 @@ def test_every_deployed_compose_service_has_a_healthcheck(repo_root):
         "workflow-mcp",
     }
     assert all(compose["services"][name].get("healthcheck", {}).get("test") for name in deployed)
+
+
+def test_maxio_compose_is_private_pinned_persistent_and_not_an_agent_credential_delivery(repo_root):
+    compose = yaml.safe_load((repo_root / "docker-compose.yaml").read_text())
+    services = compose["services"]
+    maxio, backend = services["maxio"], services["backend"]
+    assert maxio["image"] == "ghcr.io/coollabsio/maxio:${MAXIO_VERSION:-0.4.2}"
+    assert not maxio.get("ports")
+    assert set(maxio["networks"]) == {"outputs", "agents"}
+    assert compose["networks"]["outputs"]["internal"] is True
+    assert "maxio-data:/data" in maxio["volumes"]
+    assert "maxio-data:/output-storage:ro" in backend["volumes"]
+    assert backend["environment"]["OUTPUT_STORAGE_DISK_PATH"] == "/output-storage"
+    assert backend["environment"]["OUTPUT_S3_ENDPOINT"] == "http://maxio:9000"
+    assert backend["depends_on"]["maxio"]["condition"] == "service_healthy"
+    assert ":?" in maxio["environment"]["MAXIO_SECRET_KEY"]
+    for name, service in services.items():
+        if name not in {"backend", "maxio"}:
+            assert not any(key.startswith(("MAXIO_", "OUTPUT_S3_")) for key in service.get("environment", {}))
+
+
+def test_full_stack_smoke_provisions_separate_required_maxio_credentials(repo_root):
+    workflow = yaml.safe_load((repo_root / ".github/workflows/smoke.yml").read_text())
+    steps = workflow["jobs"]["smoke"]["steps"]
+    configure = next(step["run"] for step in steps if step.get("name") == "Write .env")
+    assert 'echo "MAXIO_ACCESS_KEY=nautionette-smoke"' in configure
+    assert 'echo "MAXIO_SECRET_KEY=$(openssl rand -hex 32)"' in configure
+    assert "private MaxIO output storage is connected" in (repo_root / "scripts/smoke.py").read_text()
 
 
 def test_explicit_agent_resource_overrides_are_preserved(monkeypatch):

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import subprocess
 import sys
 import time
@@ -131,6 +132,45 @@ class Coolify:
         )
 
 
+def ensure_output_storage_credentials(api: Coolify, app: str) -> None:
+    """Provision independent MaxIO credentials once, without logging or rotating them."""
+    path = f"/applications/{app}/envs"
+    existing = {
+        row["key"]: row.get("value")
+        for row in api.call(path)
+        if row.get("key") in {"MAXIO_ACCESS_KEY", "MAXIO_SECRET_KEY"} and not row.get("is_preview", False)
+    }
+    missing = [
+        key for key in ("MAXIO_ACCESS_KEY", "MAXIO_SECRET_KEY") if not str(existing.get(key) or "").strip()
+    ]
+    if not missing:
+        return
+    generated = {key: secrets.token_hex(32 if key == "MAXIO_SECRET_KEY" else 16) for key in missing}
+    api.call(
+        path + "/bulk",
+        "PATCH",
+        {
+            "data": [
+                {
+                    "key": key,
+                    "value": value,
+                    "is_buildtime": True,
+                    "is_runtime": True,
+                    "is_literal": True,
+                }
+                for key, value in generated.items()
+            ]
+        },
+    )
+    verified = {
+        row["key"]: row.get("value")
+        for row in api.call(path)
+        if row.get("key") in generated and not row.get("is_preview", False)
+    }
+    if any(verified.get(key) != value for key, value in generated.items()):
+        raise RuntimeError("Coolify did not persist the output storage credentials; nothing was deployed")
+
+
 def healthy(target: str) -> None:
     url = https_url(required("APP_URL"))
     try:
@@ -168,6 +208,19 @@ def healthy(target: str) -> None:
                 problems.append(f"{name}: {label}")
     if problems:
         raise RuntimeError("Health checks failed: " + "; ".join(problems))
+    try:
+        storage = request(url + "/api/settings/storage", required("APP_TOKEN"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise RuntimeError("Output storage health endpoint returned invalid JSON") from None
+    except TimeoutError:
+        raise RuntimeError("Output storage health endpoint request timed out") from None
+    if (
+        not isinstance(storage, dict)
+        or not isinstance(storage.get("health"), dict)
+        or storage["health"].get("status") != "ok"
+    ):
+        # Never echo provider diagnostics, transfer URLs or credentials.
+        raise RuntimeError("Output storage health check failed; inspect Settings → Storage")
 
 
 def health_timeout() -> int:
@@ -297,6 +350,7 @@ def deploy(target: str, commit: str) -> str | None:
         for row in versions
     ):
         raise RuntimeError("Coolify did not accept the source version; nothing was deployed")
+    ensure_output_storage_credentials(api, app)
     queued = api.call("/deploy", "POST", {"uuid": app, "force": False})
     deployments = queued.get("deployments", [])
     if len(deployments) != 1 or deployments[0].get("resource_uuid") != app:

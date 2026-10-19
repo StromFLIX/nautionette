@@ -12,13 +12,15 @@ from scripts import staging_refresh_host as host
 
 def container(app, svc, *, environment=None):
     volumes = {dest: name for name, (service, dest) in host.DATASETS.items() if service == svc}
+    if svc == "backend":
+        volumes["/output-storage"] = "maxio-data"
     if svc == "worker":
         volumes = {"/workflows": "workflows", "/artifacts": "artifacts"}
     if svc == "docker-broker":
         volumes = {"/projects": "projects"}
     return {
         "Id": app + "-" + svc,
-        "Image": "same-postgres-image" if svc == "postgres" else app + "-" + svc + "-image",
+        "Image": "same-" + svc + "-image" if svc in {"postgres", "maxio"} else app + "-" + svc + "-image",
         "Config": {
             "Labels": {"com.docker.compose.project": app, "com.docker.compose.service": svc},
             "Env": [
@@ -34,7 +36,7 @@ def container(app, svc, *, environment=None):
         "HostConfig": {"RestartPolicy": {"Name": "unless-stopped", "MaximumRetryCount": 0}},
         "NetworkSettings": {"Networks": {app + "-internal": {}}},
         "Mounts": [
-            {"Type": "volume", "Destination": dest, "Name": app + "-" + name}
+            {"Type": "volume", "Destination": dest, "Name": app + "-" + name, "RW": dest != "/output-storage"}
             for dest, name in volumes.items()
         ],
     }
@@ -50,13 +52,14 @@ def test_inventory_is_secret_free_and_datasets_are_distinct(stacks):
     rows, prod, stage = stacks
     host.assert_isolated(rows, prod, stage)
     host.assert_password_compatible(rows, prod, stage)
-    assert len(prod["volumes"]) == 6
+    assert len(prod["volumes"]) == 7
     assert "private" not in json.dumps(prod)
     assert "private" not in json.dumps(stage)
 
 
 @pytest.mark.parametrize(
-    "fault", ["shared_volume", "shared_network", "postgres_image", "foreign_mount", "active_agent"]
+    "fault",
+    ["shared_volume", "shared_network", "postgres_image", "maxio_image", "foreign_mount", "active_agent"],
 )
 def test_isolation_failures_are_closed(stacks, fault):
     rows, prod, stage = stacks
@@ -66,6 +69,8 @@ def test_isolation_failures_are_closed(stacks, fault):
         stage["network"] = prod["network"]
     elif fault == "postgres_image":
         stage["postgres_image"] = "other-version"
+    elif fault == "maxio_image":
+        stage["maxio_image"] = "other-version"
     elif fault == "foreign_mount":
         rows[-1]["Mounts"].append({"Type": "volume", "Name": "prod-projects", "Destination": "/bad"})
     elif fault == "active_agent":
@@ -78,7 +83,17 @@ def test_isolation_failures_are_closed(stacks, fault):
 
 
 @pytest.mark.parametrize(
-    "fault", ["identity", "auth", "workflow_volume", "bind_mount", "missing_service", "stopped"]
+    "fault",
+    [
+        "identity",
+        "auth",
+        "workflow_volume",
+        "output_mount",
+        "output_writable",
+        "bind_mount",
+        "missing_service",
+        "stopped",
+    ],
 )
 def test_inventory_rejects_unsafe_or_incomplete_stacks(stacks, fault):
     rows, _, _ = stacks
@@ -92,6 +107,12 @@ def test_inventory_rejects_unsafe_or_incomplete_stacks(stacks, fault):
         broker["Config"]["Env"][2] = "WORKFLOWS_VOLUME=prod-workflows"
     elif fault == "bind_mount":
         backend["Mounts"][0]["Type"] = "bind"
+    elif fault in {"output_mount", "output_writable"}:
+        mount = next(m for m in backend["Mounts"] if m["Destination"] == "/output-storage")
+        if fault == "output_mount":
+            mount["Name"] = "another-maxio-volume"
+        else:
+            mount["RW"] = True
     elif fault == "missing_service":
         rows.remove(backend)
     else:
@@ -106,6 +127,26 @@ def test_refuse_incompatible_restored_role_password(stacks):
     pg["Config"]["Env"][-1] = "POSTGRES_PASSWORD=other-private"
     with pytest.raises(RuntimeError, match="role configuration"):
         host.assert_password_compatible(rows, prod, stage)
+
+
+@pytest.mark.parametrize("key", ["MAXIO_DEFAULT_BUCKETS", "MAXIO_MASTER_KEY"])
+def test_refuse_incompatible_maxio_bucket_or_master_key(stacks, key):
+    rows, prod, stage = stacks
+    maxio = next(r for r in rows if r["Id"] == "stage-maxio")
+    maxio["Config"]["Env"].append(f"{key}=different-test-configuration")
+    with pytest.raises(RuntimeError, match="MaxIO bucket/key configuration differs"):
+        host.assert_password_compatible(rows, prod, stage)
+
+
+def test_refresh_health_checks_maxio_connectivity_before_resuming_a_stack(stacks, monkeypatch):
+    _, prod, _ = stacks
+    calls = []
+    monkeypatch.setattr(host, "docker", lambda *args, **kwargs: calls.append(args))
+    host.health(prod, "production", attempts=1)
+    code = calls[0][-1]
+    compile(code, "refresh-health", "exec")
+    assert "/api/settings/storage" in code and "['health']['status'] == 'ok'" in code
+    assert "Bearer " in code and "private" not in code
 
 
 def test_copy_preserves_dotfiles_external_symlinks_hardlinks_permissions_and_bytes(tmp_path):
@@ -220,7 +261,7 @@ def test_copy_helper_only_mounts_source_readonly(tmp_path, stacks, monkeypatch):
     monkeypatch.setattr(host, "helper", lambda *args: calls.append(args))
     _, prod, _ = stacks
     host.copy_datasets(tmp_path, prod, "snapshot")
-    assert len(calls) == 6
+    assert len(calls) == 7
     assert all("dst=/src,readonly" in args[3][0] for args in calls)
     assert all("type=bind" in args[3][1] for args in calls)
 

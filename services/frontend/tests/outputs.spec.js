@@ -21,11 +21,11 @@ async function fixture (context, { empty = false, inline = false } = {}) {
       alpha: { chat: chat('alpha'), messages: [{ id: 'reply', role: 'assistant', content: 'Here is your result.', meta: inline ? { outputs: [first] } : {} }], outputs: empty ? [] : [first], active_turn: null },
       beta: { chat: chat('beta'), messages: [], outputs: [], active_turn: null }
     },
-    history: [first], reads: [], files: [], completedFiles: 0, failPreview: false, failDownload: false, failHistory: false
+    history: [first], events: [], reads: [], files: [], completedFiles: 0, failPreview: false, failDownload: false, failHistory: false
   }
   await context.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
-    if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: ': connected\n\n' })
+    if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 100\n${state.events.splice(0).map(event => `data: ${JSON.stringify(event)}\n\n`).join('')}: connected\n\n` })
     if (path === '/api/catalog') return route.fulfill({ json: { models: [], tools: [], agent_sets: [], default_model: 'test/model' } })
     if (path === '/api/system') return route.fulfill({ json: { components: [], agent_sets: [] } })
     if (path === '/api/chats') return route.fulfill({ json: { chats: Object.values(state.chats).map(data => data.chat) } })
@@ -217,6 +217,29 @@ test('committed revisions update live, history stays immutable, selected output 
   await expect(panel.getByText('Ready · Revision 1 · CADCraft')).toBeVisible()
   await panel.getByRole('combobox', { name: 'Revision', exact: true }).selectOption({ label: 'Latest · 3' })
   await expect(panel.getByText('Ready · Revision 3 · CADCraft')).toBeVisible()
+})
+
+test('storage cleanup removes stale reply cards and falls back from a deleted history selection', async ({ page, context }) => {
+  const state = await fixture(context, { inline: true })
+  state.chats.alpha.outputs = [output(2)]
+  state.history.unshift(output(2))
+  await page.goto('/chats/alpha')
+  await page.getByRole('button', { name: 'View output: Mounting bracket', exact: true }).click()
+  const panel = outputPanel(page)
+  await expect(panel.getByText('Ready · Revision 1 · CADCraft')).toBeVisible()
+  state.history = [output(2)]
+  state.chats.alpha.messages[0].meta.outputs = []
+  state.events.push({ kind: 'chat.output.deleted', chat_id: 'alpha' })
+  await expect(panel.getByText('Ready · Revision 2 · CADCraft')).toBeVisible()
+  await expect(panel.getByRole('alert')).toContainText('That revision was removed in Storage')
+  await expect(panel.getByRole('combobox', { name: 'Revision', exact: true })).not.toContainText('Revision 1')
+  await page.getByRole('tab', { name: 'Chat', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'View output: Mounting bracket', exact: true })).toHaveCount(0)
+  await outputsTab(page).click()
+  state.chats.alpha.outputs = []
+  state.history = []
+  state.events.push({ kind: 'chat.output.deleted', chat_id: 'alpha' })
+  await expect(page.getByRole('heading', { name: 'No outputs yet' })).toBeVisible()
 })
 
 test('viewing outputs does not acknowledge hidden replies', async ({ page, context }) => {

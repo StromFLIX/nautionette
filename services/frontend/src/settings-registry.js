@@ -96,6 +96,16 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
+    key: 'storage', label: 'Storage', icon: 'storage', group: 'Operations', scope: 'Instance',
+    load: () => import('./components/settings/StoragePane.vue'),
+    entries: [
+      entry('storage-overview', 'Output storage usage', 'Private MaxIO S3 bucket, originals, previews, revisions and migration health.', 'disk capacity available free filesystem database bytes requirements'),
+      entry('storage-limits', 'Storage limits', 'Increase instance, chat, file and publication quotas. Reserve physical free disk space.', 'quota full upload size MCP error'),
+      entry('storage-retention', 'Automatic retention', 'Opt-in cleanup after a configured age; optionally keep current revisions.', 'older days X expire delete'),
+      entry('storage-outputs', 'Stored outputs', 'List all output revisions. Find the largest or oldest files and preview permanent removal.', 'inventory cleanup remove delete CAD PDF downloads big')
+    ]
+  },
+  {
     key: 'system', label: 'System', icon: 'monitor_heart', group: 'Operations', scope: 'Instance',
     load: () => import('./components/settings/SystemPane.vue'),
     entries: [

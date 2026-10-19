@@ -28,6 +28,7 @@ flowchart TB
         wfmcp["workflow-mcp<br/>authoring tools"]
         orch(["Temporal orchestrator"])
         pg[("PostgreSQL")]
+        maxio[("MaxIO<br/>private output binaries")]
         wk["Temporal workers 1..n<br/>at least one always running"]
         pi["Pi run<br/>one container per call<br/>exits when the call ends"]
     end
@@ -37,6 +38,8 @@ flowchart TB
     clients <--> be
     ext <--> be
     be --> gw
+    be <-->|"authorized output downloads"| maxio
+    pi <-->|"signed binary transfers"| maxio
     be <-->|"start runs, stats"| orch
     be -->|"run_agent, restart_worker"| broker
     broker -.->|"docker run --rm"| pi
@@ -76,7 +79,8 @@ Five rules the diagram encodes:
 | **workflow-mcp** | Our own MCP server, registered behind the gateway. Provides validated workflow authoring, immediate deployment, run controls and history, plus the REST side the backend uses to publish files. |
 | **Pi runs** | The agent runtime ([Pi](https://pi.dev), `@earendil-works/pi-coding-agent`). Pi is a CLI, so a call is a container run: start, work, exit. The base image is Node plus the Pi CLI plus `agent-run`, the wrapper that turns a job into NDJSON. An agent set extends it with Pi extensions and packages. |
 | **Temporal** | Orchestrator and workers. Durable runs, retries, schedules and history, stored in PostgreSQL. A workflow step can call MCP tools, invoke Pi, or run plain Python. |
-| **Shared volume** | Where workflow files live. What an agent writes is what a worker loads. Run artifacts land on their own volume, until there is an object store. |
+| **MaxIO** | Private S3-compatible storage for generated chat originals, editable sources and sanitized previews. SQLite keeps manifests/ownership; agents stream through scoped signed URLs. No host ports are published. |
+| **Shared volume** | Where workflow files live. What an agent writes is what a worker loads. Workflow run artifacts and project worktrees remain on their own volumes, separate from output object storage. |
 
 ## Workspace customization
 
@@ -397,9 +401,18 @@ are downloads; publish generated page images alongside a PDF for mobile previews
 Original bytes and saved source survive disposable agent containers. Publication
 uses the existing sandbox; it adds no editor/WASM viewer or dedicated Rust workers.
 
+Originals, editable sources and safe previews live in **MaxIO**, not SQLite BLOBs.
+The binary path bypasses MCP/base64 payload limits. **Settings > Storage** shows
+all revisions, usage, configurable quotas, verified legacy migration, selected/age
+cleanup, opt-in retention and the actual backing filesystem's available space.
+Quota errors return a working settings link. Back up `maxio-data` together with
+`backend-data`; database-only backups no longer include all output binaries.
+MaxIO is pinned to 0.4.2 and upstream warns it is not yet production-ready.
+
 See [Durable chat outputs](docs/chat-outputs.md) for tool examples, revision and
-restore semantics, storage limits, authorization and deployment checks. Rebuild
-the backend, broker, frontend and default agent image together.
+restore semantics, quotas, authorization, migration and deployment checks. Set
+separate MaxIO credentials, then rebuild backend, frontend and the default agent
+image together; Compose provisions the private MaxIO service/bucket.
 
 ### Native creative apps
 
@@ -1063,12 +1076,12 @@ services/backend/nautionette_backend/
   routers/           the HTTP surface, one router per thing
 ```
 
-Networks: `edge` (published), `internal` (services, outbound allowed so the gateway reaches the model provider), `control` (backend to broker only), `data` (Temporal to Postgres only).
+Networks: `edge` (published), `internal` (services, outbound allowed so the gateway reaches the model provider), `agents` (sandbox outbound access, gateway and signed MaxIO transfers), `outputs` (private backend-to-MaxIO traffic), `control` (backend to broker only), `data` (Temporal to Postgres only).
 
 ## Run it
 
 ```
-cp .env.example .env                    # provider keys, POSTGRES_PASSWORD, APP_TOKEN
+cp .env.example .env                    # keys, POSTGRES_PASSWORD, MAXIO_SECRET_KEY, APP_TOKEN
 docker compose up -d
 ```
 

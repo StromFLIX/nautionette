@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from nautionette.telemetry import instrument_app
 
-from . import artcraft, github_mentions, mcp_servers, pi_packages, runs
+from . import artcraft, github_mentions, mcp_servers, output_maintenance, pi_packages, runs
 from .backend_mcp import BackendMCP
 from .background import drain, spawn
 from .clients.http import close_shared
@@ -49,6 +49,7 @@ async def lifespan(_: FastAPI):
     artcraft.recover_installations()
     spawn(recover_chat_agents(), name="chat-agent-recovery")
     spawn(github_mentions.consume(), name="github-mention-inbox")
+    spawn(output_maintenance.run(), name="output-storage-maintenance")
     # agentgateway may still be starting, so this retries in the background
     # rather than holding the port closed.
     spawn(bootstrap(), name="integration-bootstrap")

@@ -20,6 +20,15 @@ jobs:
   python:
     name: Python
     runs-on: ubuntu-latest
+    services:
+      maxio:
+        image: ghcr.io/coollabsio/maxio:0.4.2
+        env:
+          MAXIO_ACCESS_KEY: nautionette-ci-only
+          MAXIO_SECRET_KEY: not-for-production-ci-maxio-secret
+          MAXIO_DEFAULT_BUCKETS: nautionette-test-outputs
+        ports:
+          - 9000/tcp
     steps:
       - uses: actions/checkout@v7
 
@@ -48,7 +57,15 @@ jobs:
         run: uv run pytest tests/lib/test_telemetry.py tests/lib/test_telemetry_http.py
 
       - name: Model capability, images and durable chat output guards
-        run: uv run pytest tests/backend/test_catalog.py tests/backend/test_model_capabilities.py tests/backend/test_chat_images.py tests/backend/test_chat_outputs.py
+        run: uv run pytest tests/backend/test_catalog.py tests/backend/test_model_capabilities.py tests/backend/test_chat_images.py tests/backend/test_chat_outputs.py tests/backend/test_output_storage.py
+
+      - name: Real MaxIO binary uploads, large-file restore, integrity and migration
+        env:
+          MAXIO_TEST_ENDPOINT: http://127.0.0.1:${{ job.services.maxio.ports[9000] }}
+          MAXIO_TEST_ACCESS_KEY: nautionette-ci-only
+          MAXIO_TEST_SECRET_KEY: not-for-production-ci-maxio-secret
+          MAXIO_TEST_BUCKET: nautionette-test-outputs
+        run: uv run pytest tests/backend/test_output_maxio.py
 
       - name: Model integrations and Copilot sign-in
         run: uv run pytest tests/backend/test_copilot_login.py tests/backend/test_integrations.py tests/backend/test_events_and_clients.py
@@ -101,7 +118,7 @@ jobs:
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
           tests/copilot-login.spec.js tests/tool-calls.spec.js tests/activity-timing.spec.js
-          tests/workflow-inputs.spec.js tests/outputs.spec.js tests/creative-apps.spec.js
+          tests/workflow-inputs.spec.js tests/outputs.spec.js tests/creative-apps.spec.js tests/storage.spec.js
           --workers=1 --reporter=dot,github
 
   images:
@@ -215,4 +232,5 @@ jobs:
       - name: Config resolves
         run: |
           cp .env.example .env
-          docker compose --profile images --profile debug --profile observability config --quiet
+          MAXIO_SECRET_KEY="$(openssl rand -hex 32)" \
+            docker compose --profile images --profile debug --profile observability config --quiet

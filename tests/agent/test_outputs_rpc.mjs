@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { digest, outputTransport } from './output_fixture.mjs'
 
 const piAvailable = spawnSync('pi', ['--version']).status === 0
 const extension = fileURLToPath(new URL('../../images/agent-sets/default/extensions/nautionette/index.ts', import.meta.url))
@@ -15,8 +16,8 @@ const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 const pdf = Buffer.from('%PDF-output-test')
 const grant = 'private-test-capability-with-32-characters'
 const output = { id: 'a'.repeat(32), revision: 1, title: 'Report', files: [
-  { id: 'b'.repeat(32), name: 'report.pdf', mime_type: 'application/pdf', size: pdf.length, role: 'file', previewable: false },
-  { id: 'c'.repeat(32), name: 'preview.png', mime_type: 'image/png', size: png.length, role: 'preview', previewable: true }
+  { id: '1'.repeat(32), name: 'report.pdf', mime_type: 'application/pdf', size: pdf.length, role: 'file', previewable: false },
+  { id: '2'.repeat(32), name: 'preview.png', mime_type: 'image/png', size: png.length, role: 'preview', previewable: true }
 ] }
 
 async function exercisePi (selection) {
@@ -25,7 +26,13 @@ async function exercisePi (selection) {
   await writeFile(config, JSON.stringify({ grant }), { mode: 0o600 })
   await writeFile(join(cwd, 'report.pdf'), pdf)
   await writeFile(join(cwd, 'preview.png'), png)
-  const requests = [], publications = [], events = []
+  const requests = [], events = []
+  const longCallId = 'publish-call'.repeat(100)
+  const transfer = await outputTransport({ onPublish: args => {
+    assert.equal(args.request_id, `sha256:${digest(longCallId)}`)
+    assert.deepEqual(args.files.map(file => Buffer.from(file.data, 'base64')), [pdf, png])
+  } })
+  const publications = transfer.records
   const server = createServer(async (req, res) => {
     try {
       let raw = ''
@@ -34,25 +41,14 @@ async function exercisePi (selection) {
       if (req.url === '/mcp') {
         let result = {}
         if (body.method === 'tools/list') result = { tools: [
+          { name: 'backend_prepare_chat_output', description: 'Private prepare', inputSchema: { type: 'object' } },
           { name: 'backend_publish_chat_output', description: 'Private publisher', inputSchema: { type: 'object' } },
           { name: 'backend_read_chat_output', description: 'Private reader', inputSchema: { type: 'object' } },
           { name: 'publish_output', description: 'Remote name must not shadow the local publisher', inputSchema: { type: 'object' } }
         ] }
         if (body.method === 'tools/call') {
           assert.equal(body.params.arguments.body.grant, grant)
-          const args = body.params.arguments.body
-          let value
-          if (body.params.name === 'backend_publish_chat_output') {
-            publications.push(args)
-            assert.equal(args.request_id, 'publish-call')
-            assert.deepEqual(args.files.map(file => Buffer.from(file.data, 'base64')), [pdf, png])
-            value = output
-          } else {
-            assert.equal(body.params.name, 'backend_read_chat_output')
-            assert.equal(args.output_id, output.id)
-            value = { output_id: output.id, revision: 1, file: { ...output.files[1], data: png.toString('base64') } }
-          }
-          result = { content: [{ type: 'text', text: JSON.stringify(value) }] }
+          result = await transfer.rpc(body.method, body.params, AbortSignal.timeout(20000))
         }
         res.setHeader('content-type', 'application/json')
         res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result }))
@@ -72,7 +68,9 @@ async function exercisePi (selection) {
         chunk({ role: 'assistant', tool_calls: [{ index: 0, id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
         chunk({}, 'tool_calls')
       }
-      if (requests.length === 1) call('publish-call', 'publish_output', {
+      assert.ok(!JSON.stringify(body).includes('private-upload-capability'))
+      assert.ok(!JSON.stringify(body).includes('private-download-capability'))
+      if (requests.length === 1) call(longCallId, 'publish_output', {
         title: 'Report', files: [{ path: 'report.pdf' }, { path: 'preview.png', role: 'preview' }]
       })
       else if (requests.length === 2) call('restore-call', 'read_output', { output_id: output.id, file_id: output.files[1].id })
@@ -136,6 +134,7 @@ async function exercisePi (selection) {
     if (child && child.exitCode === null && child.signalCode === null) { const closed = once(child, 'close'); child.kill(); await closed }
     server.closeAllConnections()
     await new Promise(resolve => server.close(resolve))
+    await transfer.close()
     await rm(cwd, { force: true, recursive: true })
   }
 }
