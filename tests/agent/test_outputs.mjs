@@ -34,24 +34,61 @@ test('a capability is read privately, unlinked, and never exposed in tool schema
   await writeFile(path, JSON.stringify({ grant: 'invalid-secret' }))
   assert.throws(() => loadOutputGrant(path), error => !error.message.includes('invalid-secret'))
   const registered = tools(() => {})
-  assert.deepEqual([...registered.keys()], ['publish_output', 'read_output'])
+  assert.deepEqual([...registered.keys()], ['publish_output', 'update_output', 'read_output'])
   assert.ok(!JSON.stringify([...registered.values()]).includes(grant.grant))
   assert.equal(tools(() => {}, null).size, 0)
   for (const name of ['backend_prepare_chat_output', 'backend_publish_chat_output', 'backend_read_chat_output']) assert.ok(isOutputTransportTool(name))
   assert.ok(!isOutputTransportTool('backend_system_status'))
 }))
 
-test('publication instructions distinguish server-assigned creates from existing-output updates', () => {
+test('creation cannot declare update identifiers, even when a provider fills all schema properties', () => {
   const registered = tools(() => {})
-  const publisher = registered.get('publish_output')
+  const publisher = registered.get('publish_output'), updater = registered.get('update_output')
   assert.deepEqual(publisher.parameters.required, ['title', 'files'])
-  assert.match(publisher.description, /omit both output_id and expected_revision/)
-  assert.match(publisher.description, /Never invent an output ID/)
+  assert.equal(publisher.parameters.additionalProperties, false)
+  assert.match(publisher.description, /CREATE a NEW output/)
+  assert.match(publisher.description, /update_output/)
+  assert.deepEqual(updater.parameters.required, ['title', 'files', 'output_id', 'expected_revision'])
   for (const name of ['output_id', 'expected_revision']) {
-    assert.match(publisher.parameters.properties[name].description, /UPDATE ONLY/)
-    assert.match(publisher.parameters.properties[name].description, /For CREATE, omit/)
+    assert.ok(!Object.hasOwn(publisher.parameters.properties, name))
+    assert.ok(Object.hasOwn(updater.parameters.properties, name))
   }
+  assert.ok(isOutputTransportTool('update_output'))
   assert.match(registered.get('read_output').description, /discover existing output IDs and current revisions/)
+  for (const property of Object.values(registered.get('read_output').parameters.properties)) {
+    assert.ok(property.anyOf.some(branch => branch.type === 'null'))
+  }
+})
+
+test('stale create calls with fabricated IDs fail locally without opening files or sending metadata', async () => {
+  const publisher = tools(() => assert.fail('must not prepare or commit')).get('publish_output')
+  for (const fields of [{ output_id: outputId }, { expected_revision: 1 }, { output_id: outputId, expected_revision: 1 }]) {
+    await assert.rejects(execute(publisher, 'stale', { title: 'CAD', files: [{ path: '/missing.step' }], ...fields }, '/workspace'), /only creates new outputs/)
+  }
+})
+
+test('update_output preserves explicit revision metadata and binary uploads', () => workspace(async (cwd, transport) => {
+  const first = await publish(cwd, transport)
+  const registered = tools(transport.rpc)
+  const listing = await execute(registered.get('read_output'), 'list', { output_id: null, revision: null, file_id: null }, cwd)
+  assert.equal(listing.details.outputs[0].id, first.details.output.id)
+  assert.deepEqual(transport.calls.at(-1).arguments.body, { ...grant, binary: true })
+  await writeFile(join(cwd, 'bracket.dxf'), 'revised-source')
+  const revised = await execute(registered.get('update_output'), 'revision', {
+    title: 'Bracket revised', output_id: first.details.output.id, expected_revision: 1,
+    files: [{ path: 'bracket.dxf', role: 'source' }]
+  }, cwd)
+  assert.equal(revised.details.output.revision, 2)
+  assert.equal(transport.records[1].output_id, first.details.output.id)
+  assert.equal(transport.records[1].expected_revision, 1)
+  assert.equal(Buffer.from(transport.records[1].files[0].data, 'base64').toString(), 'revised-source')
+}))
+
+test('update_output never silently creates when revision fields are missing or invalid', async () => {
+  const updater = tools(() => assert.fail('must not prepare or commit')).get('update_output')
+  for (const fields of [{}, { output_id: outputId }, { output_id: 'invented', expected_revision: 1 }, { output_id: outputId, expected_revision: null }, { output_id: outputId, expected_revision: 65 }]) {
+    await assert.rejects(execute(updater, 'invalid', { title: 'CAD', files: [{ path: '/missing.step' }], ...fields }, '/workspace'), /requires an existing output_id/)
+  }
 })
 
 test('an undeletable capability file fails closed before tools can be registered', { skip: process.getuid?.() === 0 }, () => workspace(async cwd => {

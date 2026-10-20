@@ -23,7 +23,7 @@ this migration does not move `chat_images`, project worktrees or workflow artifa
 
 ## Agent tools
 
-The default Pi extension registers local `publish_output` and `read_output` tools
+The default Pi extension registers local `publish_output`, `update_output` and `read_output` tools
 when a chat turn has a private capability. They remain available independently of
 the selectable federated MCP tools. Workflow agents and custom images without the
 extension/capability have no chat output tools. Models supply paths and metadata,
@@ -42,13 +42,19 @@ never chat IDs, credentials, transfer URLs or file bytes:
 }
 ```
 
-Pass this to `publish_output` after generating completed files. **For a new
-output, omit both `output_id` and `expected_revision` entirely.** The server
-generates the ID; never invent one, copy one from another chat, or use an all-zero
-placeholder. These two fields are only for updating an existing output discovered
-with `read_output` in this chat. If publication reports "Output not found in this
-chat", list `read_output {}` to find the correct ID for an update, or omit both
-fields to create a new output. Do not repeatedly retry the missing ID.
+Pass this to `publish_output` after generating completed files. **This tool only
+creates new outputs and has no `output_id` or `expected_revision` parameters.**
+The server generates the ID. To revise an existing output, use `update_output`
+with the same metadata/file list plus the `output_id` and `expected_revision`
+returned by `read_output` in this chat. Never invent IDs or copy them from another
+chat. If an update reports "Output not found in this chat", list `read_output {}`
+to find the correct ID, or use `publish_output` to create a new output. Do not
+repeatedly retry the missing ID.
+
+Creation and revision updates have separate schemas so models that fill every
+schema property cannot turn a new publication into a fabricated-ID update.
+`read_output` accepts omitted or null fields, so those models can list outputs
+with `{"output_id": null, "revision": null, "file_id": null}` without inventing IDs.
 
 Optional file
 `name` and `mime_type` override basename and extension-based detection. Originals
@@ -65,8 +71,8 @@ To continue in another turn:
    directory. The tool returns `file.path`, never transfer URLs or base64. It
    streams the download and verifies both its byte count and SHA-256. Partial or
    corrupt downloads are removed; existing workspace files are not overwritten.
-4. Edit the restored source, regenerate previews/exports and publish the full
-   file list with `output_id` and `expected_revision`. Updates are complete,
+4. Edit the restored source, regenerate previews/exports and call `update_output`
+   with the full file list, `output_id` and `expected_revision`. Updates are complete,
    immutable snapshots, not patches. Old revisions stay available until deleted.
 
 An outdated expected revision fails with 409 instead of overwriting newer work.

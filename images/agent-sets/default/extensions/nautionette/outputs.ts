@@ -9,7 +9,7 @@ import { basename, extname, join, resolve, sep } from "node:path";
 // server-side against Settings → Storage on every prepare AND commit.
 const HARD_FILE_BYTES = 1024 * 1024 * 1024;
 export const OUTPUT_TRANSPORT_TOOLS = new Set(["backend_prepare_chat_output", "backend_publish_chat_output", "backend_read_chat_output"]);
-const LOCAL_TOOLS = new Set(["publish_output", "read_output"]);
+const LOCAL_TOOLS = new Set(["publish_output", "update_output", "read_output"]);
 export const isOutputTransportTool = (name: string) => OUTPUT_TRANSPORT_TOOLS.has(name) || LOCAL_TOOLS.has(name);
 export const publicationRequestId = (value: string) => [...value].length <= 256 ? value : `sha256:${createHash("sha256").update(value).digest("hex")}`;
 
@@ -100,17 +100,24 @@ const id = { type: "string", pattern: "^[a-f0-9]{32}$" };
 
 export function registerOutputTools(pi: ExtensionAPI, rpc: Rpc, grant: Grant | null) {
   if (!grant) return;
-  pi.registerTool({
-    name: "publish_output", label: "Publish output",
-    description: "Publish generated files durably to this chat's Outputs tab. Supply local file paths, not bytes or URLs. Include a PNG/JPEG/WebP preview for PDFs/CAD files, and role=source for editable documents. Publish completed snapshots only. CREATE a new output: omit both output_id and expected_revision; the server generates the ID. Never invent an output ID or use a placeholder. UPDATE an existing output: first call read_output to obtain its ID and current revision in this chat, then supply both output_id and expected_revision. Old revisions stay available. If an output is not found, list read_output to find the correct ID; for a new output, omit both revision fields instead of retrying the missing ID. Up to 8 files; configurable file, publication, chat and instance quotas are enforced. Quota errors include usage, limits and a settings_url: give the user that link instead of repeatedly retrying. Success means all files are committed. If interrupted, read_output before retrying.",
+  // Separate operations structurally, not just in prose. Some model endpoints
+  // fill every declared property, even optional ones; exposing update identifiers
+  // on the create tool caused repeated fabricated-ID updates instead of uploads.
+  for (const updating of [false, true]) pi.registerTool({
+    name: updating ? "update_output" : "publish_output", label: updating ? "Update output" : "Publish output",
+    description: `${updating
+      ? "Publish a new revision of an EXISTING output in this chat. First call read_output to obtain its output_id and current revision; supply them as output_id and expected_revision. Never invent IDs. If the output does not exist, use publish_output to CREATE it instead. Old revisions stay available."
+      : "CREATE a NEW output durably in this chat's Outputs tab. The server generates its ID; this tool takes no output_id or expected_revision. To revise an existing output, first read_output, then use update_output."} Supply local file paths, not bytes or URLs. Include a PNG/JPEG/WebP preview for PDFs/CAD files, and role=source for editable documents. Publish completed snapshots only. Up to 8 files; configurable file, publication, chat and instance quotas are enforced. Quota errors include usage, limits and a settings_url: give the user that link instead of repeatedly retrying. Success means all files are committed. If interrupted, read_output before retrying.`,
     promptSnippet: "Use publish_output for requested deliverables (images, PDFs, exports), including previews/source when useful. Ordinary repository edits do not need publication.",
     parameters: {
-      type: "object", additionalProperties: false, required: ["title", "files"],
+      type: "object", additionalProperties: false, required: updating ? ["title", "files", "output_id", "expected_revision"] : ["title", "files"],
       properties: {
         title: { type: "string", minLength: 1, maxLength: 120 }, summary: { type: "string", maxLength: 2000 },
         source_app: { type: "string", maxLength: 64 },
-        output_id: { ...id, description: "UPDATE ONLY: existing ID returned by read_output in this chat. For CREATE, omit this property entirely; never invent an ID." },
-        expected_revision: { type: "integer", minimum: 1, maximum: 64, description: "UPDATE ONLY: current revision returned by read_output, together with output_id. For CREATE, omit this property entirely." },
+        ...(updating ? {
+          output_id: { ...id, description: "Existing ID returned by read_output in this chat; never invent an ID." },
+          expected_revision: { type: "integer", minimum: 1, maximum: 64, description: "Current revision returned by read_output for this output_id." },
+        } : {}),
         files: { type: "array", minItems: 1, maxItems: 8, items: {
           type: "object", additionalProperties: false, required: ["path"], properties: {
             path: { type: "string", minLength: 1, maxLength: 4096 }, name: { type: "string", minLength: 1, maxLength: 200 },
@@ -120,6 +127,11 @@ export function registerOutputTools(pi: ExtensionAPI, rpc: Rpc, grant: Grant | n
       },
     } as any,
     async execute(toolCallId, params: any, signal, _onUpdate, ctx) {
+      // Also guard direct/nested callers and resumed calls from older transcripts.
+      if (!updating && ("output_id" in params || "expected_revision" in params))
+        throw new Error("publish_output only creates new outputs and takes no revision fields. Use update_output after read_output to revise an existing output.");
+      if (updating && (!/^[a-f0-9]{32}$/.test(params.output_id || "") || !Number.isInteger(params.expected_revision) || params.expected_revision < 1 || params.expected_revision > 64))
+        throw new Error("update_output requires an existing output_id and current expected_revision from read_output. To create a new output, use publish_output.");
       const files: Awaited<ReturnType<typeof sandboxFile>>[] = [];
       const request_id = publicationRequestId(toolCallId);
       try {
@@ -161,12 +173,15 @@ export function registerOutputTools(pi: ExtensionAPI, rpc: Rpc, grant: Grant | n
   });
   pi.registerTool({
     name: "read_output", label: "Read output",
-    description: "List this chat's published outputs (no arguments) to discover existing output IDs and current revisions before updating; never invent IDs. Inspect an output/revision (output_id, optional revision), or restore one file to this sandbox (also file_id). Use this on a later turn to continue working from saved source, or after an uncertain publication. Restored files return a local path, not bytes or private URLs. Use read on a restored image for visual inspection. Access is limited to this chat.",
+    description: "List this chat's published outputs (no arguments, or all fields null) to discover existing output IDs and current revisions before update_output; never invent IDs. Inspect an output/revision (output_id, optional revision), or restore one file to this sandbox (also file_id). Omit unused fields or set them to null. Use this on a later turn to continue working from saved source, or after an uncertain publication. Restored files return a local path, not bytes or private URLs. Use read on a restored image for visual inspection. Access is limited to this chat.",
     parameters: { type: "object", additionalProperties: false, properties: {
-      output_id: id, revision: { type: "integer", minimum: 1, maximum: 64 }, file_id: id,
+      output_id: { anyOf: [id, { type: "null" }] },
+      revision: { anyOf: [{ type: "integer", minimum: 1, maximum: 64 }, { type: "null" }] },
+      file_id: { anyOf: [id, { type: "null" }] },
     } } as any,
     async execute(_toolCallId, params: any, signal, _onUpdate, ctx) {
-      const result = await transport(rpc, "backend_read_chat_output", { ...params, ...grant, binary: true }, signal);
+      const selection = Object.fromEntries(Object.entries(params).filter(([, value]) => value != null));
+      const result = await transport(rpc, "backend_read_chat_output", { ...selection, ...grant, binary: true }, signal);
       if (!result.file) return textResult(result);
       const file = result.file;
       if (!Number.isSafeInteger(file.size) || file.size < 1 || file.size > HARD_FILE_BYTES || !/^[a-f0-9]{64}$/.test(file.sha256))

@@ -44,6 +44,7 @@ MAX_BASE64_CHARS = (MAX_FILE_BYTES + 2) // 3 * 4
 RESERVED_TOOL_NAMES = frozenset(
     {
         "publish_output",
+        "update_output",
         "read_output",
         "backend_prepare_chat_output",
         "backend_publish_chat_output",

@@ -93,7 +93,7 @@ test('real CAD -> published editable source/PNG -> fresh turn restoration -> rev
   const changed = parse(await next.native('cadcraft', 'query_entities', { type: 'Circle' }))
   assert.equal(changed.count, 4)
   assert.ok(changed.entities.every(entity => entity.geometry.radius === 3))
-  const revised = parse(await next.call('publish_output', { title: 'Mounting plate', source_app: 'CADCraft', output_id: outputId, expected_revision: 1,
+  const revised = parse(await next.call('update_output', { title: 'Mounting plate', source_app: 'CADCraft', output_id: outputId, expected_revision: 1,
     files: [{ path: revisedSource, role: 'source' }, { path: revisedPreview, role: 'preview' }] }))
   assert.equal(revised.output.revision, 2)
   assert.equal(revisions[0].files[0].data, originalSource)

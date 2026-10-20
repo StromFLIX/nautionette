@@ -20,7 +20,7 @@ const output = { id: 'a'.repeat(32), revision: 1, title: 'Report', files: [
   { id: '2'.repeat(32), name: 'preview.png', mime_type: 'image/png', size: png.length, role: 'preview', previewable: true }
 ] }
 
-async function exercisePi (selection) {
+async function exercisePi (selection, api = 'openai-completions') {
   const cwd = await mkdtemp(join(tmpdir(), 'pi-output-rpc-'))
   const config = join(cwd, 'private-config.json')
   await writeFile(config, JSON.stringify({ grant }), { mode: 0o600 })
@@ -29,7 +29,7 @@ async function exercisePi (selection) {
   const requests = [], events = []
   const longCallId = 'publish-call'.repeat(100)
   const transfer = await outputTransport({ onPublish: args => {
-    assert.equal(args.request_id, `sha256:${digest(longCallId)}`)
+    assert.equal(args.request_id, `sha256:${digest(api === 'openai-responses' ? `${longCallId}|fc_1` : longCallId)}`)
     assert.deepEqual(args.files.map(file => Buffer.from(file.data, 'base64')), [pdf, png])
   } })
   const publications = transfer.records
@@ -44,7 +44,8 @@ async function exercisePi (selection) {
           { name: 'backend_prepare_chat_output', description: 'Private prepare', inputSchema: { type: 'object' } },
           { name: 'backend_publish_chat_output', description: 'Private publisher', inputSchema: { type: 'object' } },
           { name: 'backend_read_chat_output', description: 'Private reader', inputSchema: { type: 'object' } },
-          { name: 'publish_output', description: 'Remote name must not shadow the local publisher', inputSchema: { type: 'object' } }
+          { name: 'publish_output', description: 'Remote name must not shadow the local publisher', inputSchema: { type: 'object' } },
+          { name: 'update_output', description: 'Remote name must not shadow the local updater', inputSchema: { type: 'object' } }
         ] }
         if (body.method === 'tools/call') {
           assert.equal(body.params.arguments.body.grant, grant)
@@ -55,8 +56,13 @@ async function exercisePi (selection) {
         return
       }
       requests.push(body)
-      const names = body.tools.map(tool => tool.function.name)
-      assert.ok(names.includes('publish_output') && names.includes('read_output') && names.includes('read'))
+      const declarations = body.tools.map(tool => tool.function || tool)
+      const names = declarations.map(tool => tool.name)
+      assert.ok(names.includes('publish_output') && names.includes('update_output') && names.includes('read_output') && names.includes('read'))
+      const publisher = declarations.find(tool => tool.name === 'publish_output')
+      assert.ok(!Object.hasOwn(publisher.parameters.properties, 'output_id'))
+      assert.ok(!Object.hasOwn(publisher.parameters.properties, 'expected_revision'))
+      assert.ok(declarations.find(tool => tool.name === 'update_output').parameters.required.includes('expected_revision'))
       assert.ok(!names.some(name => name.startsWith('backend_')))
       assert.ok(!JSON.stringify(body).includes(grant))
       res.setHeader('content-type', 'text/event-stream')
@@ -64,27 +70,45 @@ async function exercisePi (selection) {
         id: 'chat-output', object: 'chat.completion.chunk', model: 'test/model',
         choices: [{ index: 0, delta, finish_reason }]
       })}\n\n`)
+      const emit = event => res.write(`data: ${JSON.stringify(event)}\n\n`)
+      const response = item => {
+        emit({ type: 'response.created', response: { id: 'resp_test', model: 'test/model', status: 'in_progress', output: [] } })
+        emit({ type: 'response.output_item.added', output_index: 0, item: { ...item, arguments: '', content: [] } })
+        if (item.type === 'function_call') emit({ type: 'response.function_call_arguments.delta', item_id: item.id, output_index: 0, delta: item.arguments })
+        else emit({ type: 'response.output_text.delta', item_id: item.id, output_index: 0, content_index: 0, delta: item.content[0].text })
+        emit({ type: 'response.output_item.done', output_index: 0, item })
+        emit({ type: 'response.completed', response: { id: 'resp_test', model: 'test/model', status: 'completed', output: [item], usage: { input_tokens: 20, output_tokens: 1, total_tokens: 21 } } })
+      }
       const call = (id, name, args) => {
-        chunk({ role: 'assistant', tool_calls: [{ index: 0, id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
-        chunk({}, 'tool_calls')
+        if (api === 'openai-responses') response({ type: 'function_call', id: `fc_${requests.length}`, call_id: id, name, arguments: JSON.stringify(args), status: 'completed' })
+        else {
+          chunk({ role: 'assistant', tool_calls: [{ index: 0, id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
+          chunk({}, 'tool_calls')
+        }
       }
       assert.ok(!JSON.stringify(body).includes('private-upload-capability'))
       assert.ok(!JSON.stringify(body).includes('private-download-capability'))
       if (requests.length === 1) call(longCallId, 'publish_output', {
         title: 'Report', files: [{ path: 'report.pdf' }, { path: 'preview.png', role: 'preview' }]
       })
-      else if (requests.length === 2) call('restore-call', 'read_output', { output_id: output.id, file_id: output.files[1].id })
-      else if (requests.length === 3) {
-        const restored = JSON.parse(body.messages.findLast(message => message.role === 'tool').content)
+      else if (requests.length === 2) call('list-call', 'read_output', { output_id: null, revision: null, file_id: null })
+      else if (requests.length === 3) call('restore-call', 'read_output', { output_id: output.id, revision: null, file_id: output.files[1].id })
+      else if (requests.length === 4) {
+        const restored = JSON.parse(api === 'openai-responses'
+          ? body.input.findLast(item => item.type === 'function_call_output').output
+          : body.messages.findLast(message => message.role === 'tool').content)
         assert.equal(restored.file.data, undefined)
         assert.deepEqual(await readFile(restored.file.path), png)
         call('inspect-call', 'read', { path: restored.file.path })
       } else {
-        assert.ok(JSON.stringify(body.messages).includes('data:image/png;base64,'))
-        chunk({ role: 'assistant', content: 'Published and inspected.' })
-        chunk({}, 'stop')
+        assert.ok(JSON.stringify(body.input || body.messages).includes('data:image/png;base64,'))
+        if (api === 'openai-responses') response({ type: 'message', id: 'msg_test', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'Published and inspected.', annotations: [] }] })
+        else {
+          chunk({ role: 'assistant', content: 'Published and inspected.' })
+          chunk({}, 'stop')
+        }
       }
-      res.end('data: [DONE]\n\n')
+      res.end(api === 'openai-responses' ? '' : 'data: [DONE]\n\n')
     } catch (error) {
       res.statusCode = 500
       res.end(error.message)
@@ -100,7 +124,7 @@ async function exercisePi (selection) {
       '--provider', 'nautionette', '--model', 'test/model'], {
       cwd, env: { ...process.env, PI_CODING_AGENT_DIR: cwd, PI_OFFLINE: '1', PI_TELEMETRY: '0',
         AGENTGATEWAY_URL: gateway, MCP_URL: `${gateway}/mcp`, AGENT_MODEL: 'test/model',
-        NAUTIONETTE_MODEL_API: 'openai-completions', NAUTIONETTE_TOOLS_JSON: JSON.stringify(selection),
+        NAUTIONETTE_MODEL_API: api, NAUTIONETTE_TOOLS_JSON: JSON.stringify(selection),
         NAUTIONETTE_OUTPUT_GRANT_FILE: config }, stdio: ['pipe', 'pipe', 'pipe']
     })
     child.stderr.on('data', chunk => { stderr += chunk })
@@ -124,11 +148,11 @@ async function exercisePi (selection) {
       child.stdin.write(JSON.stringify({ type: 'prompt', message: 'Publish this report with its preview, then inspect the saved preview.' }) + '\n')
     })
     assert.equal(publications.length, 1, JSON.stringify(events.filter(event => event.type === 'tool_execution_end' || (event.type === 'message_end' && event.message.stopReason === 'error'))))
-    assert.equal(requests.length, 4)
+    assert.equal(requests.length, 5)
     assert.ok(!JSON.stringify(events).includes(grant))
     const results = events.filter(event => event.type === 'tool_execution_end')
-    assert.deepEqual(results.map(result => result.toolName), ['publish_output', 'read_output', 'read'])
-    assert.ok(results.every(result => !result.isError))
+    assert.deepEqual(results.map(result => result.toolName), ['publish_output', 'read_output', 'read_output', 'read'])
+    assert.ok(results.every(result => !result.isError), JSON.stringify(results.filter(result => result.isError)))
     await assert.rejects(stat(config), { code: 'ENOENT' })
   } finally {
     if (child && child.exitCode === null && child.signalCode === null) { const closed = once(child, 'close'); child.kill(); await closed }
@@ -139,7 +163,9 @@ async function exercisePi (selection) {
   }
 }
 
-for (const selection of [null, []]) {
-  test(`real Pi publishes, restores and visually reads a preview (MCP selection: ${JSON.stringify(selection)})`,
-    { skip: !piAvailable, timeout: 30000 }, () => exercisePi(selection))
+for (const api of ['openai-completions', 'openai-responses']) {
+  for (const selection of [null, []]) {
+    test(`real Pi publishes, lists with nulls, restores and visually reads a preview (${api}, MCP selection: ${JSON.stringify(selection)})`,
+      { skip: !piAvailable, timeout: 30000 }, () => exercisePi(selection, api))
+  }
 }
