@@ -2,16 +2,12 @@
 
 import base64
 import os
-from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 
-
-SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "services/frontend/scripts/sign-android-release.sh"
-)
+SCRIPT = Path(__file__).resolve().parents[1] / "services/frontend/scripts/sign-android-release.sh"
 
 
 class AndroidSigningTest(unittest.TestCase):
@@ -24,14 +20,14 @@ class AndroidSigningTest(unittest.TestCase):
         (self.root / "private").mkdir()
         # The doubles validate ordering, decoded key and password indirection.
         for name, body in {
-            "zipalign": '''
+            "zipalign": """
 if [[ "$1" == "-c" ]]; then
   [[ "$(<"${@: -1}")" == signed ]]
 else
   cp "${@: -2:1}" "${@: -1}"
 fi
-''',
-            "apksigner": '''
+""",
+            "apksigner": """
 if [[ "$1" == verify ]]; then
   [[ "$(<"${@: -1}")" == signed ]]
   [[ "${FAIL_VERIFY:-}" != 1 ]]
@@ -41,7 +37,7 @@ else
   [[ "$8" == --key-pass && "$9" == env:ANDROID_KEY_PASSWORD ]]
   printf signed > "${11}"
 fi
-''',
+""",
         }.items():
             tool = tools / name
             tool.write_text("#!/usr/bin/env bash\nset -euo pipefail\n" + body)
@@ -60,9 +56,11 @@ fi
         self.output = self.root / "out/release.apk"
 
     def run_signer(self):
-        result = subprocess.run(
-            ["bash", str(SCRIPT), str(self.source), str(self.output)],
-            env=self.env, capture_output=True, text=True,
+        result = subprocess.run(  # noqa: S603 — fixed repository script and test-owned paths
+            ["/bin/bash", str(SCRIPT), str(self.source), str(self.output)],
+            env=self.env,
+            capture_output=True,
+            text=True,
         )
         self.assertEqual(list((self.root / "private").iterdir()), [])
         self.assertNotIn("test-store-password", result.stdout + result.stderr)
