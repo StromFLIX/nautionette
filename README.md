@@ -139,6 +139,62 @@ configuration; profiles do not automatically change deployed workflows.
 See [Agent configuration](docs/agent-configuration.md) for API semantics, migration
 and deployment requirements.
 
+## Signed Android releases
+
+The **Android** workflow (`.github/workflows/android.yml`) builds debug APKs for
+pushes to `main`, pull requests and manual branch runs. Pushing a `v*` tag builds
+a release APK, aligns it, signs it, verifies the signature and attaches
+`nautionette-<tag>-release.apk` to the GitHub Release. Both paths also upload the
+`nautionette-apk` Actions artifact. Tag builds fail if signing secrets are missing;
+they never fall back to a debug or unsigned APK.
+
+### One-time signing setup
+
+Generate a private signing key **on your own computer**, with a JDK installed:
+
+```bash
+keytool -genkeypair -v -keystore nautionette-release.jks \
+  -alias nautionette -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Back up the keystore and passwords securely. Never commit them, upload them as
+release assets, or paste them in a chat. Future updates must use the same key.
+In **GitHub repository → Settings → Secrets and variables → Actions**, add:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Base64-encoded keystore, as a single line |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | `nautionette` (or the alias you chose) |
+| `ANDROID_KEY_PASSWORD` | Key password (often the same as the keystore password) |
+
+To encode the keystore on Linux or macOS (treat the output as a secret):
+
+```bash
+base64 < nautionette-release.jks | tr -d '\\n'
+```
+
+### Publish a release
+
+After the workflow changes are on `main`, tag the commit you want to release
+(use a new, unused version each time):
+
+```bash
+git switch main
+git pull --ff-only
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Wait for the **Android** workflow to succeed, then download the APK from
+**Releases → Assets**. Workflow logs print the public signing-certificate
+fingerprint for verification, never the private key or passwords.
+
+A release-signed APK cannot update an installed debug-signed APK with the same
+application ID. Uninstall the debug app first (this clears its local app data),
+then install the release APK. Subsequent release APKs must retain the signing key.
+This is APK signing for sideloading, not a Google Play upload or Play App Signing setup.
+
 ## Saving chat files on Android
 
 **Download** in Outputs (and file attachments) opens Android's **Save to** picker.

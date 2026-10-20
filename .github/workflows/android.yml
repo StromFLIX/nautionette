@@ -1,7 +1,7 @@
 name: Android
 
 # The app is the same dist/ the web serves, wrapped by Capacitor. Every push to
-# main leaves a debug APK attached to the run; a tag also gets a GitHub release.
+# main leaves a debug APK attached to the run; v* tags publish signed release APKs.
 on:
   push:
     branches: [main]
@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   apk:
-    name: Debug APK
+    name: Android APK
     runs-on: ubuntu-latest
     # Only the tag path writes anything, and only to a release.
     permissions:
@@ -42,6 +42,21 @@ jobs:
 
       - uses: android-actions/setup-android@v4
 
+      - name: Require release signing secrets
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for key in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Missing GitHub Actions secret: $key"
+              exit 1
+            fi
+          done
+
       - name: Install
         run: npm ci
 
@@ -52,15 +67,34 @@ jobs:
       - name: Generate the Android project
         run: npm run android:add
 
-      - name: Assemble
+      - name: Assemble debug APK
+        if: "!startsWith(github.ref, 'refs/tags/v')"
         working-directory: services/frontend/android
         run: ./gradlew --no-daemon assembleDebug
 
-      - name: Name it after the commit
+      - name: Assemble unsigned release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: services/frontend/android
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Sign and verify release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          bash scripts/sign-android-release.sh \
+            android/app/build/outputs/apk/release/app-release-unsigned.apk \
+            "out/nautionette-${GITHUB_REF_NAME}-release.apk"
+
+      - name: Name debug APK after the commit
+        if: "!startsWith(github.ref, 'refs/tags/v')"
         run: |
           mkdir -p out
           cp android/app/build/outputs/apk/debug/app-debug.apk \
-             "out/nautionette-${GITHUB_SHA::7}.apk"
+             "out/nautionette-${GITHUB_SHA::7}-debug.apk"
 
       - uses: actions/upload-artifact@v7
         with:
