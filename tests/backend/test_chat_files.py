@@ -113,19 +113,31 @@ async def test_mixed_attachments_switch_models_without_losing_files(backend):
     async with chat_client() as client:
         chat_id = (await client.post("/api/chats", json={"title": "Mixed"})).json()["id"]
         path = f"/api/chats/{chat_id}"
-        image = chat_attachments.store_attachment(chat_id, picture(), "image/png", "image.png")
+        image_bytes = picture()
+        image = chat_attachments.store_attachment(chat_id, image_bytes, "image/png", "image.png")
         pdf = chat_attachments.store_attachment(chat_id, b"original PDF", "application/pdf", "file.pdf")
         response = await client.post(path + "/messages", json={"attachment_ids": [image["id"], pdf["id"]]})
         assert response.status_code == 202
         await finish_background()
-        assert backend.broker.jobs[-1]["images"] and backend.broker.jobs[-1]["files"]
+        job = backend.broker.jobs[-1]
+        assert job["images"] == [
+            {"type": "image", "mimeType": "image/png", "data": base64.b64encode(image_bytes).decode("ascii")}
+        ]
+        assert [file["id"] for file in job["files"]] == [image["id"], pdf["id"]]
+        assert base64.b64decode(job["files"][0]["data"]) == image_bytes
+        assert job["files"][0]["name"] == "image.png"
+        await client.post(path + "/messages", json={"text": "Edit the image again"})
+        await finish_background()
+        previous = backend.broker.jobs[-1]["history"][0]
+        assert previous["files"] == job["files"]
+        assert previous["images"] == job["images"]
         runtime.cache_catalog({"models": [{"id": "text-only", "supports_images": False}]})
         await client.patch(path, json={"model": "text-only"})
         await client.post(path + "/messages", json={"text": "Revisit the PDF"})
         await finish_background()
         history = backend.broker.jobs[-1]["history"][0]
-        assert not history["images"] and len(history["files"]) == 1
-        assert history["files"][0]["id"] == pdf["id"]
+        assert not history["images"]
+        assert history["files"] == job["files"]
         assert "image input unavailable" in history["content"]
 
 

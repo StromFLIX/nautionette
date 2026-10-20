@@ -186,11 +186,13 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 if images:
                     message["content"] += (
                         f"\n[{len(images)} image(s) omitted: "
-                        "image input unavailable for this model/API route]"
+                        "image input unavailable for this model/API route; "
+                        "originals available as workspace files]"
                     )
-                attachments = [item for item in attachments if not chat_attachments.is_image(item)]
             if attachments:
                 message.update(chat_attachments.load_attachments(chat_id, attachments))
+                if job.get("supports_images") is False:
+                    message["images"] = []
         controller = spawn(control_turn(turn_id, chat_id, job, finished), name=f"chat-control-{turn_id}")
         if job.get("project_ids"):
             # Resolve on execution, not enqueue: queued/new turns see the latest settings.

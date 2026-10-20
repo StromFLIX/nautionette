@@ -1,7 +1,8 @@
 """Bounded chat attachments. Bytes never enter transcript snapshots or events.
 
 The legacy chat_images table also stores files, without parsing or converting them.
-Only supported raster images are decoded and passed to the model as vision input.
+All attachments are materialized unchanged in the agent workspace. Supported
+raster images are additionally passed to the model as vision input.
 """
 
 from __future__ import annotations
@@ -109,6 +110,7 @@ def load_attachments(chat_id: str, attachments: list[dict[str, Any]]) -> dict[st
         data = base64.b64encode(stored["data"]).decode("ascii")
         if is_image(stored):
             out["images"].append({"type": "image", "mimeType": stored["mime_type"], "data": data})
-        else:
-            out["files"].append({**stored, "data": data})
+        # Vision input alone is not a file tools can open. Keep every original
+        # available through the same bounded workspace-materialization path.
+        out["files"].append({**stored, "data": data})
     return out

@@ -83,6 +83,29 @@ test('raw current and historical files reach the workspace, never model bytes or
 })
 
 const image = (data) => ({ type: 'image', mimeType: 'image/png', data })
+test('image attachments are editable workspace files as well as native vision inputs', async () => {
+  const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=', 'base64')
+  const data = bytes.toString('base64')
+  const file = (id) => ({ id: id.repeat(32), name: 'photo.png', mime_type: 'image/png', data })
+  const result = await run({ chat_id: 'chat', prompt: 'Edit this image',
+    images: [image(data)], files: [file('a')],
+    history: [{ role: 'user', content: 'Original image', images: [image(data)], files: [file('b')] }] })
+  const command = result.commands.find(c => c.type === 'prompt')
+  assert.deepEqual(command.images, [image(data)])
+  const history = result.writes.find(([path]) => path.endsWith('history.jsonl'))[1].trim().split('\n').map(JSON.parse)
+  assert.deepEqual(history[1].message.content[1], image(data))
+  for (const [id, text] of [['a', command.message], ['b', history[1].message.content[0].text]]) {
+    const path = `/workspace/attachments/${id.repeat(32)}.png`
+    assert.ok(result.writes.find(([name]) => name === path)[1].equals(bytes))
+    assert.ok(text.includes(path))
+    assert.equal(text.includes(data), false)
+  }
+  const stored = JSON.parse(result.writes.find(([path]) => path.endsWith('JOB.json'))[1])
+  assert.equal(stored.files[0].data, undefined)
+  assert.equal(stored.images, undefined)
+  assert.equal(stored.history, undefined)
+  assert.equal(result.output.at(-1).ok, true)
+})
 test('history has native roles/images and current images reach RPC, never argv or JOB.json', async () => {
   const result = await run({ chat_id: 'chat', prompt: 'Compare these', model: 'vision',
     history: [{ role: 'user', content: 'Before', images: [image('older')] }, { role: 'assistant', content: 'Reply' }],
