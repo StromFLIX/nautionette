@@ -41,6 +41,19 @@ test('a capability is read privately, unlinked, and never exposed in tool schema
   assert.ok(!isOutputTransportTool('backend_system_status'))
 }))
 
+test('publication instructions distinguish server-assigned creates from existing-output updates', () => {
+  const registered = tools(() => {})
+  const publisher = registered.get('publish_output')
+  assert.deepEqual(publisher.parameters.required, ['title', 'files'])
+  assert.match(publisher.description, /omit both output_id and expected_revision/)
+  assert.match(publisher.description, /Never invent an output ID/)
+  for (const name of ['output_id', 'expected_revision']) {
+    assert.match(publisher.parameters.properties[name].description, /UPDATE ONLY/)
+    assert.match(publisher.parameters.properties[name].description, /For CREATE, omit/)
+  }
+  assert.match(registered.get('read_output').description, /discover existing output IDs and current revisions/)
+})
+
 test('an undeletable capability file fails closed before tools can be registered', { skip: process.getuid?.() === 0 }, () => workspace(async cwd => {
   const path = join(cwd, 'capability.json')
   await writeFile(path, JSON.stringify(grant), { mode: 0o600 })
@@ -56,6 +69,8 @@ test('publish streams binary bytes separately and returns only committed metadat
   assert.deepEqual(transport.calls[0].arguments.body.files, [{ name: 'bracket.dxf', mime_type: 'image/vnd.dxf', role: 'source', size: bytes.length, sha256: digest(bytes) }])
   assert.equal(transport.calls[0].arguments.body.grant, grant.grant)
   assert.equal(transport.calls[0].arguments.body.request_id, 'tool-call-1')
+  assert.ok(!Object.hasOwn(transport.calls[0].arguments.body, 'output_id'))
+  assert.ok(!Object.hasOwn(transport.calls[0].arguments.body, 'expected_revision'))
   assert.equal(transport.records[0].files[0].data, bytes.toString('base64'))
   assert.deepEqual(result.details.output, transport.records[0].output)
   for (const secret of [grant.grant, bytes.toString('base64'), cwd, 'private-upload-capability']) assert.ok(!JSON.stringify(result).includes(secret))

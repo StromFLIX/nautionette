@@ -102,14 +102,15 @@ export function registerOutputTools(pi: ExtensionAPI, rpc: Rpc, grant: Grant | n
   if (!grant) return;
   pi.registerTool({
     name: "publish_output", label: "Publish output",
-    description: "Publish generated files durably to this chat's Outputs tab. Supply local file paths, not bytes or URLs. Include a PNG/JPEG/WebP preview for PDFs/CAD files, and role=source for editable documents. Publish completed snapshots only. To revise, first read_output and supply output_id plus expected_revision; old revisions stay available. Up to 8 files; configurable file, publication, chat and instance quotas are enforced. Quota errors include usage, limits and a settings_url: give the user that link instead of repeatedly retrying. Success means all files are committed. If interrupted, read_output before retrying.",
+    description: "Publish generated files durably to this chat's Outputs tab. Supply local file paths, not bytes or URLs. Include a PNG/JPEG/WebP preview for PDFs/CAD files, and role=source for editable documents. Publish completed snapshots only. CREATE a new output: omit both output_id and expected_revision; the server generates the ID. Never invent an output ID or use a placeholder. UPDATE an existing output: first call read_output to obtain its ID and current revision in this chat, then supply both output_id and expected_revision. Old revisions stay available. If an output is not found, list read_output to find the correct ID; for a new output, omit both revision fields instead of retrying the missing ID. Up to 8 files; configurable file, publication, chat and instance quotas are enforced. Quota errors include usage, limits and a settings_url: give the user that link instead of repeatedly retrying. Success means all files are committed. If interrupted, read_output before retrying.",
     promptSnippet: "Use publish_output for requested deliverables (images, PDFs, exports), including previews/source when useful. Ordinary repository edits do not need publication.",
     parameters: {
       type: "object", additionalProperties: false, required: ["title", "files"],
       properties: {
         title: { type: "string", minLength: 1, maxLength: 120 }, summary: { type: "string", maxLength: 2000 },
-        source_app: { type: "string", maxLength: 64 }, output_id: id,
-        expected_revision: { type: "integer", minimum: 1, maximum: 64 },
+        source_app: { type: "string", maxLength: 64 },
+        output_id: { ...id, description: "UPDATE ONLY: existing ID returned by read_output in this chat. For CREATE, omit this property entirely; never invent an ID." },
+        expected_revision: { type: "integer", minimum: 1, maximum: 64, description: "UPDATE ONLY: current revision returned by read_output, together with output_id. For CREATE, omit this property entirely." },
         files: { type: "array", minItems: 1, maxItems: 8, items: {
           type: "object", additionalProperties: false, required: ["path"], properties: {
             path: { type: "string", minLength: 1, maxLength: 4096 }, name: { type: "string", minLength: 1, maxLength: 200 },
@@ -160,7 +161,7 @@ export function registerOutputTools(pi: ExtensionAPI, rpc: Rpc, grant: Grant | n
   });
   pi.registerTool({
     name: "read_output", label: "Read output",
-    description: "List this chat's published outputs (no arguments), inspect an output/revision (output_id, optional revision), or restore one file to this sandbox (also file_id). Use this on a later turn to continue working from saved source, or after an uncertain publication. Restored files return a local path, not bytes or private URLs. Use read on a restored image for visual inspection. Access is limited to this chat.",
+    description: "List this chat's published outputs (no arguments) to discover existing output IDs and current revisions before updating; never invent IDs. Inspect an output/revision (output_id, optional revision), or restore one file to this sandbox (also file_id). Use this on a later turn to continue working from saved source, or after an uncertain publication. Restored files return a local path, not bytes or private URLs. Use read on a restored image for visual inspection. Access is limited to this chat.",
     parameters: { type: "object", additionalProperties: false, properties: {
       output_id: id, revision: { type: "integer", minimum: 1, maximum: 64 }, file_id: id,
     } } as any,

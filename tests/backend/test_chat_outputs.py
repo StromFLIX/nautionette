@@ -224,10 +224,31 @@ def test_authentication_and_chat_revision_scope_cannot_be_bypassed(client, anony
             == 404
         )
         update = payload(other_grant, output_id=output["id"], expected_revision=1)
-        assert client.post("/api/chat-outputs/publish", json=update).status_code == 404
+        response = client.post("/api/chat-outputs/publish", json=update)
+        assert response.status_code == 404
+        assert "omit both output_id and expected_revision" in response.json()["detail"]
+        assert "call read_output with no arguments" in response.json()["detail"]
     assert client.post("/api/chat-outputs/publish", json=payload({"grant": "expired"})).status_code == 401
     # Chat IDs are not accepted as authority, even with a valid grant.
     assert client.post("/api/chat-outputs/publish", json=payload(grant, chat_id=other)).status_code == 422
+
+
+@pytest.mark.parametrize("output_id", ["0" * 32, "c6100a755a2d4dfbac7d81d50e95fa64"])
+def test_unknown_update_id_explains_create_and_update_recovery(client, output_scope, output_id):
+    _, grant = output_scope
+    response = client.post(
+        "/api/chat-outputs/publish", json=payload(grant, output_id=output_id, expected_revision=1)
+    )
+    assert response.status_code == 404
+    detail = response.json()["detail"]
+    assert "omit both output_id and expected_revision" in detail
+    assert "server generates the ID" in detail
+    assert "call read_output with no arguments" in detail
+    assert "Never invent an ID" in detail
+    # The failed update must not create an output or prevent a correct new publication.
+    created = chat_outputs.publish(payload(grant, request_id="corrected-create"))
+    assert created["revision"] == 1
+    assert created["id"] != output_id
 
 
 @pytest.mark.parametrize("state", ["stop", "complete", "revoke", "delete", "queued"])

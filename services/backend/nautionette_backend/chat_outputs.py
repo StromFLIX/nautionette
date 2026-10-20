@@ -296,7 +296,13 @@ def _revision(conn: Any, chat_id: str, payload: dict[str, Any]) -> tuple[str, in
             (payload["output_id"], chat_id),
         ).fetchone()
         if not current:
-            raise HTTPException(404, "Output not found in this chat")
+            raise HTTPException(
+                404,
+                "Output not found in this chat. To create a new output, omit both output_id and "
+                "expected_revision; the server generates the ID. To update an existing output, "
+                "call read_output with no arguments to find its ID and current revision in this chat. "
+                "Never invent an ID or retry a missing ID.",
+            )
         if current["current_revision"] != payload["expected_revision"]:
             raise HTTPException(409, "Output has a newer revision; read it before publishing again")
         if current["next_revision"] > MAX_REVISIONS:
@@ -336,7 +342,11 @@ def prepare(payload: dict[str, Any]) -> dict[str, Any]:
     """Reserve quota and issue size/checksum-bound URLs; no binary MCP payload."""
     scope = grant_scope(payload["grant"])
     if ("output_id" in payload) != ("expected_revision" in payload):
-        raise HTTPException(422, "Updating an output requires output_id and expected_revision together")
+        raise HTTPException(
+            422,
+            "Updating an output requires output_id and expected_revision together. "
+            "To create a new output, omit both fields; the server generates the ID.",
+        )
     files = [_file_metadata(item) for item in payload["files"]]
     metadata = {key: _text(payload.get(key, "")) for key in ("title", "summary", "source_app")}
     if not metadata["title"]:

@@ -42,7 +42,15 @@ never chat IDs, credentials, transfer URLs or file bytes:
 }
 ```
 
-Pass this to `publish_output` after generating completed files. Optional file
+Pass this to `publish_output` after generating completed files. **For a new
+output, omit both `output_id` and `expected_revision` entirely.** The server
+generates the ID; never invent one, copy one from another chat, or use an all-zero
+placeholder. These two fields are only for updating an existing output discovered
+with `read_output` in this chat. If publication reports "Output not found in this
+chat", list `read_output {}` to find the correct ID for an update, or omit both
+fields to create a new output. Do not repeatedly retry the missing ID.
+
+Optional file
 `name` and `mime_type` override basename and extension-based detection. Originals
 are preserved exactly. Success returns committed output/file IDs, revision numbers
 and SHA-256 digests, not bytes or public links. The chat receives a compact result
