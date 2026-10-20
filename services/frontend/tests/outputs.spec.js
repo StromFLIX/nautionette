@@ -38,7 +38,8 @@ async function fixture (context, { empty = false, inline = false } = {}) {
       state.files.push({ path, preview, authorization: route.request().headers().authorization })
       if (preview ? state.failPreview : state.failDownload) return route.fulfill({ status: 503, json: { detail: 'File unavailable' } })
       if (state.waitFile) await state.waitFile
-      await route.fulfill({ contentType: preview ? 'image/png' : 'application/octet-stream', body: preview ? png : pdf })
+      const body = preview || path.includes('/files/preview-') ? png : (state.downloadBytes || pdf)
+      await route.fulfill({ contentType: preview ? 'image/png' : 'application/octet-stream', body })
       state.completedFiles++
       return
     }
@@ -58,25 +59,45 @@ async function fixture (context, { empty = false, inline = false } = {}) {
   return state
 }
 
-async function mockNativeDownloads (context, { available = true } = {}) {
-  await context.addInitScript(({ available }) => {
+async function mockNativeDownloads (context, { available = true, legacy = false } = {}) {
+  await context.addInitScript(({ available, legacy }) => {
     if (window !== window.top) return
     localStorage.setItem('nautionette.server', location.origin)
     window.androidBridge = {}
     window.nativeSaves = []
+    window.nativeChunks = []
+    window.nativeDiscards = []
+    window.stagedBytes = ''
     window.saveOutcome = 'pending'
     window.Capacitor = {
       isNativePlatform: () => true,
-      PluginHeaders: available ? [{ name: 'NautionetteDownloads', methods: [{ name: 'save', rtype: 'promise' }] }] : [],
+      PluginHeaders: available ? [{ name: 'NautionetteDownloads', methods: (legacy ? ['save'] : ['begin', 'append', 'save', 'discard']).map(name => ({ name, rtype: 'promise' })) }] : [],
       nativePromise: async (plugin, method, options) => {
-        if (plugin !== 'NautionetteDownloads' || method !== 'save') throw new Error('Unexpected native call')
+        if (plugin !== 'NautionetteDownloads') throw new Error('Unexpected native call')
+        if (method === 'begin') {
+          window.stagedBytes = ''
+          return { id: 'staged-download' }
+        }
+        if (method === 'append') {
+          window.nativeChunks.push(options)
+          if (window.failChunk) throw new Error('Temporary storage is full')
+          if (options.offset !== window.stagedBytes.length) throw new Error('Incorrect chunk offset')
+          window.stagedBytes += atob(options.base64)
+          if (window.pauseChunk) await new Promise(resolve => { window.finishChunk = resolve })
+          return {}
+        }
+        if (method === 'discard') {
+          window.nativeDiscards.push(options.id)
+          return {}
+        }
+        if (method !== 'save') throw new Error('Unexpected native call')
         window.nativeSaves.push(options)
         if (window.saveOutcome === 'pending') return new Promise((resolve, reject) => { window.finishSave = resolve; window.failSave = reject })
         if (window.saveOutcome === 'failed') throw new Error('Storage is full')
         return { cancelled: window.saveOutcome === 'cancelled' }
       }
     }
-  }, { available })
+  }, { available, legacy })
 }
 
 const outputsTab = page => page.getByRole('tab', { name: /Outputs/ })
@@ -130,8 +151,9 @@ test('Android saves authenticated output bytes with the native picker and waits 
   const download = panel.getByRole('button', { name: 'Download bracket.pdf', exact: true })
   await download.click()
   await expect.poll(() => page.evaluate(() => window.nativeSaves)).toEqual([
-    { name: 'bracket.pdf', mimeType: 'application/pdf', base64: pdf.toString('base64') }
+    { id: 'staged-download', name: 'bracket.pdf', mimeType: 'application/pdf' }
   ])
+  expect(await page.evaluate(() => btoa(window.stagedBytes))).toBe(pdf.toString('base64'))
   await expect(download).toBeDisabled()
   await expect(panel.getByRole('status')).toHaveCount(0)
   await page.evaluate(() => window.finishSave({ cancelled: false }))
@@ -144,8 +166,71 @@ test('Android saves authenticated output bytes with the native picker and waits 
   await expect(panel.getByRole('status')).toContainText('Saved bracket.dxf')
   await panel.getByRole('button', { name: 'Download preview.png', exact: true }).click()
   await expect(panel.getByRole('status')).toContainText('Saved preview.png')
+  expect(await page.evaluate(() => btoa(window.stagedBytes))).toBe(png.toString('base64'))
   expect((await page.evaluate(() => window.nativeSaves)).map(file => file.mimeType)).toEqual(['application/pdf', 'image/vnd.dxf', 'image/png'])
   expect(browserDownloads).toBe(0)
+})
+
+test('Android stages large binary downloads in bounded ordered chunks, keeping bytes out of picker state', async ({ page, context }) => {
+  const state = await fixture(context)
+  // Includes every byte value, multiple full chunks, and a non-aligned tail.
+  state.downloadBytes = Buffer.alloc(2 * 1024 * 1024 + 17)
+  for (let i = 0; i < state.downloadBytes.length; i++) state.downloadBytes[i] = i % 256
+  await mockNativeDownloads(context)
+  await page.goto('/chats/alpha')
+  await outputsTab(page).click()
+  await page.getByRole('button', { name: 'Download bracket.pdf', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.nativeSaves.length)).toBe(1)
+  const chunks = await page.evaluate(() => window.nativeChunks)
+  expect(chunks.length).toBeGreaterThan(10)
+  expect(chunks.every(chunk => chunk.base64.length <= 256 * 1024)).toBe(true)
+  expect(Buffer.concat(chunks.map(chunk => Buffer.from(chunk.base64, 'base64')))).toEqual(state.downloadBytes)
+  const saves = await page.evaluate(() => window.nativeSaves)
+  expect(JSON.stringify(saves).length).toBeLessThan(200)
+  expect(saves[0]).not.toHaveProperty('base64')
+  await page.evaluate(() => window.finishSave({ cancelled: false }))
+  await expect.poll(() => page.evaluate(() => window.nativeDiscards)).toEqual(['staged-download'])
+})
+
+test('Android staging failures clean up without opening the picker and allow retry', async ({ page, context }) => {
+  await fixture(context)
+  await mockNativeDownloads(context)
+  await page.goto('/chats/alpha')
+  await outputsTab(page).click()
+  await page.evaluate(() => { window.failChunk = true })
+  const panel = outputPanel(page).locator('.output-card')
+  const download = panel.getByRole('button', { name: 'Download bracket.pdf', exact: true })
+  await download.click()
+  await expect(panel.getByRole('alert')).toContainText('Temporary storage is full')
+  expect(await page.evaluate(() => window.nativeSaves)).toEqual([])
+  expect(await page.evaluate(() => window.nativeDiscards)).toEqual(['staged-download'])
+  await page.evaluate(() => { window.failChunk = false; window.saveOutcome = 'saved' })
+  await download.click()
+  await expect(panel.getByRole('status')).toContainText('Saved bracket.pdf')
+})
+
+test('Android navigation during staging discards bytes without launching a late picker', async ({ page, context }) => {
+  await fixture(context)
+  await mockNativeDownloads(context)
+  await page.goto('/chats/alpha')
+  await outputsTab(page).click()
+  await page.evaluate(() => { window.pauseChunk = true })
+  await page.getByRole('button', { name: 'Download bracket.pdf', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.nativeChunks.length)).toBe(1)
+  await page.locator('#shell-sidebar a[href="/chats/beta"]').click()
+  await page.evaluate(() => window.finishChunk())
+  await expect.poll(() => page.evaluate(() => window.nativeDiscards)).toEqual(['staged-download'])
+  expect(await page.evaluate(() => window.nativeSaves)).toEqual([])
+})
+
+test('older Android save plugins request an app update instead of using the unsafe transport', async ({ page, context }) => {
+  await fixture(context)
+  await mockNativeDownloads(context, { legacy: true })
+  await page.goto('/chats/alpha')
+  await outputsTab(page).click()
+  await page.getByRole('button', { name: 'Download bracket.pdf', exact: true }).click()
+  await expect(outputPanel(page).getByRole('alert')).toContainText('Update the Android app')
+  expect(await page.evaluate(() => window.nativeSaves)).toEqual([])
 })
 
 test('Android cancellation and write errors are visible and allow retry', async ({ page, context }) => {

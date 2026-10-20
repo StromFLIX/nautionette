@@ -230,6 +230,18 @@ They stream through the backend, **not a public S3 redirect**. Originals use
 private/no-store caching. Only sanitized raster previews (`?preview=true`) are
 inline. Browser/offline caches retain manifests, not bytes or capabilities.
 
+Android saves use the same authenticated original bytes, staged into a private
+cache file through ordered 192 KiB binary chunks (at most 256 KiB base64 per bridge
+call). The native plugin checks offsets and total length before opening Android's
+save-file picker, then streams the staged file to the selected document provider.
+Only a staging ID/name/MIME type enter the picker call: whole-file base64 must not
+be retained in Capacitor's Android activity state, which has a small Binder limit.
+Staging is discarded on completion, cancellation, errors and navigation before the
+picker opens; abandoned files from a killed process are removed on the next plugin
+load. Failed provider writes attempt to delete the incomplete destination rather
+than report success with a truncated file. This protocol requires rebuilding and
+installing the Android APK; updating only the hosted frontend is not sufficient.
+
 The backend creates capabilities only around active broker calls. They do not
 enter persisted jobs; the broker supplies a mode-0600 private file which the Pi
 extension consumes and unlinks. Private prepare/publish/read transports are hidden
