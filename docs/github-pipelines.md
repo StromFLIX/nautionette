@@ -167,6 +167,10 @@ After the offline image tests pass, **main push/manual CI only** publishes:
 
 The publish step uses the job's scoped `GITHUB_TOKEN` (`packages: write`); PRs do
 not log in or publish. Publication must succeed before CI can trigger Deploy.
+`scripts/publish_agent_images.py` retries transient registry failures (including
+GHCR `unknown blob`) at most twice, after 10 and 30 seconds, using the same locally
+tested image and source tag. Permission/authentication errors fail immediately;
+exhausted retries still fail CI and block deployment. No deployment gate is bypassed.
 Fingerprints use the same stdlib module as the broker, not the commit SHA or
 `latest`: backend/frontend-only changes reuse the same agent images. These are
 source-context tags, not OCI digest pins; protect package write access. Only the

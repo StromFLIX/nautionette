@@ -48,7 +48,7 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Deployment, snapshot, gateway buffers and agent image safety tests
-        run: uv run pytest tests/test_coolify_release.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py tests/broker/test_chat_sessions.py tests/broker/test_chat_recovery.py tests/broker/test_sandbox_network.py
+        run: uv run pytest tests/test_coolify_release.py tests/test_publish_agent_images.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py tests/broker/test_chat_sessions.py tests/broker/test_chat_recovery.py tests/broker/test_sandbox_network.py
 
       - name: Native creative app release contracts, installer isolation and Settings
         run: uv run pytest tests/lib/test_artcraft.py tests/broker/test_artcraft.py tests/backend/test_artcraft.py
@@ -216,12 +216,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           BASE_HASH: ${{ steps.images.outputs.base }}
           DEFAULT_HASH: ${{ steps.images.outputs.default }}
-        run: |
-          prefix="ghcr.io/${REPOSITORY,,}/pi-"
-          docker tag nautionette/pi-base:dev "${prefix}base:${BASE_HASH}"
-          docker tag nautionette/pi-agent-default:dev "${prefix}agent-default:${DEFAULT_HASH}"
-          docker push "${prefix}base:${BASE_HASH}"
-          docker push "${prefix}agent-default:${DEFAULT_HASH}"
+        run: python3 scripts/publish_agent_images.py
 
   compose:
     name: Compose file
