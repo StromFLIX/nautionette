@@ -64,7 +64,7 @@ for (const width of [1440, 390, 320]) {
     await expect(rows(page)).toHaveCount(3)
     await expect(rows(page).filter({ hasText: 'Switched from Ada to Grace' })).toHaveCount(1)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-    await page.screenshot({ path: `/workspace/agent-sidebar-${width}.png`, fullPage: true })
+    await page.screenshot({ path: test.info().outputPath(`agent-sidebar-${width}.png`), fullPage: true })
   })
 
   test(`compact octagonal rail and direct agent image selection work at ${width}px`, async ({ page, context }) => {
@@ -99,7 +99,7 @@ for (const width of [1440, 390, 320]) {
     await expect(page.getByRole('button', { name: 'Chats with Grace', exact: true }).locator('img')).toBeVisible()
     await page.reload()
     await expect(page.getByRole('button', { name: 'Chats with Grace', exact: true }).locator('img')).toBeVisible()
-    await page.screenshot({ path: `/workspace/compact-agents-${width}.png`, fullPage: true })
+    await page.screenshot({ path: test.info().outputPath(`compact-agents-${width}.png`), fullPage: true })
   })
 
   test(`customizing leaves the agent view, stays All-only after undo, and reselecting moves it at ${width}px`, async ({ page, context }) => {
@@ -192,7 +192,7 @@ test('press and hold opens image management on a phone without changing the agen
     await page.getByRole('link', { name: 'Change image', exact: true }).tap()
     await expect(page.getByLabel('Agent name', { exact: true })).toHaveValue('Grace')
     await expect(page.getByRole('button', { name: 'Choose agent image', exact: true })).toBeInViewport()
-    await page.screenshot({ path: '/workspace/agent-image-picker-mobile.png', fullPage: true })
+    await page.screenshot({ path: test.info().outputPath('agent-image-picker-mobile.png'), fullPage: true })
   } finally { await context.close() }
 })
 
