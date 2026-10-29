@@ -28,6 +28,10 @@ def session_lock(chat_id: str):
     SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
     fd = os.open(SESSIONS_DIR / f".{chat_id}.lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
+        # The broker runs as root; the backend runs as 10001. Both must open the
+        # same lock inode to synchronize deletion with container startup.
+        if os.geteuid() == 0:
+            os.fchown(fd, 10001, 10001)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as exc:

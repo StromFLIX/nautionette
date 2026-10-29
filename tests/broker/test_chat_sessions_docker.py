@@ -3,6 +3,7 @@
 import json
 import os
 import uuid
+from pathlib import Path
 
 import docker
 import pytest
@@ -64,6 +65,28 @@ def test_native_session_survives_container_removal_without_exposing_other_chats(
             )
 
         first, second = run("first"), run("second")
+        # A privileged broker creates the lock, then the real backend UID must
+        # acquire that same inode for deletion. Never test only as root.
+        shared = Path(__file__).resolve().parents[2] / "libs/nautionette/src/nautionette/chat_sessions.py"
+        lock_script = (
+            "import importlib.util; "
+            "s=importlib.util.spec_from_file_location('sessions','/session-state.py'); "
+            "m=importlib.util.module_from_spec(s); s.loader.exec_module(m); "
+            "lock=m.session_lock('one'); lock.__enter__(); lock.__exit__(None,None,None)"
+        )
+        for uid in ("0:0", "10001:10001"):
+            client.containers.run(
+                IMAGE,
+                entrypoint="python3",
+                command=["-c", lock_script],
+                user=uid,
+                mounts=[
+                    Mount(target="/chat-sessions", source=volume.name, type="volume"),
+                    Mount(target="/session-state.py", source=str(shared), type="bind", read_only=True),
+                ],
+                network_mode="none",
+                remove=True,
+            )
         assert first["id"] == second["id"]
         assert first["sibling"] is second["sibling"] is False
         assert first["escape"] is second["escape"] is False

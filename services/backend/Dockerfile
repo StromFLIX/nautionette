@@ -27,8 +27,9 @@ COPY workflows/ /seed/
 # Backend, workflow-mcp and worker share one uid: the shared volume has to be
 # writable by all three, and a fresh named volume inherits these permissions.
 RUN useradd --create-home --uid 10001 app \
-    && mkdir -p /data /artifacts /workflows /projects \
-    && chown -R app:app /app /data /artifacts /workflows /projects
+    && mkdir -p /data /artifacts /workflows /projects /chat-sessions \
+    && chown -R app:app /app /data /artifacts /workflows /projects /chat-sessions \
+    && chmod 700 /chat-sessions
 USER app
 
 EXPOSE 8080

@@ -14,7 +14,11 @@ COPY services/workflow-mcp/pyproject.toml services/workflow-mcp/
 COPY services/worker/pyproject.toml services/worker/
 COPY services/docker-broker/ services/docker-broker/
 RUN uv sync --locked --no-dev --package nautionette-docker-broker
-RUN mkdir -p /projects && chown 10001:10001 /projects
+# Either service may be the first to populate the shared named volume. Keep its
+# root writable by the non-root backend, not just by this privileged broker.
+RUN mkdir -p /projects /chat-sessions \
+    && chown 10001:10001 /projects /chat-sessions \
+    && chmod 700 /chat-sessions
 
 # The broker carries the build contexts so pruned Pi images can be rebuilt.
 COPY images/ /agent-images/
