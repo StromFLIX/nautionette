@@ -44,6 +44,9 @@
       <div class="side__search">
         <span class="material-icons">search</span>
         <input v-model="query" class="side__search-input" :placeholder="`Search ${heading.toLowerCase()}`" :aria-label="`Search ${heading.toLowerCase()}`" />
+        <button v-if="section === 'chats'" type="button" class="side__search-expand" aria-label="Expand chat search" title="Search chats and settings (⌘K / Ctrl+K)" aria-keyshortcuts="Meta+K Control+K" @click="$emit('open-search', query)">
+          <kbd>{{ searchShortcut }}</kbd>
+        </button>
         <button v-if="query" class="btn btn--icon btn--sm" aria-label="Clear search" @click="query = ''">
           <span class="material-icons" style="font-size: 1rem">close</span>
         </button>
@@ -194,11 +197,13 @@ const props = defineProps({
   showCollapseButton: { type: Boolean, default: false },
   isChatActive: { type: Function, required: true }
 })
-defineEmits(['collapse-sidebar'])
+defineEmits(['collapse-sidebar', 'open-search'])
+defineExpose({ getChatQuery: () => section.value === 'chats' ? query.value : '' })
 
 const route = useRoute()
 const router = useRouter()
 const query = ref('')
+const searchShortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K'
 const readBusy = ref('')
 const readError = ref('')
 
@@ -357,6 +362,13 @@ function refresh () {
 
 .side__search-input::placeholder {
   color: var(--text-dim);
+}
+
+.side__search-expand { display: flex; flex: none; padding: 2px; border: 0; background: transparent; color: var(--text-dim); cursor: pointer; }
+.side__search-expand:hover { color: var(--accent); }
+.side__search-expand kbd { font-size: 0.6875rem; white-space: nowrap; }
+@media (max-width: 900px) {
+  .side__search-expand { display: none; }
 }
 
 .side__controls {
