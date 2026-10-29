@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { syncFile } from './chat-session.mjs';
+import { toolContextEdits } from './tool-context.mjs';
 
 export default function (pi) {
   pi.on('message_start', (event, ctx) => {
@@ -27,7 +28,12 @@ export default function (pi) {
   // A finalized user/assistant/result has reached SessionManager before these
   // boundaries. Flush before external tools, subsequent model calls and exit.
   pi.on('tool_call', (_event, ctx) => { checkpoint(ctx); });
-  pi.on('turn_end', (_event, ctx) => { checkpoint(ctx); });
+  pi.on('turn_end', (event, ctx) => {
+    checkpoint(ctx);
+    // Pi applies these append-only edits before its next threshold check. Keep
+    // raw results for chat_history, including errors and tool-call relationships.
+    return { entries: toolContextEdits(event.context.contextEntries) };
+  });
   pi.on('session_shutdown', (_event, ctx) => { checkpoint(ctx); });
   // A chat owns one exact session. Session-replacing package commands must not
   // silently move continuation into an ephemeral file.

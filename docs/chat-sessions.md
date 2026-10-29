@@ -33,9 +33,19 @@ bounded previews). `next` is a validated entry-boundary byte cursor. Normal chat
 snapshots still use SQL and are not inflated with full tool results or images.
 
 The native transcript retains the result Pi actually received, before the UI's
-4,000-character preview cap. It cannot recover data a tool already truncated;
-files in ephemeral `/tmp` mentioned by a tool will still disappear. Publish useful
-artifacts/exports to Outputs rather than assuming all tool-created files persist.
+4,000-character preview cap. Interactive chats apply append-only `context_edit`
+previews to tool text exceeding 32,000 characters or 1,000 lines, before Pi's
+next compaction threshold check. Previews retain the beginning and end, label
+omissions, and point to the exact original entry through `chat_history` with
+`entry_id`/`offset` pagination. Tool IDs, error status, images and raw evidence
+are unchanged. Existing oversized chats receive the same projection repair when
+reopened, before initial compaction. This matters because compaction must keep
+the newest assistant/tool batch intact; summarizing older history cannot shrink
+an oversized result in that batch. One-shot workflow calls are unchanged.
+
+History cannot recover data a tool already truncated; files in ephemeral `/tmp`
+mentioned by a tool will still disappear. Publish useful artifacts/exports to
+Outputs rather than assuming all tool-created files persist.
 
 ## Input safety and crash recovery
 

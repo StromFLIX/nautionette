@@ -2,6 +2,7 @@
 import { appendFileSync, closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { SessionManager, CURRENT_SESSION_VERSION } from '/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js';
 import { fileReferences } from './chat-files.mjs';
+import { toolContextEdits } from './tool-context.mjs';
 
 export function syncFile(path) {
   const fd = openSync(path, 'r');
@@ -66,6 +67,14 @@ export function prepareSession(job, workspace, directory = '/chat-session') {
     renameSync(temp, file);
     syncFile(directory);
   }
+  // Repair already-oversized chats before Pi's initial compaction check too.
+  // Public SDK context edits preserve the original bytes and active branch;
+  // repeated opens do not add edits when the projection is already bounded.
+  const manager = SessionManager.open(file);
+  const edits = toolContextEdits(manager.buildSessionProjection().entries);
+  for (const edit of edits) manager.appendContextEdit(edit.targetId, edit.replacement);
+  if (edits.length) syncFile(file);
+
   const journal = `${directory}/inputs.jsonl`;
   const states = new Map();
   if (existsSync(journal)) {
