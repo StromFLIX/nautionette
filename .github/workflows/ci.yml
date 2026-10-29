@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # setup-uv publishes no floating major tag, so this is pinned exactly.
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
@@ -186,7 +186,7 @@ jobs:
             --volume "$PWD/scripts/check-pi-dev-tools.sh:/check-pi-dev-tools.sh:ro" \
             --entrypoint bash nautionette/pi-agent-default:dev /check-pi-dev-tools.sh
 
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock

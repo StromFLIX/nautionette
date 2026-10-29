@@ -83,6 +83,8 @@ def test_logging_never_formats_untrusted_text():
 
 
 def test_disabled_configuration_does_not_install_exporters(monkeypatch):
+    # Exercise fresh startup even when earlier integration tests configured OTel.
+    monkeypatch.setattr("nautionette.telemetry._initialized", False)
     monkeypatch.setenv("OTEL_SDK_DISABLED", "true")
     monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://unused:4318")
     assert configure("test-disabled") is False

@@ -97,7 +97,8 @@ def test_extraction_keeps_cli_and_upstream_licenses_not_desktop_or_wasm(installe
     path = archive(
         tmp_path,
         [
-            ("release/cadcraft-cli", b"binary"),
+            ("release/share/bash-completion/completions/cadcraft-cli", b"completion script"),
+            ("release/bin/cadcraft-cli", b"binary"),
             ("release/README.md", b"readme"),
             ("release/doc/LICENSE.font", b"font attribution"),
             ("release/LICENSE", b"MIT"),
@@ -121,6 +122,8 @@ def test_extraction_keeps_cli_and_upstream_licenses_not_desktop_or_wasm(installe
         [("release\\cadcraft-cli", b"evil")],
         [("release/cadcraft-cli", "/etc/passwd")],
         [("one/cadcraft-cli", b"one"), ("two/cadcraft-cli", b"two")],
+        [("release/cadcraft-cli", b"one"), ("release/bin/cadcraft-cli", b"two")],
+        [("release/share/bash-completion/completions/cadcraft-cli", b"not a binary")],
         [("release/README.md", b"no CLI")],
     ],
 )

@@ -1,4 +1,4 @@
-ARG TEMPORAL_VERSION=1.29.0
+ARG TEMPORAL_VERSION=1.29.7
 FROM temporalio/auto-setup:${TEMPORAL_VERSION}
 
 # Same reason as the gateway: carry the config in the image, not on the host.

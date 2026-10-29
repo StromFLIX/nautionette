@@ -194,7 +194,7 @@ services:
     build:
       context: ./services/agentgateway
       args:
-        AGENTGATEWAY_VERSION: ${AGENTGATEWAY_VERSION:-v1.5.0}
+        AGENTGATEWAY_VERSION: ${AGENTGATEWAY_VERSION:-v1.7.0}
     image: ${STACK_NAMESPACE:-nautionette}/agentgateway:dev
     restart: unless-stopped
     command: ["-f", "/config/config.yaml"]
@@ -336,7 +336,7 @@ services:
     build:
       context: ./infra/temporal
       args:
-        TEMPORAL_VERSION: ${TEMPORAL_VERSION:-1.29.0}
+        TEMPORAL_VERSION: ${TEMPORAL_VERSION:-1.29.7}
     image: ${STACK_NAMESPACE:-nautionette}/temporal:dev
     restart: unless-stopped
     environment:
@@ -467,7 +467,7 @@ services:
   # docker compose --profile debug up -d
 
   temporal-ui:
-    image: temporalio/ui:${TEMPORAL_UI_VERSION:-2.34.0}
+    image: temporalio/ui:${TEMPORAL_UI_VERSION:-2.57.0}
     profiles: [debug]
     restart: unless-stopped
     environment:

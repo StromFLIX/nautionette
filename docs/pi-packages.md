@@ -105,12 +105,14 @@ selection/authorization. Native per-call session seeding preserves text/image
 history but does **not** persist extension session entries, auth sessions, caches,
 custom messages or extension state between turns.
 
-The Pi image pins **1.0.0** as a full npm installation. The image build verifies
+The Pi image pins **1.4.0** as a full npm installation. The image build verifies
 the exact version, public SDK exports, and host dependency imports. Do not graft
 older or duplicate Pi dependencies onto this SDK to satisfy an extension.
 
-**Upgrade compatibility:** Pi 1.0 removed `@earendil-works/pi-agent-core/node`.
-The async runners in `pi-subagents` **0.66.0 and 0.74.0** still require that export
+**Upgrade compatibility:** Pi 1.0 removed `@earendil-works/pi-agent-core/node`,
+and Pi 1.2 removed the host dependency on `@earendil-works/chord`. Pi 1.4 keeps
+both changes. Extensions must use supported public APIs and declare their own
+dependencies rather than relying on obsolete host packages. The async runners in `pi-subagents` **0.66.0 and 0.74.0** still require that export
 and fail before starting a child. Updating to 0.74.0 alone does not fix this.
 Deselect affected packages before deploying this image, or retain the previous
 Pi 0.85.1 image if async subagents are required until a compatible package release

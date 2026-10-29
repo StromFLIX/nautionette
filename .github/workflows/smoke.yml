@@ -79,7 +79,7 @@ jobs:
           exit 1
 
       # setup-uv publishes no floating major tag, so this is pinned exactly.
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock

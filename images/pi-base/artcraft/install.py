@@ -91,7 +91,11 @@ def extract(archive: Path, target: Path, app: str) -> None:
             path = PurePosixPath(member.name)
             if count > 20_000 or path.is_absolute() or ".." in path.parts or "\\" in member.name:
                 raise ValueError("Unsafe release archive path or member count")
-            binary = path.name == f"{app}-cli"
+            # Releases also ship share/bash-completion/completions/<app>-cli.
+            # Only the release root or its bin/ directory contains executables.
+            binary = path.name == f"{app}-cli" and (
+                len(path.parts) <= 2 or (len(path.parts) == 3 and path.parts[-2] == "bin")
+            )
             # All release docs (including font licenses/attributions) are kept.
             docs = (
                 "doc" in path.parts

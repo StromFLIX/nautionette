@@ -1,10 +1,10 @@
-ARG AGENTGATEWAY_VERSION=v1.5.0
+ARG AGENTGATEWAY_VERSION=v1.7.0
 FROM cr.agentgateway.dev/agentgateway:${AGENTGATEWAY_VERSION} AS gateway
 
 # The gateway starts stdio targets inside this container. Trixie matches the
 # upstream binary's glibc build baseline; Node and Python cover npx and uvx MCPs.
 FROM node:24-trixie-slim
-COPY --from=ghcr.io/astral-sh/uv:0.12.10 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /uvx /usr/local/bin/
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates python3 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 65532 gateway \

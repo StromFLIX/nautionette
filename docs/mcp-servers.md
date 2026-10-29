@@ -22,7 +22,7 @@ Rebuild/redeploy **agentgateway, backend and frontend-web** together:
 docker compose up -d --build agentgateway backend frontend-web
 ```
 
-In Coolify, redeploy the updated Compose stack. The gateway still uses v1.5.0 by
+In Coolify, redeploy the updated Compose stack. The gateway uses v1.7.0 by
 default, with the upstream binary copied into a Node 24 / Debian Trixie image.
 It includes Node, npm, npx, Python 3, uv and uvx. Commands requiring other binaries,
 browsers, native build tools, private package-registry configuration or system
