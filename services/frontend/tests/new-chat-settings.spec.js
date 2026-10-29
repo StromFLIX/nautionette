@@ -53,7 +53,7 @@ for (const entry of ['sidebar', 'welcome']) {
     page.on('pageerror', error => errors.push(error.message))
     const agent = state.addAgent('Writer')
     const settings = { agent_id: agent.id, model: 'test/model', agent_set: 'research', reasoning_effort: 'high',
-      tools: ['mail_search'], project_ids: [projectId], packages: ['extension-revision'] }
+      tools: ['mail_search'], project_ids: [projectId], packages: ['extension-revision'], system_prompt: '', agent_customized: false }
     Object.assign(state.data.chat, settings, { agent_name: agent.name })
     await page.goto('/chats/alpha')
     await send(page)

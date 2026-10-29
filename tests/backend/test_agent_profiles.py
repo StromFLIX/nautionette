@@ -62,6 +62,7 @@ def test_global_defaults_round_trip_as_native_types_and_reach_every_new_chat(cli
     expected = {
         **{key: values[setting] for key, setting in agent_profiles.SETTING_KEYS.items()},
         "packages": [],
+        "system_prompt": "",
     }
     available = client.get("/api/catalog").json()
     assert available["global_chat_defaults"] == expected
@@ -105,6 +106,7 @@ def test_agents_inherit_by_omission_and_explicit_choices_override_each_field(cli
         "project_ids": [],
         "reasoning_effort": None,
         "packages": [],
+        "system_prompt": "",
     }
     save_defaults(client, default_agent_id=agent["id"])
     first = new_chat(client)
@@ -125,7 +127,7 @@ def test_direct_api_chat_overrides_and_explicit_global_selection_beat_the_defaul
     agent = create(client, {"model": "test/other", "tools": [], "project_ids": [configured]})
     save_defaults(client, default_agent_id=agent["id"])
     chat = new_chat(client, tools=None, project_ids=[], reasoning_effort="low")
-    assert chat["agent_id"] == agent["id"] and chat["tools"] is None
+    assert chat["agent_id"] == agent["id"] and chat["tools"] is None and chat["agent_customized"]
     assert chat["project_ids"] == [] and chat["reasoning_effort"] == "low"
     baseline = new_chat(client, agent_id=None)
     assert baseline["agent_id"] is None and baseline["model"] == "test/reasoner"
@@ -170,6 +172,7 @@ def test_selecting_an_agent_replaces_the_configuration_atomically_and_can_be_rea
     assert selected["model"] == "test/reasoner" and selected["reasoning_effort"] == "high"
     customized = client.patch(url, json={"tools": None, "project_ids": []}).json()
     assert customized["tools"] is None and customized["agent_id"] == agent["id"]
+    assert customized["agent_customized"]
     assert client.patch(url, json={"agent_id": agent["id"]}).json()["tools"] == []
     explicit = client.patch(
         url, json={"agent_id": agent["id"], "model": "test/plain", "project_ids": []}
@@ -249,6 +252,9 @@ def test_stale_project_defaults_fail_closed_and_can_be_overridden_or_cleared(cli
         {"reasoning_effort": "invalid"},
         {"reasoning_effort": {}},
         {"unexpected": True},
+        {"system_prompt": None},
+        {"system_prompt": False},
+        {"system_prompt": "x" * 32001},
     ],
 )
 def test_invalid_profile_configs_are_rejected_before_writing_any_fields(client, invalid):
@@ -294,7 +300,7 @@ def test_duplicate_names_validation_and_authentication(client, anonymous):
     agent = create(client, name=" Research ")
     assert agent["name"] == "Research"
     assert client.post("/api/agents", json={"name": "research"}).status_code == 409
-    for name in [None, "", " ", "x" * 81, "Global defaults"]:
+    for name in [None, "", " ", "x" * 81, "Global defaults", "All", " all "]:
         assert client.post("/api/agents", json={"name": name}).status_code == 422
     for method, url, body in [
         ("get", "/api/agents", None),

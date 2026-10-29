@@ -1,4 +1,5 @@
 import { mockDesign } from './design-fixture.js'
+import { sameConfig } from '../src/agent-config.js'
 
 const fields = ['model', 'agent_set', 'reasoning_effort', 'tools', 'project_ids']
 export const projectId = 'a'.repeat(32)
@@ -14,7 +15,7 @@ export async function mockAgents (context) {
   state.chats = { alpha: state.data }
   state.pendingEvents = []
   state.catalog.models.push({ id: 'test/plain', name: 'Plain', provider: 'Test', gateway: 'gateway', reasoning_efforts: [] })
-  const globalDefaults = () => Object.fromEntries(fields.map(key => [key, state.settings[`default_${key}`]]))
+  const globalDefaults = () => ({ ...Object.fromEntries(fields.map(key => [key, state.settings[`default_${key}`]])), packages: [], system_prompt: '' })
   const resolved = (overrides, base = globalDefaults()) => {
     const result = structuredClone({ ...base, ...overrides })
     if (result.model !== base.model && !Object.hasOwn(overrides, 'reasoning_effort')) result.reasoning_effort = null
@@ -23,7 +24,7 @@ export async function mockAgents (context) {
   const selection = (id) => {
     const agent = state.agents.find(item => item.id === id)
     if (id && !agent) throw new Error('Agent not found')
-    return { agent_id: agent?.id ?? null, agent_name: agent?.name ?? null, ...resolved(agent?.config || {}) }
+    return { agent_id: agent?.id ?? null, agent_name: agent?.name ?? null, agent_customized: false, ...resolved(agent?.config || {}) }
   }
   const catalog = () => ({
     ...state.catalog, default_model: state.settings.default_model, default_agent_set: state.settings.default_agent_set,
@@ -32,7 +33,7 @@ export async function mockAgents (context) {
     chat_defaults: selection(state.settings.default_agent_id)
   })
   state.addAgent = (name, config = {}) => {
-    const agent = { id: `agent-${state.agents.length + 1}`, name, description: '', config: structuredClone(config) }
+    const agent = { id: `agent-${state.agents.length + 1}`, name, description: '', image: '', config: structuredClone(config) }
     state.agents.push(agent)
     return agent
   }
@@ -70,6 +71,7 @@ export async function mockAgents (context) {
         if (state.agents.some(agent => agent.name.toLowerCase() === body.name.toLowerCase())) return reply({ detail: 'An agent with that name already exists' }, 409)
         const agent = state.addAgent(body.name, body.config)
         agent.description = body.description
+        agent.image = body.image || ''
         return reply({ ...agent, resolved: resolved(agent.config) }, 201)
       }
       return reply(catalog())
@@ -94,6 +96,7 @@ export async function mockAgents (context) {
         const config = selection(Object.hasOwn(body, 'agent_id') ? body.agent_id : state.settings.default_agent_id)
         const id = `created-${state.created.length + 1}`
         const chat = { id, title: 'New chat', read_revision: 0, ...resolved(body, config), updated_at: Date.now() / 1000 }
+        chat.agent_customized = Boolean(body.agent_customized) || !sameConfig(chat, config)
         state.created.push(body)
         state.chats[id] = { chat, messages: [], active_turn: null }
         return reply(chat)
@@ -117,8 +120,15 @@ export async function mockAgents (context) {
         state.chatWrites.push(body)
         if (state.chatPatchGate) await state.chatPatchGate
         if (state.chatPatchFailure) return reply({ detail: 'Chat settings could not be saved' }, 422)
-        if (Object.hasOwn(body, 'agent_id')) Object.assign(data.chat, selection(body.agent_id))
-        Object.assign(data.chat, body)
+        const before = structuredClone(data.chat)
+        if (Object.hasOwn(body, 'agent_id')) {
+          const config = selection(body.agent_id)
+          Object.assign(data.chat, config, body)
+          data.chat.agent_customized = !sameConfig(data.chat, config)
+        } else {
+          Object.assign(data.chat, body)
+          if (!sameConfig(before, data.chat)) data.chat.agent_customized = true
+        }
         return reply(data.chat)
       }
       return reply(data)

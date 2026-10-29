@@ -1,8 +1,9 @@
 <template>
   <div class="app-frame">
     <EnvironmentBanner />
-  <div class="shell" data-skin-part="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed }">
+  <div class="shell" data-skin-part="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed, 'shell--agents': route.name === 'chats' }">
     <NavRail ref="navRail" class="shell__rail" :sidebar-collapsed="sideCollapsed" @open-sidebar="openSidebar" />
+    <AgentRail v-if="route.name === 'chats'" v-show="!sideCollapsed" class="shell__agents" />
     <template v-if="!fullPage">
       <aside v-show="!sideCollapsed" data-skin-part="sidebar" id="shell-sidebar" class="shell__side" :style="{ width: `${sideWidth}px` }">
         <SidePanel :show-collapse-button="!mobile" :is-chat-active="isChatActive" @collapse-sidebar="collapseSidebar" />
@@ -53,6 +54,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EnvironmentBanner from './components/EnvironmentBanner.vue'
 import NavRail from './components/NavRail.vue'
+import AgentRail from './components/AgentRail.vue'
 import SidePanel from './components/SidePanel.vue'
 import { actions, store } from './store'
 import { auth, isNative, server } from './api'
@@ -179,6 +181,8 @@ onUnmounted(() => {
   background: var(--surface-app);
 }
 
+.shell--agents { grid-template-columns: var(--rail-width) 92px auto minmax(0, 1fr); }
+
 .shell--full,
 .shell--collapsed {
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
@@ -250,6 +254,18 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 1fr) auto;
   }
+
+  .shell--agents {
+    --list-safe-top: 0px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .shell--agents .shell__agents { grid-row: 1; }
+  .shell--agents:not(.shell--detail) .shell__side { grid-row: 2; }
+  .shell--agents .shell__rail { grid-row: 3; }
+  .shell--agents.shell--detail { grid-template-rows: minmax(0, 1fr); }
+  .shell--detail .shell__agents { display: none; }
 
   .shell--full {
     grid-template-columns: minmax(0, 1fr);

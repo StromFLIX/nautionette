@@ -58,7 +58,7 @@
     <div v-show="configurationOpen" :id="configurationId" class="composer__configuration scroll-y" aria-label="Chat configuration controls">
       <div class="composer__profile">
         <button class="pick composer__profile-picker" type="button" aria-label="Select agent" :disabled="configurationBusy">
-          <span class="material-icons pick__icon" aria-hidden="true">smart_toy</span><span class="truncate">{{ profileLabel }}</span>
+          <AgentAvatar :agent="selectedAgent" class="composer__agent-avatar" /><span class="truncate">{{ profileLabel }}</span>
           <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
           <AgentPicker :model-value="agentId" @update:model-value="$emit('update:agentId', $event)" />
         </button>
@@ -127,6 +127,7 @@
 import { computed, ref, useId } from 'vue'
 import ModelPicker from './ModelPicker.vue'
 import AgentPicker from './AgentPicker.vue'
+import AgentAvatar from './AgentAvatar.vue'
 import { agentConfig, sameConfig } from '../agent-config'
 import ReasoningPicker from './ReasoningPicker.vue'
 import ChatAttachment from './ChatAttachment.vue'
@@ -142,6 +143,7 @@ import { contextMeter, modelContextWindow } from '../context'
 const props = defineProps({
   modelValue: { type: String, default: '' }, attachments: { type: Array, default: () => [] },
   agentId: { type: String, default: null }, agentName: { type: String, default: '' },
+  agentCustomized: Boolean, systemPrompt: { type: String, default: '' },
   agentSet: { type: String, default: '' }, model: { type: String, default: '' },
   reasoningEffort: { type: String, default: null }, tools: { type: Array, default: null },
   packages: { type: Array, default: () => [] }, commands: { type: Array, default: () => [] },
@@ -158,11 +160,12 @@ const imageError = ref('')
 const configurationId = useId()
 // Disclosure is local to this composer, not a preference carried into other chats.
 const configurationOpen = ref(false)
+const selectedAgent = computed(() => store.catalog.agents?.find(agent => agent.id === props.agentId) || null)
 const profileDefaults = computed(() => agentConfig(store.catalog, props.agentId))
 const profileLabel = computed(() => props.agentId ? (profileDefaults.value?.agent_name || props.agentName || 'Removed agent') : 'Global defaults')
-const customConfiguration = computed(() => !sameConfig(profileDefaults.value, {
+const customConfiguration = computed(() => props.agentCustomized || !sameConfig(profileDefaults.value, {
   agent_set: props.agentSet || 'default', model: props.model || store.catalog.default_model,
-  reasoning_effort: props.reasoningEffort, tools: props.tools, project_ids: props.projectIds, packages: props.packages
+  reasoning_effort: props.reasoningEffort, tools: props.tools, project_ids: props.projectIds, packages: props.packages, system_prompt: props.systemPrompt
 }))
 const selectedModel = computed(() => store.catalog.models?.find(m => m.id === (props.model || store.catalog.default_model)))
 const imageSupport = computed(() => selectedModel.value?.supports_images)
@@ -249,6 +252,7 @@ defineExpose({ focus: () => input.value?.focus() })
   animation: composer-light-orbit 4s linear infinite;
 }
 @keyframes composer-light-orbit { to { --composer-orbit-angle: 360deg; } }
+.composer__agent-avatar { --agent-avatar-size: 24px; }
 .composer__commands { max-height: 180px; overflow: auto; border-bottom: 1px solid var(--border); padding: 6px; }
 .composer__commands strong { white-space: nowrap; }
 .composer__attachments { display: flex; flex-wrap: wrap; gap: 10px; padding: 0 14px; }

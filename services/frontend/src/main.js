@@ -19,4 +19,6 @@ app.use(Quasar, {
 app.use(router)
 startPreferences()
 watchKeyboard()
-seedHistory().then(() => app.mount('#app'))
+// The agent column and mobile rows depend on the resolved section. Avoid
+// mounting the default chat list before lazy initial navigation has settled.
+seedHistory().then(() => router.isReady()).then(() => app.mount('#app'))

@@ -35,6 +35,7 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { draftCount, health } from '../store'
 import BrandMark from './BrandMark.vue'
+import { chatLocation } from '../router'
 
 // Reopening the current list should not leave its detail view or discard a draft.
 defineProps({ sidebarCollapsed: { type: Boolean, default: false } })
@@ -51,7 +52,7 @@ const route = useRoute()
 const active = computed(() => route.name)
 
 const items = computed(() => [
-  { name: 'chats', label: 'Chats', icon: 'chat_bubble_outline', to: '/chats' },
+  { name: 'chats', label: 'Chats', icon: 'chat_bubble_outline', to: chatLocation() },
   { name: 'workflows', label: 'Workflows', icon: 'account_tree', to: '/workflows', badge: draftCount.value || 0 },
   { name: 'runs', label: 'Runs', icon: 'history', to: '/runs' }
 ])

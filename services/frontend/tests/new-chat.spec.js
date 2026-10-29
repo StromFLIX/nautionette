@@ -101,7 +101,7 @@ test('catalog discovery for remembered settings does not block typing or use an 
   requests[0].resolve()
   await expect(page).toHaveURL(/\/chats\/created-1$/)
   await expect(message(page)).toHaveValue('Typing while defaults are loading')
-  expect(state.created[0]).toEqual({ ...settings, agent_id: null })
+  expect(state.created[0]).toEqual({ ...settings, agent_id: null, system_prompt: '', agent_customized: false })
 })
 
 test('a direct draft route tolerates initial discovery being superseded by a live refresh', async ({ page, context }) => {

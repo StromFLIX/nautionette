@@ -4,7 +4,7 @@
     <div class="agent-picker__list scroll-y" role="menu" aria-label="Saved agents">
       <button v-for="agent in choices" :key="agent.id || 'global'" v-close-popup class="agent-picker__choice" type="button" role="menuitemradio"
         :aria-label="agent.name" :aria-checked="agent.id === modelValue" @click="$emit('update:modelValue', agent.id)">
-        <span class="material-icons agent-picker__icon" aria-hidden="true">{{ agent.id ? 'smart_toy' : 'tune' }}</span>
+        <AgentAvatar :agent="agent.id ? agent : null" />
         <span class="grow"><strong>{{ agent.name }}</strong><span v-if="agent.description" class="caption dim">{{ agent.description }}</span>
           <span class="caption dim">{{ toolLabel(agent.resolved.tools) }} · {{ projectLabel(agent.resolved.project_ids) }}</span>
         </span>
@@ -22,6 +22,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { store } from '../store'
+import AgentAvatar from './AgentAvatar.vue'
 import { globalChatConfig, resolveAgentConfig, toolLabel, projectLabel } from '../agent-config'
 defineProps({ modelValue: { type: String, default: null } })
 defineEmits(['update:modelValue'])

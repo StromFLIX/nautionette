@@ -1,7 +1,7 @@
 <template>
   <section id="agent-profiles" class="setting profiles">
     <div class="row profiles__head">
-      <div class="grow"><h3 class="setting__label">Agents</h3><p class="caption dim">One configuration. Ready for any chat.</p></div>
+      <div class="grow"><h3 class="setting__label">Agents</h3><p class="caption dim">People to chat with. Each with their own tools, projects and instructions.</p></div>
       <button v-if="!editing" class="btn btn--primary btn--sm" type="button" :disabled="busy || !store.catalogLoaded" @click="open()"><span class="material-icons" aria-hidden="true">add</span>New agent</button>
     </div>
     <p v-if="error" class="caption field-hint--bad" role="alert">{{ error }}</p>
@@ -18,12 +18,23 @@
       <input id="profile-name" ref="nameInput" v-model="draft.name" class="field" maxlength="80" required :disabled="busy" placeholder="e.g. Code review" />
       <label class="profile-editor__label" for="profile-description">Description <span class="dim">optional</span></label>
       <input id="profile-description" v-model="draft.description" class="field" maxlength="500" :disabled="busy" placeholder="What this agent is for" />
+      <label class="profile-editor__label" for="profile-image">Agent image <span class="dim">optional</span></label>
+      <div class="row profile-editor__portrait">
+        <AgentAvatar :agent="draft" />
+        <input id="profile-image" ref="imageInput" type="file" accept="image/png,image/jpeg,image/webp" class="field grow" :disabled="busy || imageBusy" @change="chooseImage" />
+        <button v-if="draft.image" class="btn btn--sm" type="button" :disabled="busy || imageBusy" @click="clearImage">Remove image</button>
+      </div>
+      <p class="caption dim">PNG, JPEG or WebP · up to 5 MiB. Stored with your agent, not linked to another site.</p>
+      <p v-if="imageError" class="caption field-hint--bad" role="alert">{{ imageError }}</p>
+      <label class="profile-editor__label" for="profile-prompt">System prompt <span class="dim">optional</span></label>
+      <textarea id="profile-prompt" class="field profile-editor__prompt" :value="draft.config.system_prompt || ''" rows="5" maxlength="32000" :disabled="busy" placeholder="How should this person think, speak and help?" @input="setPrompt($event.target.value)" />
+      <p class="caption dim">Additional instructions for new chats. The app’s core operating rules still apply.</p>
       <AgentConfigFields v-model="draft.config" :defaults="globalConfig" inheritable :disabled="busy" />
       <AgentPackages :key="draft.id" :model-value="draft.config.packages || []" :disabled="busy" @update:model-value="draft.config.packages = $event" @busy="packageBusy = $event" />
       <div class="row profile-editor__actions">
         <span class="caption dim grow">Existing chats stay unchanged.</span>
         <button class="btn" type="button" :disabled="busy" @click="close">Cancel</button>
-        <button class="btn btn--primary" type="submit" :disabled="busy || packageBusy || !draft.name.trim()">{{ busy ? 'Saving…' : 'Save agent' }}</button>
+        <button class="btn btn--primary" type="submit" :disabled="busy || packageBusy || imageBusy || !draft.name.trim()">{{ busy ? 'Saving…' : 'Save agent' }}</button>
       </div>
     </form>
 
@@ -38,7 +49,7 @@
         </div>
       </article>
       <article v-for="agent in agents" :key="agent.id" class="profile-card">
-        <span class="profile-card__mark material-icons" aria-hidden="true">smart_toy</span>
+        <AgentAvatar :agent="agent" />
         <button class="profile-card__info profile-card__open grow" type="button" :aria-label="`Edit ${agent.name}`" :disabled="busy" @click="open(agent)">
           <strong>{{ agent.name }}</strong><span v-if="agent.description" class="caption dim">{{ agent.description }}</span>
           <span class="caption dim">{{ summary(agent.resolved || resolveAgentConfig(agent.config, globalConfig)) }}</span>
@@ -58,6 +69,7 @@
 import { computed, nextTick, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import AgentConfigFields from './AgentConfigFields.vue'
+import AgentAvatar from '../AgentAvatar.vue'
 import AgentPackages from './AgentPackages.vue'
 import { api } from '../../api'
 import { actions, store } from '../../store'
@@ -68,7 +80,35 @@ const editing = ref(false)
 const busy = ref(false), packageBusy = ref(false)
 const error = ref('')
 const nameInput = ref(null)
-const draft = reactive({ id: null, name: '', description: '', config: {} })
+const draft = reactive({ id: null, name: '', description: '', image: '', config: {} })
+const imageInput = ref(null), imageBusy = ref(false), imageError = ref('')
+let imageGeneration = 0
+function clearImage () { imageGeneration++; draft.image = ''; imageError.value = ''; if (imageInput.value) imageInput.value.value = '' }
+async function chooseImage (event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  const generation = ++imageGeneration
+  imageError.value = ''
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+    imageError.value = 'Choose a PNG, JPEG or WebP of at most 5 MiB.'
+    event.target.value = ''; return
+  }
+  imageBusy.value = true
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result)
+      reader.onerror = () => reject(new Error('Could not read the image. Please try again.'))
+      reader.readAsDataURL(file)
+    })
+    if (generation === imageGeneration) draft.image = image
+  } catch (failure) { if (generation === imageGeneration) imageError.value = failure.message }
+  finally { if (generation === imageGeneration) imageBusy.value = false }
+}
+function setPrompt (value) {
+  if (value) draft.config.system_prompt = value
+  else delete draft.config.system_prompt
+}
 const agents = computed(() => store.catalog.agents || [])
 const defaultId = computed(() => store.catalog.default_agent_id ?? null)
 const globalConfig = computed(() => globalChatConfig(store.catalog))
@@ -82,18 +122,19 @@ function open (agent = null, duplicate = false) {
   Object.assign(draft, {
     id: duplicate ? null : agent?.id ?? null,
     name: agent ? `${agent.name}${duplicate ? ' copy' : ''}`.slice(0, 80) : '',
-    description: agent?.description || '', config: copyConfig(agent?.config || {})
+    description: agent?.description || '', image: agent?.image || '', config: copyConfig(agent?.config || {})
   })
+  imageGeneration++; imageBusy.value = false; imageError.value = ''
   editing.value = true
   nextTick(() => nameInput.value?.focus())
 }
-function close () { if (!packageBusy.value) { editing.value = false; error.value = '' } }
+function close () { if (!packageBusy.value) { imageGeneration++; imageBusy.value = false; editing.value = false; error.value = '' } }
 async function save () {
-  if (busy.value || packageBusy.value || !draft.name.trim()) return
+  if (busy.value || packageBusy.value || imageBusy.value || !draft.name.trim()) return
   busy.value = true
   error.value = ''
   try {
-    const body = { name: draft.name.trim(), description: draft.description, config: draft.config }
+    const body = { name: draft.name.trim(), description: draft.description, image: draft.image, config: draft.config }
     const saved = draft.id ? await api.updateAgent(draft.id, body) : await api.createAgent(body)
     draft.id = saved.id // A failed refresh must not make a retry create a duplicate.
     actions.syncAgentCatalog({ agents: [...agents.value.filter(agent => agent.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name)) })
@@ -150,6 +191,9 @@ function remove (agent) {
 .profile-editor__head { margin-bottom: 16px; }
 .profile-editor__label { display: block; margin: 16px 0 8px; font-size: 0.75rem; }
 .profile-editor__label .dim { margin-left: 6px; font-size: 0.6875rem; }
+.profile-editor__portrait { gap: 12px; flex-wrap: wrap; --agent-avatar-size: 56px; }
+.profile-editor__portrait input { min-width: 0; width: 180px; max-width: 100%; font-size: 0.75rem; }
+.profile-editor__prompt { width: 100%; resize: vertical; line-height: 1.6; }
 .profile-editor__actions { flex-wrap: wrap; gap: 6px; padding-top: 18px; border-top: 1px solid var(--border); }
 @media (max-width: 640px) {
   .profile-card { padding: 12px; }

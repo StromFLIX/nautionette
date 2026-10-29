@@ -17,12 +17,16 @@ from . import pi_packages, projects
 from .db import db
 from .runtime import runtime
 
-CONFIG_KEYS = ("agent_set", "model", "reasoning_effort", "tools", "project_ids", "packages")
-SETTING_KEYS = {key: f"default_{key}" for key in CONFIG_KEYS if key != "packages"}
+CONFIG_KEYS = ("agent_set", "model", "reasoning_effort", "tools", "project_ids", "packages", "system_prompt")
+SETTING_KEYS = {key: f"default_{key}" for key in CONFIG_KEYS if key not in {"packages", "system_prompt"}}
 
 
 def global_config() -> dict[str, Any]:
-    return {**{key: runtime(setting) for key, setting in SETTING_KEYS.items()}, "packages": []}
+    return {
+        **{key: runtime(setting) for key, setting in SETTING_KEYS.items()},
+        "packages": [],
+        "system_prompt": "",
+    }
 
 
 def resolve(config: dict[str, Any], base: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -39,7 +43,9 @@ def normalize(config: Any) -> dict[str, Any]:
     """Validate explicit choices without turning empty selections into defaults."""
     if not isinstance(config, dict) or config.keys() - set(CONFIG_KEYS):
         raise HTTPException(
-            422, "config must contain only agent_set, model, reasoning_effort, tools, project_ids, packages"
+            422,
+            "config must contain only agent_set, model, reasoning_effort, tools, "
+            "project_ids, packages, system_prompt",
         )
     result = dict(config)
     if "agent_set" in result:
@@ -66,7 +72,22 @@ def normalize(config: Any) -> dict[str, Any]:
         result["project_ids"] = projects.selection(result["project_ids"])
     if "packages" in result:
         result["packages"] = pi_packages.selection(result["packages"])
+    if "system_prompt" in result:
+        value = result["system_prompt"]
+        if not isinstance(value, str) or len(value) > 32000:
+            raise HTTPException(422, "system_prompt must be text of at most 32000 characters")
     return result
+
+
+def same_config(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    """Set-valued choices ignore order; package order and prompt whitespace matter."""
+    for key in CONFIG_KEYS:
+        a, b = left.get(key), right.get(key)
+        if key in {"tools", "project_ids"} and isinstance(a, list) and isinstance(b, list):
+            a, b = sorted(a), sorted(b)
+        if a != b:
+            return False
+    return True
 
 
 def list_agents() -> list[dict[str, Any]]:

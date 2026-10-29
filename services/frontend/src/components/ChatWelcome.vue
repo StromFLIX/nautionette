@@ -7,7 +7,7 @@
         <h1 class="welcome__title">What should happen next?</h1>
         <p class="welcome__lead">An idea. A conversation. A workflow.</p>
       </div>
-      <Composer ref="composer" v-model="text" v-model:attachments="attachments" :agent-id="config.agent_id" :agent-name="config.agent_name || ''"
+      <Composer ref="composer" v-model="text" v-model:attachments="attachments" :agent-id="config.agent_id" :agent-name="config.agent_name || ''" :agent-customized="Boolean(config.agent_customized)" :system-prompt="config.system_prompt || ''"
         :agent-set="config.agent_set" :model="config.model" :reasoning-effort="config.reasoning_effort" :tools="config.tools" :project-ids="config.project_ids" :packages="config.packages || []"
         variant="welcome" :busy="busy" :configuration-ready="store.catalogLoaded" placeholder="Ask, build, or automate…"
         @update:agent-id="chooseAgent" @update:agent-set="override('agent_set', $event)" @update:model="override('model', $event)"
@@ -47,6 +47,8 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { chatLocation } from '../router'
 import Composer from './Composer.vue'
 import BrandMark from './BrandMark.vue'
 import { modelContextWindow } from '../context'
@@ -70,8 +72,13 @@ const attachments = ref([])
 // into its own source. With no history (or in defaults mode), follow async defaults.
 const scope = chatCacheScope()
 const remembered = chatSettings.load(scope)
-const selectedAgent = ref(undefined)
+const route = useRoute(), router = useRouter()
+const selectedAgent = ref(typeof route.query.agent === 'string' ? route.query.agent : undefined)
 const overrides = ref({})
+const customized = ref(false)
+watch(() => route.query.agent, id => {
+  if (typeof id === 'string' && id) { selectedAgent.value = id; overrides.value = {}; customized.value = false }
+})
 const source = computed(() => {
   if (selectedAgent.value !== undefined) return agentConfig(store.catalog, selectedAgent.value)
   if (preferences.newChatSettings === 'last' && remembered) {
@@ -82,7 +89,8 @@ const source = computed(() => {
 })
 const lastSource = ref(defaultChatConfig(store.catalog))
 watch(source, value => { if (value) lastSource.value = copyConfig(value) }, { immediate: true, deep: true })
-const config = computed(() => resolveAgentConfig(overrides.value, source.value || lastSource.value))
+const config = computed(() => ({ ...resolveAgentConfig(overrides.value, source.value || lastSource.value),
+  agent_customized: customized.value || Boolean((source.value || lastSource.value).agent_customized) }))
 watch([config, () => store.catalogLoaded], () => {
   // Remember deliberate choices, including unsent drafts, but never loading placeholders.
   if (store.catalogLoaded && scope === chatCacheScope() && (selectedAgent.value !== undefined || Object.keys(overrides.value).length)) {
@@ -92,10 +100,16 @@ watch([config, () => store.catalogLoaded], () => {
 const composer = ref(null)
 const contextWindow = computed(() => modelContextWindow(store.catalog, config.value.model))
 function use (prompt) { text.value = prompt; nextTick(() => composer.value?.focus()) }
-function chooseAgent (id) { selectedAgent.value = id; overrides.value = {} }
+function chooseAgent (id) {
+  selectedAgent.value = id; overrides.value = {}; customized.value = false
+  if (route.query.agent && route.query.agent !== id) router.replace(chatLocation('', null))
+}
 function override (key, value) {
+  if (JSON.stringify(value) === JSON.stringify(config.value[key])) return
   const changedModel = key === 'model' && value !== config.value.model
   overrides.value = { ...overrides.value, [key]: value, ...(changedModel ? { reasoning_effort: null } : {}) }
+  customized.value = true
+  if (route.query.agent) router.replace(chatLocation('', null))
 }
 const toolSummary = computed(() => {
   const total = (store.catalog.tools || []).length

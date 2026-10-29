@@ -7,16 +7,16 @@ export const CONFIG_FIELDS = [
   { key: 'project_ids', id: 'projects', label: 'Projects' }
 ]
 export const DEFAULT_CONFIG_KEYS = CONFIG_FIELDS.map(field => field.key)
-export const CONFIG_KEYS = [...DEFAULT_CONFIG_KEYS, 'packages']
+export const CONFIG_KEYS = [...DEFAULT_CONFIG_KEYS, 'packages', 'system_prompt']
 const copy = value => Array.isArray(value) ? [...value] : value
 export const copyConfig = config => Object.fromEntries(Object.entries(config).map(([key, value]) => [key, copy(value)]))
 
 export function globalChatConfig (catalog) {
-  return copyConfig(catalog.global_chat_defaults || {
+  return copyConfig({ system_prompt: '', ...(catalog.global_chat_defaults || {
     model: catalog.default_model || '', agent_set: catalog.default_agent_set || 'default',
     reasoning_effort: catalog.default_reasoning_effort ?? null,
     tools: catalog.default_tools ?? null, project_ids: catalog.default_project_ids || [], packages: []
-  })
+  }) })
 }
 
 export function resolveAgentConfig (overrides, defaults) {
@@ -35,17 +35,23 @@ export function agentConfig (catalog, id) {
 }
 
 export function defaultChatConfig (catalog) {
-  return copyConfig(catalog.chat_defaults || agentConfig(catalog, catalog.default_agent_id ?? null) || agentConfig(catalog, null))
+  return copyConfig({ system_prompt: '', ...(catalog.chat_defaults || agentConfig(catalog, catalog.default_agent_id ?? null) || agentConfig(catalog, null)) })
 }
 
 export function sameConfig (left, right) {
   if (!left || !right) return false
   return CONFIG_KEYS.every(key => {
     const a = key === 'packages' ? left[key] || [] : left[key], b = key === 'packages' ? right[key] || [] : right[key]
+    if (key === 'system_prompt') return (a || '') === (b || '')
     if (key === 'packages') return JSON.stringify(a) === JSON.stringify(b)
     if (Array.isArray(a) && Array.isArray(b)) return JSON.stringify([...a].sort()) === JSON.stringify([...b].sort())
     return a === b
   })
+}
+
+/** Membership is a saved selection, not a comparison with a mutable profile. */
+export function belongsToAgent (chat, agentId) {
+  return !agentId || (chat.agent_id === agentId && !chat.agent_customized)
 }
 
 export function toolLabel (tools, total) {

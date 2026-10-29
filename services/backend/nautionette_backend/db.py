@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import settings
-from .migrations import remove_internet_approval
+from .migrations import add_agent_grouping, remove_internet_approval
 from .output_ids import publication_request_id
 
 _SCHEMA = """
@@ -252,6 +252,8 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN reasoning_effort TEXT",
     "ALTER TABLE chats ADD COLUMN agent_id TEXT",
     "ALTER TABLE chats ADD COLUMN agent_name TEXT",
+    "ALTER TABLE chats ADD COLUMN system_prompt TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE agent_profiles ADD COLUMN image TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE chats ADD COLUMN packages TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE chats ADD COLUMN package_commands TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE chats ADD COLUMN tools TEXT",
@@ -281,6 +283,8 @@ _EDITABLE_CHAT_COLUMNS = (
     "project_ids",
     "agent_id",
     "agent_name",
+    "agent_customized",
+    "system_prompt",
     "packages",
     "timeout_exempt",
 )
@@ -346,6 +350,7 @@ class Database:
                 "WHERE key IN (OLD.object_key, OLD.preview_key); END;"
             )
             remove_internet_approval(self._conn)
+            add_agent_grouping(self._conn, settings.agent_model, settings.default_agent_set)
             # Backfill only legacy rows, never overwrite live message timestamps on restart.
             self._conn.execute(
                 "UPDATE chats SET last_message_at = COALESCE("
@@ -458,14 +463,17 @@ class Database:
         packages: list[str] | None = None,
         timeout_exempt: bool = False,
         chat_id: str | None = None,
+        system_prompt: str = "",
+        agent_customized: bool = False,
     ) -> dict[str, Any]:
         now = time.time()
         chat_id = chat_id or uuid.uuid4().hex[:12]
         self.execute(
             "INSERT INTO chats (id, title, agent_set, model, tools, reasoning_effort,"
             " created_at, updated_at, title_state, project_ids, agent_id, agent_name, packages,"
-            " last_message_at, last_user_message_at, last_activity_at, timeout_exempt)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " last_message_at, last_user_message_at, last_activity_at, timeout_exempt,"
+            " system_prompt, agent_customized)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 chat_id,
                 title,
@@ -484,6 +492,8 @@ class Database:
                 now,
                 now,
                 timeout_exempt,
+                system_prompt,
+                agent_customized,
             ),
         )
         return self.get_chat(chat_id)  # type: ignore[return-value]
@@ -515,6 +525,7 @@ class Database:
             (chat_id,),
         )
         if row:
+            row["agent_customized"] = bool(row["agent_customized"])
             row["timeout_exempt"] = bool(row["timeout_exempt"])
             row["unread"] = bool(row["unread"])
             row["tools"] = json.loads(row["tools"]) if row.get("tools") else None
@@ -545,6 +556,7 @@ class Database:
         }
         for row in rows:
             summary = summaries.get(row["id"])
+            row["agent_customized"] = bool(row["agent_customized"])
             row["timeout_exempt"] = bool(row["timeout_exempt"])
             row["unread"] = bool(row["unread"])
             row["answering"] = row["id"] in answering
