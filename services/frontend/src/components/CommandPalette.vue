@@ -1,5 +1,5 @@
 <template>
-  <q-dialog v-model="open" no-refocus no-route-dismiss aria-label="Search chats and settings" @before-show="rememberFocus" @show="focusSearch" @hide="restoreFocus">
+  <q-dialog v-model="open" no-refocus no-route-dismiss aria-label="Search chats and settings" @before-show="rememberFocus" @show="onShow" @hide="restoreFocus">
     <q-card class="command-palette" @keydown="onKeydown">
       <div class="command-palette__search">
         <span class="material-icons" aria-hidden="true">search</span>
@@ -75,6 +75,14 @@ function restoreFocus () {
   previousFocus = null
 }
 function focusSearch () { input.value?.focus() }
+function revealSelected () {
+  if (open.value && selected.value) document.getElementById(optionId(selected.value))?.scrollIntoView({ block: 'nearest' })
+}
+function onShow () {
+  focusSearch()
+  // Early keyboard navigation can happen while the dialog is still scaling in.
+  revealSelected()
+}
 watch(open, value => {
   if (!value) return
   query.value = props.initialQuery
@@ -102,7 +110,7 @@ function onKeydown (event) {
     const index = results.value.findIndex(result => result.key === selected.value?.key)
     const next = (index + (event.key === 'ArrowDown' ? 1 : -1) + results.value.length) % results.value.length
     activeKey.value = results.value[next].key
-    nextTick(() => document.getElementById(optionId(selected.value))?.scrollIntoView({ block: 'nearest' }))
+    nextTick(revealSelected)
   }
 }
 
