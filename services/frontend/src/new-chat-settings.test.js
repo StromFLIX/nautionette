@@ -4,7 +4,7 @@ import { chatSettingsSnapshot, createChatSettings, LAST_CHAT_SETTINGS_KEY, reusa
 
 const config = () => ({
   agent_id: 'writer', model: 'test/model', agent_set: 'coding', reasoning_effort: 'high',
-  tools: [], project_ids: ['project'], packages: ['extension-revision']
+  tools: [], project_ids: ['project'], packages: ['extension-revision'], system_prompt: '', agent_customized: false
 })
 const catalog = { agents: [{ id: 'writer' }] }
 function fixture () {
@@ -75,6 +75,18 @@ test('storage failures preserve session choices rather than restoring stale pers
   copy.packages.push('another-revision')
   assert.deepEqual(failing.load(), latest)
   assert.equal(errors.length, 1)
+})
+
+test('persona prompts and custom membership survive remembering and old snapshots migrate', () => {
+  const { history } = fixture()
+  const custom = { ...config(), system_prompt: 'Use plain language.', agent_customized: true }
+  history.remember(custom)
+  assert.deepEqual(history.load(), custom)
+  const old = config()
+  delete old.system_prompt; delete old.agent_customized
+  assert.deepEqual(chatSettingsSnapshot(old), config())
+  assert.equal(chatSettingsSnapshot({ ...old, system_prompt: false }), null)
+  assert.equal(chatSettingsSnapshot({ ...old, agent_customized: 'yes' }), null)
 })
 
 test('another tab can update history without changing an already loaded draft', () => {

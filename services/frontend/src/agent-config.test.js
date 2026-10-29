@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { agentConfig, copyConfig, defaultChatConfig, globalChatConfig, resolveAgentConfig, sameConfig, toolLabel, projectLabel } from './agent-config.js'
+import { agentConfig, copyConfig, defaultChatConfig, globalChatConfig, resolveAgentConfig, sameConfig, toolLabel, projectLabel, belongsToAgent } from './agent-config.js'
 
-const defaults = { model: 'test/reasoner', agent_set: 'default', reasoning_effort: 'high', tools: ['search'], project_ids: ['project'] }
+const defaults = { model: 'test/reasoner', agent_set: 'default', reasoning_effort: 'high', tools: ['search'], project_ids: ['project'], system_prompt: '' }
 
 test('old catalogs still produce complete, independent global defaults', () => {
   assert.deepEqual(globalChatConfig({ default_model: 'test/model' }), {
-    model: 'test/model', agent_set: 'default', reasoning_effort: null, tools: null, project_ids: [], packages: []
+    model: 'test/model', agent_set: 'default', reasoning_effort: null, tools: null, project_ids: [], packages: [], system_prompt: ''
   })
   const config = globalChatConfig({ global_chat_defaults: defaults })
   config.tools.push('write'); config.project_ids.length = 0
@@ -54,6 +54,18 @@ test('custom configuration comparison ignores order, never null versus empty sel
   assert.equal(sameConfig(defaults, { ...defaults, packages: [] }), true)
   assert.equal(sameConfig({ ...defaults, packages: ['v1'] }, { ...defaults, packages: ['v2'] }), false)
   assert.equal(sameConfig({ ...defaults, packages: ['a', 'b'] }, { ...defaults, packages: ['b', 'a'] }), false)
+})
+
+test('agent grouping follows only the latest non-custom selection, never profile contents', () => {
+  const chat = { agent_id: 'writer', agent_customized: false, tools: ['old-tool'] }
+  assert.equal(belongsToAgent(chat, null), true)
+  assert.equal(belongsToAgent(chat, 'writer'), true)
+  assert.equal(belongsToAgent(chat, 'researcher'), false)
+  assert.equal(belongsToAgent({ ...chat, agent_id: 'researcher' }, 'writer'), false)
+  assert.equal(belongsToAgent({ ...chat, agent_customized: true }, 'writer'), false)
+  assert.equal(belongsToAgent({ ...chat, agent_customized: true }, null), true)
+  assert.equal(belongsToAgent({ agent_id: null }, 'writer'), false)
+  assert.equal(sameConfig(defaults, { ...defaults, system_prompt: 'Be concise' }), false)
 })
 
 test('selection labels distinguish all, none, and pinned tools and projects', () => {

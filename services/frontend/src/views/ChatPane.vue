@@ -3,11 +3,12 @@
 
   <div v-else class="thread stack grow">
     <header class="pane-head" data-skin-part="header">
-      <button class="btn btn--icon pane-head__back" aria-label="Back to chats" @click="backTo('/chats')">
+      <button class="btn btn--icon pane-head__back" aria-label="Back to chats" @click="backTo(chatLocation())">
         <span class="material-icons">arrow_back</span>
         <span v-if="draftCount" class="pane-head__badge">{{ draftCount }}</span>
       </button>
-      <div class="avatar-sm" :style="avatarStyle(chatId)">{{ initials(chat?.title || '?') }}</div>
+      <AgentAvatar v-if="profile" :agent="profile" />
+      <div v-else class="avatar-sm" :style="avatarStyle(chatId)">{{ initials(chat?.title || '?') }}</div>
       <div class="grow">
         <div class="pane-head__title truncate">{{ chat?.title || 'Chat' }}</div>
         <div class="caption dim truncate">
@@ -123,6 +124,8 @@
         :preparing="isNewChat"
         :agent-id="chat?.agent_id ?? null"
         :agent-name="chat?.agent_name || ''"
+        :agent-customized="Boolean(chat?.agent_customized)"
+        :system-prompt="chat?.system_prompt || ''"
         :agent-set="chat?.agent_set || ''"
         :model="chat?.model || store.catalog.default_model"
         :reasoning-effort="chat?.reasoning_effort ?? null"
@@ -153,6 +156,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from 'vue-router'
 import ChatWelcome from '../components/ChatWelcome.vue'
+import AgentAvatar from '../components/AgentAvatar.vue'
 import Composer from '../components/Composer.vue'
 import ProjectChanges from '../components/ProjectChanges.vue'
 import MessageBubble from '../components/MessageBubble.vue'
@@ -160,14 +164,14 @@ import ChatAttachment from '../components/ChatAttachment.vue'
 import ChatOutputs from '../components/ChatOutputs.vue'
 import { uploadAttachments } from '../attachments'
 import { avatarStyle, initials } from '../format'
-import { backTo } from '../router'
+import { backTo, chatLocation } from '../router'
 import { actions, chatSettings, draftCount, onLiveEvent, store } from '../store'
 import { api, chatStream } from '../api'
 import { delivery, onDelivery, pendingMessages } from '../delivery'
 import { latestContext } from '../context'
 import { cacheError, chatCache, chatCacheScope } from '../chat-cache'
 import { preferences, reducedMotion } from '../preferences'
-import { CONFIG_KEYS, defaultChatConfig } from '../agent-config'
+import { CONFIG_KEYS, agentConfig, belongsToAgent, defaultChatConfig } from '../agent-config'
 import { reusableChatSettings } from '../new-chat-settings'
 
 const $q = useQuasar()
@@ -175,6 +179,7 @@ const route = useRoute()
 const router = useRouter()
 
 const chat = ref(null)
+const profile = computed(() => store.catalog.agents?.find(agent => agent.id === chat.value?.agent_id))
 const savedMessages = ref([])
 const outputs = ref([])
 const activeTab = ref('chat')
@@ -279,7 +284,7 @@ async function markUnread () {
   readSuspended = true
   try {
     await api.updateChatReadState(id, { unread: true })
-    await router.push('/chats')
+    await router.push(chatLocation())
     await actions.loadChats()
   } catch (error) {
     readSuspended = false
@@ -291,6 +296,9 @@ function applySnapshot (data, cached = false) {
   const el = scroller.value
   const atBottom = activeTab.value === 'chat' && (!savedMessages.value.length || !el || el.scrollHeight - el.scrollTop - el.clientHeight < 100)
   chat.value = data.chat
+  if (!cached && route.query.agent && !belongsToAgent(data.chat, route.query.agent)) {
+    router.replace(chatLocation(chatId.value, null))
+  }
   savedMessages.value = data.messages
   outputs.value = data.outputs || []
   activeTurn.value = data.active_turn || null
@@ -325,7 +333,7 @@ function connectChat () {
     if (error.status === 401) store.needsToken = true
     if (error.status === 404) {
       chatCache.remove(id, scope)
-      router.replace('/chats')
+      router.replace(chatLocation())
     }
   })
   stream = chatStream(id, (data) => {
@@ -334,7 +342,7 @@ function connectChat () {
     if (!data.chat) {
       stream?.close()
       chatCache.remove(id, scope)
-      router.replace('/chats')
+      router.replace(chatLocation())
       return
     }
     applySnapshot(data)
@@ -349,19 +357,21 @@ function scrollDown (behavior = 'smooth') {
 }
 
 function currentCreation (request) {
-  return creation === request && route.name === 'chats' && request.scope === chatCacheScope()
+  return creation === request && route.name === 'chats' && request.scope === chatCacheScope() &&
+    request.agentView === (route.query.agent ?? null)
 }
 
 async function createNewChat () {
   if (!isNewChat.value || starting.value) return
-  const request = { scope: chatCacheScope() }
+  const request = { scope: chatCacheScope(), agentView: route.query.agent ?? null }
   creation = request
   starting.value = true
   creationError.value = ''
   nextTick(() => { if (currentCreation(request)) composer.value?.focus() })
   try {
-    const remembered = preferences.newChatSettings === 'last' ? chatSettings.load(request.scope) : null
-    chat.value = { title: 'New chat', ...(remembered || defaultChatConfig(store.catalog)) }
+    const agentId = typeof route.query.agent === 'string' ? route.query.agent : null
+    const remembered = !agentId && preferences.newChatSettings === 'last' ? chatSettings.load(request.scope) : null
+    chat.value = { title: 'New chat', ...(agentId ? agentConfig(store.catalog, agentId) : remembered || defaultChatConfig(store.catalog)) }
     // Validate a remembered profile without delaying the editor. Initial/live
     // discovery can supersede this read; only an actual catalog error is failure.
     while (remembered && !store.catalogLoaded) {
@@ -371,13 +381,13 @@ async function createNewChat () {
     }
     if (!currentCreation(request)) return
     // Empty means current backend defaults; explicit last settings stay pinned.
-    const created = await api.createChat(remembered ? reusableChatSettings(store.catalog, remembered) : {})
+    const created = await api.createChat(agentId ? { agent_id: agentId } : remembered ? reusableChatSettings(store.catalog, remembered) : {})
     actions.addChat(created, request.scope)
     if (!currentCreation(request)) return
     chatSettings.remember(created, request.scope)
     request.created = created
     // Replace the temporary URL, preserving the same editor, draft and focus.
-    await router.replace(`/chats/${created.id}`)
+    await router.replace(chatLocation(created.id))
   } catch (error) {
     if (currentCreation(request)) {
       creationError.value = `Could not create chat: ${error.message}`
@@ -390,15 +400,20 @@ async function createNewChat () {
 
 async function start ({ text, configuration, attachments: images = [] }) {
   if (starting.value || (!text.trim() && !images.length)) return
-  const request = { scope: chatCacheScope() }
+  const request = { scope: chatCacheScope(), agentView: route.query.agent ?? null }
   creation = request
   starting.value = true
   try {
-    const created = await api.createChat({ agent_id: configuration.agent_id, ...Object.fromEntries(CONFIG_KEYS.map(key => [key, configuration[key]])) })
+    // An untouched agent view selects the person, not a possibly stale catalog
+    // snapshot. Deliberate overrides have already returned the draft to All.
+    const payload = request.agentView && configuration.agent_id === request.agentView && !configuration.agent_customized
+      ? { agent_id: request.agentView }
+      : { agent_id: configuration.agent_id, agent_customized: Boolean(configuration.agent_customized), ...Object.fromEntries(CONFIG_KEYS.map(key => [key, configuration[key]])) }
+    const created = await api.createChat(payload)
     actions.addChat(created, request.scope)
     if (!currentCreation(request)) return
     chatSettings.remember(created, request.scope)
-    await router.push(`/chats/${created.id}`)
+    await router.push(chatLocation(created.id, belongsToAgent(created, route.query.agent) ? route.query.agent : null))
     if (chatId.value !== created.id || request.scope !== chatCacheScope()) return
     draft.value = text
     attachments.value = images
@@ -447,6 +462,8 @@ function patch (fields) {
       const updated = await api.updateChat(id, fields)
       if (id === chatId.value && version === generation) {
         chat.value = updated
+        // Keep the open conversation, but leave a scope it no longer belongs to.
+        if (route.query.agent && !belongsToAgent(updated, route.query.agent)) await router.replace(chatLocation(id, null))
         if (['agent_id', ...CONFIG_KEYS].some(key => Object.hasOwn(fields, key))) chatSettings.remember(updated)
       }
       actions.loadChats()
@@ -526,9 +543,17 @@ function remove () {
       await api.deleteChat(chatId.value)
       await chatCache.remove(chatId.value)
       await actions.loadChats()
-      router.push('/chats')
+      router.push(chatLocation())
     })
 }
+
+watch(() => route.query.agent, () => {
+  if (creation && creation.agentView !== (route.query.agent ?? null)) {
+    creation = null
+    starting.value = false
+    creationError.value = ''
+  }
+})
 
 watch(() => route.params.id, (id, previous) => {
   const created = previous === 'new' && creation?.created && creation.created.id === id ? creation.created : null

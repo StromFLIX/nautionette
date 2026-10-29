@@ -7,6 +7,47 @@ import re
 import sqlite3
 
 
+def add_agent_grouping(conn: sqlite3.Connection, model: str, agent_set: str) -> None:
+    """Classify old custom presets once, never against a profile on every read.
+
+    Afterwards only an explicit agent selection restores membership. Profile or
+    default edits cannot move an existing conversation between people.
+    """
+    if any(row["name"] == "agent_customized" for row in conn.execute("PRAGMA table_info(chats)")):
+        return
+    conn.execute("ALTER TABLE chats ADD COLUMN agent_customized INTEGER NOT NULL DEFAULT 0")
+    base = {
+        "model": model,
+        "agent_set": agent_set,
+        "reasoning_effort": None,
+        "tools": None,
+        "project_ids": [],
+        "packages": [],
+        "system_prompt": "",
+    }
+    for key in ("model", "agent_set", "reasoning_effort", "tools", "project_ids"):
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (f"default_{key}",)).fetchone()
+        if row:
+            base[key] = json.loads(row["value"])
+    agents = {
+        row["id"]: json.loads(row["config"]) for row in conn.execute("SELECT id, config FROM agent_profiles")
+    }
+    for row in conn.execute("SELECT * FROM chats WHERE agent_id IS NOT NULL"):
+        overrides = agents.get(row["agent_id"])
+        resolved = {**base, **(overrides or {})}
+        if resolved["model"] != base["model"] and "reasoning_effort" not in (overrides or {}):
+            resolved["reasoning_effort"] = None
+        custom = overrides is None
+        for key, expected in resolved.items():
+            actual = row[key]
+            if key in {"tools", "project_ids", "packages"}:
+                actual = json.loads(actual) if actual is not None else None
+            if key in {"tools", "project_ids"} and isinstance(actual, list) and isinstance(expected, list):
+                actual, expected = sorted(actual), sorted(expected)
+            custom |= actual != expected
+        conn.execute("UPDATE chats SET agent_customized = ? WHERE id = ?", (custom, row["id"]))
+
+
 def remove_internet_approval(conn: sqlite3.Connection) -> None:
     """Drop legacy state and instructions, including jobs queued before upgrade.
 

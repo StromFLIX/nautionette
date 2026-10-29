@@ -1,7 +1,7 @@
 <template>
   <div class="chat-list-item" :class="{ 'chat-list-item--menu-open': menuOpen }">
     <RouterLink
-      :to="`/chats/${chat.id}`"
+      :to="chatLocation(chat.id)"
       class="row-item" :class="{
         'row-item--active': activeRouteId === chat.id,
         'row-item--running': chat.answering,
@@ -38,6 +38,7 @@
 import { computed, ref } from 'vue'
 import { fullTime, shortTime } from '../format'
 import { chatActivityAt } from '../chat-order'
+import { chatLocation } from '../router'
 
 const props = defineProps({
   chat: { type: Object, required: true },

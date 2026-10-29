@@ -40,7 +40,7 @@ export const SETTINGS_SECTIONS = [
     key: 'agents', label: 'Agents & models', icon: 'memory', group: 'Connections', scope: 'Instance',
     load: () => import('./components/settings/AgentsPane.vue'),
     entries: [
-      entry('agent-profiles', 'Saved agents', 'Create reusable configurations with model, reasoning, tools and projects.', 'profile preset defaults inherit override duplicate'),
+      entry('agent-profiles', 'Saved agents', 'People with their own image, system prompt, model, tools and projects.', 'profile preset defaults inherit override duplicate avatar portrait persona instructions grouping'),
       entry('agent-sets', 'Agent sets', 'Available container environments and image readiness.', 'container docker runtime'),
       entry('model-integrations', 'Model integrations', 'Add, configure or test a model provider.', 'API key credentials OpenAI Anthropic OpenRouter gateway'),
       entry('available-models', 'Available models', 'Models discovered through your integrations.', 'catalog vendor provider refresh')

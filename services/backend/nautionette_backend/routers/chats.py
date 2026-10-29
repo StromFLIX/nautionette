@@ -74,11 +74,15 @@ async def new_chat(payload: dict[str, Any], *, chat_id: str | None = None) -> di
     )
     if config["reasoning_effort"] is not None:
         _effort(config["reasoning_effort"], await catalog.model_info(config["model"]))
+    customized = payload.get("agent_customized", False)
+    if type(customized) is not bool:
+        raise HTTPException(422, "agent_customized must be a boolean")
     chat = db.create_chat(
         chat_id=chat_id,
         title=(payload.get("title") or "New chat").strip()[:120],
         agent_id=selected["agent_id"],
         agent_name=selected["agent_name"],
+        agent_customized=customized or not agent_profiles.same_config(config, selected),
         timeout_exempt=_timeout_exempt(payload),
         **config,
     )
@@ -107,7 +111,14 @@ async def update_chat(chat_id: str, payload: dict[str, Any] = Body(default={})) 
         config = overrides
         if "model" in config and config["model"] != current.get("model") and "reasoning_effort" not in config:
             config["reasoning_effort"] = None
-    fields.update(agent_profiles.normalize(config))
+    normalized = agent_profiles.normalize(config)
+    fields.update(normalized)
+    if "agent_id" in payload:
+        fields["agent_customized"] = not agent_profiles.same_config(normalized, selected)
+    elif normalized and not agent_profiles.same_config({**current, **normalized}, current):
+        # Never recover membership just by undoing an override: only the latest
+        # explicit agent selection defines the person this chat belongs to.
+        fields["agent_customized"] = True
     if fields.get("reasoning_effort") is not None:
         model = fields.get("model", current.get("model")) or runtime("default_model")
         _effort(fields["reasoning_effort"], await catalog.model_info(model))
@@ -360,6 +371,9 @@ async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool 
         run_id=f"chat-{chat_id}",
         timeout_seconds=settings.agent_run_timeout_seconds,
     )
+    if chat.get("system_prompt"):
+        # Persona instructions supplement, never replace, the app's operating rules.
+        job["system_prompt"] += "\n\nAgent instructions:\n" + chat["system_prompt"]
     job.update(
         chat_id=chat_id,
         turn_id=message_id,

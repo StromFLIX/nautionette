@@ -26,13 +26,19 @@ export async function seedHistory () {
   const entry = router.resolve(window.location.pathname + window.location.search + window.location.hash)
   const list = UNDER[entry.name]
   if (!list || entry.path === list) return
-  await router.replace(list)
+  await router.replace({ path: list, query: entry.name === 'chats' ? entry.query : {} })
   await router.push(entry.fullPath)
+}
+
+/** Chat links retain the agent grouping, including on mobile back navigation. */
+export function chatLocation (id = '', agent = router.currentRoute.value.query.agent) {
+  return { path: id ? `/chats/${id}` : '/chats', query: typeof agent === 'string' && agent ? { agent } : {} }
 }
 
 /** Back out of a detail view without stacking history when that is where we came from. */
 export function backTo (path) {
-  if (window.history.state?.back === path) router.back()
+  const target = router.resolve(path).fullPath
+  if (window.history.state?.back === target) router.back()
   else router.push(path)
 }
 

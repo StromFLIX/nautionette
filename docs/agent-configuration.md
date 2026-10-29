@@ -15,6 +15,7 @@ Agents inherit only global defaults, never another agent.
 | `tools` | `default_tools` | `null` for all MCP tools; `[]` for none; an explicit list for a pinned selection |
 | `project_ids` | `default_project_ids` | Ready, writable projects; `[]` for none |
 | `packages` | None (always `[]`) | Ordered immutable Pi package/configuration revision IDs, selected in Settings |
+| `system_prompt` | None (always `""`) | Up to 32,000 characters of additional persona instructions; supplements the app's operating rules |
 
 An omitted **agent config** key inherits. Explicit null is valid only for tools
 and reasoning; it is not an inheritance marker. To restore inheritance, remove the
@@ -39,6 +40,37 @@ See [Managed Pi packages](pi-packages.md) for Settings-based installation,
 resource selection, write-only configuration, runtime compatibility and backup
 requirements. Package changes do not need per-agent image builds.
 
+## Agent views and portraits
+
+The chat workspace has an agent column between navigation and the chat list.
+**All** is always its first, pinned item and shows every chat, including custom,
+unassigned and deleted-agent conversations. Saved agents follow it. On phones the
+same list becomes a horizontal strip; All remains visible while people scroll.
+
+Selecting a person filters the existing date/project/activity groups, counts and
+search to that person's chats. The `?agent=<id>` URL preserves the view on reload
+and mobile back navigation. **New chat** and the welcome composer use that agent,
+ahead of remembered settings or the configured default. A deleted selection falls
+back to All after successful catalog discovery, not during an outage.
+
+Membership uses the latest explicit `agent_id` selection and a stored
+`agent_customized` flag. Changing an effective model, environment, reasoning,
+tool/project/package selection or system prompt marks the chat custom and leaves
+the agent view for All without closing the chat. Undoing overrides does not restore
+membership: choose/reapply an agent explicitly to do that. Renames, read state,
+operational timeout controls and no-op configuration writes do not detach it.
+Profile/default edits do not reclassify existing chats. The upgrade classifies
+legacy customized chats once; subsequent restarts preserve that result.
+
+**Settings > Agents & models > Agents** accepts an optional portrait file and a
+system prompt. Images are authenticated API data, not third-party URLs. PNG, JPEG
+and WebP files up to 5 MiB / 25 megapixels are validated and converted to a static
+WebP thumbnail, at most 256×256, without EXIF metadata. Avatars fall back to initials.
+Images are used in the column, settings, agent picker and conversation header.
+Duplicating an agent copies its image and prompt; removing either restores its
+fallback. Prompts are copied into chats and accepted turn jobs, so edits never
+rewrite running or queued work.
+
 ## API
 
 All routes use the same authenticated backend API as other instance settings.
@@ -46,7 +78,8 @@ All routes use the same authenticated backend API as other instance settings.
 - `GET /api/agents`: raw and resolved agents, `global_chat_defaults`,
   `default_agent_id`, and the resolved `chat_defaults` for new chats.
 - `POST /api/agents`: create an agent; returns the saved record with its ID and
-  resolved configuration (HTTP 201).
+  resolved configuration (HTTP 201). Metadata is `name`, `description` and `image`
+  (an uploaded raster image as a base64 data URL, or `""` to clear).
 - `GET /api/agents/{id}`: read a saved agent.
 - `PATCH /api/agents/{id}`: edit metadata or **replace** `config`. Omitting
   `config` preserves it; sending `config: {}` restores inheritance for every field.
@@ -70,7 +103,7 @@ For example, create a project-specific agent while inheriting its model and envi
 ```
 
 Names are required, limited to 80 characters, and case-insensitively unique under
-SQLite's `NOCASE` collation. Descriptions are optional (500 characters). Config
+SQLite's `NOCASE` collation. All and Global defaults are reserved names. Descriptions are optional (500 characters). Config
 keys and types are validated. Project selections must be ready and available;
 stale project defaults fail closed and can be cleared explicitly. Missing
 explicitly selected agent IDs return HTTP 404, not a silent global fallback.
@@ -123,10 +156,10 @@ empty tool list as all tools. Already running containers keep their original set
 Focused checks from the repository root (Node 24 and installed workspace dependencies):
 
 ```sh
-uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_backend_mcp.py
+uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_agent_grouping.py tests/backend/test_backend_mcp.py
 node --test tests/agent/test_tool_selection.ts tests/agent/test_images.mjs
 npm --prefix services/frontend test
-npm --prefix services/frontend run test:e2e -- tests/agent-profiles.spec.js --workers=1
+npm --prefix services/frontend run test:e2e -- tests/agent-profiles.spec.js tests/agent-views.spec.js --workers=1
 npm --prefix services/frontend run build
 ```
 

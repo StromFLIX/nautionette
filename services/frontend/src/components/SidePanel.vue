@@ -43,7 +43,10 @@
       </div>
       <div class="side__search">
         <span class="material-icons">search</span>
-        <input v-model="query" class="side__search-input" :placeholder="`Search ${heading.toLowerCase()}`" :aria-label="`Search ${heading.toLowerCase()}`" />
+        <input v-model="query" class="side__search-input" :placeholder="`Search ${section}`" :aria-label="`Search ${section}`" />
+        <button v-if="section === 'chats'" type="button" class="side__search-expand" aria-label="Expand chat search" title="Search chats and settings (⌘K / Ctrl+K)" aria-keyshortcuts="Meta+K Control+K" @click="$emit('open-search', query)">
+          <kbd>{{ searchShortcut }}</kbd>
+        </button>
         <button v-if="query" class="btn btn--icon btn--sm" aria-label="Clear search" @click="query = ''">
           <span class="material-icons" style="font-size: 1rem">close</span>
         </button>
@@ -189,16 +192,20 @@ import { api } from '../api'
 import ChatRow from './ChatRow.vue'
 import { preferences } from '../preferences'
 import { CHAT_GROUP_OPTIONS, groupChats } from '../chat-groups'
+import { belongsToAgent } from '../agent-config'
+import { chatLocation } from '../router'
 
 const props = defineProps({
   showCollapseButton: { type: Boolean, default: false },
   isChatActive: { type: Function, required: true }
 })
-defineEmits(['collapse-sidebar'])
+defineEmits(['collapse-sidebar', 'open-search'])
+defineExpose({ getChatQuery: () => section.value === 'chats' ? query.value : '' })
 
 const route = useRoute()
 const router = useRouter()
 const query = ref('')
+const searchShortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘K' : 'Ctrl K'
 const readBusy = ref('')
 const readError = ref('')
 
@@ -236,7 +243,7 @@ async function setUnread (chat, unread) {
   readError.value = ''
   try {
     // Leave the open chat first so it is not immediately acknowledged again.
-    if (unread && route.params.id === chat.id) await router.push('/chats')
+    if (unread && route.params.id === chat.id) await router.push(chatLocation())
     await api.updateChatReadState(chat.id, { unread })
     await actions.loadChats()
   } catch (error) {
@@ -247,12 +254,13 @@ async function setUnread (chat, unread) {
 }
 
 const section = computed(() => route.name || 'chats')
-const heading = computed(() => ({ chats: 'Chats', workflows: 'Workflows', runs: 'Runs' }[section.value]))
+const selectedAgent = computed(() => section.value === 'chats' ? store.catalog.agents?.find(agent => agent.id === route.query.agent) : null)
+const heading = computed(() => selectedAgent.value?.name || ({ chats: 'Chats', workflows: 'Workflows', runs: 'Runs' }[section.value]))
 
 const matches = (haystack) => haystack.toLowerCase().includes(query.value.trim().toLowerCase())
 
 const filteredChats = computed(() =>
-  store.chats.filter((chat) => matches(`${chat.title} ${chat.last_message?.preview || ''}`)))
+  store.chats.filter((chat) => belongsToAgent(chat, route.query.agent) && matches(`${chat.title} ${chat.last_message?.preview || ''}`)))
 
 const filteredWorkflows = computed(() =>
   store.workflows.filter((workflow) => matches(`${workflow.name} ${workflow.title || ''} ${workflow.description || ''}`)))
@@ -266,7 +274,7 @@ const filteredRuns = computed(() =>
 async function startChat () {
   // Keep the list beneath the draft even if clicked during initial lazy routing.
   await router.isReady()
-  router.push('/chats/new')
+  router.push(chatLocation('new'))
 }
 
 function refresh () {
@@ -357,6 +365,13 @@ function refresh () {
 
 .side__search-input::placeholder {
   color: var(--text-dim);
+}
+
+.side__search-expand { display: flex; flex: none; padding: 2px; border: 0; background: transparent; color: var(--text-dim); cursor: pointer; }
+.side__search-expand:hover { color: var(--accent); }
+.side__search-expand kbd { font-size: 0.6875rem; white-space: nowrap; }
+@media (max-width: 900px) {
+  .side__search-expand { display: none; }
 }
 
 .side__controls {
@@ -545,7 +560,7 @@ function refresh () {
 
 @media (max-width: 900px) {
   .side__head {
-    padding-top: calc(10px + env(safe-area-inset-top));
+    padding-top: calc(10px + var(--list-safe-top, env(safe-area-inset-top)));
     padding-right: max(12px, env(safe-area-inset-right));
     padding-left: max(12px, env(safe-area-inset-left));
   }

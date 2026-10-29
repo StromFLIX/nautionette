@@ -110,7 +110,16 @@ Configuration follows **global defaults → agent overrides → chat changes**.
 **Settings > General** sets the starting model, container environment, reasoning,
 MCP tools and writable projects. Choose **Global defaults** or a saved agent as the
 default for new chats. **Settings > Agents & models** creates, edits, duplicates and
-deletes reusable agents. Each field shows **Inherited** or offers **Use global**.
+deletes reusable agents. Give each person an image and a system prompt, along with
+their model, tools, projects and extensions. Configurable defaults show **Inherited**
+or offer **Use global**.
+
+The chat workspace's agent column always starts with **All**, which shows every
+chat. Select a person to see only their chats and start new chats with that agent,
+regardless of remembered settings. On mobile this becomes a horizontally scrollable
+strip with All pinned first. Customizing a chat moves it to All without closing it;
+selecting/reapplying an agent explicitly restores membership. Only the latest agent
+selection counts. Agent/profile edits never reshuffle historical conversations.
 
 Pick an agent under **Chat configuration**, customize individual fields, or use
 **Reapply agent defaults**. Applying an agent to an existing chat is explicit:

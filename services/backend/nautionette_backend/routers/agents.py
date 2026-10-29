@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from .. import agent_profiles, catalog
+from .. import agent_images, agent_profiles, catalog
 from ..db import db
 from ..events import bus
 from ..reasoning import validate_effort
@@ -30,14 +30,14 @@ def _result(agent: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _validated(payload: dict[str, Any], current: dict[str, Any] | None = None) -> dict[str, Any]:
-    if payload.keys() - {"name", "description", "config"}:
-        raise HTTPException(422, "An agent accepts name, description and config")
-    values = {**(current or {"description": "", "config": {}}), **payload}
+    if payload.keys() - {"name", "description", "config", "image"}:
+        raise HTTPException(422, "An agent accepts name, description, image and config")
+    values = {**(current or {"description": "", "config": {}, "image": ""}), **payload}
     name = values.get("name")
     if not isinstance(name, str) or not name.strip() or len(name.strip()) > 80:
         raise HTTPException(422, "Agent name must contain 1–80 characters")
-    if name.strip().casefold() == "global defaults":
-        raise HTTPException(422, "Choose a name other than Global defaults")
+    if name.strip().casefold() in {"global defaults", "all"}:
+        raise HTTPException(422, "All and Global defaults are reserved names")
     description = values["description"]
     if not isinstance(description, str) or len(description) > 500:
         raise HTTPException(422, "Agent description must be at most 500 characters")
@@ -50,7 +50,8 @@ async def _validated(payload: dict[str, Any], current: dict[str, Any] | None = N
                 validate_effort(resolved["reasoning_effort"], await catalog.model_info(resolved["model"]))
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
-    return {"name": name.strip(), "description": description.strip(), "config": config}
+    image = agent_images.normalize_image(values["image"]) if "image" in payload else values["image"]
+    return {"name": name.strip(), "description": description.strip(), "config": config, "image": image}
 
 
 @router.get("/api/agents")
@@ -65,9 +66,17 @@ async def create_agent(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
     now = time.time()
     try:
         db.execute(
-            "INSERT INTO agent_profiles (id, name, description, config, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (agent_id, values["name"], values["description"], json.dumps(values["config"]), now, now),
+            "INSERT INTO agent_profiles (id, name, description, config, image, created_at, updated_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (
+                agent_id,
+                values["name"],
+                values["description"],
+                json.dumps(values["config"]),
+                values["image"],
+                now,
+                now,
+            ),
         )
     except sqlite3.IntegrityError as exc:
         raise HTTPException(409, "An agent with that name already exists") from exc
@@ -86,8 +95,16 @@ async def update_agent(agent_id: str, payload: dict[str, Any] = Body(...)) -> di
     values = await _validated(payload, agent_profiles.get_agent(agent_id))
     try:
         changed = db.execute(
-            "UPDATE agent_profiles SET name = ?, description = ?, config = ?, updated_at = ? WHERE id = ?",
-            (values["name"], values["description"], json.dumps(values["config"]), time.time(), agent_id),
+            "UPDATE agent_profiles SET name = ?, description = ?, config = ?, image = ?, "
+            "updated_at = ? WHERE id = ?",
+            (
+                values["name"],
+                values["description"],
+                json.dumps(values["config"]),
+                values["image"],
+                time.time(),
+                agent_id,
+            ),
         ).rowcount
     except sqlite3.IntegrityError as exc:
         raise HTTPException(409, "An agent with that name already exists") from exc

@@ -22,7 +22,9 @@ test('header collapse button makes room for the chat without losing its draft, s
   await expect(grip).toHaveAttribute('aria-valuenow', '330')
   const expandedWidth = (await main.boundingBox()).width
   await expect(sidebar.locator('.side__head').getByRole('button', { name: 'Collapse sidebar', exact: true })).toBeVisible()
-  await expect(page.getByRole('navigation').getByRole('button')).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button')).toHaveCount(0)
+  const agentColumn = page.getByRole('navigation', { name: 'Chats by agent' })
+  const agentWidth = (await agentColumn.boundingBox()).width
   const collapseBox = await collapseButton(page).boundingBox()
   const groupBox = await page.getByRole('button', { name: 'Group', exact: true }).boundingBox()
   expect(collapseBox.x + collapseBox.width).toBeLessThanOrEqual(groupBox.x)
@@ -36,7 +38,8 @@ test('header collapse button makes room for the chat without losing its draft, s
   await expect(page.getByRole('button', { name: 'Expand sidebar', exact: true })).toHaveCount(0)
   await expect(chatsLink(page)).toBeFocused()
   await expect(input).toHaveValue('Keep this draft while I focus')
-  expect((await main.boundingBox()).width).toBeCloseTo(expandedWidth + 330)
+  await expect(agentColumn).toBeHidden()
+  expect((await main.boundingBox()).width).toBeCloseTo(expandedWidth + 330 + agentWidth)
   await page.screenshot({ path: '/tmp/nautionette-sidebar-collapsed.png' })
 
   // Focus moves to the existing navigation link, which reopens the current list.

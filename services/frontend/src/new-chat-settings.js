@@ -10,10 +10,13 @@ export function chatSettingsSnapshot (value) {
       !(value.tools === null || strings(value.tools)) || !strings(value.project_ids) ||
       !(value.reasoning_effort == null || typeof value.reasoning_effort === 'string') ||
       !(value.agent_id == null || typeof value.agent_id === 'string') ||
-      !(value.packages == null || strings(value.packages))) return null
+      !(value.packages == null || strings(value.packages)) ||
+      !(value.system_prompt == null || typeof value.system_prompt === 'string') ||
+      !(value.agent_customized == null || typeof value.agent_customized === 'boolean' || value.agent_customized === 0 || value.agent_customized === 1)) return null
   const config = { agent_id: value.agent_id ?? null,
     ...Object.fromEntries(CONFIG_KEYS.map(key => [key, value[key]])),
-    reasoning_effort: value.reasoning_effort ?? null, packages: value.packages ?? [] }
+    reasoning_effort: value.reasoning_effort ?? null, packages: value.packages ?? [],
+    system_prompt: value.system_prompt ?? '', agent_customized: Boolean(value.agent_customized) }
   // Extension revision IDs pin their configuration. Never share mutable selections with a draft.
   return copyConfig(config)
 }
