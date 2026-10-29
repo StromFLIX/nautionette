@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { THEMES, resolveTheme } from '../src/themes.js'
 import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 import { mockDesign } from './design-fixture.js'
+import { closeChatConfiguration } from './helpers.js'
 
 const rgb = hex => `rgb(${[1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16)).join(', ')})`
 const stored = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREFERENCES_KEY)
@@ -182,6 +183,7 @@ test('workspace controls change layout, composer behavior, code and graph direct
   await expect(page.getByRole('button', { name: 'Chat configuration', exact: true })).toHaveAttribute('aria-expanded', 'false')
   await page.getByRole('button', { name: 'Chat configuration', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Select projects', exact: true })).toBeVisible()
+  await closeChatConfiguration(page)
   await expect(page.locator('.msg__time')).toHaveCount(0)
   const input = page.getByRole('textbox', { name: 'Message', exact: true })
   await input.fill('First line')

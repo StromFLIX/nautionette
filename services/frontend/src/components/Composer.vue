@@ -1,5 +1,5 @@
 <template>
-  <div class="composer" data-skin-part="composer" :class="[`composer--${variant}`, { 'composer--focus': focused, 'composer--running': running, 'composer--expanded': configurationOpen }]"
+  <div v-show="!configurationOpen" ref="composerElement" class="composer" data-skin-part="composer" :class="[`composer--${variant}`, { 'composer--focus': focused, 'composer--running': running }]"
     @dragover.prevent @drop.prevent="drop" @paste="paste">
     <div v-if="attachments.length" class="composer__attachments">
       <div v-for="image in attachments" :key="image.id" class="composer__attachment">
@@ -11,7 +11,7 @@
     </div>
     <p v-if="!configurationReady" class="composer__notice caption" role="status">Loading chat defaults…</p>
     <p v-if="imageError" class="composer__notice caption" role="alert">{{ imageError }}</p>
-    <p v-if="imageSupport !== true && (hasImages || configurationOpen)" class="composer__notice caption" role="status">{{ imageNotice }}</p>
+    <p v-if="imageSupport !== true && hasImages" class="composer__notice caption" role="status">{{ imageNotice }}</p>
     <div v-if="commandSuggestions.length" class="composer__commands" aria-label="Pi command suggestions">
       <button v-for="command in commandSuggestions" :key="command.name" class="pick-menu__item" type="button" :disabled="busy" @click="chooseCommand(command.name)">
         <strong>/{{ command.name }}</strong><span class="caption dim truncate">{{ command.description }}</span>
@@ -40,12 +40,12 @@
         <span class="sr-only">{{ meter.label }}</span>
         <q-tooltip>{{ meter.title }}</q-tooltip>
       </div>
-      <button class="pick pick--icon composer__config-toggle" :class="{ 'pick--active': configurationOpen }" type="button"
-        aria-label="Chat configuration" :aria-expanded="configurationOpen" :aria-controls="configurationId"
-        @click="configurationOpen = !configurationOpen">
+      <button ref="configurationToggle" class="pick pick--icon composer__config-toggle" type="button"
+        aria-label="Chat configuration" aria-haspopup="dialog" :aria-expanded="configurationOpen" :aria-controls="configurationId"
+        @click="openConfiguration">
         <span class="material-icons" aria-hidden="true">tune</span>
         <span v-if="customConfiguration && !configurationOpen" class="composer__configured" aria-label="Custom configuration" />
-        <q-tooltip>Agent, reasoning, tools, projects & extensions{{ customConfiguration ? ' · customized' : '' }}</q-tooltip>
+        <q-tooltip>Model, agent, reasoning, tools, projects & extensions{{ customConfiguration ? ' · customized' : '' }}</q-tooltip>
       </button>
       <button type="button" :class="showStop ? 'composer__stop' : ['composer__send', { 'composer__send--busy': busy }]"
         :aria-label="showStop ? 'Stop response' : running ? 'Queue message' : 'Send message'"
@@ -55,7 +55,20 @@
       </button>
     </div>
 
-    <div v-show="configurationOpen" :id="configurationId" class="composer__configuration scroll-y" aria-label="Chat configuration controls">
+  </div>
+
+  <q-dialog v-model="configurationOpen" :aria-labelledby="`${configurationId}-title`" @hide="restoreConfigurationFocus">
+    <div :id="configurationId" class="composer__configuration" data-skin-part="chat-configuration" :style="{ width: `${configurationWidth}px` }">
+      <header class="composer__configuration-head">
+        <div>
+          <h2 :id="`${configurationId}-title`">Chat preferences</h2>
+          <p>All settings for this chat, in one place.</p>
+        </div>
+        <button class="pick pick--icon" type="button" aria-label="Close chat preferences" autofocus @click="configurationOpen = false">
+          <span class="material-icons" aria-hidden="true">close</span>
+        </button>
+      </header>
+      <div class="composer__configuration-body scroll-y">
       <div class="composer__profile">
         <button class="pick composer__profile-picker" type="button" aria-label="Select agent" :disabled="configurationBusy">
           <span class="material-icons pick__icon" aria-hidden="true">smart_toy</span><span class="truncate">{{ profileLabel }}</span>
@@ -68,6 +81,16 @@
         </button>
       </div>
       <div class="composer__options">
+        <div class="composer__option">
+          <span class="composer__option-label">Model</span>
+          <button class="pick" type="button" :disabled="configurationBusy" aria-label="Select model">
+            <span class="material-icons pick__icon" aria-hidden="true">memory</span>
+            <span class="truncate">{{ shortModel }}</span>
+            <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
+            <ModelPicker :model-value="model" @update:model-value="$emit('update:model', $event)" />
+            <q-tooltip>Model for this chat</q-tooltip>
+          </button>
+        </div>
         <div class="composer__option">
           <span class="composer__option-label">Environment</span>
           <button class="pick" type="button" aria-label="Select agent set" :disabled="configurationBusy">
@@ -118,13 +141,16 @@
           </button>
         </div>
       </div>
-      <div class="composer__configuration-foot"><span>{{ meter.label }}</span><RouterLink to="/settings/workspace">Workspace preferences<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink></div>
+      <p v-if="!configurationReady" class="composer__configuration-notice caption" role="status">Loading chat defaults…</p>
+      <p v-if="imageSupport !== true" class="composer__configuration-notice caption" role="status">{{ imageNotice }}</p>
+      </div>
+      <div class="composer__configuration-foot"><span>{{ meter.label }}</span><RouterLink to="/settings/workspace" @click="configurationOpen = false">Workspace preferences<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink></div>
     </div>
-  </div>
+  </q-dialog>
 </template>
 
 <script setup>
-import { computed, ref, useId } from 'vue'
+import { computed, nextTick, ref, useId } from 'vue'
 import ModelPicker from './ModelPicker.vue'
 import AgentPicker from './AgentPicker.vue'
 import { agentConfig, sameConfig } from '../agent-config'
@@ -156,8 +182,18 @@ const focused = ref(false)
 const fileInput = ref(null)
 const imageError = ref('')
 const configurationId = useId()
-// Disclosure is local to this composer, not a preference carried into other chats.
+// The overlay is local to this composer, never carried into other chats.
 const configurationOpen = ref(false)
+const composerElement = ref(null)
+const configurationToggle = ref(null)
+const configurationWidth = ref(800)
+function openConfiguration () {
+  configurationWidth.value = (composerElement.value?.getBoundingClientRect().width || 768) + 32
+  configurationOpen.value = true
+}
+function restoreConfigurationFocus () {
+  nextTick(() => configurationToggle.value?.focus())
+}
 const profileDefaults = computed(() => agentConfig(store.catalog, props.agentId))
 const profileLabel = computed(() => props.agentId ? (profileDefaults.value?.agent_name || props.agentName || 'Removed agent') : 'Global defaults')
 const customConfiguration = computed(() => !sameConfig(profileDefaults.value, {
@@ -228,14 +264,9 @@ defineExpose({ focus: () => input.value?.focus() })
 
 <style scoped>
 .composer { position: relative; min-width: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-input); transition: border-color var(--transition), box-shadow var(--transition); }
-/* On short viewports the draft and advanced controls scroll, not the primary actions. */
+/* On short viewports the draft scrolls, not the primary actions. */
 .composer--docked { display: flex; flex-direction: column; max-height: 100%; }
-/* The extra tab row can leave less than the input + actions + one control.
-   Scroll that minimum as a unit instead of overflowing a fractionally clipped box. */
-.composer--docked.composer--expanded { min-height: calc(var(--chat-font-size) * 1.6 + max(2rem, 44px) + max(2rem, 44px) + 54px); }
 .composer--docked .composer__input { flex: 0 1 auto; min-height: calc(var(--chat-font-size) * 1.6 + 28px); }
-/* Leave room for a complete control plus the border in the scrollable area. */
-.composer--docked .composer__configuration { min-height: calc(max(2rem, 44px) + 1px); }
 .composer--focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .composer--welcome { border-radius: var(--radius-xl); box-shadow: var(--shadow-md); }
 .composer--running { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft), 0 0 20px var(--accent-soft); }
@@ -282,7 +313,12 @@ defineExpose({ focus: () => input.value?.focus() })
 .composer__send:disabled, .composer__stop:disabled { color: var(--text-dim); cursor: default; }
 .composer__send:disabled::before { background: var(--surface-active); }
 .composer__send .material-icons, .composer__stop .material-icons { font-size: 1.25rem; }
-.composer__configuration { min-height: 0; padding: 14px 16px 12px; border-top: 1px solid var(--border); }
+.composer__configuration { display: flex; flex-direction: column; min-width: 0; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-input); color: var(--text); box-shadow: var(--shadow-md); }
+.composer__configuration-head { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+.composer__configuration-head h2 { margin: 0; font-size: 1rem; font-weight: 600; }
+.composer__configuration-head p { margin: 4px 0 0; color: var(--text-dim); font-size: 0.6875rem; }
+.composer__configuration-body { min-height: 0; padding: 18px 20px; }
+.composer__configuration-notice { margin: 14px 8px 0; color: var(--warning); }
 .composer__profile { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
 .composer__profile-picker { max-width: min(280px, 100%); color: var(--text); background: var(--surface-hover); }
 .composer__profile > .caption { font-size: 0.625rem; }
@@ -290,7 +326,7 @@ defineExpose({ focus: () => input.value?.focus() })
 .composer__option { min-width: 0; }
 .composer__option-label { display: block; color: var(--text-dim); font-size: 0.625rem; margin: 0 8px 4px; }
 .composer__option > .pick { width: 100%; max-width: none; background: var(--surface-hover); }
-.composer__configuration-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 8px 0; color: var(--text-dim); font-size: 0.625rem; }
+.composer__configuration-foot { display: flex; flex: none; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.625rem; }
 .composer__configuration-foot a { display: flex; align-items: center; gap: 4px; color: var(--text-muted); text-decoration: none; }
 .composer__configuration-foot .material-icons { font-size: 0.75rem; }
 @media (max-width: 1100px) { .composer__options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -299,7 +335,9 @@ defineExpose({ focus: () => input.value?.focus() })
   .composer__model { flex: 0 1 auto; max-width: 190px; }
   .composer__bar { padding: 6px 8px 10px; gap: 3px; }
   .composer__input, .composer--welcome .composer__input { padding: 14px 14px 8px; }
-  .composer__configuration { padding: 12px 10px; }
+  .composer__configuration-head { padding: 14px; }
+  .composer__configuration-body { padding: 14px; }
+  .composer__configuration-foot { padding: 12px 14px; }
   .composer__options { gap: 10px; }
 }
 @media (max-width: 380px) {

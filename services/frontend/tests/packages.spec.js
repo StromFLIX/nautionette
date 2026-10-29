@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { mockAgents } from './agent-fixture.js'
+import { closeChatConfiguration } from './helpers.js'
 
 async function mockPackages (context) {
   const state = await mockAgents(context)
@@ -160,6 +161,7 @@ test('new chat sends the selected extension revisions without creating an agent'
   await page.getByRole('button', { name: 'Select extensions', exact: true }).click()
   await page.getByRole('checkbox', { name: /pi-test-prompts/ }).check()
   await page.keyboard.press('Escape')
+  await closeChatConfiguration(page)
   await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Review this')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect.poll(() => state.created[0]?.packages).toEqual([item.default_revision_id])

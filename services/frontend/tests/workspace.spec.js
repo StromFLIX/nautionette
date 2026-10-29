@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import { THEMES } from '../src/themes.js'
 import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 import { mockDesign } from './design-fixture.js'
+import { closeChatConfiguration } from './helpers.js'
 
 for (const theme of THEMES) {
   test(`${theme.name} keeps mobile chat controls and source code usable`, async ({ page, context }) => {
@@ -17,19 +18,19 @@ for (const theme of THEMES) {
     await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Keep this draft')
     const toggle = page.getByRole('button', { name: 'Chat configuration', exact: true })
     await toggle.press('Space')
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    for (const name of ['Select agent', 'Select agent set', 'Reasoning effort', 'Select tools', 'Select projects']) {
+    await expect(page.getByRole('dialog', { name: 'Chat preferences' })).toBeVisible()
+    for (const name of ['Select agent', 'Select model', 'Select agent set', 'Reasoning effort', 'Select tools', 'Select projects', 'Select extensions']) {
       const control = page.getByRole('button', { name, exact: true })
+      await control.scrollIntoViewIfNeeded()
       await expect(control).toBeVisible()
       const box = await control.boundingBox()
       expect(box.x).toBeGreaterThanOrEqual(0)
       expect(box.x + box.width).toBeLessThanOrEqual(320)
       expect(box.y + box.height).toBeLessThanOrEqual(568)
     }
-    await page.getByRole('textbox', { name: 'Message', exact: true }).focus()
-    await expect(page.getByRole('tooltip')).toHaveCount(0)
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeHidden()
     await page.screenshot({ path: `/tmp/nautionette-theme-${theme.id}-mobile.png` })
-    await toggle.click()
+    await closeChatConfiguration(page)
     await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('Keep this draft')
     await page.goto('/workflows/digest?tab=Code')
     await expect(page.locator('.viewer')).toBeVisible()
@@ -76,6 +77,8 @@ for (const { name, width, hasTouch } of [
           await expectMatchingSize('Send message')
           await input.fill('Draft message')
           await settings.click()
+          await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeHidden()
+          await closeChatConfiguration(page)
           await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled()
           await expectMatchingSize('Send message')
         }
@@ -95,26 +98,27 @@ test.describe('touch layouts', () => {
   test.use({ hasTouch: true, isMobile: true })
 
   for (const width of [320, 390]) {
-    test(`expanded composer stays reachable in a keyboard-sized viewport at ${width}px`, async ({ page, context }) => {
+    test(`preferences stay reachable in a keyboard-sized viewport at ${width}px`, async ({ page, context }) => {
       const state = await mockDesign(context)
       const errors = []
       page.on('pageerror', error => errors.push(error.message))
       await page.setViewportSize({ width, height: 568 })
       await page.goto('/chats/alpha')
-      await page.getByRole('button', { name: 'Chat configuration', exact: true }).tap()
       const input = page.getByRole('textbox', { name: 'Message', exact: true })
       const draft = Array.from({ length: 8 }, (_, index) => `Draft line ${index + 1}`).join('\n')
       await input.fill(draft)
+      await page.getByRole('button', { name: 'Chat configuration', exact: true }).tap()
       await page.setViewportSize({ width, height: 320 })
-      const footer = page.locator('.thread__foot')
-      await expect(footer).toBeInViewport({ ratio: 1 })
-      for (const name of ['Select agent', 'Select agent set', 'Reasoning effort', 'Select tools', 'Select projects', 'Send message']) {
+      await expect(input).toBeHidden()
+      for (const name of ['Select agent', 'Select model', 'Select agent set', 'Reasoning effort', 'Select tools', 'Select projects', 'Select extensions']) {
         const control = page.getByRole('button', { name, exact: true })
         await control.scrollIntoViewIfNeeded()
         await expect(control).toBeInViewport({ ratio: 1 })
         const box = await control.boundingBox()
         expect(box.height).toBeGreaterThanOrEqual(40)
       }
+      await expect(page.getByRole('button', { name: 'Close chat preferences' })).toBeInViewport({ ratio: 1 })
+      await closeChatConfiguration(page)
       await expect(page.locator('.pane-head')).toBeInViewport({ ratio: 1 })
       await page.getByRole('button', { name: 'Send message', exact: true }).tap()
       await expect.poll(() => state.sent.length).toBe(1)

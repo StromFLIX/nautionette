@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { openChatConfiguration } from './helpers'
+import { openChatConfiguration, closeChatConfiguration } from './helpers'
 import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 
 function refreshReadState (data) {
@@ -1031,7 +1031,8 @@ for (const reason of ['The provider marks this model as text-only.', 'No compati
     await expect(page.locator('input[type=file]')).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Attach files' })).toHaveAttribute('title', new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     await openChatConfiguration(page)
-    await expect(page.locator('.composer [role=status]')).toContainText(reason)
+    await expect(page.getByRole('dialog', { name: 'Chat preferences' }).getByRole('status')).toContainText(reason)
+    await closeChatConfiguration(page)
     for (const type of ['paste', 'drop', 'change']) {
       await page.locator(type === 'change' ? 'input[type=file]' : 'textarea').evaluate((el, { type, bytes }) => {
         const transfer = new DataTransfer()
@@ -1258,7 +1259,7 @@ for (const width of [1440, 320]) {
     await page.goto('/chats/alpha')
     await openChatConfiguration(page)
     await expect(picker).toContainText('Max')
-    await page.locator('.composer .pick').filter({ hasText: 'memory' }).click()
+    await page.getByRole('button', { name: 'Select model', exact: true }).click()
     await page.getByPlaceholder('Search models').fill('Flash')
     await page.getByPlaceholder('Search models').press('Enter')
     await expect(picker).toContainText('default')
@@ -1270,7 +1271,7 @@ for (const width of [1440, 320]) {
     await picker.click()
     await page.getByRole('menuitemradio', { name: 'Provider default', exact: true }).click()
     await expect.poll(() => state.chats.alpha.chat.reasoning_effort).toBe(null)
-    await page.locator('.composer .pick').filter({ hasText: 'memory' }).click()
+    await page.getByRole('button', { name: 'Select model', exact: true }).click()
     await page.getByPlaceholder('Search models').fill('Unknown')
     await page.getByPlaceholder('Search models').press('Enter')
     await expect(picker).toBeDisabled()
@@ -1286,6 +1287,7 @@ test('welcome composer includes reasoning selection in chat creation', async ({ 
   await openChatConfiguration(page)
   await page.getByRole('button', { name: 'Reasoning effort', exact: true }).click()
   await page.getByRole('menuitemradio', { name: 'Extra high', exact: true }).click()
+  await closeChatConfiguration(page)
   await page.locator('textarea').fill('Think carefully')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect(page).toHaveURL(/\/chats\/created$/)

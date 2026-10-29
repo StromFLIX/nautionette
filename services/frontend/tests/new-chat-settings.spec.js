@@ -1,15 +1,19 @@
 import { test, expect } from '@playwright/test'
 import { mockAgents, projectId } from './agent-fixture.js'
-import { openChatConfiguration } from './helpers.js'
+import { openChatConfiguration, closeChatConfiguration } from './helpers.js'
 import { LAST_CHAT_SETTINGS_KEY } from '../src/new-chat-settings.js'
 
 const toggle = page => page.getByRole('button', { name: 'Chat configuration', exact: true })
-const newChat = page => page.getByRole('button', { name: 'New chat', exact: true }).click()
+const newChat = async page => {
+  await closeChatConfiguration(page)
+  await page.getByRole('button', { name: 'New chat', exact: true }).click()
+}
 const stored = page => page.evaluate(prefix => {
   const key = Object.keys(localStorage).find(key => key.startsWith(`${prefix}:`))
   return key ? JSON.parse(localStorage.getItem(key)) : null
 }, LAST_CHAT_SETTINGS_KEY)
 async function send (page, text = 'Use these settings') {
+  await closeChatConfiguration(page)
   await page.getByLabel('Message', { exact: true }).fill(text)
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect(page.getByLabel('Message', { exact: true })).toHaveValue('')
@@ -31,7 +35,7 @@ test('configuration opens only manually, including legacy preferences and reused
   await page.goto('/chats')
   await expect(toggle(page)).toHaveAttribute('aria-expanded', 'false')
   await toggle(page).click()
-  await expect(toggle(page)).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.getByRole('dialog', { name: 'Chat preferences' })).toBeVisible()
   await newChat(page)
   await expect(page).toHaveURL(/\/chats\/created-1$/)
   await expect(toggle(page)).toHaveAttribute('aria-expanded', 'false')
@@ -183,9 +187,10 @@ test('remembered settings wait for the catalog and explicit changes are not eras
   await openChatConfiguration(page)
   await noTools(page)
   release()
+  await expect(page.getByLabel('Reasoning effort', { exact: true })).toContainText('High')
+  await closeChatConfiguration(page)
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled()
   await expect(page.getByLabel('Message', { exact: true })).toHaveValue('Keep my draft')
-  await expect(page.getByLabel('Reasoning effort', { exact: true })).toContainText('High')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect.poll(() => state.created.length).toBe(1)
   expect(state.created[0]).toMatchObject({ tools: [], reasoning_effort: 'high' })

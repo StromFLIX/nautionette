@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 import { mockDesign } from './design-fixture.js'
+import { closeChatConfiguration } from './helpers.js'
 
 for (const width of [320, 390, 901, 1440]) {
   test(`125% defaults enlarge text and controls without zoom or overflow at ${width}px`, async ({ page, context }) => {
@@ -70,12 +71,13 @@ test.describe('phone sizing', () => {
     await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Readable with the keyboard open')
     await page.getByRole('button', { name: 'Chat configuration', exact: true }).tap()
     await page.setViewportSize({ width: 320, height: 320 })
-    for (const name of ['Select agent', 'Select agent set', 'Reasoning effort', 'Select tools', 'Select projects', 'Send message']) {
+    for (const name of ['Select agent', 'Select model', 'Select agent set', 'Reasoning effort', 'Select tools', 'Select projects', 'Select extensions']) {
       const control = page.getByRole('button', { name, exact: true })
       await control.scrollIntoViewIfNeeded()
       await expect(control).toBeInViewport({ ratio: 1 })
       expect((await control.boundingBox()).height).toBeGreaterThanOrEqual(44)
     }
+    await closeChatConfiguration(page)
     await page.getByRole('button', { name: 'Send message', exact: true }).tap()
     await expect.poll(() => state.sent.length).toBe(1)
     expect(state.sent[0].text).toBe('Readable with the keyboard open')
