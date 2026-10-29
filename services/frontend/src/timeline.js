@@ -38,6 +38,10 @@ export function foldEvent (steps, event) {
   if (event.type === 'delta') addText(steps, event.text)
   else if (event.type === 'tool') startTool(steps, event)
   else if (event.type === 'tool_done') finishTool(steps, event)
+  else if (event.type === 'compaction') steps.push({
+    kind: 'compaction', state: event.state, tokens_before: event.tokens_before,
+    aborted: event.aborted, error: event.error
+  })
   else if (event.type === 'recovery') steps.push({
     kind: 'recovery', attempt: event.attempt, max_attempts: event.max_attempts,
     message: String(event.message || 'Automatic recovery').slice(0, 500)

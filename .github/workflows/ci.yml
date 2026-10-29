@@ -48,7 +48,7 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Deployment, snapshot, gateway buffers and agent image safety tests
-        run: uv run pytest tests/test_coolify_release.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py
+        run: uv run pytest tests/test_coolify_release.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py tests/broker/test_chat_sessions.py tests/broker/test_chat_recovery.py tests/broker/test_sandbox_network.py
 
       - name: Native creative app release contracts, installer isolation and Settings
         run: uv run pytest tests/lib/test_artcraft.py tests/broker/test_artcraft.py tests/backend/test_artcraft.py
@@ -74,7 +74,7 @@ jobs:
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py
 
       - name: Backend restart draining and safe crash recovery
-        run: uv run pytest tests/backend/test_chat_draining.py tests/backend/test_chat_restart_process.py tests/backend/test_chat_recovery.py tests/backend/test_chat_queue.py
+        run: uv run pytest tests/backend/test_chat_draining.py tests/backend/test_chat_restart_process.py tests/backend/test_chat_recovery.py tests/backend/test_chat_queue.py tests/backend/test_chat_sessions.py
 
       - name: GitHub connections, migrations and project credentials
         run: uv run pytest tests/backend/test_github_connections.py tests/backend/test_github_setup.py tests/backend/test_projects.py tests/backend/test_project_changes.py tests/backend/test_project_credentials.py tests/broker/test_projects.py tests/broker/test_git_credentials.py
@@ -177,7 +177,7 @@ jobs:
           docker run --rm --network none --user 10001:10001 \
             --env HOME=/workspace --env ARTCRAFT_REQUIRE_NATIVE=1 --tmpfs /workspace:rw,mode=1777 \
             --volume "$PWD:/source:ro" --entrypoint bash nautionette/pi-agent-default:dev -c \
-            'pi --version && node --test /source/tests/agent/test_artcraft.mjs /source/tests/agent/test_artcraft_native.mjs /source/tests/agent/test_artcraft_rpc.mjs /source/tests/agent/test_chat_files.mjs /source/tests/agent/test_outputs.mjs /source/tests/agent/test_outputs_rpc.mjs /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs /source/tests/agent/test_packages_rpc.mjs /source/tests/agent/test_context_usage.mjs /source/tests/agent/test_chat_control.mjs /source/tests/agent/test_chat_recovery.mjs /source/tests/agent/test_chat_recovery_rpc.mjs /source/tests/agent/test_project_git.mjs /source/tests/agent/test_telemetry.mjs'
+            'pi --version && node --test /source/tests/agent/test_artcraft.mjs /source/tests/agent/test_artcraft_native.mjs /source/tests/agent/test_artcraft_rpc.mjs /source/tests/agent/test_chat_files.mjs /source/tests/agent/test_chat_session.mjs /source/tests/agent/test_chat_session_rpc.mjs /source/tests/agent/test_outputs.mjs /source/tests/agent/test_outputs_rpc.mjs /source/tests/agent/test_images.mjs /source/tests/agent/test_provider.ts /source/tests/agent/test_model_api.ts /source/tests/agent/test_reasoning.ts /source/tests/agent/test_tool_selection.ts /source/tests/agent/test_image_transport.mjs /source/tests/agent/test_packages_rpc.mjs /source/tests/agent/test_context_usage.mjs /source/tests/agent/test_chat_control.mjs /source/tests/agent/test_chat_recovery.mjs /source/tests/agent/test_chat_recovery_rpc.mjs /source/tests/agent/test_project_git.mjs /source/tests/agent/test_telemetry.mjs'
 
       - name: Development tools work offline as the project user
         run: |
@@ -194,7 +194,7 @@ jobs:
       - name: Git credential rotation in a live unprivileged container (offline)
         run: |
           uv sync --locked --all-packages
-          NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_git_credentials_docker.py
+          NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_git_credentials_docker.py tests/broker/test_chat_sessions_docker.py
 
       # Publishing is part of CI, so Deploy cannot start before these images
       # exist. PR code never logs in or pushes (including same-repository PRs).

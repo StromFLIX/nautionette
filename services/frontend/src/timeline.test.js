@@ -110,3 +110,15 @@ test('recovery notices survive replay, separate tool groups, and never count as 
   assert.deepEqual(groupToolCalls(JSON.parse(JSON.stringify(steps))), grouped)
   assert.equal(steps.filter(part => part.kind === 'text').map(part => part.text).join(''), 'Resumed')
 })
+
+test('native compaction markers survive reload and are not prose or tool calls', () => {
+  const steps = []
+  foldEvent(steps, { type: 'tool', id: 'one', name: 'read' })
+  foldEvent(steps, { type: 'compaction', state: 'started' })
+  foldEvent(steps, { type: 'compaction', state: 'completed', tokens_before: 120000, aborted: false })
+  foldEvent(steps, { type: 'delta', text: 'Continued' })
+  const restored = JSON.parse(JSON.stringify(steps))
+  assert.deepEqual(groupToolCalls(restored).map(part => part.kind), ['tool-group', 'compaction', 'compaction', 'text'])
+  assert.equal(restored[2].tokens_before, 120000)
+  assert.equal(summarizeToolCalls(restored).label, 'Ran 1 tool call')
+})

@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import pytest
 from docker.errors import APIError, NotFound
 from fastapi.testclient import TestClient
-from nautionette_docker_broker import agent_run, chat_agents, main, projects
+from nautionette_docker_broker import agent_run, chat_agents, chat_sessions, main, projects
 
 from ..conftest import INTERNAL_TOKEN
 
@@ -166,6 +166,10 @@ def test_cleanup_racing_container_creation_prevents_a_late_start(agents, monkeyp
             networks=SimpleNamespace(get=lambda name: SimpleNamespace(attrs={"Internal": True})),
         ),
     )
+    # This test isolates creation/cleanup racing; native mount isolation has its own tests.
+    from contextlib import nullcontext
+
+    monkeypatch.setattr(chat_sessions, "claim", lambda chat_id: nullcontext([]))
     monkeypatch.setattr(agent_run.images, "discovered_agent_sets", lambda: ["default"])
     monkeypatch.setattr(agent_run.images, "has_image", lambda tag: True)
     monkeypatch.setattr(agent_run.images, "image_tag", lambda name: "test-image")

@@ -8,15 +8,15 @@ import logging
 from time import monotonic
 from typing import Any
 
-from . import chat_attachments, git_authorship, projects
-from .agent import Timeline, build_history, stream_agent
+from . import chat_attachments, chat_sessions, git_authorship, projects
+from .agent import Timeline, stream_agent
 from .background import is_draining, spawn
 from .chat_titles import refine_chat_title
 from .clients import broker
 from .db import db
 from .events import bus, sse
 from .project_credentials import TurnCredentials
-from .runtime import history_budget, remember_agent_result, runtime
+from .runtime import remember_agent_result, runtime
 
 CHAT_PROGRESS_NOTICE_INTERVAL = 1.0
 
@@ -108,7 +108,7 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
                     candidate = json.loads(pending["job"])
                     # Attachment messages run as their own durable turn. Never send a text-only
                     # steering command that silently drops attachments (or exceed exec argv limits).
-                    if candidate.get("attachments"):
+                    if candidate.get("attachments") or candidate.get("prompt", "").startswith("/compact"):
                         break
                     if any(
                         candidate.get(key) != job.get(key)
@@ -170,14 +170,9 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         except Exception:
             cleanup_failed = True
             raise
-        job["history"] = build_history(
-            [
-                message
-                for message in db.list_messages(chat_id)
-                if message["id"] != turn_id and not message["meta"].get("queued")
-            ],
-            max_chars=history_budget(job.get("model")),
-        )
+        # Only the first native turn imports legacy UI records. Pi, not SQL
+        # transcript trimming, owns context and compaction from then onward.
+        job["history"] = chat_sessions.legacy_history(chat_id, turn_id)
         job.update(chat_attachments.load_attachments(chat_id, job.get("attachments", [])))
         for message in job["history"]:
             attachments = message.pop("attachments", [])
@@ -214,7 +209,19 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
             if not db.one("SELECT id FROM chat_turns WHERE id = ?", (turn_id,)):
                 return
             kind = event.get("type")
-            if kind == "commands":
+            if kind == "session_ready":
+                session_id = event.get("id")
+                current = db.get_chat(chat_id)
+                if (
+                    not isinstance(session_id, str)
+                    or not session_id
+                    or (current and current.get("pi_session_id") not in (None, session_id))
+                ):
+                    raise RuntimeError(
+                        "Native Pi session identity changed unexpectedly; original history retained"
+                    )
+                db.execute("UPDATE chats SET pi_session_id = ? WHERE id = ?", (session_id, chat_id))
+            elif kind == "commands":
                 current = db.get_chat(chat_id)
                 if (
                     current
@@ -263,7 +270,18 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 "interrupted",
             } or (kind == "phase" and event.get("phase") != "other"):
                 status = ""
-            if kind == "recovery":
+            if kind == "compaction":
+                timeline.steps.append(
+                    {
+                        "kind": "compaction",
+                        **{
+                            key: event[key]
+                            for key in ("state", "tokens_before", "aborted", "error")
+                            if key in event
+                        },
+                    }
+                )
+            elif kind == "recovery":
                 timeline.steps.append(
                     {
                         "kind": "recovery",

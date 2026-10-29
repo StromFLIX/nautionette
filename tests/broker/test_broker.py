@@ -14,7 +14,7 @@ import pytest
 import yaml
 from docker.models.containers import ContainerCollection
 from fastapi.testclient import TestClient
-from nautionette_docker_broker import agent_run, config, daemon, images, main, monitor, workers
+from nautionette_docker_broker import agent_run, chat_sessions, config, daemon, images, main, monitor, workers
 
 from ..conftest import INTERNAL_TOKEN
 
@@ -41,6 +41,7 @@ class FakeDocker:
     """Just enough of the Docker API for the verbs this broker exposes."""
 
     def __init__(self) -> None:
+        self.api = SimpleNamespace(_version="1.45")
         self.tags: set[str] = set()
         self.built: list[tuple[str, str]] = []
         self.listed: list[FakeContainer] = []
@@ -67,7 +68,18 @@ class FakeDocker:
             def get(self, _name):
                 if not broker.up:
                     raise RuntimeError("docker is unreachable")
-                return SimpleNamespace(labels=broker.own_labels)
+                return SimpleNamespace(
+                    labels=broker.own_labels,
+                    attrs={
+                        "Mounts": [
+                            {
+                                "Destination": str(chat_sessions.SESSIONS_DIR),
+                                "Type": "volume",
+                                "Name": "test-chat-sessions",
+                            }
+                        ]
+                    },
+                )
 
             def list(self, filters=None, all=False):
                 if not broker.up:
@@ -95,6 +107,7 @@ class FakeDocker:
 @pytest.fixture
 def docker(monkeypatch: pytest.MonkeyPatch) -> FakeDocker:
     fake = FakeDocker()
+    monkeypatch.setattr(chat_sessions.os, "chown", lambda *args: None)
     monkeypatch.setattr(workers, "last_error", None)
     monkeypatch.setattr(workers, "PROJECT_OVERRIDE", "")
     monkeypatch.setattr(workers, "WORKER_REPLICAS", 1)

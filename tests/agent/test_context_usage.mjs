@@ -95,7 +95,7 @@ test('retry and compaction overhead are not charged to model wait', async () => 
     { type: 'auto_retry_end', success: true }
   ])
   assert.deepEqual(events.map(event => event.type === 'phase' ? event.phase : event.type), [
-    'model', 'usage', 'agent_end', 'other', 'other', 'other', 'model', 'usage', 'result'
+    'model', 'usage', 'agent_end', 'other', 'compaction', 'other', 'compaction', 'other', 'model', 'usage', 'result'
   ])
   assert.equal(events.at(-1).ok, true)
 })

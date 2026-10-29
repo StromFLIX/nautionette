@@ -98,3 +98,28 @@ test('unconfirmed user input and Stop both prevent a new automatic continuation'
   control.cancelRecovery()
   assert.equal(control.beginRecovery(), false)
 })
+
+test('durable hooks distinguish rejection, consumed input, handled extension input and uncertain queue', async () => {
+  const persisted = [], consumed = [], rejected = [], events = []
+  const control = createChatControl({ send () {}, emit: e => events.push(e),
+    beforeInput: id => persisted.push(id), onConsumed: id => consumed.push(id), onRejected: id => rejected.push(id) })
+  control.receive({ type: 'response', id: 'initial', success: true, data: { disposition: 'handled' } })
+  assert.deepEqual(consumed, [null])
+  const bad = control.command({ id: 'bad', type: 'steer', text: 'Bad' })
+  control.receive({ type: 'response', id: 'bad', success: false })
+  assert.equal((await bad).ok, false)
+  assert.deepEqual(rejected, ['bad'])
+  const handled = control.command({ id: 'handled', type: 'steer', text: 'Consumed by extension' })
+  control.receive({ type: 'response', id: 'handled', success: true, data: { disposition: 'handled' } })
+  assert.equal((await handled).ok, true)
+  assert.deepEqual(consumed, [null, 'handled'])
+  const queued = control.command({ id: 'queued', type: 'steer', text: 'Queued' })
+  control.receive({ type: 'response', id: 'queued', success: true, data: { disposition: 'queued' } })
+  await queued
+  assert.deepEqual(control.pendingInputs(), ['queued'])
+  assert.deepEqual(persisted, ['bad', 'handled', 'queued'])
+  assert.deepEqual(events, [{ type: 'input_consumed', id: 'handled' }])
+  control.receive({ type: 'message_start', message: { role: 'user', timestamp: 42 } })
+  assert.deepEqual(consumed, [null, 'handled', 'queued'])
+  assert.deepEqual(control.pendingInputs(), [])
+})

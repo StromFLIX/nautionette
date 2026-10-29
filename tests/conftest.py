@@ -23,6 +23,7 @@ _ROOT = Path(tempfile.mkdtemp(prefix="nautionette-tests-"))
 os.environ.update(
     {
         "DATA_DIR": str(_ROOT / "data"),
+        "CHAT_SESSIONS_DIR": str(_ROOT / "chat-sessions"),
         "ARTIFACTS_DIR": str(_ROOT / "artifacts"),
         "WORKFLOWS_DIR": str(_ROOT / "workflows"),
         "WORKFLOWS_SEED_DIR": str(_ROOT / "seed"),

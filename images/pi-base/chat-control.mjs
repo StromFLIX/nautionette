@@ -1,6 +1,6 @@
 import { createServer } from 'node:net'
 
-export function createChatControl({ send, emit }) {
+export function createChatControl({ send, emit, beforeInput = () => {}, onConsumed = () => {}, onRejected = () => {} }) {
   const requests = new Map()
   const queued = []
   let initialMessage = true
@@ -14,9 +14,26 @@ export function createChatControl({ send, emit }) {
       const request = requests.get(event.id)
       if (!event.success) {
         const index = queued.findIndex((item) => item.id === event.id)
-        if (index >= 0) queued.splice(index, 1)
+        if (index >= 0) {
+          queued.splice(index, 1)
+          onRejected(event.id)
+        }
         request.resolve({ ok: false, error: event.error || 'Agent rejected the message' })
-      } else request.resolve({ ok: true })
+      } else {
+        if (event.data?.disposition === 'handled') {
+          const index = queued.findIndex(item => item.id === event.id)
+          if (index >= 0) {
+            queued.splice(index, 1)
+            onConsumed(event.id)
+            emit({ type: 'input_consumed', id: event.id })
+          }
+        }
+        request.resolve({ ok: true })
+      }
+    }
+    if (event.type === 'response' && event.id === 'initial' && event.success && event.data?.disposition === 'handled' && initialMessage) {
+      initialMessage = false
+      onConsumed(null)
     }
     if (event.type === 'message_start' && event.message?.role === 'user') {
       // Only the internal recovery prompt can arrive here while steering is
@@ -25,10 +42,15 @@ export function createChatControl({ send, emit }) {
         recoveryInput = recovering = false
         return
       }
-      if (initialMessage) initialMessage = false
-      else {
+      if (initialMessage) {
+        initialMessage = false
+        onConsumed(null, event.message.timestamp)
+      } else {
         const message = queued.shift()
-        if (message) emit({ type: 'input_consumed', id: message.id })
+        if (message) {
+          onConsumed(message.id, event.message.timestamp)
+          emit({ type: 'input_consumed', id: message.id })
+        }
       }
     }
     // agent_end is only a low-level boundary: retries/compaction can follow.
@@ -44,6 +66,11 @@ export function createChatControl({ send, emit }) {
     if (requests.has(input.id)) return requests.get(input.id).promise
     if (closed || stopping) return Promise.resolve({ ok: false, error: 'Agent is stopping or finished' })
     if (recovering && input.type !== 'stop') return Promise.resolve({ ok: false, error: 'Agent is recovering; keep this input queued' })
+    if (input.type === 'steer') {
+      if (/^\/compact(?:\s|$)/.test(input.text || '')) return Promise.resolve({ ok: false, error: 'Compaction waits for its own turn' })
+      try { beforeInput(input.id) }
+      catch (error) { return Promise.resolve({ ok: false, error: error.message }) }
+    }
     let resolve
     const promise = new Promise((done) => { resolve = done })
     requests.set(input.id, { promise, resolve })
@@ -76,7 +103,8 @@ export function createChatControl({ send, emit }) {
 
   function cancelRecovery() { recovering = recoveryInput = false }
 
-  return { receive, command, close, beginRecovery, continueRecovery, cancelRecovery }
+  return { receive, command, close, beginRecovery, continueRecovery, cancelRecovery,
+    pendingInputs: () => queued.map(input => input.id) }
 }
 
 export function listenForChatControl(control, path = '/tmp/nautionette-chat.sock') {

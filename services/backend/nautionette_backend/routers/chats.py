@@ -8,25 +8,24 @@ import uuid
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from .. import agent_profiles, catalog, chat_attachments, project_changes, projects
+from .. import agent_profiles, catalog, chat_attachments, chat_sessions, project_changes, projects
 from ..agent import (
     agent_job,
-    build_history,
     promote_chat,
     summarise_for_title,
 )
 from ..background import is_draining, spawn
 from ..chat_titles import rewrite_chat_title, title_context, title_messages
 from ..config import settings
-from ..conversations import chat_snapshots, launch_next, run_turn, turn_events
+from ..conversations import chat_snapshots, launch_next, reconcile_chat_agents, run_turn, turn_events
 from ..db import db
 from ..events import bus
 from ..reasoning import validate_effort
-from ..runtime import history_budget, runtime
+from ..runtime import runtime
 from ..security import require_user
 from .system import SSE_HEADERS
 
@@ -191,9 +190,31 @@ async def subscribe_chat(chat_id: str) -> StreamingResponse:
 
 @router.delete("/api/chats/{chat_id}")
 async def delete_chat(chat_id: str) -> dict[str, Any]:
+    _chat_or_404(chat_id)
+    if db.one("SELECT id FROM chat_turns WHERE chat_id = ? AND state = 'running'", (chat_id,)):
+        raise HTTPException(409, "Stop the active response before deleting this chat")
+    await reconcile_chat_agents(chat_id)
+    # Fence a submission that arrived while broker cleanup yielded.
+    if db.one("SELECT id FROM chat_turns WHERE chat_id = ? AND state = 'running'", (chat_id,)):
+        raise HTTPException(409, "Stop the active response before deleting this chat")
+    try:
+        chat_sessions.delete(chat_id)
+    except RuntimeError as exc:
+        raise HTTPException(409, "Chat session cleanup is still in progress; retry shortly") from exc
     db.delete_chat(chat_id)
     bus.publish("chat.deleted", {"chat_id": chat_id})
     return {"ok": True}
+
+
+@router.get("/api/chats/{chat_id}/session/entries")
+def native_session_entries(
+    chat_id: str, after: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=100)
+) -> dict[str, Any]:
+    _chat_or_404(chat_id)
+    try:
+        return chat_sessions.entries(chat_id, after, limit)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(422, "Cannot read native session at this cursor") from exc
 
 
 @router.post("/api/chats/{chat_id}/images", include_in_schema=False)
@@ -286,7 +307,7 @@ async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool 
         reason = model_info.get("image_support_reason") or "This model is text-only."
         raise HTTPException(422, f"{reason} Choose an image-capable model/API route to send images.")
 
-    history = build_history(db.list_messages(chat_id), max_chars=history_budget(chat.get("model")))
+    has_history = bool(db.one("SELECT id FROM messages WHERE chat_id = ? LIMIT 1", (chat_id,)))
     message_id = payload.get("message_id") or uuid.uuid4().hex
     if not isinstance(message_id, str) or len(message_id) > 128:
         raise HTTPException(status_code=400, detail="message_id must be a string of at most 128 characters")
@@ -313,7 +334,12 @@ async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool 
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="This chat is still answering; retry shortly.") from exc
-    if created and chat["title_state"] == "provisional" and chat["title"] in {"New chat", ""} and not history:
+    if (
+        created
+        and chat["title_state"] == "provisional"
+        and chat["title"] in {"New chat", ""}
+        and not has_history
+    ):
         preview = summarise_for_title(text or "File attachment")
         changed = db.execute(
             "UPDATE chats SET title = ? WHERE id = ? AND title_revision = ? AND title_state = 'provisional'",
@@ -328,7 +354,6 @@ async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool 
     job = agent_job(
         prompt=text,
         mode="interactive",
-        history=history,
         agent_set=chat["agent_set"],
         model=model_id,
         tools=chat.get("tools"),

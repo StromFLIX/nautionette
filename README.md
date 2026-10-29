@@ -212,6 +212,20 @@ in the selected destination, then check cancellation and retry.
 
 ## Chat delivery and recovery
 
+Interactive chats resume their **durable native Pi session**, including tool
+commands/results, compaction checkpoints and extension session entries. Containers
+still exit after each call; only the chat-scoped session and original attachments
+persist. Pi owns context and automatic compaction, not the UI's visible/collapsed
+history. Use `/compact` manually or the agent's read-only `chat_history` tool to
+retrieve older exact evidence. Existing chats import the stored transcript once,
+explicitly marking legacy evidence as incomplete.
+
+This requires **Docker Engine 26+** for per-chat volume-subpath isolation. Back up
+**chat-sessions together with backend-data**. Stop an active response before
+deleting its chat; deletion removes that chat's persisted state after cleanup.
+See [Durable native Pi sessions](docs/chat-sessions.md) for storage limits,
+input/crash safety, migration, native session inspection and deployment tests.
+
 Web and Android use the same thin client. The backend owns accepted messages,
 active turns, partial text/tool timelines, and completed answers in SQLite.
 Closing a tab, navigating away, or suspending Android does not stop an answer.
@@ -375,8 +389,8 @@ remain usable with every model. Switching models preserves the draft but blocks
 sending incompatible images until removed. Unknown support is labelled
 **Image support unverified** and remains usable—not mislabelled as text-only.
 
-Non-image attachments arrive **unchanged** in the agent's ephemeral workspace under
-`/workspace/attachments/<id>.<extension>`. The prompt maps original filenames to
+Original attachments arrive **unchanged** in the chat's durable mounted storage under
+`/chat-session/attachments/<id>.<extension>`. The prompt maps original filenames to
 safe, unique paths. Uploading does not parse, extract text, perform OCR, unpack,
 or execute files. The agent chooses how to inspect them using its tools; usable
 formats depend on the tooling available in the selected agent environment.
@@ -407,13 +421,12 @@ from messages/events and are deleted with the message or chat. Unattached upload
 older than 24 hours are cleaned up on subsequent uploads; at most 20 drafts per chat.
 
 Queued attachment messages wait for their own turn so steering cannot drop files.
-Pi receives supported images through RPC; other files are written privately to the
-workspace with generated filenames, never overwriting workspace instructions.
-Up to four recent history attachments are replayed alongside current attachments,
-subject to the history budget. Older omitted attachments are marked in the prompt.
-History files are restored for each fresh agent container; switching to a text-only
-model omits only vision images, not other files. File references, not binary contents,
-are charged to text context. All file-bearing jobs and other large jobs use a private
+Pi receives supported images through RPC; all originals are written privately to
+chat-scoped durable storage with generated filenames, never overwriting workspace
+instructions. Later turns resume native messages and attachment references, rather
+than replaying a character-trimmed transcript. All originals stay accessible to tools;
+switching to a text-only model omits historical vision blocks from that request only.
+File references, not binary contents, are charged to text context. All file-bearing jobs and other large jobs use a private
 file copied into the container, never environment variables. Raw bytes are not written
 to `JOB.json`, persisted jobs, snapshots, or events.
 Deploy by rebuilding the backend, Docker broker, frontend, and Pi images together.

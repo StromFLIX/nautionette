@@ -5,7 +5,7 @@
  * In:  AGENT_JOB (base64 JSON) or AGENT_JOB_FILE (large jobs with images/history).
  * Out: NDJSON events on stdout, one JSON object per line, ending in `result`.
  *
- * Nothing is remembered between runs: the container starts, works and exits.
+ * Containers are disposable; interactive chats resume their durable native Pi session.
  */
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -17,6 +17,7 @@ import { createTelemetry } from "./telemetry.mjs";
 import { createChatControl, listenForChatControl } from "./chat-control.mjs";
 import { createChatRecovery } from "./chat-recovery.mjs";
 import { prepareFiles, fileReferences } from "./chat-files.mjs";
+import { prepareSession } from "./chat-session.mjs";
 
 const OUT = process.stdout;
 let telemetry;
@@ -168,7 +169,8 @@ async function main() {
   if (existsSync("/workspace-defaults")) {
     cpSync("/workspace-defaults", workspace, { recursive: true });
   }
-  prepareFiles(job, workspace);
+  const durable = Boolean(job.chat_id && job.turn_id);
+  prepareFiles(job, workspace, durable ? "/chat-session/attachments" : undefined);
   writeFileSync(`${workspace}/JOB.json`, JSON.stringify({ ...job, history: undefined, images: undefined, project_credentials: undefined, package_runtime: undefined }, null, 2));
   if (job.project_ids?.length) {
     emit({ type: "status", state: "projects", message: "Preparing this chat's project worktrees" });
@@ -176,12 +178,21 @@ async function main() {
   }
 
   const packageEnvironment = preparePackages();
-  const historyFile = seedHistory(job, workspace, model);
+  const continuity = durable ? prepareSession(job, workspace) : null;
+  if (continuity) emit({ type: "session_ready", id: continuity.id });
+  const historyFile = continuity?.file || seedHistory(job, workspace, model);
   const prompt = renderPrompt(job);
+  if (continuity && !/^\/compact(?:\s|$)/.test(prompt)) continuity.beginInput(job.turn_id);
   const interactive = Boolean(job.chat_id);
   const args = ["--mode", interactive ? "rpc" : "json", ...(historyFile ? ["--session", historyFile] : ["--no-session"]),
                 "--provider", "nautionette", "--model", model, "--approve"];
+  if (continuity) args.push("--extension", "/usr/local/lib/nautionette/chat-session-extension.mjs");
   const systemInstructions = [job.system_prompt];
+  if (continuity) systemInstructions.push(
+    "This chat resumes its native Pi session, including tools and compaction. Use chat_history to retrieve older exact evidence before repeating an uncertain action. " +
+    "Original attachments persist under /chat-session/attachments. Other /workspace files and background processes do not survive. " +
+    "Current instructions, tool permissions and credentials govern this turn, not historical permissions."
+  );
   if (job.packages?.length) systemInstructions.push(
     "This container is destroyed when your response ends. Background extension work cannot survive across turns. " +
     "Wait for every child you launch and consume its result before giving your final response. " +
@@ -209,6 +220,7 @@ async function main() {
       NAUTIONETTE_MODEL_REASONING: JSON.stringify(job.model_reasoning || {}),
       NAUTIONETTE_REASONING_EFFORT: job.reasoning_effort ?? "",
       NAUTIONETTE_MODE: mode,
+      NAUTIONETTE_TURN_ID: job.turn_id || '',
       NAUTIONETTE_ARTCRAFT_JSON: job.artcraft === undefined ? "" : JSON.stringify(job.artcraft),
       // JSON preserves null (all) versus [] (none) and tool names containing commas.
       NAUTIONETTE_TOOLS_JSON: JSON.stringify(job.tools ?? null),
@@ -219,7 +231,11 @@ async function main() {
   });
 
   const send = (command) => child.stdin.write(JSON.stringify(command) + "\n");
-  const control = interactive ? createChatControl({ send, emit }) : null;
+  const control = interactive ? createChatControl({ send, emit,
+    beforeInput: (id) => continuity?.beginInput(id),
+    onConsumed: (id, timestamp) => continuity?.consumed(id || job.turn_id, timestamp),
+    onRejected: (id) => continuity?.release(id),
+  }) : null;
   const controlServer = control ? listenForChatControl(control) : null;
   const recovery = createChatRecovery({ control, emit, finish: () => child.kill() });
   child.stdin?.on("error", (error) => log("pi input closed:", error.message));
@@ -281,6 +297,12 @@ async function main() {
         child.kill();
         break;
       case "response":
+        if (event.id === "compact-initial") {
+          commandCompleted = true;
+          if (event.success) finalText = "Chat context compacted. Original native history is retained.";
+          else recovery.fail(event.error || "Pi compaction failed");
+          child.kill();
+        }
         if (event.id === "commands" && event.success) {
           const commands = event.data?.commands || [];
           initialIsExtension = commands.some(command => command.source === "extension" && `/${command.name}` === prompt.split(/\s/)[0]);
@@ -291,7 +313,7 @@ async function main() {
             recovery.fail(event.error || "Pi rejected the initial prompt");
             emit({ type: "error", message: recovery.error });
             child.kill();
-          } else if (initialIsExtension) {
+          } else if (initialIsExtension || event.data?.disposition === 'handled') {
             // Commands that only notify or change state never emit agent_settled.
             send({ id: "command-completion", type: "get_state" });
           }
@@ -372,9 +394,16 @@ async function main() {
         break;
       }
       case "turn_end":
-      case "auto_retry_start":
+        continuity?.sync();
+        emit({ type: "phase", phase: "other" });
+        break;
       case "compaction_start":
       case "compaction_end":
+        emit({ type: "compaction", state: event.type === "compaction_start" ? "started" : "completed",
+          tokens_before: event.result?.tokensBefore, aborted: event.aborted, error: event.errorMessage });
+        emit({ type: "phase", phase: "other" });
+        break;
+      case "auto_retry_start":
         emit({ type: "phase", phase: "other" });
         break;
       case "agent_end":
@@ -400,12 +429,22 @@ async function main() {
     send({ type: "set_steering_mode", mode: "one-at-a-time" });
     send({ id: "commands", type: "get_commands" });
     const images = job.images || [];
-    send({ id: "initial", type: "prompt", message: prompt, ...(images.length ? { images } : {}) });
+    if (continuity && /^\/compact(?:\s|$)/.test(prompt)) {
+      send({ id: "compact-initial", type: "compact", customInstructions: prompt.slice(8).trim() });
+    } else {
+      send({ id: "initial", type: "prompt", message: prompt, ...(images.length ? { images } : {}) });
+    }
   }
   const { code, signal } = await completion;
   recovery.close();
+  // Only orderly settlement proves these steering inputs were not consumed.
+  // A crash leaves them fenced as uncertain; never silently replay them.
+  if (recovery.settled || commandCompleted) {
+    for (const id of control?.pendingInputs() || []) continuity?.release(id);
+  }
   control?.close();
   controlServer?.close();
+  continuity?.sync();
 
   const text = (finalText || streamed).trim();
   const unexpectedExit = interactive ? !recovery.settled && !commandCompleted : code !== 0;

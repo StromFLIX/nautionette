@@ -245,6 +245,7 @@ _MIGRATIONS = (
     "ALTER TABLE chat_turns ADD COLUMN timing TEXT",
     "ALTER TABLE chat_turns ADD COLUMN job TEXT",
     "ALTER TABLE chat_turns ADD COLUMN stop_requested INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE chats ADD COLUMN pi_session_id TEXT",
     "ALTER TABLE chats ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN timeout_exempt INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN model TEXT",

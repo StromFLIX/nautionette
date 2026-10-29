@@ -77,6 +77,6 @@ test('failed save keeps inputs for correction and General never resaves Git sett
   await expect(agentSet).toContainText('default')
   await page.locator('.settings__save').getByRole('button', { name: 'Save', exact: true }).click()
   await expect.poll(() => state.writes.length).toBe(2)
-  expect(state.writes[1]).toEqual({ default_model: '', default_agent_set: 'default', history_chars: 0,
+  expect(state.writes[1]).toEqual({ default_model: '', default_agent_set: 'default',
     default_agent_id: null, default_reasoning_effort: null, default_tools: null, default_project_ids: [] })
 })

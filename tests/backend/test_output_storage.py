@@ -329,6 +329,7 @@ def test_chat_deletion_queues_originals_and_previews_even_through_foreign_key_ca
 ):
     chat_id, grant = scope
     chat_outputs.publish(payload(grant))
+    db.execute("UPDATE chat_turns SET state = 'completed' WHERE chat_id = ?", (chat_id,))
     assert client.delete(f"/api/chats/{chat_id}").status_code == 200
     assert not db.query("SELECT * FROM chat_output_files")
     assert db.query("SELECT * FROM output_storage_objects WHERE state = 'delete' AND kind != 'staging'")

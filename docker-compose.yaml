@@ -51,6 +51,7 @@ services:
       DATA_DIR: /data
       ARTIFACTS_DIR: /artifacts
       PROJECTS_DIR: /projects
+      CHAT_SESSIONS_DIR: /chat-sessions
       APP_URL: ${APP_URL:-}
       OUTPUT_S3_ENDPOINT: http://maxio:9000
       OUTPUT_S3_BUCKET: ${OUTPUT_S3_BUCKET:-nautionette-outputs}
@@ -71,6 +72,7 @@ services:
       - artifacts:/artifacts
       - backend-data:/data
       - projects:/projects
+      - chat-sessions:/chat-sessions
       # Measure the actual MaxIO backing filesystem without write access to it.
       - maxio-data:/output-storage:ro
     networks: [edge, internal, control, outputs]
@@ -132,6 +134,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - projects:/projects:ro
+      - chat-sessions:/chat-sessions
     environment:
       <<: *telemetry
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
@@ -157,6 +160,8 @@ services:
       # toward the same per-agent memory limit.
       AGENT_MEMORY_LIMIT: ${AGENT_MEMORY_LIMIT:-4g}
       AGENT_WORKSPACE_SIZE: ${AGENT_WORKSPACE_SIZE:-1g}
+      CHAT_SESSIONS_DIR: /chat-sessions
+      CHAT_SESSION_MAX_BYTES: ${CHAT_SESSION_MAX_BYTES:-268435456}
       WORKER_STOP_GRACE_SECONDS: ${WORKER_STOP_GRACE_SECONDS:-60}
       # Injected into the Pi containers this broker runs.
       AGENT_AGENTGATEWAY_URL: http://agentgateway:4000
@@ -511,6 +516,7 @@ volumes:
     name: ${STACK_NAMESPACE:-nautionette}-workflows
   projects:
     name: ${STACK_NAMESPACE:-nautionette}-projects
+  chat-sessions:
   artifacts:
   backend-data:
   maxio-data:

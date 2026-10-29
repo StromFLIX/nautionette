@@ -16,6 +16,10 @@
         <div v-else-if="part.kind === 'recovery'" class="bubble__recovery caption" role="status">
           <span class="material-icons" aria-hidden="true">history</span>{{ part.message }}
         </div>
+        <div v-else-if="part.kind === 'compaction'" class="bubble__recovery caption" role="status">
+          <span class="material-icons" aria-hidden="true">compress</span>
+          {{ part.state === 'started' ? 'Compacting context…' : part.aborted || part.error ? 'Context compaction did not complete' : 'Context compacted · original history retained' }}
+        </div>
         <div v-else-if="part.kind === 'text' && part.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(part.text)" />
       </template>
       <OutputCard v-for="output in meta.outputs || []" :key="`${output.id}:${output.revision}`" :chat-id="chatId" :output="output" compact @open="$emit('open-output', $event)" />

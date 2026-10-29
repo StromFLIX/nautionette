@@ -56,6 +56,8 @@ COPY context-usage.mjs /usr/local/lib/nautionette/context-usage.mjs
 COPY chat-control.mjs /usr/local/lib/nautionette/chat-control.mjs
 COPY chat-recovery.mjs /usr/local/lib/nautionette/chat-recovery.mjs
 COPY chat-files.mjs /usr/local/lib/nautionette/chat-files.mjs
+COPY chat-session.mjs /usr/local/lib/nautionette/chat-session.mjs
+COPY chat-session-extension.mjs /usr/local/lib/nautionette/chat-session-extension.mjs
 COPY package-install.mjs /usr/local/lib/nautionette/package-install.mjs
 COPY package-runtime.mjs /usr/local/lib/nautionette/package-runtime.mjs
 RUN printf '#!/bin/sh\nexec node /usr/local/lib/nautionette/agent-run.mjs "$@"\n' \

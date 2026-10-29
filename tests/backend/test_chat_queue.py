@@ -213,9 +213,10 @@ async def test_messages_steer_the_running_turn_once_in_order(backend, monkeypatc
                 f"/api/chats/{chat_id}/messages", json={"text": "Follow up", "message_id": "follow-up"}
             )
             await finish_background()
-            assert jobs[1]["history"] == [
+            assert [{"role": m["role"], "content": m["content"]} for m in jobs[1]["history"]] == [
                 {"role": m["role"], "content": m["content"]} for m in snapshot["messages"]
             ]
+            assert jobs[1]["history"][3]["steps"][0]["args"] == {"command": "pwd"}
     finally:
         await background.drain()
 

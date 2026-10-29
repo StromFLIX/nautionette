@@ -52,7 +52,7 @@ def test_inventory_is_secret_free_and_datasets_are_distinct(stacks):
     rows, prod, stage = stacks
     host.assert_isolated(rows, prod, stage)
     host.assert_password_compatible(rows, prod, stage)
-    assert len(prod["volumes"]) == 7
+    assert len(prod["volumes"]) == 8
     assert "private" not in json.dumps(prod)
     assert "private" not in json.dumps(stage)
 
@@ -261,7 +261,7 @@ def test_copy_helper_only_mounts_source_readonly(tmp_path, stacks, monkeypatch):
     monkeypatch.setattr(host, "helper", lambda *args: calls.append(args))
     _, prod, _ = stacks
     host.copy_datasets(tmp_path, prod, "snapshot")
-    assert len(calls) == 7
+    assert len(calls) == 8
     assert all("dst=/src,readonly" in args[3][0] for args in calls)
     assert all("type=bind" in args[3][1] for args in calls)
 

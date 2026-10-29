@@ -266,7 +266,8 @@ def test_late_calls_are_fenced_but_committed_outputs_are_preserved(client, db, o
     elif state == "queued":
         db.execute("UPDATE chat_turns SET state = 'queued' WHERE id = 'output-turn'")
     else:
-        client.delete(f"/api/chats/{chat_id}")
+        db.finish_chat_turn("output-turn", "Done", {})
+        assert client.delete(f"/api/chats/{chat_id}").status_code == 200
     assert client.post("/api/chat-outputs/publish", json=payload(grant, request_id="late")).status_code in {
         401,
         409,

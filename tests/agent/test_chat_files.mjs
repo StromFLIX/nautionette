@@ -27,8 +27,9 @@ test('raw bytes and safe extension survive; names never choose a workspace path'
   }
   assert.match(fileReferences(job.files), /available unchanged/)
   assert.equal(fileReferences(), '')
-  // Never overwrite an existing file or follow its symlink.
-  assert.throws(() => prepareFiles({ files: [file({ name: 'AGENTS.md' })] }, directory), /EEXIST/)
+  // Identical originals can be reused on resume; different bytes never overwrite.
+  prepareFiles({ files: [file({ name: 'AGENTS.md' })] }, directory)
+  assert.throws(() => prepareFiles({ files: [file({ name: 'AGENTS.md', data: Buffer.from('different').toString('base64') })] }, directory), /differs/)
 }))
 
 for (const overrides of [

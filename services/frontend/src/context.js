@@ -22,7 +22,7 @@ export function contextMeter (context, window) {
   const detail = tokens !== null
     ? `${count(tokens)}${window ? ` of ${count(window)}` : ''} tokens — last model response. ` +
       'Includes system instructions, tools, cached input and output; excludes unsent text. ' +
-      'Each chat turn starts a fresh context from trimmed history.'
+      'Chats resume native Pi sessions. Compaction retains a summary and recent context; original history stays retrievable.'
     : 'Token usage is unavailable until the model reports it. No character-based estimate is used.'
   return {
     label,

@@ -1,8 +1,9 @@
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
 import yaml
-from nautionette_docker_broker import agent_run, main
+from nautionette_docker_broker import agent_run, chat_sessions, main
 
 
 @pytest.mark.parametrize("job", [{"chat_id": "chat-a"}, {"chat_id": "chat-b", "internet_allowed": False}, {}])
@@ -26,6 +27,7 @@ def test_agents_start_without_a_network_decision(monkeypatch, job):
     # No network attach/detach or decision delivery API is needed to start.
     docker = SimpleNamespace(containers=SimpleNamespace(create=create))
     monkeypatch.setattr(agent_run.daemon, "client", lambda: docker)
+    monkeypatch.setattr(chat_sessions, "claim", lambda chat_id: nullcontext([]))
     monkeypatch.setattr(agent_run.images, "discovered_agent_sets", lambda: ["default"])
     monkeypatch.setattr(agent_run.images, "has_image", lambda tag: True)
     monkeypatch.setattr(agent_run.images, "image_tag", lambda name: "test-image")

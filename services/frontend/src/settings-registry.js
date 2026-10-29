@@ -15,7 +15,7 @@ export const SETTINGS_SECTIONS = [
       entry('default-reasoning', 'Default reasoning', 'Reasoning effort for the default model.', 'thinking high medium low provider'),
       entry('default-tools', 'Default tools', 'All, no, or selected MCP tools for new chats.', 'permissions capabilities access'),
       entry('default-projects', 'Default projects', 'Writable projects selected for new chats.', 'repositories git workspace'),
-      entry('history', 'History budget', 'Automatic or fixed transcript character limit.', 'context tokens trimming'),
+      entry('history', 'Conversation memory', 'Native Pi sessions, persistent tools and automatic compaction.', 'context tokens history compact memory'),
       { ...entry('server', 'Server', 'Connect this device to an instance.', 'URL address connection endpoint'), scope: 'This device' },
       { ...entry('access-token', 'Access token', 'Authentication for this device.', 'password security credentials login'), scope: 'This device' }
     ]

@@ -1,11 +1,12 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_FILES = 8; // Four current attachments plus four from bounded history.
 
 // Materialize original bytes, without parsing, converting, or executing uploads.
 // Filenames never choose directories and cannot overwrite workspace instructions.
-export function prepareFiles(job, workspace) {
+export function prepareFiles(job, workspace, attachmentDirectory = `${workspace}/attachments`) {
   const messages = [job, ...(job.history || [])];
   const files = messages.flatMap(message => message.files || []);
   if (files.length > MAX_FILES) throw new Error("Too many attached files");
@@ -19,7 +20,10 @@ export function prepareFiles(job, workspace) {
     }
     ids.add(file.id);
   }
-  if (files.length) mkdirSync(`${workspace}/attachments`, { recursive: true, mode: 0o700 });
+  if (files.length) {
+    mkdirSync(attachmentDirectory, { recursive: true, mode: 0o700 });
+    if (!lstatSync(attachmentDirectory).isDirectory()) throw new Error("Invalid attachment directory");
+  }
   for (const message of messages) {
     if (!message.files?.length) continue;
     message.files = message.files.map(file => {
@@ -28,10 +32,18 @@ export function prepareFiles(job, workspace) {
         throw new Error("Invalid attached file size or encoding");
       }
       const extension = file.name.match(/\.[a-zA-Z0-9]{1,16}$/)?.[0] || "";
-      const path = `${workspace}/attachments/${file.id}${extension}`;
-      writeFileSync(path, bytes, { mode: 0o600, flag: "wx" });
+      const path = `${attachmentDirectory}/${file.id}${extension}`;
+      if (existsSync(path)) {
+        if (!lstatSync(path).isFile() || !readFileSync(path).equals(bytes)) {
+          throw new Error("Original attachment differs from its durable copy");
+        }
+      } else writeFileSync(path, bytes, { mode: 0o600, flag: "wx", flush: true });
       return { id: file.id, name: file.name, mime_type: file.mime_type, size: bytes.length, path };
     });
+  }
+  if (files.length) for (const directory of [attachmentDirectory, dirname(attachmentDirectory)]) {
+    const fd = openSync(directory, "r");
+    try { fsyncSync(fd); } finally { closeSync(fd); }
   }
 }
 

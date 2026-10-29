@@ -65,6 +65,7 @@ DATASETS = {
     "workflows": ("backend", "/workflows"),
     "artifacts": ("backend", "/artifacts"),
     "projects": ("backend", "/projects"),
+    "chat-sessions": ("backend", "/chat-sessions"),
     "maxio-data": ("maxio", "/data"),
 }
 

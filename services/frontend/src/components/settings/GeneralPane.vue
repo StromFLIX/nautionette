@@ -17,18 +17,11 @@
   <AgentConfigFields v-model="config" :defaults="configDefaults" prefix="default" global :disabled="saving || !loaded" />
 
   <details id="history" class="settings-disclosure general-history">
-    <summary><span class="material-icons" aria-hidden="true">history</span><span class="grow">History budget</span><span class="caption dim">{{ historyMode === 'auto' ? 'Automatic' : 'Custom' }}</span></summary>
+    <summary><span class="material-icons" aria-hidden="true">history</span><span class="grow">Conversation memory</span><span class="caption dim">Native Pi session</span></summary>
     <div class="general-detail">
-      <label for="history-mode" class="setting__label">Transcript limit</label>
-      <div class="row">
-        <select id="history-mode" v-model="historyMode" class="field">
-          <option value="auto">From the model</option>
-          <option value="fixed">A fixed number</option>
-        </select>
-        <input v-if="historyMode === 'fixed'" v-model.number="form.history_chars" class="field" type="number" min="2000" step="10000" aria-label="History character limit" />
-      </div>
-      <p class="caption muted">{{ contextHint }}</p>
-      <p class="caption dim">Trims the transcript only. The context meter includes instructions and tools.</p>
+      <p class="caption muted">Chats resume their native Pi session, including tool commands, results and extension session entries. Expanding or collapsing the timeline does not affect the agent's context.</p>
+      <p class="caption dim">Pi automatically summarizes older context when needed; the original session remains available to the agent through read-only history retrieval. Send <code>/compact</code> to compact manually. Original attachments persist; other scratch files do not.</p>
+      <p class="caption dim">Existing chats import their stored timeline once. Original tool output may already be truncated, and earlier compaction summaries cannot be recovered.</p>
     </div>
   </details>
 
@@ -60,13 +53,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import AgentConfigFields from './AgentConfigFields.vue'
 import AgentPicker from '../AgentPicker.vue'
 import { DEFAULT_CONFIG_KEYS as CONFIG_KEYS, globalChatConfig } from '../../agent-config'
-import { compactChars } from '../../format'
-import { actions, historyBudget, store } from '../../store'
+import { actions, store } from '../../store'
 import { api, auth, isNative, server } from '../../api'
 
 const $q = useQuasar()
@@ -76,23 +68,15 @@ const serverUrl = ref(server.url)
 const saving = ref(false)
 const loaded = ref(false)
 const loadError = ref('')
-const historyMode = ref('auto')
-const form = reactive({ default_agent_id: null, history_chars: 0 })
+const form = reactive({ default_agent_id: null })
 const config = ref(globalChatConfig(store.catalog))
 const configDefaults = ref(globalChatConfig(store.catalog))
-const contextHint = computed(() => {
-  if (historyMode.value === 'fixed') return `${compactChars(form.history_chars || 0)} characters of history`
-  const model = (store.catalog.models || []).find(item => item.id === config.value.model)
-  if (!model?.context_length) return 'No window published. The instance fallback is used.'
-  return `${compactChars(model.context_length)} token window → ${compactChars(historyBudget(config.value.model))} characters`
-})
 function apply (data) {
   for (const key of Object.keys(form)) {
     if (Object.hasOwn(data.settings || {}, key)) form[key] = data.settings[key]
   }
   config.value = globalChatConfig(data.settings || {})
   configDefaults.value = globalChatConfig(data.defaults || {})
-  historyMode.value = form.history_chars > 0 ? 'fixed' : 'auto'
 }
 function saveToken () { actions.setToken(token.value.trim()); $q.notify({ type: 'positive', message: 'Token saved' }) }
 function saveServer () {
@@ -111,15 +95,10 @@ async function persist (payload) {
   finally { saving.value = false }
 }
 function saveSettings () {
-  if (historyMode.value === 'fixed' && (!Number.isInteger(form.history_chars) || form.history_chars < 2000)) {
-    $q.notify({ type: 'negative', message: 'History limit must be at least 2,000 characters.' })
-    return
-  }
-  return persist({ ...form, ...Object.fromEntries(CONFIG_KEYS.map(key => [`default_${key}`, config.value[key]])),
-    history_chars: historyMode.value === 'auto' ? 0 : form.history_chars })
+  return persist({ ...form, ...Object.fromEntries(CONFIG_KEYS.map(key => [`default_${key}`, config.value[key]])) })
 }
 function resetSettings () {
-  return persist({ default_agent_id: null, history_chars: null, ...Object.fromEntries(CONFIG_KEYS.map(key => [`default_${key}`, null])) })
+  return persist({ default_agent_id: null, ...Object.fromEntries(CONFIG_KEYS.map(key => [`default_${key}`, null])) })
 }
 async function load () {
   loadError.value = ''
