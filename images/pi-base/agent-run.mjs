@@ -161,7 +161,7 @@ async function main() {
   const workspace = "/workspace";
 
   mkdirSync(workspace, { recursive: true });
-  if (job.project_ids?.length && existsSync("/root/.pi/agent")) {
+  if ((job.chat_id || job.project_ids?.length) && existsSync("/root/.pi/agent")) {
     cpSync("/root/.pi/agent", `${workspace}/.pi-agent`, { recursive: true });
   }
   // Whatever the agent set ships (AGENTS.md and friends) becomes the context for

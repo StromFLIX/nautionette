@@ -127,5 +127,9 @@ RPC tests use the real production runner and a loopback-only fake model: origina
 full tool evidence survives fresh processes, native manual compaction persists,
 read-only history retrieves summarized results, model switches apply new
 instructions, extension entries survive and attachments outlive scratch space.
-The Docker test validates actual subpath isolation and disposal as UID 10001.
+The Docker tests validate actual subpath isolation and disposal as UID 10001,
+backend/broker lock ownership, and the installed production entrypoint against a
+private mode-0700 session mount with all Linux capabilities dropped. Every chat
+uses UID 10001 even without project mounts; capability-restricted root cannot
+write another UID's private session directory.
 CI builds the agent image and runs both offline RPC and real Docker checks.

@@ -831,8 +831,9 @@ is no longer used. Keep Docker's default container hostname so the broker can in
 itself. No checkout migration or re-download is needed when a platform prefixes the
 volume name.
 
-The broker rebuilds the changed Pi images automatically. Project agents run as UID
-10001, matching the backend, with capabilities dropped. Custom agent sets must keep
+The broker rebuilds the changed Pi images automatically. All chat agents (with or
+without project mounts) and project agents run as UID 10001, matching the backend,
+with capabilities dropped. Custom agent sets must keep
 their image-provided Pi configuration readable so it can be copied into `/workspace`.
 
 Checks: `uv run pytest tests/backend/test_projects.py tests/backend/test_github_setup.py tests/backend/test_github_connections.py

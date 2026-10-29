@@ -531,6 +531,18 @@ def test_agent_creation_uses_valid_sdk_arguments_and_streams_logs(
     container.remove.assert_called_once_with(force=True)
 
 
+def test_runner_setup_errors_are_not_hidden_by_an_empty_container_stderr(client, running_agent):
+    container, _ = running_agent
+    container.wait.return_value = {"StatusCode": 1}
+    container.logs.side_effect = [
+        iter([b'{"type":"result","ok":false,"error":"EACCES: session.tmp"}\n']),
+        b"",
+    ]
+    events = frames(client.post("/agent/run", headers=HEADERS, json={}))
+    assert events[-2] == {"type": "error", "message": "agent container exited 1: EACCES: session.tmp"}
+    assert events[-1] == {"type": "closed"}
+
+
 @pytest.fixture
 def running_agent(agent_images, docker, monkeypatch):
     images.ensure_images()
@@ -561,18 +573,18 @@ def running_agent(agent_images, docker, monkeypatch):
     return container, timers
 
 
-@pytest.mark.parametrize("with_projects", [False, True])
+@pytest.mark.parametrize("kind", ["workflow", "chat", "project"])
 @pytest.mark.parametrize("workspace", ["1g", "768m"])
 def test_workspace_capacity_applies_to_all_agents_without_weakening_isolation(
-    client, running_agent, docker, monkeypatch, with_projects, workspace
+    client, running_agent, docker, monkeypatch, kind, workspace
 ):
     monkeypatch.setattr(agent_run, "AGENT_WORKSPACE_SIZE", workspace)
     monkeypatch.setattr(docker, "api", SimpleNamespace(_version="1.45"), raising=False)
     monkeypatch.setattr(agent_run.projects, "mounts", lambda *args: [])
     monkeypatch.setattr(agent_run.projects, "claim", lambda *args: None)
     monkeypatch.setattr(agent_run.projects, "release", lambda *args: None)
-    job = {}
-    if with_projects:
+    job = {"chat_id": "c" * 12, "turn_id": "capacity"} if kind != "workflow" else {}
+    if kind == "project":
         project = "a" * 32
         job = {
             "chat_id": "c" * 12,
@@ -586,7 +598,9 @@ def test_workspace_capacity_applies_to_all_agents_without_weakening_isolation(
     events = frames(client.post("/agent/run", headers=HEADERS, json=job))
     assert not any(event["type"] == "error" for event in events)
     options = docker.containers.create.call_args.kwargs
-    if with_projects:
+    if kind != "workflow":
+        assert options["environment"]["HOME"] == "/workspace"
+        assert options["environment"]["PI_CODING_AGENT_DIR"] == "/workspace/.pi-agent"
         assert options["tmpfs"] == {
             "/workspace": f"size={workspace},exec,uid=10001,gid=10001",
             "/projects": "size=1m,uid=10001,gid=10001",
@@ -608,9 +622,12 @@ def test_workspace_capacity_applies_to_all_agents_without_weakening_isolation(
         {"prompt": "follow up", "history": [{"role": "user", "files": [{"id": "b" * 32, "data": "YWJj"}]}]},
     ],
 )
+@pytest.mark.parametrize("interactive", [False, True])
 def test_large_jobs_and_files_are_copied_before_start_not_put_in_environment(
-    client, running_agent, docker, job
+    client, running_agent, docker, job, interactive
 ):
+    if interactive:
+        job = {**job, "chat_id": "c" * 12, "turn_id": "archive-owner"}
     container, _ = running_agent
     events = frames(client.post("/agent/run", headers=HEADERS, json=job))
     assert not any(event["type"] == "error" for event in events)
@@ -621,6 +638,7 @@ def test_large_jobs_and_files_are_copied_before_start_not_put_in_environment(
     with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
         entry = tar.getmembers()[0]
         assert entry.name == "nautionette-job.json" and entry.mode == 0o600
+        assert entry.uid == entry.gid == (10001 if interactive else 0)
         copied = json.loads(tar.extractfile(entry).read())
         trace = copied.pop("_trace_context", None)
         if trace:

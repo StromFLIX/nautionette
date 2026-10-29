@@ -175,6 +175,12 @@ def _await_image(tag: str, stopped: threading.Event | None = None) -> Iterator[s
         time.sleep(BUILD_POLL_SECONDS)
 
 
+def _uses_app_user(job: dict[str, Any]) -> bool:
+    # Root with cap_drop=ALL cannot access the backend-owned mode-0700 session.
+    # Every chat (with or without projects) shares the volume's unprivileged UID.
+    return bool(job.get("project_ids") or job.get("chat_id"))
+
+
 def _environment(job: dict[str, Any]) -> dict[str, str]:
     environment = dict(AGENT_ENVIRONMENT)
     if traceparent := job.get("_trace_context", {}).get("traceparent"):
@@ -187,7 +193,7 @@ def _environment(job: dict[str, Any]) -> dict[str, str]:
         environment["AGENT_JOB_FILE"] = "/tmp/nautionette-job.json"  # noqa: S108 - private container filesystem
     else:
         environment["AGENT_JOB"] = base64.b64encode(raw).decode("ascii")
-    if job.get("project_ids"):
+    if _uses_app_user(job):
         environment["HOME"] = "/workspace"
         environment["PI_CODING_AGENT_DIR"] = "/workspace/.pi-agent"
     if job.get("chat_id"):
@@ -206,7 +212,7 @@ def _copy_job(
         entry = tarfile.TarInfo(filename)
         entry.size = len(raw)
         entry.mode = 0o600
-        entry.uid = entry.gid = 10001 if job.get("project_ids") else 0
+        entry.uid = entry.gid = 10001 if _uses_app_user(job) else 0
         tar.addfile(entry, io.BytesIO(raw))
     if not container.put_archive("/tmp", archive.getvalue()):  # noqa: S108
         raise RuntimeError("Could not deliver the agent job")
@@ -325,10 +331,10 @@ def _run(
                     "/workspace": f"size={AGENT_WORKSPACE_SIZE},exec,uid=10001,gid=10001",
                     "/projects": "size=1m,uid=10001,gid=10001",
                 }
-                if project_ids
+                if _uses_app_user(job)
                 else {"/workspace": f"size={AGENT_WORKSPACE_SIZE},exec"}
             ),
-            user="10001:10001" if project_ids else None,
+            user="10001:10001" if _uses_app_user(job) else None,
             mem_limit=AGENT_MEMORY,
             pids_limit=512,
             security_opt=["no-new-privileges:true"],
@@ -379,12 +385,23 @@ def _run(
             watchdog.daemon = True
             watchdog.start()
         buffer = b""
+        result_error = ""
         for chunk in container.logs(stream=True, follow=True, stdout=True, stderr=False):
             buffer += chunk
             while b"\n" in buffer:
                 line, buffer = buffer.split(b"\n", 1)
                 text = line.decode("utf-8", "replace").strip()
                 if text:
+                    try:
+                        event = json.loads(text)
+                        if (
+                            isinstance(event, dict)
+                            and event.get("type") == "result"
+                            and event.get("ok") is False
+                        ):
+                            result_error = str(event.get("error") or "")[:800]
+                    except ValueError:
+                        pass
                     yield text + "\n"
         if buffer.strip():
             yield buffer.decode("utf-8", "replace").strip() + "\n"
@@ -424,7 +441,10 @@ def _run(
                 }
             else:
                 stderr = container.logs(stdout=False, stderr=True, tail=100).decode("utf-8", "replace")
-                error = {"type": "error", "message": f"agent container exited {code}: {stderr[-800:]}"}
+                error = {
+                    "type": "error",
+                    "message": f"agent container exited {code}: {result_error or stderr[-800:]}",
+                }
             daemon.log.warning(
                 "agent container failed: chat=%s turn=%s exit=%s oom_killed=%s",
                 job.get("chat_id", ""),
