@@ -130,6 +130,8 @@ CREATE TABLE IF NOT EXISTS chat_turns (
     status TEXT NOT NULL DEFAULT ''
 );
 CREATE UNIQUE INDEX IF NOT EXISTS chat_turn_running ON chat_turns(chat_id) WHERE state = 'running';
+CREATE INDEX IF NOT EXISTS chat_turn_activity ON chat_turns(state, chat_id)
+    WHERE state IN ('running', 'queued');
 CREATE TABLE IF NOT EXISTS chat_turn_events (
     seq INTEGER PRIMARY KEY AUTOINCREMENT,
     turn_id TEXT NOT NULL REFERENCES chat_turns(id) ON DELETE CASCADE,
@@ -575,6 +577,27 @@ class Database:
                 else None
             )
         return rows
+
+    def chat_activity(self) -> dict[str, Any]:
+        """Count live turns across all chats, not just the recent sidebar page.
+
+        Customized and unassigned chats belong to All only, just like the agent
+        views. Each running turn is one active agent; each queued turn is one
+        waiting message, including paused queues. Steered/completed turns are not
+        waiting, even when their user messages remain in history.
+        """
+        activity: dict[str, Any] = {"running": 0, "queued": 0, "agents": {}}
+        for row in self.query(
+            "SELECT c.agent_id, c.agent_customized, t.state, COUNT(*) AS n "
+            "FROM chat_turns t JOIN chats c ON c.id = t.chat_id "
+            "WHERE t.state IN ('running', 'queued') "
+            "GROUP BY c.agent_id, c.agent_customized, t.state"
+        ):
+            activity[row["state"]] += row["n"]
+            if row["agent_id"] and not row["agent_customized"]:
+                counts = activity["agents"].setdefault(row["agent_id"], {"running": 0, "queued": 0})
+                counts[row["state"]] += row["n"]
+        return activity
 
     def set_chat_read_state(
         self,

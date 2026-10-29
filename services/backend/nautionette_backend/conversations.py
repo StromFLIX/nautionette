@@ -70,6 +70,7 @@ def launch_next(chat_id: str) -> None:
         return
     turn = db.next_chat_turn(chat_id)
     if turn:
+        bus.publish("chat.queue.changed", {"chat_id": chat_id})
         spawn(
             run_turn(turn["id"], chat_id, json.loads(turn["job"])),
             name=f"chat-{turn['id']}",
@@ -254,6 +255,7 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                     },
                 ):
                     timeline = Timeline()
+                    bus.publish("chat.queue.changed", {"chat_id": chat_id})
             elif kind == "interrupted":
                 interrupted = True
             if kind == "status":

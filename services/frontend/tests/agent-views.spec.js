@@ -80,7 +80,7 @@ for (const width of [1440, 390, 320]) {
     await expect(agentButton.locator('.agent-avatar')).toHaveCSS('clip-path', /^polygon\(/)
     await expect(agentButton.locator('.agent-avatar')).toHaveCSS('border-radius', '0px')
     await agentButton.hover()
-    await expect(page.getByRole('tooltip')).toHaveText('Grace')
+    await expect(page.getByRole('tooltip')).toHaveText('Grace · 0 agents running · 0 messages waiting')
     await page.mouse.move(0, 0)
     await agentButton.click({ button: 'right' })
     await page.getByRole('link', { name: 'Change image', exact: true }).click()
@@ -100,6 +100,50 @@ for (const width of [1440, 390, 320]) {
     await page.reload()
     await expect(page.getByRole('button', { name: 'Chats with Grace', exact: true }).locator('img')).toBeVisible()
     await page.screenshot({ path: test.info().outputPath(`compact-agents-${width}.png`), fullPage: true })
+  })
+
+  test(`running agents and waiting messages update across scopes at ${width}px`, async ({ page, context }) => {
+    const { state, research, writer } = await fixture(context)
+    state.chatActivity = { running: 4, queued: 123, agents: { [research.id]: { running: 2, queued: 1 }, [writer.id]: { running: 1, queued: 120 } } }
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(`/chats?agent=${research.id}`)
+    const ada = page.getByRole('button', { name: 'Chats with Ada', exact: true })
+    const grace = page.getByRole('button', { name: 'Chats with Grace', exact: true })
+    await expect(all(page)).toHaveAccessibleDescription('4 agents running · 123 messages waiting')
+    await expect(all(page).locator('.agent-activity__badge--running')).toHaveText('play_arrow4')
+    await expect(all(page).locator('.agent-activity__badge--queued')).toHaveText('hourglass_top99+')
+    await expect(ada).toHaveAccessibleDescription('2 agents running · 1 message waiting')
+    await expect(ada.locator('.agent-activity__badge--running')).toHaveText('play_arrow2')
+    await expect(ada.locator('.agent-activity__badge--queued')).toHaveText('hourglass_top1')
+    await expect(grace).toHaveAccessibleDescription('1 agent running · 120 messages waiting')
+    // These are server-wide counts, unaffected by list scope or search.
+    await page.getByRole('textbox', { name: 'Search chats' }).fill('No matches')
+    await expect(rows(page)).toHaveCount(0)
+    await expect(all(page)).toHaveAccessibleDescription('4 agents running · 123 messages waiting')
+    await page.getByRole('button', { name: 'Clear search' }).click()
+    await select(page, writer.name)
+    await expect(ada).toHaveAccessibleDescription('2 agents running · 1 message waiting')
+    await page.screenshot({ path: test.info().outputPath(`agent-activity-${width}.png`), fullPage: true })
+    // Steering consumes a queued message, but the same two agents keep running.
+    state.chatActivity.agents[research.id].queued = 0
+    state.chatActivity.queued = 122
+    state.pendingEvents.push('chat.queue.changed')
+    await expect(ada.locator('.agent-activity__badge--queued')).toHaveCount(0)
+    await expect(ada.locator('.agent-activity__badge--running')).toHaveText('play_arrow2')
+    // Idle agents have no distracting badges; descriptions still report zero.
+    state.chatActivity = { running: 0, queued: 0, agents: {} }
+    state.pendingEvents.push('chat.answered')
+    await expect(page.locator('.agent-activity__badge')).toHaveCount(0)
+    await expect(ada).toHaveAccessibleDescription('0 agents running · 0 messages waiting')
+    // A paused queue is visible even with no running agent.
+    state.chatActivity = { running: 0, queued: 1, agents: { [research.id]: { running: 0, queued: 1 } } }
+    state.pendingEvents.push('chat.queue.changed')
+    await expect(ada).toHaveAccessibleDescription('0 agents running · 1 message waiting')
+    await expect(ada.locator('.agent-activity__badge--queued')).toHaveText('hourglass_top1')
+    await expect(ada.locator('.agent-activity__badge--running')).toHaveCount(0)
+    await page.reload()
+    await expect(ada).toHaveAccessibleDescription('0 agents running · 1 message waiting')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   })
 
   test(`customizing leaves the agent view, stays All-only after undo, and reselecting moves it at ${width}px`, async ({ page, context }) => {
@@ -152,6 +196,49 @@ for (const width of [1440, 390, 320]) {
     expect(await page.locator('.settings__body').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
   })
 }
+
+test('older list responses cannot resurrect finished agents or consumed queue counts', async ({ page, context }) => {
+  const { state, research } = await fixture(context)
+  state.chatActivity = { running: 1, queued: 2, agents: { [research.id]: { running: 1, queued: 2 } } }
+  await page.goto('/chats')
+  await expect(all(page)).toHaveAccessibleDescription('1 agent running · 2 messages waiting')
+  let release, entered, staleRequest
+  const gate = new Promise(resolve => { release = resolve })
+  const requested = new Promise(resolve => { entered = resolve })
+  let first = true
+  await context.route('**/api/chats', async route => {
+    if (!first) return route.fallback()
+    first = false
+    const snapshot = { chats: Object.values(state.chats).map(data => data.chat), activity: structuredClone(state.chatActivity) }
+    staleRequest = route.request()
+    entered()
+    await gate
+    await route.fulfill({ json: snapshot })
+  })
+  state.pendingEvents.push('chat.progress')
+  await requested
+  state.chatActivity = { running: 0, queued: 0, agents: {} }
+  state.pendingEvents.push('chat.answered')
+  await expect(all(page)).toHaveAccessibleDescription('0 agents running · 0 messages waiting')
+  const finished = page.waitForResponse(response => response.request() === staleRequest)
+  release()
+  await (await finished).finished()
+  await expect(all(page)).toHaveAccessibleDescription('0 agents running · 0 messages waiting')
+  await expect(page.locator('.agent-activity__badge')).toHaveCount(0)
+})
+
+test('offline list history does not pretend cached agents are still running', async ({ page, context }) => {
+  const { state, research } = await fixture(context)
+  state.chats.alpha.chat.answering = true
+  state.chatActivity = { running: 1, queued: 1, agents: { [research.id]: { running: 1, queued: 1 } } }
+  await page.goto('/chats')
+  await expect(all(page)).toHaveAccessibleDescription('1 agent running · 1 message waiting')
+  await context.route('**/api/chats', route => route.abort('failed'))
+  await page.reload()
+  await expect(rows(page)).toHaveCount(5)
+  await expect(all(page)).toHaveAccessibleDescription('Activity unavailable')
+  await expect(page.locator('.agent-activity__badge')).toHaveCount(0)
+})
 
 test('agent context menu is keyboard accessible and canceling an image change preserves the saved portrait', async ({ page, context }) => {
   const { state, research } = await fixture(context)

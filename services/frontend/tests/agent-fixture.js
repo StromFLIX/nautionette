@@ -13,6 +13,7 @@ export async function mockAgents (context) {
   state.created = []
   state.chatWrites = []
   state.chats = { alpha: state.data }
+  state.chatActivity = { running: 0, queued: 0, agents: {} }
   state.pendingEvents = []
   state.catalog.models.push({ id: 'test/plain', name: 'Plain', provider: 'Test', gateway: 'gateway', reasoning_efforts: [] })
   const globalDefaults = () => ({ ...Object.fromEntries(fields.map(key => [key, state.settings[`default_${key}`]])), packages: [], system_prompt: '' })
@@ -101,7 +102,7 @@ export async function mockAgents (context) {
         state.chats[id] = { chat, messages: [], active_turn: null }
         return reply(chat)
       }
-      return reply({ chats: Object.values(state.chats).map(data => data.chat) })
+      return reply({ chats: Object.values(state.chats).map(data => data.chat), activity: state.chatActivity })
     }
     const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|messages|read-state))?$/)
     if (match) {

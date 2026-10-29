@@ -55,7 +55,7 @@ def _timeout_exempt(payload: dict[str, Any]) -> bool:
 
 @router.get("/api/chats")
 async def list_chats() -> dict[str, Any]:
-    return {"chats": db.list_chats()}
+    return {"chats": db.list_chats(), "activity": db.chat_activity()}
 
 
 @router.post("/api/chats")
@@ -467,6 +467,7 @@ async def discard_queued_message(chat_id: str, message_id: str) -> dict[str, Any
     ).rowcount
     if not removed:
         raise HTTPException(status_code=409, detail="Stop the chat before removing a queued message")
+    bus.publish("chat.queue.changed", {"chat_id": chat_id})
     return db.chat_snapshot(chat_id)
 
 

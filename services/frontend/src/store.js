@@ -24,6 +24,7 @@ const state = reactive({
   system: { components: [], agent_sets: [] },
   catalog: emptyCatalog(),
   chats: [],
+  chatActivity: null,
   projects: [],
   workflows: [],
   drafts: [],
@@ -34,6 +35,7 @@ const state = reactive({
 const listeners = new Set()
 let source = null
 let catalogRequest = 0
+let chatsRequest = 0
 
 function emit (event) {
   listeners.forEach((fn) => fn(event))
@@ -100,9 +102,12 @@ export const actions = {
 
   async loadChats () {
     const scope = chatCacheScope()
+    const request = ++chatsRequest
     const data = await guard(() => api.chats())
-    if (data && scope === chatCacheScope()) {
+    if (data && scope === chatCacheScope() && request === chatsRequest) {
       state.chats = data.chats
+      // Activity is server-wide and never restored from the offline list cache.
+      state.chatActivity = data.activity || null
       await chatCache.saveList(data.chats, scope)
       warmChatCache(data.chats, scope)
     }
@@ -173,7 +178,9 @@ export const actions = {
     if (state.needsServer) return
     source?.close()
     const scope = chatCacheScope()
+    chatsRequest++
     state.chats = []
+    state.chatActivity = null
     chatCache.list(scope).then((chats) => {
       if (scope === chatCacheScope() && !state.chats.length) state.chats = chats || []
     })
