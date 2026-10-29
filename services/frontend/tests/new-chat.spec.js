@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { mockAgents } from './agent-fixture.js'
 import { LAST_CHAT_SETTINGS_KEY } from '../src/new-chat-settings.js'
+import { openChatConfiguration, closeChatConfiguration } from './helpers.js'
 
 const message = page => page.getByRole('textbox', { name: 'Message', exact: true })
 const send = page => page.getByRole('button', { name: 'Send message', exact: true })
@@ -24,6 +25,30 @@ async function pauseCreations (context) {
     return route.fallback()
   })
   return requests
+}
+
+for (const width of [1440, 901]) {
+  test(`welcome omits examples and session details while keeping chat controls at ${width}px`, async ({ page, context }) => {
+    const state = await mockAgents(context)
+    // Previously enabled suggestions must not restore the removed examples.
+    await page.addInitScript(() => localStorage.setItem('nautionette.preferences.v1', JSON.stringify({ starterPrompts: true })))
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats')
+    await expect(page.getByRole('heading', { name: 'What should happen next?', exact: true })).toBeVisible()
+    await expect(message(page)).toBeEditable()
+    await expect(page.getByLabel('Starter prompts', { exact: true })).toHaveCount(0)
+    for (const name of ['Daily briefing', 'Watch for changes', 'Weekly digest', 'Follow a feed']) {
+      await expect(page.getByRole('button', { name, exact: true })).toHaveCount(0)
+    }
+    await expect(page.getByText('Session details', { exact: true })).toHaveCount(0)
+    await openChatConfiguration(page)
+    await closeChatConfiguration(page)
+    await message(page).fill('Start from the simplified welcome screen')
+    await send(page).click()
+    await expect(page).toHaveURL(/\/chats\/created-1$/)
+    await expect.poll(() => state.sent.length).toBe(1)
+    expect(state.sent[0].text).toBe('Start from the simplified welcome screen')
+  })
 }
 
 for (const width of [1440, 390]) {
