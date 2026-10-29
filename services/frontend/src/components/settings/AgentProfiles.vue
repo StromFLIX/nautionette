@@ -18,13 +18,19 @@
       <input id="profile-name" ref="nameInput" v-model="draft.name" class="field" maxlength="80" required :disabled="busy" placeholder="e.g. Code review" />
       <label class="profile-editor__label" for="profile-description">Description <span class="dim">optional</span></label>
       <input id="profile-description" v-model="draft.description" class="field" maxlength="500" :disabled="busy" placeholder="What this agent is for" />
-      <label class="profile-editor__label" for="profile-image">Agent image <span class="dim">optional</span></label>
+      <label class="profile-editor__label" for="profile-image-file">Agent image <span class="dim">optional</span></label>
       <div class="row profile-editor__portrait">
-        <AgentAvatar :agent="draft" />
-        <input id="profile-image" ref="imageInput" type="file" accept="image/png,image/jpeg,image/webp" class="field grow" :disabled="busy || imageBusy" @change="chooseImage" />
-        <button v-if="draft.image" class="btn btn--sm" type="button" :disabled="busy || imageBusy" @click="clearImage">Remove image</button>
+        <button id="profile-image" class="profile-editor__image-button" type="button" :aria-label="draft.image ? 'Change agent image' : 'Choose agent image'" :disabled="busy || imageBusy" @click="imageInput?.click()">
+          <AgentAvatar :agent="draft" />
+          <span class="profile-editor__image-overlay material-icons" aria-hidden="true">add_a_photo</span>
+        </button>
+        <div class="profile-editor__image-actions">
+          <button class="btn btn--sm btn--outline" type="button" :disabled="busy || imageBusy" @click="imageInput?.click()">{{ imageBusy ? 'Reading image…' : draft.image ? 'Change image' : 'Choose image' }}</button>
+          <button v-if="draft.image" class="btn btn--sm" type="button" :disabled="busy || imageBusy" @click="clearImage">Remove image</button>
+        </div>
+        <input id="profile-image-file" ref="imageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden :disabled="busy || imageBusy" @change="chooseImage" />
       </div>
-      <p class="caption dim">PNG, JPEG or WebP · up to 5 MiB. Stored with your agent, not linked to another site.</p>
+      <p class="caption dim">Click the avatar or choose a file. PNG, JPEG or WebP · up to 5 MiB. Previewed as an octagon and stored with this agent.</p>
       <p v-if="imageError" class="caption field-hint--bad" role="alert">{{ imageError }}</p>
       <label class="profile-editor__label" for="profile-prompt">System prompt <span class="dim">optional</span></label>
       <textarea id="profile-prompt" class="field profile-editor__prompt" :value="draft.config.system_prompt || ''" rows="5" maxlength="32000" :disabled="busy" placeholder="How should this person think, speak and help?" @input="setPrompt($event.target.value)" />
@@ -66,7 +72,8 @@
 </template>
 
 <script setup>
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import AgentConfigFields from './AgentConfigFields.vue'
 import AgentAvatar from '../AgentAvatar.vue'
@@ -76,6 +83,7 @@ import { actions, store } from '../../store'
 import { copyConfig, globalChatConfig, resolveAgentConfig, toolLabel, projectLabel } from '../../agent-config'
 
 const $q = useQuasar()
+const route = useRoute(), router = useRouter()
 const editing = ref(false)
 const busy = ref(false), packageBusy = ref(false)
 const error = ref('')
@@ -128,7 +136,22 @@ function open (agent = null, duplicate = false) {
   editing.value = true
   nextTick(() => nameInput.value?.focus())
 }
-function close () { if (!packageBusy.value) { imageGeneration++; imageBusy.value = false; editing.value = false; error.value = '' } }
+// Rail context menus can open a specific agent, even before discovery finishes.
+watch([() => route.query.edit, () => store.catalogLoaded], ([id, loaded]) => {
+  if (loaded && typeof id === 'string') {
+    const agent = agents.value.find(agent => agent.id === id)
+    if (agent) open(agent)
+  }
+}, { immediate: true })
+function close () {
+  if (packageBusy.value) return
+  imageGeneration++; imageBusy.value = false; editing.value = false; error.value = ''
+  if (route.query.edit) {
+    const query = { ...route.query }
+    delete query.edit
+    router.replace({ query, hash: '#agent-profiles' })
+  }
+}
 async function save () {
   if (busy.value || packageBusy.value || imageBusy.value || !draft.name.trim()) return
   busy.value = true
@@ -191,8 +214,15 @@ function remove (agent) {
 .profile-editor__head { margin-bottom: 16px; }
 .profile-editor__label { display: block; margin: 16px 0 8px; font-size: 0.75rem; }
 .profile-editor__label .dim { margin-left: 6px; font-size: 0.6875rem; }
-.profile-editor__portrait { gap: 12px; flex-wrap: wrap; --agent-avatar-size: 56px; }
-.profile-editor__portrait input { min-width: 0; width: 180px; max-width: 100%; font-size: 0.75rem; }
+.profile-editor__portrait { gap: 16px; flex-wrap: wrap; --agent-avatar-size: 72px; }
+.profile-editor__image-button { position: relative; display: grid; flex: none; padding: 4px; border: 1px dashed var(--border-strong); border-radius: var(--radius-md); background: transparent; color: var(--text); cursor: pointer; }
+.profile-editor__image-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.profile-editor__image-button:hover:not(:disabled) { border-color: var(--accent); }
+.profile-editor__image-button:disabled { opacity: 0.5; cursor: not-allowed; }
+.profile-editor__image-overlay { position: absolute; display: grid; place-items: center; inset: 4px; clip-path: var(--octagon); background: rgb(0 0 0 / 45%); color: white; font-size: 1.5rem; opacity: 0; transition: opacity var(--transition); }
+.profile-editor__image-button:hover .profile-editor__image-overlay, .profile-editor__image-button:focus-visible .profile-editor__image-overlay { opacity: 1; }
+.profile-editor__image-actions { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; flex: 1; }
+@media (pointer: coarse) { .profile-editor__image-actions .btn { min-height: 44px; } }
 .profile-editor__prompt { width: 100%; resize: vertical; line-height: 1.6; }
 .profile-editor__actions { flex-wrap: wrap; gap: 6px; padding-top: 18px; border-top: 1px solid var(--border); }
 @media (max-width: 640px) {

@@ -204,7 +204,7 @@ onUnmounted(() => {
   background: var(--surface-app);
 }
 
-.shell--agents { grid-template-columns: var(--rail-width) 92px auto minmax(0, 1fr); }
+.shell--agents { grid-template-columns: var(--rail-width) 68px auto minmax(0, 1fr); }
 
 .shell--full,
 .shell--collapsed {

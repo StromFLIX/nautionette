@@ -41,6 +41,9 @@ for (const path of ['/chats', '/chats/alpha']) {
       await options.click()
       await expect(page.getByRole('button', { name: /Rename$/ })).toBeVisible()
       await page.keyboard.press('Escape')
+      await expect(page.locator('.q-menu')).toHaveCount(0)
+      // Quasar restores anchor focus after the menu's exit transition.
+      await expect(options).toBeFocused()
       await expect(panel).toBeVisible()
     }
     await page.screenshot({ path: `/tmp/chat-preferences-${path === '/chats' ? 'welcome' : 'chat'}.png` })
@@ -50,6 +53,8 @@ for (const path of ['/chats', '/chats/alpha']) {
     await expect(page.locator('.composer__attachments')).toContainText('notes.txt')
     await expect(page.getByRole('button', { name: 'Chat configuration', exact: true })).toBeFocused()
     await openChatConfiguration(page)
+    // Opening transfers focus on Vue's next tick; Escape belongs to the panel.
+    await expect(close).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(panel).toBeHidden()
     await expect(input).toHaveValue(draft)

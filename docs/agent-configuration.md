@@ -45,7 +45,9 @@ requirements. Package changes do not need per-agent image builds.
 The chat workspace has an agent column between navigation and the chat list.
 **All** is always its first, pinned item and shows every chat, including custom,
 unassigned and deleted-agent conversations. Saved agents follow it. On phones the
-same list becomes a horizontal strip; All remains visible while people scroll.
+same compact, icon-only list becomes a horizontal strip; All remains visible while
+people scroll. Octagonal portraits identify agents, with names on hover. Right-click
+an agent (or press and hold on touchscreens) to edit it or change its image.
 
 Selecting a person filters the existing date/project/activity groups, counts and
 search to that person's chats. The `?agent=<id>` URL preserves the view on reload
@@ -63,7 +65,9 @@ Profile/default edits do not reclassify existing chats. The upgrade classifies
 legacy customized chats once; subsequent restarts preserve that result.
 
 **Settings > Agents & models > Agents** accepts an optional portrait file and a
-system prompt. Images are authenticated API data, not third-party URLs. PNG, JPEG
+system prompt. Click the portrait preview or **Choose image** to upload; **Change
+image** and **Remove image** let you replace it or return to initials before saving.
+Images are authenticated API data, not third-party URLs. PNG, JPEG
 and WebP files up to 5 MiB / 25 megapixels are validated and converted to a static
 WebP thumbnail, at most 256×256, without EXIF metadata. Avatars fall back to initials.
 Images are used in the column, settings, agent picker and conversation header.

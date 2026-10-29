@@ -15,7 +15,7 @@ watch(() => props.agent?.image, () => { failed.value = false })
 </script>
 
 <style scoped>
-.agent-avatar { display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--agent-avatar-size, 36px); height: var(--agent-avatar-size, 36px); overflow: hidden; border-radius: 50%; font-weight: 650; }
+.agent-avatar { display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--agent-avatar-size, 36px); height: var(--agent-avatar-size, 36px); overflow: hidden; clip-path: var(--octagon); font-weight: 650; }
 .agent-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .agent-avatar__initials { font-size: 0.8125rem; }
 .agent-avatar .material-icons { font-size: 1.25rem; }
