@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { createChatRecovery } from '../../images/pi-base/chat-recovery.mjs'
@@ -15,15 +16,17 @@ async function run (job, events = null) {
   const commands = [], output = [], writes = [], removed = []
   let spawnArgs, spawnOptions
   await runInNewContext(source, {
-    Buffer, console, createChatRecovery,
+    Buffer, console, createChatRecovery, dirname,
     createTelemetry: (job) => createTelemetry(job, { OTEL_SDK_DISABLED: 'true' }),
     mkdirSync () {}, existsSync () { return false },
+    lstatSync () { return { isDirectory: () => true } },
+    openSync () { return 1 }, closeSync () {}, fsyncSync () {},
     writeFileSync (path, value, options) { writes.push([path, value, options]) },
     readFileSync (path) { assert.equal(path, '/tmp/nautionette-job.json'); return JSON.stringify(job) },
     unlinkSync (path) { removed.push(path) },
     projectEnvironment () { return {} }, contextUsage () { return null },
     preparePackages () { return {} }, randomUUID () { return 'a'.repeat(32) },
-    createChatControl () { return { receive () {}, close () {} } },
+    createChatControl () { return { receive () {}, close () {}, pendingInputs () { return [] } } },
     listenForChatControl () { return { close () {} } },
     process: { env: { AGENT_JOB_FILE: '/tmp/nautionette-job.json' }, stdout: { write (line) { output.push(JSON.parse(line)) } } },
     spawn (_command, args, options) {
