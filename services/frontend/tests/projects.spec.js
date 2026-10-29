@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { openChatConfiguration } from './helpers'
+import { openChatConfiguration, closeChatConfiguration } from './helpers'
 
 const firstId = 'a'.repeat(32)
 const secondId = 'b'.repeat(32)
@@ -191,6 +191,7 @@ for (const width of [1440, 320]) {
     expect(menu.y + menu.height).toBeLessThanOrEqual(width === 320 ? 568 : 1000)
     await page.screenshot({ path: `/tmp/nautionette-project-picker-${width}.png` })
     await page.keyboard.press('Escape')
+    await closeChatConfiguration(page)
     await page.locator('.composer__input').fill('Update both projects')
     await page.locator('.composer__send').click()
     await expect.poll(() => state.sent.length).toBe(1)
@@ -203,6 +204,7 @@ for (const width of [1440, 320]) {
     await page.getByRole('button', { name: 'Select projects', exact: true }).click()
     await page.getByRole('checkbox', { name: 'team/nautionette', exact: true }).uncheck()
     await page.keyboard.press('Escape')
+    await closeChatConfiguration(page)
     await page.locator('.composer__input').fill('Work only on the second project')
     await page.locator('.composer__send').click()
     await expect.poll(() => state.sent.length).toBe(2)
@@ -232,6 +234,7 @@ test('project selection is saved before sending and follows server snapshots', a
   await expect(page.getByRole('button', { name: 'Select projects', exact: true })).not.toContainText('1 project')
   state.chat.project_ids = [firstId]
   await expect(page.getByRole('button', { name: 'Select projects', exact: true })).toContainText('1 project')
+  await closeChatConfiguration(page)
   await page.locator('.composer__input').fill('Keep working')
   await page.locator('.composer__send').click()
   await expect.poll(() => state.sent.length).toBe(1)
@@ -259,6 +262,7 @@ for (const fail of [false, true]) {
     await page.getByRole('checkbox', { name: repository.full_name, exact: true }).check()
     await expect.poll(() => saving).toBe(true)
     await page.keyboard.press('Escape')
+    await closeChatConfiguration(page)
     await page.locator('.composer__input').fill('Use the selected project')
     await page.locator('.composer__send').click()
     await expect(page.locator('.composer__send')).toBeDisabled()
@@ -292,6 +296,7 @@ test('unavailable selected projects can be removed without being silently replac
   await clear.click()
   await page.keyboard.press('Escape')
   await expect(page.locator('.project-picker')).toBeHidden()
+  await closeChatConfiguration(page)
   await page.locator('.composer__input').fill('No project needed')
   await page.locator('.composer__send').click()
   await expect.poll(() => state.sent.length).toBe(1)

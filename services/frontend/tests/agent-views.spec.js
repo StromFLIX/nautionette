@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { mockAgents } from './agent-fixture.js'
-import { openChatConfiguration } from './helpers.js'
+import { openChatConfiguration, closeChatConfiguration } from './helpers.js'
 
 const portrait = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64')
 async function fixture (context) {
@@ -77,11 +77,15 @@ for (const width of [1440, 390, 320]) {
     await page.keyboard.press('Escape')
     await expect(page).toHaveURL(/\/chats\/alpha$/)
     expect(state.chats.alpha.chat.agent_customized).toBe(true)
+    // Leaving the scoped route dismisses the preferences dialog asynchronously.
+    await expect(page.getByRole('dialog', { name: 'Chat preferences' })).toBeHidden()
+    await openChatConfiguration(page)
     await page.getByRole('button', { name: 'Reapply agent defaults', exact: true }).click()
     await expect.poll(() => state.chats.alpha.chat.agent_customized).toBe(false)
     await page.getByRole('button', { name: 'Select agent', exact: true }).click()
     await page.getByRole('menuitemradio', { name: writer.name, exact: true }).click()
     await expect.poll(() => state.chats.alpha.chat.agent_id).toBe(writer.id)
+    await closeChatConfiguration(page)
     await back(page)
     await select(page, research.name)
     await expect(rows(page)).toHaveCount(0)

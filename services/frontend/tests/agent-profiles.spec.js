@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { mockAgents, projectId } from './agent-fixture.js'
-import { openChatConfiguration } from './helpers.js'
+import { openChatConfiguration, closeChatConfiguration } from './helpers.js'
 
 async function dismiss (page) {
   await page.keyboard.press('Escape')
@@ -113,11 +113,12 @@ test('welcome waits for asynchronous defaults without erasing draft text or deli
   await openChatConfiguration(page)
   await selectNoTools(page, 'Select tools')
   release()
-  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled()
-  await expect(page.getByLabel('Message', { exact: true })).toHaveValue('A draft before discovery')
   await expect(page.getByLabel('Reasoning effort', { exact: true })).toContainText('High')
   await expect(page.getByLabel('Select agent set', { exact: true })).toContainText('research')
   await expect(page.getByLabel('Select projects', { exact: true })).toContainText('1 project')
+  await closeChatConfiguration(page)
+  await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled()
+  await expect(page.getByLabel('Message', { exact: true })).toHaveValue('A draft before discovery')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect.poll(() => state.created.length).toBe(1)
   expect(state.created[0]).toMatchObject({ agent_id: null, model: 'test/model', agent_set: 'research', reasoning_effort: 'high', tools: [], project_ids: [projectId] })
@@ -131,13 +132,15 @@ test('welcome applies the selected default agent and resets reasoning only on an
   await openChatConfiguration(page)
   await expect(page.getByLabel('Select agent', { exact: true })).toContainText('Research')
   await expect(page.getByLabel('Reasoning effort', { exact: true })).toContainText('High')
-  await page.getByLabel('Select model', { exact: true }).click()
+  await page.getByRole('button', { name: 'Select model', exact: true }).click()
   await page.getByPlaceholder('Search models').fill('Plain')
   await page.getByRole('button', { name: /Plain Images unverified/ }).click()
+  await dismiss(page)
   await expect(page.getByLabel('Reasoning effort', { exact: true })).toContainText('Provider default')
   await expect(page.getByLabel('Reasoning effort', { exact: true })).toBeDisabled()
   await page.getByRole('button', { name: 'Reapply agent defaults', exact: true }).click()
   await expect(page.getByLabel('Reasoning effort', { exact: true })).toContainText('High')
+  await closeChatConfiguration(page)
   await page.getByLabel('Message', { exact: true }).fill('Use the saved agent')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect.poll(() => state.created.length).toBe(1)
@@ -250,13 +253,16 @@ test('settings events refresh untouched defaults but keep per-field overrides in
   await page.goto('/chats')
   await openChatConfiguration(page)
   await selectNoTools(page, 'Select tools')
+  await closeChatConfiguration(page)
   await page.getByLabel('Message', { exact: true }).fill('Keep writing')
+  await openChatConfiguration(page)
   state.settings.default_project_ids = [projectId]
   state.settings.default_reasoning_effort = 'high'
   state.settings.default_tools = ['mail_read']
   state.pendingEvents.push('settings.changed')
   await expect(page.getByLabel('Select projects', { exact: true })).toContainText('1 project')
   await expect(page.getByLabel('Reasoning effort', { exact: true })).toContainText('High')
+  await closeChatConfiguration(page)
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect.poll(() => state.created.length).toBe(1)
   expect(state.created[0].tools).toEqual([])
@@ -272,6 +278,7 @@ test('chat agent switches are persisted before Send and do not edit a saved agen
   state.chatPatchGate = new Promise(resolve => { release = resolve })
   await chooseAgent(page, 'Writer')
   await expect.poll(() => state.chatWrites.length).toBe(1)
+  await closeChatConfiguration(page)
   await page.getByLabel('Message', { exact: true }).fill('Work with these defaults')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled()
@@ -279,6 +286,7 @@ test('chat agent switches are persisted before Send and do not edit a saved agen
   release()
   await expect.poll(() => state.sent.length).toBe(1)
   expect(state.sent[0].project_ids).toEqual([projectId])
+  await openChatConfiguration(page)
   await expect(page.getByLabel('Select agent', { exact: true })).toContainText('Writer')
   await page.getByLabel('Select tools', { exact: true }).click()
   await page.locator('.q-menu').getByRole('button', { name: 'All', exact: true }).click()

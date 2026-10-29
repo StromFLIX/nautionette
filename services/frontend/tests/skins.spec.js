@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 import { mockDesign } from './design-fixture.js'
+import { closeChatConfiguration } from './helpers.js'
 
 const saved = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREFERENCES_KEY)
 const pack = (patch = {}) => ({ format: 'nautionette-skin', version: 2, id: 'custom', name: 'My custom design', base: 'sand',
@@ -31,7 +32,7 @@ for (const [id, name] of [['winamp-classic', 'Winamp Classic'], ['windows-xp', '
       await input.fill('This still works')
       await page.getByRole('button', { name: 'Chat configuration', exact: true }).click()
       await expect(page.getByRole('button', { name: 'Select model', exact: true })).toBeInViewport()
-      await page.getByRole('button', { name: 'Chat configuration', exact: true }).click()
+      await closeChatConfiguration(page)
       await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeInViewport()
       if (id === 'windows-xp' && width > 900) {
         const nav = await page.locator('[data-skin-part=navigation]').boundingBox()
@@ -72,7 +73,7 @@ test.describe('skin touch layouts', () => {
         await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Draft\nwith\nseveral\nlines')
         await page.getByRole('button', { name: 'Chat configuration', exact: true }).tap()
         await page.setViewportSize({ width: 320, height: 320 })
-        for (const label of ['Select agent', 'Select model', 'Select tools', 'Select projects', 'Send message']) {
+        for (const label of ['Select agent', 'Select model', 'Select tools', 'Select projects', 'Select extensions', 'Close chat preferences']) {
           const control = page.getByRole('button', { name: label, exact: true })
           await control.scrollIntoViewIfNeeded()
           await expect(control).toBeInViewport({ ratio: 1 })
