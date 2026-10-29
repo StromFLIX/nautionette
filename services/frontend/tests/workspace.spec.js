@@ -162,6 +162,13 @@ test('model picker restores keyboard focus and clears its tooltip when focus mov
   await page.keyboard.press('Escape')
   await expect(page.locator('.q-menu')).toHaveCount(0)
   await expect(model).toBeFocused()
+  // Quasar suppresses tooltips during portal refocus: Escape must not reopen
+  // the dismissed tooltip. A new keyboard focus should still show it normally.
+  await expect(tooltip).toHaveCount(0)
+  await input.focus()
+  await page.keyboard.press('Tab') // Attach files
+  await page.keyboard.press('Tab') // Select model again
+  await expect(model).toBeFocused()
   await expect(tooltip).toBeVisible()
   await input.focus()
   await expect(page.getByRole('tooltip')).toHaveCount(0)
