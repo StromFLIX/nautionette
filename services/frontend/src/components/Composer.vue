@@ -1,6 +1,6 @@
 <template>
-  <div v-show="!configurationOpen" ref="composerElement" class="composer" data-skin-part="composer" :class="[`composer--${variant}`, { 'composer--focus': focused, 'composer--running': running }]"
-    @dragover.prevent @drop.prevent="drop" @paste="paste">
+  <div class="composer" data-skin-part="composer" :class="[`composer--${variant}`, { 'composer--focus': focused && !configurationOpen, 'composer--running': running && !configurationOpen, 'composer--configuration': configurationOpen }]">
+    <div v-show="!configurationOpen" class="composer__draft" @dragover.prevent @drop.prevent="drop" @paste="paste">
     <div v-if="attachments.length" class="composer__attachments">
       <div v-for="image in attachments" :key="image.id" class="composer__attachment">
         <ChatAttachment :attachment="image" />
@@ -41,7 +41,7 @@
         <q-tooltip>{{ meter.title }}</q-tooltip>
       </div>
       <button ref="configurationToggle" class="pick pick--icon composer__config-toggle" type="button"
-        aria-label="Chat configuration" aria-haspopup="dialog" :aria-expanded="configurationOpen" :aria-controls="configurationId"
+        aria-label="Chat configuration" :aria-expanded="configurationOpen" :aria-controls="configurationId"
         @click="openConfiguration">
         <span class="material-icons" aria-hidden="true">tune</span>
         <span v-if="customConfiguration && !configurationOpen" class="composer__configured" aria-label="Custom configuration" />
@@ -54,17 +54,16 @@
         <q-tooltip><template v-if="showStop">{{ stopping ? 'Stopping response' : 'Stop response' }}</template><template v-else>{{ running ? 'Queue message' : 'Send message' }} · {{ preferences.sendShortcut === 'enter' ? 'Enter' : '⌘ / Ctrl + Enter' }}</template></q-tooltip>
       </button>
     </div>
+    </div>
 
-  </div>
-
-  <q-dialog v-model="configurationOpen" :aria-labelledby="`${configurationId}-title`" @hide="restoreConfigurationFocus">
-    <div :id="configurationId" class="composer__configuration" data-skin-part="chat-configuration" :style="{ width: `${configurationWidth}px` }">
+    <section v-if="configurationOpen" :id="configurationId" class="composer__configuration" data-skin-part="chat-configuration"
+      :aria-labelledby="`${configurationId}-title`" @keydown.esc.stop="closeConfiguration">
       <header class="composer__configuration-head">
         <div>
           <h2 :id="`${configurationId}-title`">Chat preferences</h2>
           <p>All settings for this chat, in one place.</p>
         </div>
-        <button class="pick pick--icon" type="button" aria-label="Close chat preferences" autofocus @click="configurationOpen = false">
+        <button ref="configurationClose" class="pick pick--icon" type="button" aria-label="Close chat preferences" @click="closeConfiguration">
           <span class="material-icons" aria-hidden="true">close</span>
         </button>
       </header>
@@ -143,10 +142,10 @@
       </div>
       <p v-if="!configurationReady" class="composer__configuration-notice caption" role="status">Loading chat defaults…</p>
       <p v-if="imageSupport !== true" class="composer__configuration-notice caption" role="status">{{ imageNotice }}</p>
+      <div class="composer__configuration-foot"><span>{{ meter.label }}</span><RouterLink to="/settings/workspace">Workspace preferences<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink></div>
       </div>
-      <div class="composer__configuration-foot"><span>{{ meter.label }}</span><RouterLink to="/settings/workspace" @click="configurationOpen = false">Workspace preferences<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink></div>
-    </div>
-  </q-dialog>
+    </section>
+  </div>
 </template>
 
 <script setup>
@@ -182,17 +181,17 @@ const focused = ref(false)
 const fileInput = ref(null)
 const imageError = ref('')
 const configurationId = useId()
-// The overlay is local to this composer, never carried into other chats.
+// Preferences replace this composer's draft in place, never carried into other chats.
 const configurationOpen = ref(false)
-const composerElement = ref(null)
 const configurationToggle = ref(null)
-const configurationWidth = ref(800)
+const configurationClose = ref(null)
 function openConfiguration () {
-  configurationWidth.value = (composerElement.value?.getBoundingClientRect().width || 768) + 32
   configurationOpen.value = true
+  nextTick(() => configurationClose.value?.focus({ preventScroll: true }))
 }
-function restoreConfigurationFocus () {
-  nextTick(() => configurationToggle.value?.focus())
+function closeConfiguration () {
+  configurationOpen.value = false
+  nextTick(() => configurationToggle.value?.focus({ preventScroll: true }))
 }
 const profileDefaults = computed(() => agentConfig(store.catalog, props.agentId))
 const profileLabel = computed(() => props.agentId ? (profileDefaults.value?.agent_name || props.agentName || 'Removed agent') : 'Global defaults')
@@ -259,13 +258,14 @@ function submit () {
   emit('send')
   if (input.value) input.value.style.height = 'auto'
 }
-defineExpose({ focus: () => input.value?.focus() })
+defineExpose({ focus: () => (configurationOpen.value ? configurationClose.value : input.value)?.focus() })
 </script>
 
 <style scoped>
-.composer { position: relative; min-width: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-input); transition: border-color var(--transition), box-shadow var(--transition); }
-/* On short viewports the draft scrolls, not the primary actions. */
-.composer--docked { display: flex; flex-direction: column; max-height: 100%; }
+.composer { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; max-height: 100%; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-input); transition: border-color var(--transition), box-shadow var(--transition); }
+/* Keep the draft mounted so switching views preserves text, attachments and height. */
+.composer__draft { display: flex; flex-direction: column; min-height: 0; }
+.composer--configuration { overflow: hidden; }
 .composer--docked .composer__input { flex: 0 1 auto; min-height: calc(var(--chat-font-size) * 1.6 + 28px); }
 .composer--focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .composer--welcome { border-radius: var(--radius-xl); box-shadow: var(--shadow-md); }
@@ -313,11 +313,11 @@ defineExpose({ focus: () => input.value?.focus() })
 .composer__send:disabled, .composer__stop:disabled { color: var(--text-dim); cursor: default; }
 .composer__send:disabled::before { background: var(--surface-active); }
 .composer__send .material-icons, .composer__stop .material-icons { font-size: 1.25rem; }
-.composer__configuration { display: flex; flex-direction: column; min-width: 0; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-input); color: var(--text); box-shadow: var(--shadow-md); }
+.composer__configuration { display: flex; flex-direction: column; min-width: 0; min-height: 0; max-height: min(480px, calc(var(--app-height) - 120px)); color: var(--text); }
 .composer__configuration-head { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
 .composer__configuration-head h2 { margin: 0; font-size: 1rem; font-weight: 600; }
 .composer__configuration-head p { margin: 4px 0 0; color: var(--text-dim); font-size: 0.6875rem; }
-.composer__configuration-body { min-height: 0; padding: 18px 20px; }
+.composer__configuration-body { min-height: 0; padding: 18px 20px 0; scroll-padding-block: 2px; }
 .composer__configuration-notice { margin: 14px 8px 0; color: var(--warning); }
 .composer__profile { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
 .composer__profile-picker { max-width: min(280px, 100%); color: var(--text); background: var(--surface-hover); }
@@ -326,7 +326,7 @@ defineExpose({ focus: () => input.value?.focus() })
 .composer__option { min-width: 0; }
 .composer__option-label { display: block; color: var(--text-dim); font-size: 0.625rem; margin: 0 8px 4px; }
 .composer__option > .pick { width: 100%; max-width: none; background: var(--surface-hover); }
-.composer__configuration-foot { display: flex; flex: none; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px 20px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.625rem; }
+.composer__configuration-foot { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 18px -20px 0; padding: 14px 20px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.625rem; }
 .composer__configuration-foot a { display: flex; align-items: center; gap: 4px; color: var(--text-muted); text-decoration: none; }
 .composer__configuration-foot .material-icons { font-size: 0.75rem; }
 @media (max-width: 1100px) { .composer__options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -336,9 +336,13 @@ defineExpose({ focus: () => input.value?.focus() })
   .composer__bar { padding: 6px 8px 10px; gap: 3px; }
   .composer__input, .composer--welcome .composer__input { padding: 14px 14px 8px; }
   .composer__configuration-head { padding: 14px; }
-  .composer__configuration-body { padding: 14px; }
-  .composer__configuration-foot { padding: 12px 14px; }
+  .composer__configuration-body { padding: 14px 14px 0; }
+  .composer__configuration-foot { margin: 14px -14px 0; padding: 12px 14px; }
   .composer__options { gap: 10px; }
+}
+@media (max-height: 480px) {
+  .composer__configuration-head { align-items: center; padding: 8px 12px; }
+  .composer__configuration-head p { display: none; }
 }
 @media (max-width: 380px) {
   .composer__model { padding: 0 4px; }

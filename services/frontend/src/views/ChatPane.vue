@@ -657,13 +657,16 @@ onUnmounted(() => {
 }
 
 .thread__foot {
-  /* Keep the header and every control reachable when the keyboard reduces the viewport. */
+  /* Let the in-place preferences body shrink and scroll when the keyboard is open. */
+  display: flex;
+  flex-direction: column;
   min-height: 0;
   padding: 12px 24px 20px;
   background: var(--surface-app);
 }
 
 .thread__foot > :deep(.composer) {
+  width: 100%;
   max-width: var(--content-width);
   margin: 0 auto;
 }
@@ -725,6 +728,10 @@ onUnmounted(() => {
   .thread__foot {
     padding: 10px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
   }
+}
+
+@media (max-height: 480px) {
+  .thread__body { padding-block: 0; }
 }
 
 @media (max-width: 420px) {

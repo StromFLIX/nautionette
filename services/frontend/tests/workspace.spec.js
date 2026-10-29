@@ -18,7 +18,7 @@ for (const theme of THEMES) {
     await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Keep this draft')
     const toggle = page.getByRole('button', { name: 'Chat configuration', exact: true })
     await toggle.press('Space')
-    await expect(page.getByRole('dialog', { name: 'Chat preferences' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Chat preferences' })).toBeVisible()
     for (const name of ['Select agent', 'Select model', 'Select agent set', 'Reasoning effort', 'Select tools', 'Select projects', 'Select extensions']) {
       const control = page.getByRole('button', { name, exact: true })
       await control.scrollIntoViewIfNeeded()

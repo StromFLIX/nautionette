@@ -12,23 +12,37 @@ for (const path of ['/chats', '/chats/alpha']) {
     await input.fill(draft)
     await page.locator('input[type=file]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Keep this attachment') })
     const height = (await input.boundingBox()).height
-    const composerWidth = (await page.locator('.composer').boundingBox()).width
+    const composerBox = await page.locator('.composer').boundingBox()
     await openChatConfiguration(page)
-    const dialog = page.getByRole('dialog', { name: 'Chat preferences' })
+    const panel = page.getByRole('region', { name: 'Chat preferences' })
     await expect(input).toBeHidden()
     await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeHidden()
     await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeHidden()
     for (const name of ['Select agent', 'Select model', 'Select agent set', 'Reasoning effort', 'Select tools', 'Select projects', 'Select extensions']) {
-      await expect(dialog.getByRole('button', { name, exact: true })).toBeVisible()
+      await expect(panel.getByRole('button', { name, exact: true })).toBeVisible()
     }
-    await expect.poll(async () => (await page.locator('.composer__configuration').boundingBox()).width).toBeGreaterThan(composerWidth)
-    const close = dialog.getByRole('button', { name: 'Close chat preferences' })
+    await expect(page.locator('.composer')).toBeVisible()
+    await expect(page.locator('.composer > .composer__configuration')).toBeVisible()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(page.locator('.q-dialog__backdrop')).toHaveCount(0)
+    const settingsBox = await page.locator('.composer').boundingBox()
+    expect(settingsBox.x).toBeCloseTo(composerBox.x, 1)
+    expect(settingsBox.width).toBeCloseTo(composerBox.width, 1)
+    if (path === '/chats') expect(settingsBox.y).toBeCloseTo(composerBox.y, 1)
+    else expect(settingsBox.y + settingsBox.height).toBeCloseTo(composerBox.y + composerBox.height, 1)
+    const close = panel.getByRole('button', { name: 'Close chat preferences' })
     await expect(close).toBeFocused()
     const header = await page.locator('.composer__configuration-head').boundingBox()
     const closeBox = await close.boundingBox()
     expect(closeBox.x).toBeGreaterThan(header.x + header.width / 2)
-    await page.keyboard.press('Shift+Tab')
-    expect(await dialog.evaluate(el => el.contains(document.activeElement))).toBe(true)
+    if (path === '/chats/alpha') {
+      // The rest of the chat remains usable: this is not a modal or a focus trap.
+      const options = page.getByRole('button', { name: 'Chat options', exact: true })
+      await options.click()
+      await expect(page.getByRole('button', { name: /Rename$/ })).toBeVisible()
+      await page.keyboard.press('Escape')
+      await expect(panel).toBeVisible()
+    }
     await page.screenshot({ path: `/tmp/chat-preferences-${path === '/chats' ? 'welcome' : 'chat'}.png` })
     await closeChatConfiguration(page)
     await expect(input).toHaveValue(draft)
@@ -37,12 +51,12 @@ for (const path of ['/chats', '/chats/alpha']) {
     await expect(page.getByRole('button', { name: 'Chat configuration', exact: true })).toBeFocused()
     await openChatConfiguration(page)
     await page.keyboard.press('Escape')
-    await expect(dialog).toBeHidden()
+    await expect(panel).toBeHidden()
     await expect(input).toHaveValue(draft)
   })
 }
 
-test('model and reasoning changes stay together in the overlay and persist', async ({ page, context }) => {
+test('model and reasoning changes stay together in the in-place panel and persist', async ({ page, context }) => {
   const state = await mockAgents(context)
   await page.goto('/chats/alpha')
   await openChatConfiguration(page)
@@ -53,9 +67,9 @@ test('model and reasoning changes stay together in the overlay and persist', asy
   await page.getByPlaceholder('Search models').fill('Plain')
   await page.getByPlaceholder('Search models').press('Enter')
   await expect.poll(() => state.data.chat.model).toBe('test/plain')
-  // Model search remains open until dismissed; Escape must not close its parent dialog.
+  // Escape in a picker closes only that picker, not the in-place preferences.
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('dialog', { name: 'Chat preferences' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Chat preferences' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Reasoning effort', exact: true })).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Reasoning effort', exact: true })).toContainText('Provider default')
   await closeChatConfiguration(page)
@@ -66,7 +80,7 @@ test('model and reasoning changes stay together in the overlay and persist', asy
 })
 
 for (const width of [320, 390, 1440]) {
-  test(`overlay scrolls without losing its close button at ${width}px`, async ({ page, context }) => {
+  test(`in-place preferences scroll without losing their close button at ${width}px`, async ({ page, context }) => {
     await mockAgents(context)
     await context.addInitScript(key => localStorage.setItem(key, JSON.stringify({ interfaceSize: 150 })), PREFERENCES_KEY)
     await page.setViewportSize({ width, height: 320 })

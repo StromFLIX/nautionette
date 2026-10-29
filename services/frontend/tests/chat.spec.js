@@ -1031,7 +1031,7 @@ for (const reason of ['The provider marks this model as text-only.', 'No compati
     await expect(page.locator('input[type=file]')).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Attach files' })).toHaveAttribute('title', new RegExp(reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
     await openChatConfiguration(page)
-    await expect(page.getByRole('dialog', { name: 'Chat preferences' }).getByRole('status')).toContainText(reason)
+    await expect(page.getByRole('region', { name: 'Chat preferences' }).getByRole('status')).toContainText(reason)
     await closeChatConfiguration(page)
     for (const type of ['paste', 'drop', 'change']) {
       await page.locator(type === 'change' ? 'input[type=file]' : 'textarea').evaluate((el, { type, bytes }) => {

@@ -35,7 +35,7 @@ test('configuration opens only manually, including legacy preferences and reused
   await page.goto('/chats')
   await expect(toggle(page)).toHaveAttribute('aria-expanded', 'false')
   await toggle(page).click()
-  await expect(page.getByRole('dialog', { name: 'Chat preferences' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Chat preferences' })).toBeVisible()
   await newChat(page)
   await expect(page).toHaveURL(/\/chats\/created-1$/)
   await expect(toggle(page)).toHaveAttribute('aria-expanded', 'false')
