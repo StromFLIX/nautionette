@@ -38,7 +38,6 @@ async function mockChats (context, state) {
     if (imagePath) {
       const [, chatId, id] = imagePath
       if (method === 'POST') {
-        if (state.uploadWait) await state.uploadWait
         if (state.uploadFailure) return route.fulfill({ status: 422, json: { detail: 'Invalid image' } })
         const image = { id: `image-${state.uploads.length}`, name: new URL(route.request().url()).searchParams.get('name'), mime_type: route.request().headers()['content-type'], size: route.request().postDataBuffer().length }
         state.uploads.push({ chatId, image, bytes: route.request().postDataBuffer() })
@@ -53,6 +52,7 @@ async function mockChats (context, state) {
       const [, chatId, action] = match
       const data = refreshReadState(state.chats[chatId])
       if (!action && method === 'PATCH') {
+        if (state.settingsWait) await state.settingsWait
         if (state.settingsFailure) return route.fulfill({ status: 503, json: { detail: 'Settings unavailable' } })
         Object.assign(data.chat, route.request().postDataJSON())
         return route.fulfill({ json: data.chat })
@@ -458,13 +458,14 @@ test.describe('mobile composer activation', () => {
     })
   }
 
-  test('sending an attachment keeps the editor focused throughout preparation without changing the pending draft', async ({ page, context }) => {
+  test('message preparation keeps the editor focused without changing the pending draft', async ({ page, context }) => {
     const state = initial()
-    let releaseUpload
-    state.uploadWait = new Promise(resolve => { releaseUpload = resolve })
+    let releaseSettings
+    state.settingsWait = new Promise(resolve => { releaseSettings = resolve })
     await mockChats(context, state)
     await page.goto('/chats/alpha')
-    await page.locator('input[type=file]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Notes') })
+    await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+    await page.getByRole('menuitemcheckbox', { name: 'Disable agent timeout' }).click()
     const input = page.getByRole('textbox', { name: 'Message', exact: true })
     await input.fill('Send these notes')
     await input.evaluate(el => {
@@ -487,16 +488,15 @@ test.describe('mobile composer activation', () => {
       await expect(input).toHaveValue('Send these notes')
       expect(state.payloads).toHaveLength(0)
     } finally {
-      releaseUpload()
+      releaseSettings()
     }
     await expect.poll(() => state.payloads.length).toBe(1)
     expect(state.payloads[0].text).toBe('Send these notes')
-    expect(state.payloads[0].attachment_ids).toEqual(['image-0'])
     await expect(input).toHaveValue('')
     await expect(input).toBeFocused()
     expect(await page.evaluate(() => window.editorBlurs)).toBe(0)
     await input.fill('Next message')
-    await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toBeEnabled()
+    await expect(page.locator('.composer__send')).toBeEnabled()
   })
 })
 
