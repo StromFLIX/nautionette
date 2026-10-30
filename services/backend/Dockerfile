@@ -24,7 +24,8 @@ COPY images/pi-base/artcraft/catalog.json /etc/nautionette/artcraft-catalog.json
 COPY services/backend/ services/backend/
 RUN uv sync --locked --no-dev --package nautionette-backend
 # Bake the ~67 MB CPU model into the image; no first-start download or API key.
-RUN python -c "from nautionette_backend.search_model import load_encoder; load_encoder('/opt/nautionette-search-model')"
+RUN python -c "from nautionette_backend.search_model import load_encoder; load_encoder('/opt/nautionette-search-model')" \
+    && chmod -R a+rX /opt/nautionette-search-model
 
 # Committed workflows travel with the image and are seeded into the volume.
 COPY workflows/ /seed/
@@ -36,6 +37,9 @@ RUN useradd --create-home --uid 10001 app \
     && chown -R app:app /app /data /artifacts /workflows /projects /chat-sessions \
     && chmod 700 /chat-sessions
 USER app
+# Verify every cached artifact is usable offline by the actual runtime user.
+# Hub tree-cache files can otherwise retain root-only permissions from download.
+RUN python -c "from nautionette_backend.search_model import load_encoder; encoder = load_encoder('/opt/nautionette-search-model', local_files_only=True); assert len(next(iter(encoder.query_embed('offline model check')))) == 384"
 
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
