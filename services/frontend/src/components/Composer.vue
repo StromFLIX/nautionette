@@ -49,7 +49,7 @@
       </button>
       <button type="button" :class="showStop ? 'composer__stop' : ['composer__send', { 'composer__send--busy': busy }]"
         :aria-label="showStop ? 'Stop response' : running ? 'Queue message' : 'Send message'"
-        :disabled="showStop ? stopping : !canSubmit" @pointerdown="preserveDraftFocus" @click="showStop ? $emit('stop') : submit()">
+        :disabled="showStop ? stopping : !canSubmit" @mousedown="preserveDraftFocus" @click="showStop ? $emit('stop') : submit()">
         <span class="material-icons" aria-hidden="true">{{ showStop ? 'stop' : busy ? 'more_horiz' : running ? 'playlist_add' : 'arrow_upward' }}</span>
         <q-tooltip><template v-if="showStop">{{ stopping ? 'Stopping response' : 'Stop response' }}</template><template v-else>{{ running ? 'Queue message' : 'Send message' }} · {{ preferences.sendShortcut === 'enter' ? 'Enter' : '⌘ / Ctrl + Enter' }}</template></q-tooltip>
       </button>
@@ -258,8 +258,9 @@ function onKeydown (event) {
 }
 function preserveDraftFocus (event) {
   // Blurring the draft dismisses the mobile keyboard and can move this button
-  // before the tap becomes a click. Keep focus, but still activate on click so
-  // canceled gestures and keyboard/assistive-technology activation work normally.
+  // before the tap becomes a click. Cancel mousedown's focus change, not
+  // pointerdown/touchstart: Safari suppresses the click when those are canceled.
+  // Activation stays on click for canceled gestures and keyboard/accessibility.
   if (event.button === 0 && document.activeElement === input.value) event.preventDefault()
 }
 function submit () {
