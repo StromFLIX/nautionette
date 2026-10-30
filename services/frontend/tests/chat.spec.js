@@ -376,6 +376,70 @@ test('group controls are collapsed by default without clearing the selected view
   await expect(activity).toBeVisible()
 })
 
+test('send preserves mouse focus without sending on a canceled gesture, and keeps keyboard activation', async ({ page, context }) => {
+  const state = initial()
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  const input = page.getByRole('textbox', { name: 'Message', exact: true })
+  const send = page.getByRole('button', { name: 'Send message', exact: true })
+  await expect(send).toBeDisabled()
+  await input.fill('Keep this draft until activation')
+  await expect(send).toBeEnabled()
+  const bounds = await send.boundingBox()
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+  await page.mouse.down()
+  await expect(input).toBeFocused()
+  expect(state.payloads).toHaveLength(0)
+  await page.mouse.move(0, 0)
+  await page.mouse.up()
+  await expect(input).toHaveValue('Keep this draft until activation')
+  expect(state.payloads).toHaveLength(0)
+  await send.click()
+  await expect.poll(() => state.payloads.length).toBe(1)
+
+  for (const key of ['Enter', 'Space']) {
+    await input.fill(`Activate with ${key}`)
+    const queue = page.getByRole('button', { name: 'Queue message', exact: true })
+    await queue.focus()
+    await queue.press(key)
+    await expect(input).toHaveValue('')
+    await expect.poll(() => state.payloads.at(-1)?.text).toBe(`Activate with ${key}`)
+  }
+  expect(state.payloads).toHaveLength(3)
+})
+
+test.describe('mobile composer activation', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 480 } })
+
+  for (const running of [false, true]) {
+    test(`one tap ${running ? 'queues' : 'sends'} without blurring the draft before activation`, async ({ page, context }) => {
+      const state = initial()
+      if (running) state.chats.alpha.active_turn = { id: 'working', steps: [] }
+      await mockChats(context, state)
+      await page.goto('/chats/alpha')
+      const input = page.getByRole('textbox', { name: 'Message', exact: true })
+      await input.fill('Send on the first tap')
+      const action = page.getByRole('button', { name: running ? 'Queue message' : 'Send message', exact: true })
+      await expect(action).toBeEnabled()
+      // Headless browsers have no software keyboard. Observe focus at click time,
+      // before send() can refocus the draft and mask a keyboard-dismissal race.
+      await action.evaluate(button => {
+        button.addEventListener('click', () => {
+          window.draftFocusedAtActivation = document.activeElement === document.querySelector('.composer__input')
+        }, { capture: true, once: true })
+      })
+      await action.tap()
+      await expect.poll(() => state.payloads.length).toBe(1)
+      expect(state.payloads[0].text).toBe('Send on the first tap')
+      expect(await page.evaluate(() => window.draftFocusedAtActivation)).toBe(true)
+      await expect(input).toHaveValue('')
+      await expect(input).toBeFocused()
+      expect(state.attempts).toHaveLength(1)
+      if (running) expect(state.chats.alpha.messages[0].meta.queued).toBe(true)
+    })
+  }
+})
+
 function changeFixture () {
   const state = initial()
   state.chats.alpha.chat.project_ids = ['project-a', 'project-b', 'clean']
