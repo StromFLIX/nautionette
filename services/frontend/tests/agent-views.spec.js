@@ -27,6 +27,16 @@ async function fixture (context) {
 const rows = page => page.locator('.chat-list-item')
 const select = (page, name) => page.getByRole('button', { name: `Chats with ${name}`, exact: true }).click()
 const all = page => page.getByRole('button', { name: 'Show all chats', exact: true })
+async function expectRoundedAvatar (avatar) {
+  await expect(avatar).toHaveCSS('clip-path', 'none')
+  await expect(avatar).toHaveCSS('overflow', 'hidden')
+  const { radius, width } = await avatar.evaluate(el => {
+    const style = getComputedStyle(el)
+    return { radius: parseFloat(style.borderRadius), width: parseFloat(style.width) }
+  })
+  expect(radius).toBeGreaterThan(0)
+  expect(radius).toBeLessThan(width / 2)
+}
 const back = page => page.viewportSize().width > 900
   ? page.getByRole('link', { name: 'Chats', exact: true }).click()
   : page.getByRole('button', { name: 'Back to chats' }).click()
@@ -68,7 +78,7 @@ for (const width of [1440, 390, 320]) {
     await page.screenshot({ path: test.info().outputPath(`agent-sidebar-${width}.png`), fullPage: true })
   })
 
-  test(`compact octagonal rail and direct agent image selection work at ${width}px`, async ({ page, context }) => {
+  test(`compact rounded-rectangle avatars and direct agent image selection work at ${width}px`, async ({ page, context }) => {
     const { state, writer } = await fixture(context)
     await page.setViewportSize({ width, height: 900 })
     await page.goto('/chats')
@@ -78,8 +88,8 @@ for (const width of [1440, 390, 320]) {
     const bounds = await rail.boundingBox()
     expect(width > 900 ? bounds.width : bounds.height).toBeLessThanOrEqual(width > 900 ? 68 : 60)
     expect((await agentButton.boundingBox()).height).toBeLessThanOrEqual(48)
-    await expect(agentButton.locator('.agent-avatar')).toHaveCSS('clip-path', /^polygon\(/)
-    await expect(agentButton.locator('.agent-avatar')).toHaveCSS('border-radius', '0px')
+    // All-chats icon, uploaded portraits and initials share the same rounded shape.
+    for (const avatar of await rail.locator('.agent-avatar').all()) await expectRoundedAvatar(avatar)
     await agentButton.hover()
     await expect(page.getByRole('tooltip')).toHaveText('Grace · 0 agents running · 0 messages waiting')
     await page.mouse.move(0, 0)
@@ -92,7 +102,12 @@ for (const width of [1440, 390, 320]) {
     await preview.click()
     await (await chooser).setFiles({ name: 'grace.png', mimeType: 'image/png', buffer: portrait })
     await expect(page.getByRole('button', { name: 'Change agent image', exact: true }).locator('img')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Change agent image', exact: true }).locator('.agent-avatar')).toHaveCSS('clip-path', /^polygon\(/)
+    const avatar = page.getByRole('button', { name: 'Change agent image', exact: true }).locator('.agent-avatar')
+    await expectRoundedAvatar(avatar)
+    const overlay = page.locator('.profile-editor__image-overlay')
+    await expect(overlay).toHaveCSS('clip-path', 'none')
+    await expect(overlay).toHaveCSS('border-radius', await avatar.evaluate(el => getComputedStyle(el).borderRadius))
+    await expect(page.getByText('Previewed as a rounded rectangle', { exact: false })).toBeVisible()
     await page.getByRole('button', { name: 'Save agent', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Edit Grace', exact: true })).toBeVisible()
     expect(state.agents.find(agent => agent.id === writer.id).image).toContain('data:image/png;base64,')
