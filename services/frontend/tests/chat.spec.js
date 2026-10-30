@@ -446,6 +446,27 @@ for (const width of [1440, 320]) {
   })
 }
 
+for (const width of [1440, 768, 480, 320]) {
+  test(`project changes match the composer width when collapsed and expanded at ${width}px`, async ({ page, context }) => {
+    const state = changeFixture()
+    state.chats.alpha.chat.project_ids = ['project-a']
+    await mockChats(context, state)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats/alpha')
+    const bar = page.getByRole('region', { name: 'Project changes', exact: true })
+    await expect(bar).toBeVisible()
+    for (const expanded of [false, true, false]) {
+      await bar.locator('details').first().evaluate((element, open) => { element.open = open }, expanded)
+      const bounds = await bar.boundingBox()
+      const composer = await page.locator('.composer').boundingBox()
+      expect(bounds.x).toBeCloseTo(composer.x, 0)
+      expect(bounds.width).toBeCloseTo(composer.width, 0)
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(composer.y)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    }
+  })
+}
+
 test('project changes clear after push and refresh when an idle window regains focus', async ({ page, context }) => {
   const state = changeFixture()
   state.chats.alpha.active_turn = null
