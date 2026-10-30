@@ -30,7 +30,7 @@
         </div>
         <input id="profile-image-file" ref="imageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden :disabled="busy || imageBusy" @change="chooseImage" />
       </div>
-      <p class="caption dim">Click the avatar or choose a file. PNG, JPEG or WebP · up to 5 MiB. Previewed as an octagon and stored with this agent.</p>
+      <p class="caption dim">Click the avatar or choose a file. PNG, JPEG or WebP · up to 5 MiB. Previewed as a rounded rectangle and stored with this agent.</p>
       <p v-if="imageError" class="caption field-hint--bad" role="alert">{{ imageError }}</p>
       <label class="profile-editor__label" for="profile-prompt">System prompt <span class="dim">optional</span></label>
       <textarea id="profile-prompt" class="field profile-editor__prompt" :value="draft.config.system_prompt || ''" rows="5" maxlength="32000" :disabled="busy" placeholder="How should this person think, speak and help?" @input="setPrompt($event.target.value)" />
@@ -219,7 +219,7 @@ function remove (agent) {
 .profile-editor__image-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .profile-editor__image-button:hover:not(:disabled) { border-color: var(--accent); }
 .profile-editor__image-button:disabled { opacity: 0.5; cursor: not-allowed; }
-.profile-editor__image-overlay { position: absolute; display: grid; place-items: center; inset: 4px; clip-path: var(--octagon); background: rgb(0 0 0 / 45%); color: white; font-size: 1.5rem; opacity: 0; transition: opacity var(--transition); }
+.profile-editor__image-overlay { position: absolute; display: grid; place-items: center; inset: 4px; border-radius: var(--radius-sm); background: rgb(0 0 0 / 45%); color: white; font-size: 1.5rem; opacity: 0; transition: opacity var(--transition); }
 .profile-editor__image-button:hover .profile-editor__image-overlay, .profile-editor__image-button:focus-visible .profile-editor__image-overlay { opacity: 1; }
 .profile-editor__image-actions { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; flex: 1; }
 @media (pointer: coarse) { .profile-editor__image-actions .btn { min-height: 44px; } }
