@@ -1,0 +1,23 @@
+{
+  "agent_id": "d75b7c63a380",
+  "title": "Exact source revision",
+  "description": "Reusable SHA and evidence description; source freshness is rendered by the native card.",
+  "parts": [
+    {
+      "component": "status",
+      "props": {
+        "label": "Exact SHA"
+      },
+      "bindings": {
+        "value": "/sha"
+      }
+    },
+    {
+      "component": "text",
+      "props": {},
+      "bindings": {
+        "text": "/detail"
+      }
+    }
+  ]
+}

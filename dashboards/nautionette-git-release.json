@@ -1,0 +1,542 @@
+{
+  "actions": {
+    "prepare-notes": {
+      "bindings": {},
+      "conditions": [],
+      "confirm": true,
+      "confirmation": "Runs the existing model-assisted, read-only release preparation. No release or deployment is triggered.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "default": "auto",
+            "description": "Notes/version proposal only. No tag or release is created.",
+            "enum": [
+              "auto",
+              "patch",
+              "minor",
+              "major"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "inputs": {
+        "notes_agent_id": "d75b7c63a380"
+      },
+      "label": "Prepare release notes (never publish)",
+      "workflow": "prepare_nautionette_release"
+    },
+    "refresh-evidence": {
+      "bindings": {
+        "expected_sha": {
+          "path": "/sha",
+          "source": "main"
+        }
+      },
+      "conditions": [],
+      "confirm": false,
+      "confirmation": "Read-only integration/API checks. Publishes dashboard data silently; never tags, releases or deploys.",
+      "input_schema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "inputs": {},
+      "label": "Refresh exact-SHA evidence",
+      "workflow": "nautionette_git_release_status"
+    }
+  },
+  "agent_id": "d75b7c63a380",
+  "description": "StromFLIX/nautionette · live authorized reads plus deterministic evidence snapshots. No production publishing/deployment control.",
+  "pinned": true,
+  "schema_version": 1,
+  "sources": {
+    "activity": {
+      "arguments": {
+        "workflow": "nautionette_git_release_status"
+      },
+      "data": null,
+      "fields": {
+        "id": "/workflow_id",
+        "status": "/status",
+        "updated": "/updated_at",
+        "workflow": "/workflow"
+      },
+      "kind": "tool",
+      "output_schema": {},
+      "refresh_seconds": 60,
+      "select": "/runs",
+      "stale_seconds": 180,
+      "tool": "backend_list_runs",
+      "workflow": ""
+    },
+    "commits": {
+      "arguments": {
+        "fields": [
+          "sha",
+          "html_url",
+          "commit"
+        ],
+        "owner": "StromFLIX",
+        "page": 1,
+        "perPage": 8,
+        "repo": "nautionette",
+        "sha": "main"
+      },
+      "data": null,
+      "fields": {
+        "href": "/html_url",
+        "message": "/commit/message",
+        "sha": "/sha"
+      },
+      "kind": "tool",
+      "output_schema": {},
+      "refresh_seconds": 60,
+      "select": "",
+      "stale_seconds": 180,
+      "tool": "github_list_commits",
+      "workflow": ""
+    },
+    "main": {
+      "arguments": {
+        "detail": "none",
+        "owner": "StromFLIX",
+        "repo": "nautionette",
+        "sha": "main"
+      },
+      "data": null,
+      "fields": {
+        "detail": "/commit/message",
+        "sha": "/sha"
+      },
+      "kind": "tool",
+      "output_schema": {},
+      "refresh_seconds": 60,
+      "select": "",
+      "stale_seconds": 180,
+      "tool": "github_get_commit",
+      "workflow": ""
+    },
+    "production": {
+      "arguments": {
+        "uuid": "88veejhhzve4rjcnxzlyjzbo"
+      },
+      "data": null,
+      "fields": {
+        "detail": "/status",
+        "sha": "/git_commit_sha"
+      },
+      "kind": "tool",
+      "output_schema": {},
+      "refresh_seconds": 60,
+      "select": "/data",
+      "stale_seconds": 180,
+      "tool": "coolify_get_application",
+      "workflow": ""
+    },
+    "prs": {
+      "arguments": {
+        "base": "main",
+        "direction": "desc",
+        "fields": [
+          "number",
+          "title",
+          "state",
+          "html_url"
+        ],
+        "owner": "StromFLIX",
+        "page": 1,
+        "perPage": 8,
+        "repo": "nautionette",
+        "sort": "updated",
+        "state": "all"
+      },
+      "data": null,
+      "fields": {
+        "href": "/html_url",
+        "number": "/number",
+        "state": "/state",
+        "title": "/title"
+      },
+      "kind": "tool",
+      "output_schema": {},
+      "refresh_seconds": 60,
+      "select": "",
+      "stale_seconds": 180,
+      "tool": "github_list_pull_requests",
+      "workflow": ""
+    },
+    "runtime": {
+      "arguments": {},
+      "data": null,
+      "fields": {
+        "detail": "/environment",
+        "sha": "/version"
+      },
+      "kind": "tool",
+      "output_schema": {},
+      "refresh_seconds": 60,
+      "select": "",
+      "stale_seconds": 180,
+      "tool": "backend_system_status",
+      "workflow": ""
+    },
+    "staging": {
+      "arguments": {
+        "uuid": "tstmjujqyyl3zkvtwb0sx8nc"
+      },
+      "data": null,
+      "fields": {
+        "detail": "/status",
+        "sha": "/git_commit_sha"
+      },
+      "kind": "tool",
+      "output_schema": {},
+      "refresh_seconds": 60,
+      "select": "/data",
+      "stale_seconds": 180,
+      "tool": "coolify_get_application",
+      "workflow": ""
+    },
+    "staging-history": {
+      "arguments": {
+        "application_uuid": "tstmjujqyyl3zkvtwb0sx8nc",
+        "page": 1,
+        "per_page": 5
+      },
+      "data": null,
+      "fields": {
+        "deployment": "/deployment_uuid",
+        "finished": "/finished_at",
+        "sha": "/commit",
+        "status": "/status"
+      },
+      "kind": "tool",
+      "output_schema": {},
+      "refresh_seconds": 60,
+      "select": "/data",
+      "stale_seconds": 180,
+      "tool": "coolify_list_deployments",
+      "workflow": ""
+    },
+    "verification": {
+      "arguments": {},
+      "data": null,
+      "fields": {},
+      "kind": "snapshot",
+      "output_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "checks": {
+            "type": "object"
+          },
+          "ci": {
+            "type": "object"
+          },
+          "main_sha": {
+            "pattern": "^[0-9a-f]{40}$",
+            "type": "string"
+          },
+          "observed_at": {
+            "type": "string"
+          },
+          "production": {
+            "type": "object"
+          },
+          "readiness": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "main_sha",
+          "observed_at",
+          "ci",
+          "readiness",
+          "production",
+          "checks"
+        ],
+        "type": "object"
+      },
+      "refresh_seconds": 15,
+      "select": "",
+      "stale_seconds": 300,
+      "tool": "",
+      "workflow": ""
+    }
+  },
+  "title": "Nautionette · Git & releases",
+  "widgets": [
+    {
+      "bindings": {},
+      "component": "text",
+      "id": "safety",
+      "props": {
+        "text": "Live cards refresh through authorized read-only integrations while this view is open. Refresh exact-SHA evidence recomputes CI and candidate checks without a model. Empty is not success; stale/error/denied cards are never authorization. No production release control is registered.",
+        "tone": "neutral"
+      },
+      "source": null,
+      "span": 12,
+      "title": "Evidence, not release authorization"
+    },
+    {
+      "bindings": {},
+      "component": "recipe:nautionette-source-revision@1",
+      "id": "main",
+      "props": {},
+      "source": "main",
+      "span": 6,
+      "title": "Main · exact commit"
+    },
+    {
+      "bindings": {
+        "description": "/ci/detail",
+        "href": "/ci/href",
+        "tone": "/ci/tone",
+        "value": "/ci/value"
+      },
+      "component": "status",
+      "id": "ci",
+      "props": {
+        "href": "https://github.com/StromFLIX/nautionette/actions/workflows/ci.yml",
+        "label": "Run Refresh exact-SHA evidence when empty/stale"
+      },
+      "source": "verification",
+      "span": 6,
+      "title": "CI · exact-SHA snapshot"
+    },
+    {
+      "bindings": {},
+      "component": "action",
+      "id": "refresh",
+      "props": {
+        "action": "refresh-evidence"
+      },
+      "source": null,
+      "span": 6,
+      "title": "Read-only evidence refresh"
+    },
+    {
+      "bindings": {
+        "description": "/readiness/detail",
+        "tone": "/readiness/tone",
+        "value": "/readiness/value"
+      },
+      "component": "status",
+      "id": "readiness",
+      "props": {},
+      "source": "verification",
+      "span": 6,
+      "title": "Release-candidate readiness"
+    },
+    {
+      "bindings": {},
+      "component": "recipe:nautionette-source-revision@1",
+      "id": "staging",
+      "props": {},
+      "source": "staging",
+      "span": 6,
+      "title": "Staging · configured SHA / Coolify health"
+    },
+    {
+      "bindings": {},
+      "component": "recipe:nautionette-source-revision@1",
+      "id": "production",
+      "props": {},
+      "source": "production",
+      "span": 6,
+      "title": "Production · configured SHA / Coolify health"
+    },
+    {
+      "bindings": {
+        "items": ""
+      },
+      "component": "table",
+      "id": "staging-history",
+      "props": {
+        "columns": [
+          {
+            "key": "sha",
+            "label": "Commit"
+          },
+          {
+            "key": "status",
+            "label": "Status"
+          },
+          {
+            "key": "finished",
+            "label": "Finished"
+          },
+          {
+            "key": "deployment",
+            "label": "Deployment"
+          }
+        ],
+        "description": "A pin alone is not a deployed SHA. Evidence refresh requires the newest non-preview attempt to have finished at the same SHA."
+      },
+      "source": "staging-history",
+      "span": 12,
+      "title": "Staging · actual deployment history"
+    },
+    {
+      "bindings": {},
+      "component": "recipe:nautionette-source-revision@1",
+      "id": "runtime",
+      "props": {},
+      "source": "runtime",
+      "span": 6,
+      "title": "Production · authenticated runtime version"
+    },
+    {
+      "bindings": {
+        "description": "/production/detail",
+        "href": "/production/href",
+        "tone": "/production/tone",
+        "value": "/production/value"
+      },
+      "component": "status",
+      "id": "release-version",
+      "props": {},
+      "source": "verification",
+      "span": 6,
+      "title": "Production · verified release tag"
+    },
+    {
+      "bindings": {
+        "items": "/checks"
+      },
+      "component": "key-value",
+      "id": "checks",
+      "props": {},
+      "source": "verification",
+      "span": 12,
+      "title": "Candidate checks & capability limits"
+    },
+    {
+      "bindings": {
+        "items": ""
+      },
+      "component": "table",
+      "id": "commits",
+      "props": {
+        "columns": [
+          {
+            "key": "sha",
+            "label": "SHA"
+          },
+          {
+            "key": "message",
+            "label": "Commit"
+          },
+          {
+            "key": "href",
+            "label": "Details"
+          }
+        ],
+        "href": "https://github.com/StromFLIX/nautionette/commits/main"
+      },
+      "source": "commits",
+      "span": 12,
+      "title": "Recent main commits"
+    },
+    {
+      "bindings": {
+        "items": ""
+      },
+      "component": "table",
+      "id": "prs",
+      "props": {
+        "columns": [
+          {
+            "key": "number",
+            "label": "PR"
+          },
+          {
+            "key": "title",
+            "label": "Title"
+          },
+          {
+            "key": "state",
+            "label": "State"
+          },
+          {
+            "key": "href",
+            "label": "Details"
+          }
+        ],
+        "description": "A fresh table with no rows is a successful empty result—not denied or failed discovery.",
+        "href": "https://github.com/StromFLIX/nautionette/pulls"
+      },
+      "source": "prs",
+      "span": 12,
+      "title": "Recent PRs targeting main"
+    },
+    {
+      "bindings": {},
+      "component": "workflow",
+      "id": "prepare",
+      "props": {
+        "action": "prepare-notes",
+        "description": "Manual, model-assisted notes only. Revalidates staging independently; never publishes.",
+        "href": "https://github.com/StromFLIX/nautionette/actions/workflows/deploy.yml"
+      },
+      "source": null,
+      "span": 6,
+      "title": "Existing release preparation"
+    },
+    {
+      "bindings": {},
+      "component": "workflow",
+      "id": "collector",
+      "props": {
+        "workflow": "nautionette_git_release_status"
+      },
+      "source": null,
+      "span": 6,
+      "title": "Evidence workflow activity"
+    },
+    {
+      "bindings": {
+        "items": ""
+      },
+      "component": "table",
+      "id": "activity",
+      "props": {
+        "columns": [
+          {
+            "key": "workflow",
+            "label": "Workflow"
+          },
+          {
+            "key": "status",
+            "label": "Status"
+          },
+          {
+            "key": "updated",
+            "label": "Updated"
+          },
+          {
+            "key": "id",
+            "label": "Run"
+          }
+        ],
+        "description": "Actual run status, not a deployment-success badge."
+      },
+      "source": "activity",
+      "span": 12,
+      "title": "Evidence workflow · recent runs"
+    },
+    {
+      "bindings": {},
+      "component": "text",
+      "id": "legend",
+      "props": {
+        "text": "Native feed states: empty = waiting/no observations; fresh = observed successfully (possibly zero rows); stale = past threshold; denied = access revoked and cached data hidden; error = failed integration/contract (last good data may remain). Static text is explanatory only. Production promotion remains outside this dashboard: verify exact SHA, fresh CI, permissions, unused immutable tag, serialized deployment and authenticated post-deployment health. Unattended snapshot scheduling needs your timezone and cadence."
+      },
+      "source": null,
+      "span": 12,
+      "title": "Freshness & release safety"
+    }
+  ]
+}

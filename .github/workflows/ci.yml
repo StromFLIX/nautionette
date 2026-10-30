@@ -74,7 +74,7 @@ jobs:
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py
 
       - name: Agent dashboards, MCP reads and durable workflow actions
-        run: uv run pytest tests/backend/test_dashboards.py tests/backend/test_dashboard_transports.py tests/backend/test_gateway_mcp.py tests/backend/test_temporal_schedules.py
+        run: uv run pytest tests/test_git_release_dashboard.py tests/backend/test_dashboards.py tests/backend/test_dashboard_transports.py tests/backend/test_gateway_mcp.py tests/backend/test_temporal_schedules.py
 
       - name: Indexed conversation search, synchronization and fallback
         run: uv run pytest tests/backend/test_chat_search.py
