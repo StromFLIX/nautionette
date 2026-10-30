@@ -59,6 +59,9 @@ test('search works over settings and collapsed sidebars, with keyboard selection
   await expect(page.getByRole('searchbox', { name: 'Search settings', exact: true })).toBeVisible()
   await page.keyboard.press('Control+k')
   await expect(search(page)).toBeFocused()
+  // Result positions are not stable until asynchronous chat discovery has arrived.
+  await expect(palette(page).getByRole('option', { name: 'Design review', exact: true })).toBeVisible()
+  await expect(palette(page).locator('.q-dialog__inner')).not.toHaveClass(/--animating/)
   const first = palette(page).getByRole('option').first()
   await expect(first).toHaveAttribute('aria-selected', 'true')
   await page.keyboard.press('ArrowDown')
@@ -80,6 +83,27 @@ test('search works over settings and collapsed sidebars, with keyboard selection
   await palette(page).getByRole('option', { name: 'Design review', exact: true }).click()
   await expect(page).toHaveURL(/\/chats\/alpha$/)
   await expect(page.locator('#shell-sidebar')).toBeHidden()
+})
+
+test('late chat discovery preserves the keyboard-selected result rather than its old index', async ({ page, context }) => {
+  await mockDesign(context)
+  let releaseChats
+  const discovered = new Promise(resolve => { releaseChats = resolve })
+  await context.route('**/api/chats', async route => { await discovered; await route.fallback() })
+  try {
+    await page.goto('/settings/general')
+    await expect(page.getByRole('searchbox', { name: 'Search settings', exact: true })).toBeVisible()
+    await page.keyboard.press('Control+k')
+    await expect(search(page)).toBeFocused()
+    await expect(palette(page).locator('.q-dialog__inner')).not.toHaveClass(/--animating/)
+    const next = palette(page).getByRole('option').nth(1)
+    const name = await next.getAttribute('aria-label')
+    await page.keyboard.press('ArrowDown')
+    await expect(next).toHaveAttribute('aria-selected', 'true')
+    releaseChats()
+    await expect(palette(page).getByRole('option', { name: 'Design review', exact: true })).toBeVisible()
+    await expect(palette(page).getByRole('option', { name, exact: true })).toHaveAttribute('aria-selected', 'true')
+  } finally { releaseChats() }
 })
 
 test('palette follows the query, traps focus, and dismisses on outside click and mobile resize', async ({ page, context }) => {
