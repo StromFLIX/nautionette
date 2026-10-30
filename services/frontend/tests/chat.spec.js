@@ -38,6 +38,7 @@ async function mockChats (context, state) {
     if (imagePath) {
       const [, chatId, id] = imagePath
       if (method === 'POST') {
+        if (state.uploadWait) await state.uploadWait
         if (state.uploadFailure) return route.fulfill({ status: 422, json: { detail: 'Invalid image' } })
         const image = { id: `image-${state.uploads.length}`, name: new URL(route.request().url()).searchParams.get('name'), mime_type: route.request().headers()['content-type'], size: route.request().postDataBuffer().length }
         state.uploads.push({ chatId, image, bytes: route.request().postDataBuffer() })
@@ -409,7 +410,7 @@ test('send preserves mouse focus without sending on a canceled gesture, and keep
 })
 
 test.describe('mobile composer activation', () => {
-  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 480 } })
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 800 } })
 
   for (const running of [false, true]) {
     test(`one tap ${running ? 'queues' : 'sends'} without blurring the draft before activation`, async ({ page, context }) => {
@@ -421,14 +422,32 @@ test.describe('mobile composer activation', () => {
       await input.fill('Send on the first tap')
       const action = page.getByRole('button', { name: running ? 'Queue message' : 'Send message', exact: true })
       await expect(action).toBeEnabled()
-      // Headless browsers have no software keyboard. Observe focus at click time,
-      // before send() can refocus the draft and mask a keyboard-dismissal race.
+      // A WebView can dismiss the IME when the native editor selection is
+      // emptied, even while activeElement remains the textarea. Model the
+      // resulting layout shift: focus-at-click alone did not catch this race.
+      await page.evaluate(() => {
+        document.documentElement.style.setProperty('--keyboard-inset', '320px')
+        window.editorSelectionClears = []
+        const selection = window.getSelection()
+        for (const method of ['empty', 'removeAllRanges']) {
+          if (!selection[method]) continue
+          const original = selection[method].bind(selection)
+          selection[method] = () => {
+            if (document.activeElement?.matches('.composer__input')) {
+              window.editorSelectionClears.push(method)
+              document.documentElement.style.setProperty('--keyboard-inset', '0px')
+            }
+            return original()
+          }
+        }
+      })
       await action.evaluate(button => {
         button.addEventListener('click', () => {
           window.draftFocusedAtActivation = document.activeElement === document.querySelector('.composer__input')
         }, { capture: true, once: true })
       })
       await action.tap()
+      expect(await page.evaluate(() => window.editorSelectionClears)).toEqual([])
       await expect.poll(() => state.payloads.length).toBe(1)
       expect(state.payloads[0].text).toBe('Send on the first tap')
       expect(await page.evaluate(() => window.draftFocusedAtActivation)).toBe(true)
@@ -438,6 +457,47 @@ test.describe('mobile composer activation', () => {
       if (running) expect(state.chats.alpha.messages[0].meta.queued).toBe(true)
     })
   }
+
+  test('sending an attachment keeps the editor focused throughout preparation without changing the pending draft', async ({ page, context }) => {
+    const state = initial()
+    let releaseUpload
+    state.uploadWait = new Promise(resolve => { releaseUpload = resolve })
+    await mockChats(context, state)
+    await page.goto('/chats/alpha')
+    await page.locator('input[type=file]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Notes') })
+    const input = page.getByRole('textbox', { name: 'Message', exact: true })
+    await input.fill('Send these notes')
+    await input.evaluate(el => {
+      window.editorBlurs = 0
+      el.addEventListener('blur', () => { window.editorBlurs++ })
+    })
+    // Enter isolates preparation from the button's touch/tooltip handling.
+    await input.press('Enter')
+    try {
+      await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled()
+      await expect(input).toBeFocused()
+      expect(await input.evaluate(el => el.disabled || el.readOnly)).toBe(false)
+      await page.keyboard.type('not part of this message')
+      await expect(input).toHaveValue('Send these notes')
+      // Some IMEs/autofill emit a non-cancelable input without beforeinput.
+      await input.evaluate(el => {
+        el.value = 'unexpected native edit'
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertCompositionText', isComposing: true }))
+      })
+      await expect(input).toHaveValue('Send these notes')
+      expect(state.payloads).toHaveLength(0)
+    } finally {
+      releaseUpload()
+    }
+    await expect.poll(() => state.payloads.length).toBe(1)
+    expect(state.payloads[0].text).toBe('Send these notes')
+    expect(state.payloads[0].attachment_ids).toEqual(['image-0'])
+    await expect(input).toHaveValue('')
+    await expect(input).toBeFocused()
+    expect(await page.evaluate(() => window.editorBlurs)).toBe(0)
+    await input.fill('Next message')
+    await expect(page.getByRole('button', { name: 'Queue message', exact: true })).toBeEnabled()
+  })
 })
 
 function changeFixture () {

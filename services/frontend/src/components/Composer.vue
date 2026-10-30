@@ -17,8 +17,11 @@
         <strong>/{{ command.name }}</strong><span class="caption dim truncate">{{ command.description }}</span>
       </button>
     </div>
+    <!-- Disabling or making the native editor readonly dismisses the IME.
+         Freeze edits during preparation without taking away editor focus. -->
     <textarea ref="input" class="composer__input" :value="modelValue" :placeholder="placeholder" aria-label="Message"
-      :rows="variant === 'welcome' ? 3 : 1" :disabled="busy" @input="onInput"
+      :rows="variant === 'welcome' ? 3 : 1" :aria-disabled="busy || undefined"
+      @beforeinput="busy && $event.preventDefault()" @input="onInput"
       @focus="focused = true" @blur="focused = false" @keydown="onKeydown" />
 
     <input ref="fileInput" type="file" :disabled="busy" multiple hidden @change="chooseFiles" />
@@ -51,7 +54,9 @@
         :aria-label="showStop ? 'Stop response' : running ? 'Queue message' : 'Send message'"
         :disabled="showStop ? stopping : !canSubmit" @mousedown="preserveDraftFocus" @click="showStop ? $emit('stop') : submit()">
         <span class="material-icons" aria-hidden="true">{{ showStop ? 'stop' : busy ? 'more_horiz' : running ? 'playlist_add' : 'arrow_upward' }}</span>
-        <q-tooltip><template v-if="showStop">{{ stopping ? 'Stopping response' : 'Stop response' }}</template><template v-else>{{ running ? 'Queue message' : 'Send message' }} · {{ preferences.sendShortcut === 'enter' ? 'Enter' : '⌘ / Ctrl + Enter' }}</template></q-tooltip>
+        <!-- Touch tooltips clear the native editor selection on pointerenter,
+             before mousedown, which can dismiss the keyboard without a blur. -->
+        <q-tooltip v-if="!focused"><template v-if="showStop">{{ stopping ? 'Stopping response' : 'Stop response' }}</template><template v-else>{{ running ? 'Queue message' : 'Send message' }} · {{ preferences.sendShortcut === 'enter' ? 'Enter' : '⌘ / Ctrl + Enter' }}</template></q-tooltip>
       </button>
     </div>
     </div>
@@ -245,6 +250,8 @@ const commandSuggestions = computed(() => /^\/[^\s]*$/.test(props.modelValue)
   ? props.commands.filter(command => command.name.startsWith(props.modelValue.slice(1))).slice(0, 8) : [])
 function chooseCommand (name) { emit('update:modelValue', `/${name} `); input.value?.focus() }
 function onInput (event) {
+  // IME/autofill input is not always preceded by a cancelable beforeinput.
+  if (props.busy) { event.target.value = props.modelValue; return }
   emit('update:modelValue', event.target.value)
   event.target.style.height = 'auto'
   event.target.style.height = `${Math.min(220, event.target.scrollHeight)}px`
