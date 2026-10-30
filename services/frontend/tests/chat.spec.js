@@ -25,7 +25,7 @@ async function mockChats (context, state) {
       state.chats.created = { chat, messages: [], active_turn: null }
       return route.fulfill({ json: chat })
     }
-    if (path === '/api/chats') return route.fulfill({ json: { chats: Object.values(state.chats).map((data) => refreshReadState(data).chat) } })
+    if (path === '/api/chats') return route.fulfill({ json: { chats: Object.values(state.chats).map((data) => ({ ...refreshReadState(data).chat, message_count: data.messages.length })) } })
     if (path === '/api/workflows') return route.fulfill({ json: { workflows: [] } })
     if (path === '/api/drafts') return route.fulfill({ json: { drafts: [] } })
     if (path === '/api/runs') return route.fulfill({ json: { runs: [] } })
@@ -50,6 +50,14 @@ async function mockChats (context, state) {
     const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|messages|stop|queue\/resume|read-state|title\/regenerate))?$/)
     if (match) {
       const [, chatId, action] = match
+      if (!action && method === 'DELETE') {
+        state.deletes = [...(state.deletes || []), chatId]
+        if (state.deleteWait) await state.deleteWait
+        if (state.deleteFailure) return route.fulfill({ status: 409, json: { detail: 'Stop the active response before deleting this chat' } })
+        delete state.chats[chatId]
+        return route.fulfill({ json: { ok: true } })
+      }
+      if (!state.chats[chatId]) return route.fulfill({ status: 404, json: { detail: 'Chat not found' } })
       const data = refreshReadState(state.chats[chatId])
       if (!action && method === 'PATCH') {
         if (state.settingsWait) await state.settingsWait
@@ -144,6 +152,168 @@ async function filteredChats (context, preferences = {}) {
 
 const chatRow = (page, id) => page.locator(`#shell-sidebar a[href="/chats/${id}"]`)
 const mainNav = page => page.getByRole('navigation', { name: 'Main navigation' })
+
+async function openRowMenu (page, title = 'alpha') {
+  // Wait for the previous popup's exit/focus restoration before another row.
+  await expect(page.locator('.q-menu')).toHaveCount(0)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  const button = page.getByRole('button', { name: `Options for ${title}`, exact: true })
+  await button.focus()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.q-menu')).toBeVisible()
+}
+
+for (const width of [390, 1440]) {
+  test(`chat list and conversation offer the same actions at ${width}px`, async ({ page, context }) => {
+    const state = initial()
+    state.chats.alpha.messages = [{ id: 'reply', role: 'assistant', content: 'Saved reply', meta: {} }]
+    state.chats.alpha.chat.last_read_message_id = 'reply'
+    await mockChats(context, state)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats/alpha')
+    await page.getByRole('button', { name: 'Chat options', exact: true }).click()
+    const items = page.locator('.q-menu .pick-menu__item')
+    await expect(items).toHaveCount(5)
+    const conversationActions = await items.allTextContents()
+    await page.keyboard.press('Escape')
+    if (width < 900) await page.getByRole('button', { name: 'Back to chats', exact: true }).click()
+    await openRowMenu(page)
+    await expect(items).toHaveCount(5)
+    expect(await items.allTextContents()).toEqual(conversationActions)
+    await expect(page.getByRole('button', { name: 'Regenerate title', exact: true })).toBeEnabled()
+    await page.keyboard.press('Escape')
+    await openRowMenu(page, 'beta')
+    await expect(page.getByRole('button', { name: 'Regenerate title', exact: true })).toBeDisabled()
+  })
+}
+
+test('list rename targets the selected chat without leaving the open conversation', async ({ page, context }) => {
+  const state = initial()
+  await mockChats(context, state)
+  await page.goto('/chats/beta')
+  await openRowMenu(page)
+  await page.getByRole('button', { name: 'Rename', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog.getByRole('textbox')).toHaveValue('alpha')
+  await dialog.getByRole('textbox').fill('Renamed chat')
+  await dialog.getByRole('button', { name: 'OK', exact: true }).click()
+  await expect(chatRow(page, 'alpha')).toContainText('Renamed chat')
+  await expect(page).toHaveURL(/\/chats\/beta$/)
+  expect(state.chats.beta.chat.title).toBe('beta')
+
+  await openRowMenu(page, 'Renamed chat')
+  await page.getByRole('button', { name: 'Rename', exact: true }).click()
+  await dialog.getByRole('textbox').fill('Cancelled')
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  expect(state.chats.alpha.chat.title).toBe('Renamed chat')
+
+  state.settingsFailure = true
+  await openRowMenu(page, 'Renamed chat')
+  await page.getByRole('button', { name: 'Rename', exact: true }).click()
+  await dialog.getByRole('textbox').fill('Failed rename')
+  await dialog.getByRole('button', { name: 'OK', exact: true }).click()
+  await expect(page.getByText('Settings unavailable', { exact: true })).toBeVisible()
+  await expect(chatRow(page, 'alpha')).toContainText('Renamed chat')
+})
+
+test('list title regeneration stays on the list, guards duplicates and reports failures', async ({ page, context }) => {
+  const state = initial()
+  state.chats.alpha.messages = [{ id: 'question', role: 'user', content: 'Fix title', meta: {} }]
+  await mockChats(context, state)
+  await page.goto('/chats')
+  state.titleWait = new Promise(resolve => { state.releaseTitle = resolve })
+  await openRowMenu(page)
+  await page.getByRole('button', { name: 'Regenerate title', exact: true }).click()
+  await expect.poll(() => state.titleRequests).toBe(1)
+  await openRowMenu(page)
+  await expect(page.getByRole('button', { name: 'Regenerating title…', exact: true })).toBeDisabled()
+  await page.keyboard.press('Escape')
+  state.releaseTitle()
+  await expect(chatRow(page, 'alpha')).toContainText('Repair chat titles')
+  await expect(page).toHaveURL(/\/chats$/)
+  expect(state.chats.beta.chat.title).toBe('beta')
+
+  state.titleFailure = true
+  await openRowMenu(page, 'Repair chat titles')
+  await page.getByRole('button', { name: 'Regenerate title', exact: true }).click()
+  await expect(page.getByText('Could not regenerate the title; try again shortly', { exact: true })).toBeVisible()
+  await openRowMenu(page, 'Repair chat titles')
+  await expect(page.getByRole('button', { name: 'Regenerate title', exact: true })).toBeEnabled()
+})
+
+test('list timeout toggle saves only its chat and keeps the saved state on failure', async ({ page, context }) => {
+  const state = initial()
+  await mockChats(context, state)
+  await page.goto('/chats/beta')
+  const toggle = page.getByRole('menuitemcheckbox', { name: 'Disable agent timeout' })
+  await openRowMenu(page)
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
+  await toggle.click()
+  await expect.poll(() => state.chats.alpha.chat.timeout_exempt).toBe(true)
+  await openRowMenu(page)
+  await expect(toggle).toHaveAttribute('aria-checked', 'true')
+  await toggle.click()
+  await expect.poll(() => state.chats.alpha.chat.timeout_exempt).toBe(false)
+  await expect(page).toHaveURL(/\/chats\/beta$/)
+  expect(state.chats.beta.chat.timeout_exempt).toBeFalsy()
+
+  state.settingsFailure = true
+  await openRowMenu(page)
+  await toggle.click()
+  await expect(page.getByText('Settings unavailable', { exact: true })).toBeVisible()
+  await openRowMenu(page)
+  await expect(toggle).toHaveAttribute('aria-checked', 'false')
+})
+
+for (const openChat of ['', 'alpha', 'beta']) {
+  test(`list deletion confirms its target and preserves unrelated navigation (${openChat || 'list'})`, async ({ page, context }) => {
+    const state = initial()
+    await mockChats(context, state)
+    await page.goto(`/chats${openChat ? `/${openChat}` : ''}`)
+    await openRowMenu(page)
+    await page.getByRole('button', { name: 'Delete chat', exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog).toContainText('Delete “alpha”?')
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    expect(state.deletes || []).toEqual([])
+    await openRowMenu(page)
+    await page.getByRole('button', { name: 'Delete chat', exact: true }).click()
+    await dialog.getByRole('button', { name: 'OK', exact: true }).click()
+    await expect(chatRow(page, 'alpha')).toHaveCount(0)
+    await expect(chatRow(page, 'beta')).toBeVisible()
+    await expect(page).toHaveURL(openChat === 'beta' ? /\/chats\/beta$/ : /\/chats$/)
+    expect(state.deletes).toEqual(['alpha'])
+    await expect.poll(() => page.evaluate(async () => (await import('/src/chat-cache.js')).chatCache.get('alpha'))).toBeNull()
+  })
+}
+
+test('failed list deletion reports the server error and leaves the conversation intact', async ({ page, context }) => {
+  const state = initial()
+  state.deleteFailure = true
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  await openRowMenu(page)
+  await page.getByRole('button', { name: 'Delete chat', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'OK', exact: true }).click()
+  await expect(page.getByText('Stop the active response before deleting this chat', { exact: true })).toBeVisible()
+  await expect(chatRow(page, 'alpha')).toBeVisible()
+  await expect(page).toHaveURL(/\/chats\/alpha$/)
+})
+
+test('list deletion does not redirect a chat opened while deletion was pending', async ({ page, context }) => {
+  const state = initial()
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  state.deleteWait = new Promise(resolve => { state.releaseDelete = resolve })
+  await openRowMenu(page)
+  await page.getByRole('button', { name: 'Delete chat', exact: true }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'OK', exact: true }).click()
+  await expect.poll(() => state.deletes).toEqual(['alpha'])
+  await chatRow(page, 'beta').click()
+  state.releaseDelete()
+  await expect(chatRow(page, 'alpha')).toHaveCount(0)
+  await expect(page).toHaveURL(/\/chats\/beta$/)
+})
 
 test('agent timeout exemption is saved only for the selected chat and can be restored', async ({ page, context }) => {
   const state = initial()
