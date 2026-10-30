@@ -154,9 +154,13 @@ const chatRow = (page, id) => page.locator(`#shell-sidebar a[href="/chats/${id}"
 const mainNav = page => page.getByRole('navigation', { name: 'Main navigation' })
 
 async function openRowMenu (page, title = 'alpha') {
+  // Wait for the previous popup's exit/focus restoration before another row.
+  await expect(page.locator('.q-menu')).toHaveCount(0)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   const button = page.getByRole('button', { name: `Options for ${title}`, exact: true })
   await button.focus()
-  await button.click()
+  await page.keyboard.press('Enter')
+  await expect(page.locator('.q-menu')).toBeVisible()
 }
 
 for (const width of [390, 1440]) {
