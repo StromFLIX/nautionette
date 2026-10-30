@@ -1,4 +1,5 @@
 import { mockDesign } from './design-fixture.js'
+import { createSSEFixture, snapshotFrame } from './sse-fixture.js'
 import { sameConfig } from '../src/agent-config.js'
 
 const fields = ['model', 'agent_set', 'reasoning_effort', 'tools', 'project_ids']
@@ -6,6 +7,7 @@ export const projectId = 'a'.repeat(32)
 
 export async function mockAgents (context) {
   const state = await mockDesign(context)
+  const sse = await createSSEFixture(context)
   Object.assign(state.settings, { default_agent_id: null, default_reasoning_effort: null, default_tools: null, default_project_ids: [] })
   state.factoryDefaults = structuredClone(state.settings)
   state.agents = []
@@ -52,10 +54,9 @@ export async function mockAgents (context) {
       if (failed) return reply({ detail: 'Catalog unavailable' }, 503)
       return reply(snapshot)
     }
-    if (path === '/api/events') {
-      const events = state.pendingEvents.splice(0)
-      return route.fulfill({ contentType: 'text/event-stream', body: `retry: 250\n${events.map(kind => `data: ${JSON.stringify({ kind })}\n\n`).join('')}\n` })
-    }
+    if (path === '/api/events') return sse(route, () =>
+      state.pendingEvents.splice(0).map(kind => `data: ${JSON.stringify({ kind })}\n\n`).join(''), { deduplicate: false })
+
     if (path === '/api/settings') {
       if (method === 'PUT') {
         state.writes.push(body)
@@ -109,7 +110,7 @@ export async function mockAgents (context) {
       const [, id, operation] = match
       const data = state.chats[id]
       if (!data) return reply({ detail: 'Chat not found' }, 404)
-      if (operation === 'stream') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 500\ndata: ${JSON.stringify({ type: 'snapshot', ...data })}\n\n` })
+      if (operation === 'stream') return sse(route, () => snapshotFrame(state.chats[id]))
       if (operation === 'messages') {
         state.sent.push(body)
         const message = { id: body.message_id, chat_id: id, role: 'user', content: body.text, meta: {}, created_at: Date.now() / 1000 }

@@ -14,7 +14,7 @@ from .background import is_draining, spawn
 from .chat_titles import refine_chat_title
 from .clients import broker
 from .db import db
-from .events import bus, sse
+from .events import SSE_HEARTBEAT, bus, sse
 from .project_credentials import TurnCredentials
 from .runtime import remember_agent_result, runtime
 
@@ -446,7 +446,7 @@ async def chat_snapshots(chat_id: str):
             yield frame
             previous = frame
         elif ticks % 80 == 0:
-            yield ": keep-alive\n\n"
+            yield SSE_HEARTBEAT
         if snapshot["chat"] is None:
             return
         ticks += 1

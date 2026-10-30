@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { createSSEFixture, snapshotFrame } from './sse-fixture.js'
 import { openChatConfiguration, closeChatConfiguration } from './helpers'
 import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 
@@ -10,11 +11,12 @@ function refreshReadState (data) {
 }
 
 async function mockChats (context, state) {
+  const sse = await createSSEFixture(context)
   await context.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     const method = route.request().method()
     if (state.disconnected) return route.abort('internetdisconnected')
-    if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: ': connected\n\n' })
+    if (path === '/api/events') return sse(route, () => state.disconnected ? null : ': connected\n\n')
     if (path === '/api/system') {
       if (state.systemOffline) return route.abort('internetdisconnected')
       return route.fulfill({ json: { components: [], agent_sets: [] } })
@@ -106,7 +108,7 @@ async function mockChats (context, state) {
         return route.fulfill({ json: data })
       }
       if (action === 'stream') {
-        return route.fulfill({ contentType: 'text/event-stream', body: `retry: 100\ndata: ${JSON.stringify({ type: 'snapshot', ...data })}\n\n` })
+        return sse(route, () => state.disconnected ? null : snapshotFrame(state.chats[chatId] ? refreshReadState(state.chats[chatId]) : { chat: null, messages: [], active_turn: null }))
       }
       if (action === 'messages' && method === 'POST') {
         const payload = route.request().postDataJSON()

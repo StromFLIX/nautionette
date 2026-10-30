@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { createSSEFixture, snapshotFrame } from './sse-fixture.js'
 import { readFile } from 'node:fs/promises'
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==', 'base64')
@@ -14,6 +15,7 @@ function output (revision = 1, overrides = {}) {
   }
 }
 async function fixture (context, { empty = false, inline = false } = {}) {
+  const sse = await createSSEFixture(context)
   const first = output()
   const chat = id => ({ id, title: id, agent_set: 'default', model: 'test/model', read_revision: 0, created_at: Date.now() / 1000, updated_at: Date.now() / 1000 })
   const state = {
@@ -25,7 +27,7 @@ async function fixture (context, { empty = false, inline = false } = {}) {
   }
   await context.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
-    if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 100\n${state.events.splice(0).map(event => `data: ${JSON.stringify(event)}\n\n`).join('')}: connected\n\n` })
+    if (path === '/api/events') return sse(route, () => state.events.splice(0).map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { deduplicate: false })
     if (path === '/api/catalog') return route.fulfill({ json: { models: [], tools: [], agent_sets: [], default_model: 'test/model' } })
     if (path === '/api/system') return route.fulfill({ json: { components: [], agent_sets: [] } })
     if (path === '/api/chats') return route.fulfill({ json: { chats: Object.values(state.chats).map(data => data.chat) } })
@@ -46,7 +48,7 @@ async function fixture (context, { empty = false, inline = false } = {}) {
     const match = path.match(/^\/api\/chats\/([^/]+)(?:\/(stream|read-state))?$/)
     if (match) {
       const data = state.chats[match[1]]
-      if (match[2] === 'stream') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 100\ndata: ${JSON.stringify({ type: 'snapshot', ...data })}\n\n` })
+      if (match[2] === 'stream') return sse(route, () => snapshotFrame(state.chats[match[1]]))
       if (match[2] === 'read-state') {
         state.reads.push(route.request().postDataJSON())
         return route.fulfill({ json: data.chat })

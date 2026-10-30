@@ -1,3 +1,5 @@
+import { liveConnection } from './live-connection.js'
+
 const TOKEN_KEY = 'nautionette.token'
 const SERVER_KEY = 'nautionette.server'
 
@@ -174,25 +176,32 @@ export const api = {
   terminateRun: (id) => request(`/api/runs/${id}/terminate`, { method: 'POST', ...json({}) })
 }
 
-export function chatStream (chatId, onSnapshot, onError) {
-  const path = `/api/chats/${encodeURIComponent(chatId)}/stream`
-  const source = new EventSource(endpoint(auth.token ? `${path}?token=${encodeURIComponent(auth.token)}` : path))
-  source.onmessage = (event) => {
-    const data = JSON.parse(event.data)
-    if (data.type === 'snapshot') onSnapshot(data)
-  }
-  source.onerror = onError
-  return source
+function stream (path, onEvent, onError, onOpen) {
+  // Capture the server and credentials for this connection. Replacing it aborts
+  // outstanding probes, so old-instance failures cannot gate the new instance.
+  const base = endpoint(path)
+  const token = auth.token
+  const url = token ? `${base}?token=${encodeURIComponent(token)}` : base
+  return liveConnection(url, {
+    probe: signal => fetch(base, { method: 'HEAD', signal, cache: 'no-store',
+      headers: token ? { Authorization: `Bearer ${token}` } : {} }),
+    onMessage: message => {
+      let data
+      try { data = JSON.parse(message.data) } catch { return }
+      onEvent(data)
+    },
+    onError,
+    onOpen
+  })
 }
 
-/** Live system events. EventSource cannot set headers, so the token rides along. */
-export function liveEvents (onEvent) {
-  const url = endpoint(auth.token ? `/api/events?token=${encodeURIComponent(auth.token)}` : '/api/events')
-  const source = new EventSource(url)
-  source.onmessage = (message) => {
-    try {
-      onEvent(JSON.parse(message.data))
-    } catch { /* ignore */ }
-  }
-  return source
+export function chatStream (chatId, onSnapshot, onError) {
+  return stream(`/api/chats/${encodeURIComponent(chatId)}/stream`, data => {
+    if (data.type === 'snapshot') onSnapshot(data)
+  }, onError)
+}
+
+/** Live system events, supervised across outages, sleep and credential failures. */
+export function liveEvents (onEvent, onError, onOpen) {
+  return stream('/api/events', onEvent, onError, onOpen)
 }

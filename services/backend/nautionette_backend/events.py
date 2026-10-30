@@ -10,6 +10,9 @@ from typing import Any
 
 from .db import db
 
+# Named SSE events are observable by the client watchdog; comments are not.
+SSE_HEARTBEAT = "event: heartbeat\ndata: {}\n\n"
+
 
 class EventBus:
     def __init__(self, history: int = 200) -> None:
@@ -53,7 +56,7 @@ class EventBus:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=20)
                 except TimeoutError:
-                    yield ": keep-alive\n\n"
+                    yield SSE_HEARTBEAT
                     continue
                 yield sse(event)
         finally:

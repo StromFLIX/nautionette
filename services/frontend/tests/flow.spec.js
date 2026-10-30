@@ -188,11 +188,11 @@ test('mobile new-flow review and live connection failure remain usable', async (
   await page.goto('/runs/digest-run')
   await expect(page.locator('.flow-node')).toHaveCount(3)
   state.offline = true
-  await expect(page.getByRole('status')).toContainText('Live updates paused', { timeout: 8000 })
+  await expect(page.getByRole('status').filter({ hasText: 'Live updates paused' })).toBeVisible({ timeout: 8000 })
   await expect(page.locator('.flow-node')).toHaveCount(3)
   state.offline = false
   await page.getByRole('button', { name: 'Retry', exact: true }).click()
-  await expect(page.getByRole('status')).toHaveCount(0)
+  await expect(page.getByRole('status').filter({ hasText: 'Live updates paused' })).toHaveCount(0)
 })
 
 for (const width of [1440, 320]) {

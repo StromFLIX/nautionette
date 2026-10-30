@@ -1,12 +1,14 @@
 import { test, expect } from '@playwright/test'
+import { createSSEFixture, snapshotFrame } from './sse-fixture.js'
 
 async function mockChat (context, data) {
+  const sse = await createSSEFixture(context)
   const chat = { id: 'tools', title: 'Tool calls', model: 'test/model', read_revision: 0 }
   await context.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
     chat.answering = Boolean(data.active_turn)
-    if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: ': connected\n\n' })
-    if (path === '/api/chats/tools/stream') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 100\ndata: ${JSON.stringify({ type: 'snapshot', chat, ...data })}\n\n` })
+    if (path === '/api/events') return sse(route, () => ': connected\n\n')
+    if (path === '/api/chats/tools/stream') return sse(route, () => snapshotFrame({ chat, ...data }))
     if (path === '/api/chats/tools/read-state') return route.fulfill({ json: chat })
     if (path === '/api/chats/tools') return route.fulfill({ json: { chat, ...data } })
     if (path === '/api/chats') return route.fulfill({ json: { chats: [chat] } })

@@ -1,6 +1,10 @@
 <template>
   <div class="app-frame">
     <EnvironmentBanner />
+    <div v-if="['reconnecting', 'failed'].includes(store.liveStatus) && !store.needsToken" class="connection-notice" role="status" aria-label="Live connection">
+      {{ store.liveStatus === 'failed' ? 'Live updates are disconnected.' : 'Connection interrupted. Reconnecting automatically…' }}
+      <button v-if="store.liveStatus === 'failed'" class="btn" @click="actions.connect()">Reconnect</button>
+    </div>
   <div class="shell" data-skin-part="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed, 'shell--agents': route.name === 'chats' }">
     <NavRail ref="navRail" class="shell__rail" :sidebar-collapsed="sideCollapsed" @open-sidebar="openSidebar" />
     <AgentRail v-if="route.name === 'chats'" v-show="!sideCollapsed" class="shell__agents" />
@@ -164,8 +168,8 @@ function shortcuts (event) {
 }
 
 function connect () {
-  if (isNative) actions.setServer(serverUrl.value)
-  actions.setToken(token.value.trim())
+  if (isNative) actions.setServer(serverUrl.value).catch(() => {})
+  actions.setToken(token.value.trim()).catch(() => {})
   gate.value = false
 }
 
@@ -174,7 +178,7 @@ watch(() => store.needsToken || store.needsServer, (needed) => { if (needed) gat
 onMounted(() => {
   mobileMedia.addEventListener('change', updateMobile)
   actions.connect()
-  actions.refreshAll()
+  actions.refreshAll().catch(() => {})
   window.addEventListener('keydown', shortcuts)
 })
 onUnmounted(() => {
@@ -186,6 +190,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.connection-notice { flex: none; padding: 6px 16px; background: var(--surface-raised); color: var(--text-muted); font-size: 0.875rem; text-align: center; }
 .app-frame {
   display: flex;
   flex-direction: column;

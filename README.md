@@ -972,6 +972,18 @@ capped at 2,000 relevant events with an explicit warning, and payloads use the h
 reader's existing truncation limits. A lost connection leaves the last graph visible
 and marks updates as paused.
 
+Chat snapshots and global live events use supervised SSE connections. Temporary
+network/server errors retry with jittered exponential backoff (at most 30 seconds
+between attempts), instead of relying on the browser to retry a permanently closed
+`EventSource`. Named heartbeats every ~20 seconds let the client replace connections
+that have stalled for 60 seconds. Offline devices pause retries; returning online,
+focusing the window, or returning to a visible tab wakes an unhealthy connection.
+Recovery keeps saved messages and unsent drafts, refreshes global data, and does not
+replay message sends. An authenticated, five-second HEAD probe distinguishes
+transient failures from rejected credentials or a deleted chat; 401/403 requests a
+new token rather than retrying forever. Other permanent failures offer manual
+reconnect. Closing a stream cancels its probes, timers, and lifecycle listeners.
+
 Frontend verification (from the repository root):
 
 ```sh
@@ -984,7 +996,14 @@ npm --prefix services/frontend run build
 
 The browser tests use mocked API responses and the real Python graph builders via
 `uv`, so the workspace's Python dependencies must also be installed. They do not
-start workflows or require a running Temporal server.
+start workflows or require a running Temporal server. Live-connection tests also
+use a real local HTTP/SSE server to exercise disconnects, 503s, stalled streams,
+and credential replacement in Chromium and WebKit:
+
+```sh
+services/frontend/node_modules/.bin/playwright install chromium webkit
+npm --prefix services/frontend run test:e2e -- tests/live-connection.spec.js --browser=all --workers=1
+```
 
 ## The authoring schema
 

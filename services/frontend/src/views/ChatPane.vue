@@ -17,7 +17,8 @@
           <span class="caption dim truncate">
             {{ messages.length }} messages · {{ chat?.agent_name || chat?.agent_set }}
             <span v-if="chat?.timeout_exempt" title="Agent timeout disabled for newly sent messages in this chat"> · No agent timeout</span>
-            <template v-if="reconnecting"> · Reconnecting...</template>
+            <template v-if="connectionError"> · Live updates unavailable</template>
+            <template v-else-if="reconnecting"> · Reconnecting...</template>
             <template v-if="chat?.promoted_to"> · → {{ chat.promoted_to }}</template>
           </span>
         </span>
@@ -47,7 +48,7 @@
     <div v-show="activeTab === 'chat'" id="chat-conversation-panel" ref="scroller" :role="chatId ? 'tabpanel' : undefined" :aria-labelledby="chatId ? 'chat-conversation-tab' : undefined" data-skin-part="conversation" class="thread__body scroll-y grow" @scroll.passive="acknowledgeRead">
       <div class="thread__inner">
         <p v-if="!isNewChat && !messages.length && !activeTurn" class="caption dim" role="status">
-          {{ reconnecting ? 'Waiting for connection. No saved messages on this device.' : 'No messages yet.' }}
+          {{ connectionError ? 'Live updates unavailable.' : reconnecting ? 'Waiting for connection. No saved messages on this device.' : 'No messages yet.' }}
         </p>
         <MessageBubble
           v-for="message in messages" :key="message.id" :id="`message-${message.id}`" tabindex="-1"
@@ -92,6 +93,10 @@
         {{ creationError }}
         <button class="btn btn--sm" @click="createNewChat">Retry creation</button>
         <RouterLink to="/settings/general">Review defaults</RouterLink>
+      </p>
+      <p v-if="connectionError" class="caption" role="alert">
+        {{ connectionError }}
+        <button class="btn btn--sm" @click="connectChat">Reconnect live updates</button>
       </p>
       <p v-if="cacheError" class="caption" role="alert">{{ cacheError }}</p>
       <p v-if="controlError" class="caption" role="alert">{{ controlError }}</p>
@@ -196,6 +201,7 @@ const attachments = ref([])
 const sendingDraft = ref(false)
 const activeTurn = ref(null)
 const reconnecting = ref(false)
+const connectionError = ref('')
 const streaming = computed(() => Boolean(activeTurn.value))
 const controlBusy = ref(false)
 const controlError = ref('')
@@ -312,10 +318,12 @@ function connectChat () {
   stream?.close()
   stream = null
   const version = ++generation
+  connectionError.value = ''
   const id = chatId.value
   if (!id) { reconnecting.value = false; return }
   reconnecting.value = true
   let received = false
+  let streamReceived = false
   const scope = chatCacheScope()
   chatCache.get(id, scope).then((data) => {
     if (data && version === generation && !received && scope === chatCacheScope()) applySnapshot(data, true)
@@ -324,6 +332,7 @@ function connectChat () {
     if (version === generation && !received) {
       received = true
       applySnapshot(data)
+      reconnecting.value = !streamReceived
     }
   }).catch((error) => {
     if (version !== generation) return
@@ -336,6 +345,7 @@ function connectChat () {
   stream = chatStream(id, (data) => {
     if (version !== generation) return
     received = true
+    streamReceived = true
     if (!data.chat) {
       stream?.close()
       chatCache.remove(id, scope)
@@ -343,7 +353,17 @@ function connectChat () {
       return
     }
     applySnapshot(data)
-  }, () => { if (version === generation) reconnecting.value = true })
+  }, error => {
+    if (version !== generation) return
+    streamReceived = false
+    reconnecting.value = true
+    connectionError.value = error.permanent ? error.message : ''
+    if ([401, 403].includes(error.status)) store.needsToken = true
+    if (error.status === 404 || error.status === 410) {
+      chatCache.remove(id, scope)
+      router.replace(chatLocation())
+    }
+  })
 }
 
 let revealedMessage = ''
@@ -616,25 +636,20 @@ onUnmounted(stopNavigation)
 
 let off = () => {}
 let offDelivery = () => {}
-function resume () {
-  if (document.visibilityState === 'visible') connectChat()
-}
-function offline () {
-  reconnecting.value = true
+function resumeRead () {
+  if (document.visibilityState === 'visible') nextTick(acknowledgeRead)
 }
 onMounted(() => {
   off = onLiveEvent((event) => {
     if (event.kind === 'client.reconnect') connectChat()
   })
+  document.addEventListener('visibilitychange', resumeRead)
   offDelivery = onDelivery((message) => {
     if (message.chat_id === chatId.value && !savedMessages.value.some((saved) => saved.id === message.id)) {
       savedMessages.value.push(message)
       scrollDown()
     }
   })
-  window.addEventListener('online', connectChat)
-  window.addEventListener('offline', offline)
-  document.addEventListener('visibilitychange', resume)
 })
 onUnmounted(() => {
   generation++
@@ -642,9 +657,7 @@ onUnmounted(() => {
   stream?.close()
   off()
   offDelivery()
-  window.removeEventListener('online', connectChat)
-  window.removeEventListener('offline', offline)
-  document.removeEventListener('visibilitychange', resume)
+  document.removeEventListener('visibilitychange', resumeRead)
 })
 </script>
 

@@ -6,7 +6,7 @@ import asyncio
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from .. import runs
 from ..background import is_draining
@@ -73,6 +73,12 @@ async def system_status() -> dict[str, Any]:
         ],
         "agent_sets": agent_sets,
     }
+
+
+@router.head("/api/events", dependencies=[Depends(require_user)], include_in_schema=False)
+async def probe_events() -> Response:
+    """Let SSE clients distinguish auth failures without opening another stream."""
+    return Response(status_code=204, headers=SSE_HEADERS)
 
 
 @router.get("/api/events", dependencies=[Depends(require_user)])

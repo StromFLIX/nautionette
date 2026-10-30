@@ -1,4 +1,7 @@
+import { createSSEFixture, snapshotFrame } from './sse-fixture.js'
+
 export async function mockDesign (context) {
+  const sse = await createSSEFixture(context)
   const now = Date.now() / 1000
   const settings = { default_model: 'test/model', default_agent_set: 'default', history_chars: 0,
     git_authorship_mode: 'automation', git_human_name: '', git_human_email: '',
@@ -33,7 +36,7 @@ export async function mockDesign (context) {
     const path = new URL(route.request().url()).pathname
     const method = route.request().method()
     const reply = json => route.fulfill({ json })
-    if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: ': connected\n\n' })
+    if (path === '/api/events') return sse(route, () => ': connected\n\n')
     if (path === '/api/events/recent') return reply({ events: [{ kind: 'workflow.completed', at: now, workflow: 'digest' }] })
     if (path === '/api/system') return reply({ version: 'test', components: [{ name: 'temporal', status: 'ok', detail: 'temporal:7233' }], agent_sets: catalog.agent_sets, model_key_present: true, auth_enabled: true })
     if (path === '/api/catalog') return reply(catalog)
@@ -56,7 +59,7 @@ export async function mockDesign (context) {
         semantic: { state: 'disabled', pending: 0 }
       })
     }
-    if (path === '/api/chats/alpha/stream') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 1000\ndata: ${JSON.stringify({ type: 'snapshot', ...data })}\n\n` })
+    if (path === '/api/chats/alpha/stream') return sse(route, () => snapshotFrame(data))
     if (path === '/api/chats/alpha/messages' && method === 'POST') {
       const payload = route.request().postDataJSON()
       state.sent.push(payload)

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { createSSEFixture, snapshotFrame } from './sse-fixture.js'
 import { openChatConfiguration, closeChatConfiguration } from './helpers'
 
 const firstId = 'a'.repeat(32)
@@ -9,6 +10,7 @@ const teamConnection = { id: '1-10', app_id: '1', installation_id: '10', configu
 const personalConnection = { ...teamConnection, id: '2-20', app_id: '2', installation_id: '20', account: 'personal', slug: 'personal-app' }
 
 async function mockProjects (context) {
+  const sse = await createSSEFixture(context)
   const state = {
     app: { configured: false, registered: false, connections: [] },
     repositories: { [teamConnection.id]: [repository], [personalConnection.id]: [privateRepository] },
@@ -22,7 +24,7 @@ async function mockProjects (context) {
     const method = route.request().method()
     const data = () => route.request().postDataJSON()
     const reply = (json, status = 200) => route.fulfill({ status, json })
-    if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: ': connected\n\n' })
+    if (path === '/api/events') return sse(route, () => ': connected\n\n')
     if (path === '/api/system') return reply({ components: [], agent_sets: [], model_key_present: true })
     if (path === '/api/catalog') return reply({ models: [], tools: [], agent_sets: [], default_model: 'test/model' })
     if (path === '/api/workflows') return reply({ workflows: [] })
@@ -81,7 +83,7 @@ async function mockProjects (context) {
       return reply(state.chat)
     }
     const snapshot = { chat: state.chat, messages: state.messages, active_turn: null }
-    if (path === '/api/chats/alpha/stream') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 100\ndata: ${JSON.stringify({ type: 'snapshot', ...snapshot })}\n\n` })
+    if (path === '/api/chats/alpha/stream') return sse(route, () => snapshotFrame({ chat: state.chat, messages: state.messages, active_turn: null }))
     if (path === '/api/chats/alpha') return reply(snapshot)
     return reply({})
   })

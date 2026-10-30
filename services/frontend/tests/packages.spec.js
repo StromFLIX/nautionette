@@ -74,7 +74,7 @@ for (const width of [1440, 320]) {
     await page.getByLabel('file 1 name').fill('agent/service.json')
     await page.getByLabel('file 1 content').fill('{"region":"west"}')
     await page.getByRole('button', { name: 'Save configuration', exact: true }).click()
-    await expect(page.getByRole('status')).toContainText('Saved for future selections')
+    await expect(page.getByRole('status').filter({ hasText: 'Saved for future selections' })).toBeVisible()
     await expect(page.getByLabel('variable 1 value')).toHaveValue('')
     expect(writes[0]).toEqual({ source: 'npm:pi-test-prompts@1.2.3', allow_scripts: false })
     expect(writes.at(-1).filters.extensions).toEqual([])

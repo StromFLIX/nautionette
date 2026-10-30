@@ -193,6 +193,13 @@ async def update_read_state(chat_id: str, payload: dict[str, Any] = Body(...)) -
     return _chat_or_404(chat_id)
 
 
+@router.head("/api/chats/{chat_id}/stream", include_in_schema=False)
+async def probe_chat_stream(chat_id: str) -> Response:
+    """Authenticate and check existence without serializing chat history."""
+    _chat_or_404(chat_id)
+    return Response(status_code=204, headers=SSE_HEADERS)
+
+
 @router.get("/api/chats/{chat_id}/stream")
 async def subscribe_chat(chat_id: str) -> StreamingResponse:
     _chat_or_404(chat_id)

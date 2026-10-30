@@ -19,6 +19,7 @@ const state = reactive({
   catalogLoaded: false,
   catalogError: '',
   needsToken: false,
+  liveStatus: 'connecting',
   // The app ships without a backend, so it cannot start until it is told where one is.
   needsServer: isNative && !server.url,
   system: { components: [], agent_sets: [] },
@@ -175,8 +176,10 @@ export const actions = {
   },
 
   connect () {
-    if (state.needsServer) return
     source?.close()
+    source = null
+    if (state.needsServer) return
+    state.liveStatus = 'connecting'
     const scope = chatCacheScope()
     chatsRequest++
     state.chats = []
@@ -190,19 +193,23 @@ export const actions = {
       state.events.unshift(event)
       state.events = state.events.slice(0, 200)
       const kind = event.kind || ''
-      if (kind === 'connected') actions.refreshAll()
-      if (kind.startsWith('run.')) actions.loadRuns()
-      if (kind.startsWith('workflow.') || kind.startsWith('promote.')) actions.loadWorkflows()
-      if (kind.startsWith('chat.')) actions.loadChats()
-      if (kind.startsWith('project.')) actions.loadProjects()
-      if (['model.integration.changed', 'mcp.server.changed', 'settings.changed', 'agent.profile.changed'].includes(kind)) actions.loadCatalog(true)
+      if (kind === 'connected') actions.refreshAll().catch(() => {})
+      if (kind.startsWith('run.')) actions.loadRuns().catch(() => {})
+      if (kind.startsWith('workflow.') || kind.startsWith('promote.')) actions.loadWorkflows().catch(() => {})
+      if (kind.startsWith('chat.')) actions.loadChats().catch(() => {})
+      if (kind.startsWith('project.')) actions.loadProjects().catch(() => {})
+      if (['model.integration.changed', 'mcp.server.changed', 'settings.changed', 'agent.profile.changed'].includes(kind)) actions.loadCatalog(true).catch(() => {})
       emit(event)
-    })
+    }, error => {
+      state.liveStatus = error.permanent ? 'failed' : 'reconnecting'
+      if ([401, 403].includes(error.status)) state.needsToken = true
+    }, () => { state.liveStatus = 'connected' })
   },
 
   disconnect () {
     source?.close()
     source = null
+    state.liveStatus = 'disconnected'
     delivery.disconnect()
   }
 }

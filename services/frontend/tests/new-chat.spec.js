@@ -143,7 +143,7 @@ for (const width of [1440, 390]) {
     await expect(page).toHaveURL(/\/chats\/new$/)
     await expect(message(page)).toBeEditable()
     await expect(message(page)).toBeFocused()
-    await expect(page.getByRole('status')).toContainText('Creating chat')
+    await expect(page.locator('.thread__creation')).toContainText('Creating chat')
     await expect.poll(() => requests.length).toBe(1)
     const input = await message(page).elementHandle()
     await message(page).fill('A draft written\nbefore creation finishes')
