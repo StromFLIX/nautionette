@@ -1002,7 +1002,8 @@ and credential replacement in Chromium and WebKit:
 
 ```sh
 services/frontend/node_modules/.bin/playwright install chromium webkit
-npm --prefix services/frontend run test:e2e -- tests/live-connection.spec.js --browser=all --workers=1
+npm --prefix services/frontend run test:e2e -- tests/live-connection.spec.js --workers=1
+npm --prefix services/frontend run test:e2e -- tests/live-connection.spec.js --browser=webkit --workers=1
 ```
 
 ## The authoring schema

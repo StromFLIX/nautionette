@@ -9,6 +9,7 @@ export async function createSSEFixture (context) {
     const reader = readers.get(request.url)
     if (!reader) { response.writeHead(404); response.end(); return }
     response.writeHead(200, { 'Content-Type': 'text/event-stream', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' })
+    response.flushHeaders()
     let previous = '', heartbeat = Date.now()
     function update () {
       const frame = reader.read()
@@ -30,7 +31,8 @@ export async function createSSEFixture (context) {
     if (route.request().method() === 'HEAD') return route.fulfill({ status: 204 })
     const path = `/sse/${++nextId}`
     readers.set(path, { read, deduplicate })
-    return route.fulfill({ status: 307, headers: { Location: `http://127.0.0.1:${server.address().port}${path}` } })
+    // WebKit cannot fulfill an intercepted request with a redirect response.
+    return route.continue({ url: `http://127.0.0.1:${server.address().port}${path}` })
   }
 }
 
