@@ -606,7 +606,10 @@ watch(() => route.params.id, (id, previous) => {
 const stopNavigation = router.afterEach((to, from, failure) => {
   if (to.name === 'chats' && to.params.id === chatId.value &&
       isNavigationFailure(failure, NavigationFailureType.duplicated)) {
-    if (!revealSearchMessage(true)) scrollDown('instant')
+    if (route.hash.startsWith('#message-')) {
+      activeTab.value = 'chat'
+      nextTick(() => revealSearchMessage(true))
+    } else scrollDown('instant')
   }
 })
 onUnmounted(stopNavigation)

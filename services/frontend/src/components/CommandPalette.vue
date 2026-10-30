@@ -165,7 +165,8 @@ function onKeydown (event) {
 
 async function activate (result) {
   // Don't restore focus to the old page while a setting deep-link takes focus.
-  navigating.value = router.resolve(result.to).fullPath !== route.fullPath
+  const target = router.resolve(result.to)
+  navigating.value = target.fullPath !== route.fullPath || target.hash.startsWith('#message-')
   open.value = false
   await router.push(result.to)
 }
