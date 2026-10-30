@@ -58,7 +58,9 @@ cancelled when a query, scope, or dialog changes; stale responses are ignored.
 Embeddings and indexed text are part of the backend database backup. Deleting a
 message/chat removes its indexed text and vector rows in the same transaction.
 As with the rest of SQLite, physical reclamation of deleted pages is separate
-from logical deletion. Indexes add disk usage; no external vector service or
+from logical deletion. Administrative connections that modify the schema or
+indexed sources must load the packaged `sqlite_vec` extension first; the backend
+loads it before all migrations because SQLite validates vec0 triggers on ALTER. Indexes add disk usage; no external vector service or
 PostgreSQL change is required.
 
 ## Model provisioning
@@ -68,7 +70,9 @@ build time through `search_model.load_encoder`. Its Hugging Face revision is
 pinned in `search_index.py` and is part of the index version. The built backend
 runs offline inference from that cache; it needs no provider credential and does
 not download model weights at startup. CI tests both deterministic index behavior
-and actual semantic retrieval with offline-only model loading.
+and actual semantic retrieval with offline-only model loading. `.python-version`
+keeps workspace/CI on Python 3.13, matching the runtime images; ONNX Runtime does
+not yet publish Python 3.15 wheels.
 
 Backend environment variables (set on the backend container):
 
