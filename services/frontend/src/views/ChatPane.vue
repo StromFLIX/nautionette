@@ -7,17 +7,21 @@
         <span class="material-icons">arrow_back</span>
         <span v-if="draftCount" class="pane-head__badge">{{ draftCount }}</span>
       </button>
-      <AgentAvatar v-if="profile" :agent="profile" />
-      <div v-else class="avatar-sm" :style="avatarStyle(chatId)">{{ initials(chat?.title || '?') }}</div>
-      <div class="grow">
-        <div class="pane-head__title truncate">{{ chat?.title || 'Chat' }}</div>
-        <div class="caption dim truncate">
-          {{ messages.length }} messages · {{ chat?.agent_name || chat?.agent_set }}
-          <span v-if="chat?.timeout_exempt" title="Agent timeout disabled for newly sent messages in this chat"> · No agent timeout</span>
-          <template v-if="reconnecting"> · Reconnecting...</template>
-          <template v-if="chat?.promoted_to"> · → {{ chat.promoted_to }}</template>
-        </div>
-      </div>
+      <button class="pane-head__preferences grow" type="button" :aria-label="`Chat settings for ${chat?.title || 'Chat'}`"
+        title="Chat settings" :aria-expanded="composer?.configurationOpen || false" :aria-controls="composer?.configurationId"
+        @click="openChatSettings">
+        <AgentAvatar v-if="profile" :agent="profile" />
+        <span v-else class="avatar-sm" :style="avatarStyle(chatId)">{{ initials(chat?.title || '?') }}</span>
+        <span class="pane-head__identity grow">
+          <span class="pane-head__title truncate">{{ chat?.title || 'Chat' }}</span>
+          <span class="caption dim truncate">
+            {{ messages.length }} messages · {{ chat?.agent_name || chat?.agent_set }}
+            <span v-if="chat?.timeout_exempt" title="Agent timeout disabled for newly sent messages in this chat"> · No agent timeout</span>
+            <template v-if="reconnecting"> · Reconnecting...</template>
+            <template v-if="chat?.promoted_to"> · → {{ chat.promoted_to }}</template>
+          </span>
+        </span>
+      </button>
       <RouterLink v-if="chat?.promoted_to" class="btn btn--outline btn--sm" :to="`/workflows/${chat.promoted_to}`">
         <span class="material-icons" style="font-size: 0.9375rem">account_tree</span>
         {{ chat.promoted_to }}
@@ -225,6 +229,11 @@ const creationError = ref('')
 const scroller = ref(null)
 const composer = ref(null)
 const composerKey = ref(0)
+
+function openChatSettings (event) {
+  activeTab.value = 'chat'
+  composer.value?.openConfiguration(event)
+}
 
 // /chats/new is a local draft, never a backend chat ID.
 const isNewChat = computed(() => route.name === 'chats' && route.params.id === 'new')
@@ -711,6 +720,31 @@ onUnmounted(() => {
   color: var(--accent);
   font-size: 0.75rem;
   font-weight: 650;
+}
+
+.pane-head__preferences {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pane-head__preferences:hover .pane-head__title {
+  color: var(--accent);
+}
+
+.pane-head__identity {
+  display: flex;
+  flex-direction: column;
 }
 
 .pane-head__back {
