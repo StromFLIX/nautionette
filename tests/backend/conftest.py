@@ -22,6 +22,12 @@ from .fakes import FakeAuthoring, FakeBroker, FakeGateway, FakeModelCatalog, Fak
 from .output_fakes import MemoryS3
 
 _TABLES = (
+    "dashboard_action_requests",
+    "dashboard_action_runs",
+    "dashboard_sources",
+    "dashboard_revisions",
+    "dashboards",
+    "dashboard_components",
     "github_issue_chats",
     "github_mentions",
     "messages",

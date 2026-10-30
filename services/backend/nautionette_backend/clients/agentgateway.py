@@ -233,7 +233,12 @@ class GatewayClient:
         return [item for item in payload.get("data", []) if item.get("id") and "*" not in item["id"]]
 
     async def mcp_tools(
-        self, url: str | None = None, extra: dict[str, str] | None = None, *, timeout: float = 90
+        self,
+        url: str | None = None,
+        extra: dict[str, str] | None = None,
+        *,
+        timeout: float = 90,
+        detailed: bool = False,
     ) -> list[dict[str, Any]]:
         """One handshake against an MCP endpoint, for the tool picker."""
         url = url or settings.mcp_url
@@ -293,6 +298,14 @@ class GatewayClient:
                     {
                         "name": tool.get("name", "?"),
                         "description": (tool.get("description") or "").strip().split("\n")[0][:200],
+                        **(
+                            {
+                                "inputSchema": tool.get("inputSchema", {}),
+                                "annotations": tool.get("annotations", {}),
+                            }
+                            if detailed
+                            else {}
+                        ),
                     }
                     for tool in body["tools"]
                 )
@@ -307,6 +320,72 @@ class GatewayClient:
             raise ValueError("MCP tools/list exceeded the page limit")
         finally:
             # Catalog and test sessions must not leave stdio child processes alive.
+            if session:
+                with contextlib.suppress(httpx.HTTPError):
+                    await client.delete(url, headers=headers, timeout=5)
+
+    async def call_read_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+        """Invoke a previously validated read through the configured federation only.
+
+        The dashboard service authorizes and re-discovers the declaration before
+        reaching this transport. It never accepts a caller-supplied server URL.
+        """
+        url = settings.mcp_url
+        client = shared()
+        headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+        handshake = await client.post(
+            url,
+            headers=headers,
+            timeout=15,
+            json=_rpc(
+                1,
+                "initialize",
+                {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "nautionette-dashboard", "version": settings.version},
+                },
+            ),
+        )
+        handshake.raise_for_status()
+        session = handshake.headers.get("mcp-session-id")
+        if session:
+            headers["Mcp-Session-Id"] = session
+        try:
+            version = _rpc_result(handshake).get("protocolVersion")
+            if not isinstance(version, str) or not version:
+                raise ValueError("Invalid MCP handshake")
+            headers["MCP-Protocol-Version"] = version
+            ready = await client.post(
+                url, headers=headers, timeout=10, json=_rpc(None, "notifications/initialized")
+            )
+            ready.raise_for_status()
+            async with client.stream(
+                "POST",
+                url,
+                headers=headers,
+                timeout=20,
+                json=_rpc(2, "tools/call", {"name": name, "arguments": arguments}),
+            ) as response:
+                response.raise_for_status()
+                data = bytearray()
+                async for chunk in response.aiter_bytes():
+                    data.extend(chunk)
+                    if len(data) > 524288:
+                        raise ValueError("Tool result exceeds dashboard transport limit")
+                result = _rpc_result(httpx.Response(200, headers=response.headers, content=bytes(data)))
+            if result.get("isError"):
+                raise ValueError("Read tool reported a failure")
+            if "structuredContent" in result:
+                return result["structuredContent"]
+            text = "\n".join(
+                item.get("text", "") for item in result.get("content", []) if item.get("type") == "text"
+            )
+            try:
+                return json.loads(text)
+            except ValueError:
+                return {"text": text}
+        finally:
             if session:
                 with contextlib.suppress(httpx.HTTPError):
                     await client.delete(url, headers=headers, timeout=5)

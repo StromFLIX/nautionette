@@ -8,7 +8,7 @@ import logging
 from time import monotonic
 from typing import Any
 
-from . import chat_attachments, chat_sessions, git_authorship, projects
+from . import chat_attachments, chat_sessions, dashboards, git_authorship, projects
 from .agent import Timeline, stream_agent
 from .background import is_draining, spawn
 from .chat_titles import refine_chat_title
@@ -174,6 +174,11 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         # Only the first native turn imports legacy UI records. Pi, not SQL
         # transcript trimming, owns context and compaction from then onward.
         job["history"] = chat_sessions.legacy_history(chat_id, turn_id)
+        # Resolve at execution, including resumed/queued native sessions, not enqueue time.
+        current_chat = db.get_chat(chat_id) or {}
+        job["system_prompt"] = job.get("system_prompt", "") + dashboards.awareness(
+            current_chat.get("agent_id")
+        )
         job.update(chat_attachments.load_attachments(chat_id, job.get("attachments", [])))
         for message in job["history"]:
             attachments = message.pop("attachments", [])

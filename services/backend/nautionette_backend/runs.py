@@ -126,7 +126,9 @@ async def restart_worker() -> dict[str, Any]:
         return {"ok": False, "error": str(exc)[:200]}
 
 
-async def start(name: str, payload: dict[str, Any], trigger: str) -> dict[str, Any]:
+async def start(
+    name: str, payload: dict[str, Any], trigger: str, *, stable_id: str | None = None
+) -> dict[str, Any]:
     if db.workflow_settings(name)["disabled"]:
         raise HTTPException(status_code=409, detail=f"{name} is disabled")
     workflow = await authoring.get_workflow(name)
@@ -134,13 +136,15 @@ async def start(name: str, payload: dict[str, Any], trigger: str) -> dict[str, A
     problems = input_problems(manifest.get("inputs"), payload)
     if problems:
         raise HTTPException(status_code=400, detail={"workflow": name, "input": problems})
-    workflow_id = f"{name}-{int(time.time())}-{uuid.uuid4().hex[:6]}"
-    started = await temporal.start(
+    workflow_id = stable_id or f"{name}-{int(time.time())}-{uuid.uuid4().hex[:6]}"
+    start_operation = temporal.start_once if stable_id else temporal.start
+    started = await start_operation(
         name, workflow_id, payload, timeout_minutes=manifest.get("timeout_minutes", 30)
     )
-    db.record_run(name, started["workflow_id"], started.get("run_id"), trigger, payload)
+    row = db.record_run(name, started["workflow_id"], started.get("run_id"), trigger, payload)
     bus.publish("run.started", {"workflow": name, "workflow_id": workflow_id, "trigger": trigger})
-    follow(name, workflow_id)
+    if row["status"] == "running":
+        follow(name, workflow_id)
     return {"workflow": name, **started, "trigger": trigger}
 
 

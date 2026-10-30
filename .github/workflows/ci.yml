@@ -73,6 +73,9 @@ jobs:
       - name: Agent defaults, profiles and durable chat configuration
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py
 
+      - name: Agent dashboards, MCP reads and durable workflow actions
+        run: uv run pytest tests/backend/test_dashboards.py tests/backend/test_dashboard_transports.py tests/backend/test_gateway_mcp.py tests/backend/test_temporal_schedules.py
+
       - name: Indexed conversation search, synchronization and fallback
         run: uv run pytest tests/backend/test_chat_search.py
 
@@ -129,11 +132,11 @@ jobs:
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js tests/agent-views.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
           tests/copilot-login.spec.js tests/tool-calls.spec.js tests/activity-timing.spec.js
-          tests/workflow-inputs.spec.js tests/outputs.spec.js tests/creative-apps.spec.js tests/storage.spec.js
+          tests/workflow-inputs.spec.js tests/outputs.spec.js tests/creative-apps.spec.js tests/storage.spec.js tests/dashboards.spec.js
           --workers=1 --reporter=dot,github
 
-      - name: Live stream recovery (WebKit)
-        run: npx playwright test tests/live-connection.spec.js --browser=webkit --workers=1 --reporter=dot,github
+      - name: Live stream recovery and dashboards (WebKit)
+        run: npx playwright test tests/live-connection.spec.js tests/dashboards.spec.js --browser=webkit --workers=1 --reporter=dot,github
 
       - name: Mobile send focus and button activation (WebKit)
         run: >-

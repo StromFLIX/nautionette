@@ -104,6 +104,16 @@ Open Settings with **Ctrl/Command + ,** and focus its search with **/**.
 See [Frontend design system](docs/frontend-design.md) for the extension points,
 persistence model and testing guidance.
 
+## Agent dashboards
+
+Agents can discover, create and revise persistent dashboards from registered components,
+read-only integration feeds and typed workflow actions—without a review or approval queue.
+Dashboards inherit the current theme/skin, adapt to mobile, and can be pinned above an
+agent's chats. Revision checks and history protect concurrent edits; live SSE feeds avoid
+model calls on refresh, and workflow actions track real durable outcomes and safe retries.
+The platform ships general capabilities, not a preconfigured production-agent dashboard.
+See [Agent-owned dashboards](docs/dashboards.md) for tools, contracts and safety boundaries.
+
 ## Conversation search
 
 On desktop, **Ctrl/Command + K** opens chat and settings search. Chats use **SQLite

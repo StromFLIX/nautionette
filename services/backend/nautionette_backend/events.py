@@ -47,6 +47,16 @@ class EventBus:
             for row in db.recent_events(limit)
         ]
 
+    @contextlib.asynccontextmanager
+    async def subscribe(self):
+        """A bounded app-event subscription, cleaned up with its HTTP/worker owner."""
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=256)
+        self._subscribers.add(queue)
+        try:
+            yield queue
+        finally:
+            self._subscribers.discard(queue)
+
     async def stream(self):
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=256)
         self._subscribers.add(queue)

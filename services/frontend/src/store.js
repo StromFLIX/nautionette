@@ -28,6 +28,8 @@ const state = reactive({
   chatActivity: null,
   projects: [],
   workflows: [],
+  dashboards: [],
+  dashboardsError: '',
   drafts: [],
   runs: [],
   events: []
@@ -37,6 +39,7 @@ const listeners = new Set()
 let source = null
 let catalogRequest = 0
 let chatsRequest = 0
+let dashboardsRequest = 0
 
 function emit (event) {
   listeners.forEach((fn) => fn(event))
@@ -128,6 +131,26 @@ export const actions = {
     if (drafts) state.drafts = drafts.drafts
   },
 
+  async loadDashboards () {
+    const request = ++dashboardsRequest
+    const scope = chatCacheScope()
+    const items = []
+    let offset = 0
+    try {
+      do {
+        const data = await guard(() => api.dashboards(offset))
+        if (scope !== chatCacheScope() || request !== dashboardsRequest) return
+        if (!data) { state.dashboardsError = 'Dashboard discovery is unavailable. Reconnect and refresh.'; return }
+        items.push(...data.dashboards)
+        offset = data.next_offset
+      } while (offset != null)
+      state.dashboards = items
+      state.dashboardsError = ''
+    } catch (error) {
+      if (scope === chatCacheScope() && request === dashboardsRequest) state.dashboardsError = error.message
+    }
+  },
+
   async loadRuns () {
     const data = await guard(() => api.runs())
     if (data) state.runs = data.runs
@@ -146,6 +169,7 @@ export const actions = {
       actions.loadChats(),
       actions.loadProjects(),
       actions.loadWorkflows(),
+      actions.loadDashboards(),
       actions.loadRuns()
     ])
     state.ready = true
@@ -184,6 +208,9 @@ export const actions = {
     chatsRequest++
     state.chats = []
     state.chatActivity = null
+    dashboardsRequest++
+    state.dashboards = []
+    state.dashboardsError = ''
     chatCache.list(scope).then((chats) => {
       if (scope === chatCacheScope() && !state.chats.length) state.chats = chats || []
     })
@@ -197,6 +224,7 @@ export const actions = {
       if (kind.startsWith('run.')) actions.loadRuns().catch(() => {})
       if (kind.startsWith('workflow.') || kind.startsWith('promote.')) actions.loadWorkflows().catch(() => {})
       if (kind.startsWith('chat.')) actions.loadChats().catch(() => {})
+      if (kind === 'dashboard.changed') actions.loadDashboards().catch(() => {})
       if (kind.startsWith('project.')) actions.loadProjects().catch(() => {})
       if (['model.integration.changed', 'mcp.server.changed', 'settings.changed', 'agent.profile.changed'].includes(kind)) actions.loadCatalog(true).catch(() => {})
       emit(event)

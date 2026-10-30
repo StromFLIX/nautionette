@@ -20,6 +20,8 @@ from temporalio.client import (
     ScheduleState,
     ScheduleUpdate,
 )
+from temporalio.common import WorkflowIDReusePolicy
+from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.service import RPCError, RPCStatusCode
 
 from ..config import settings
@@ -118,6 +120,29 @@ class TemporalGateway:
             execution_timeout=timedelta(minutes=timeout_minutes),
         )
         return {"workflow_id": handle.id, "run_id": handle.result_run_id}
+
+    async def start_once(
+        self, workflow: str, workflow_id: str, payload: dict[str, Any], timeout_minutes: int = 30
+    ) -> dict[str, Any]:
+        """Stable-ID dashboard actions reject reuse, including completed executions.
+
+        A lost HTTP response may be retried with the SAME ID, never a new one.
+        The durable dashboard request record owns that ID and its immutable input.
+        """
+        client = await self.client()
+        try:
+            handle = await client.start_workflow(
+                workflow,
+                payload,
+                id=workflow_id,
+                task_queue=settings.temporal_task_queue,
+                execution_timeout=timedelta(minutes=timeout_minutes),
+                id_reuse_policy=WorkflowIDReusePolicy.REJECT_DUPLICATE,
+            )
+            return {"workflow_id": handle.id, "run_id": handle.result_run_id, "reused": False}
+        except WorkflowAlreadyStartedError:
+            info = await self.describe(workflow_id)
+            return {"workflow_id": workflow_id, "run_id": info["run_id"], "reused": True}
 
     async def result(self, workflow_id: str, timeout: float = 5.0) -> Any:
         client = await self.client()

@@ -40,7 +40,7 @@ const openAgentMenus = new Set()
 function select (id) {
   // Touch release can synthesize a click after a long-press opens the menu.
   if (openAgentMenus.has(id)) return
-  router.push(chatLocation('', id))
+  router.push(route.name === 'dashboards' ? { path: '/dashboards', query: id ? { agent: id } : {} } : chatLocation('', id))
 }
 const agentMenus = new Map()
 function registerMenu (id, menu) {
@@ -58,7 +58,7 @@ function editorLocation (agent, image = false) {
 // A removed or invalid selection must not leave the user in an empty dead end.
 watch([agents, () => store.catalogLoaded, selectedId], () => {
   if (store.catalogLoaded && selectedId.value && !agents.value.some(agent => agent.id === selectedId.value)) {
-    router.replace(chatLocation(route.params.id || '', null))
+    router.replace(route.name === 'dashboards' ? { path: '/dashboards' } : chatLocation(route.params.id || '', null))
   }
 }, { immediate: true })
 </script>

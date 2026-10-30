@@ -5,9 +5,9 @@
       {{ store.liveStatus === 'failed' ? 'Live updates are disconnected.' : 'Connection interrupted. Reconnecting automatically…' }}
       <button v-if="store.liveStatus === 'failed'" class="btn" @click="actions.connect()">Reconnect</button>
     </div>
-  <div class="shell" data-skin-part="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed, 'shell--agents': route.name === 'chats' }">
+  <div class="shell" data-skin-part="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed, 'shell--agents': ['chats', 'dashboards'].includes(route.name) }">
     <NavRail ref="navRail" class="shell__rail" :sidebar-collapsed="sideCollapsed" @open-sidebar="openSidebar" />
-    <AgentRail v-if="route.name === 'chats'" v-show="!sideCollapsed" class="shell__agents" />
+    <AgentRail v-if="['chats', 'dashboards'].includes(route.name)" v-show="!sideCollapsed" class="shell__agents" />
     <template v-if="!fullPage">
       <aside v-show="!sideCollapsed" data-skin-part="sidebar" id="shell-sidebar" class="shell__side" :style="{ width: `${sideWidth}px` }">
         <SidePanel ref="sidePanel" :show-collapse-button="!mobile" :is-chat-active="isChatActive" @collapse-sidebar="collapseSidebar" @open-search="openSearch" />

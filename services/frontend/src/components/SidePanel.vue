@@ -76,8 +76,10 @@
     </header>
 
     <div class="side__list scroll-y grow" :class="{ 'side__list--grouped': section === 'chats' && groupBy !== 'none' }">
+      <DashboardLinks v-if="section === 'dashboards'" :query="query" />
       <!-- chats -->
       <template v-if="section === 'chats'">
+        <DashboardLinks pinned-only :query="query" />
         <div v-for="group in chatGroups" :key="group.key" class="side__chat-group">
           <h2 v-if="group.key !== '__all__'" class="side__group side__group--chats">
             <span class="truncate" :class="{ 'side__group-date': groupBy === 'date' }" :title="group.label">{{ group.label }}</span>
@@ -156,7 +158,7 @@
       </template>
 
       <!-- runs -->
-      <template v-else>
+      <template v-else-if="section === 'runs'">
         <RouterLink
           v-for="run in filteredRuns" :key="run.workflow_id" :to="`/runs/${run.workflow_id}`"
           class="row-item" :class="{ 'row-item--active': route.params.id === run.workflow_id }"
@@ -190,6 +192,7 @@ import { RUN_TONE, avatarStyle, scheduleTime, shortTime } from '../format'
 import { actions, health, store } from '../store'
 import { api } from '../api'
 import ChatRow from './ChatRow.vue'
+import DashboardLinks from './DashboardLinks.vue'
 import { preferences } from '../preferences'
 import { CHAT_GROUP_OPTIONS, groupChats } from '../chat-groups'
 import { belongsToAgent } from '../agent-config'
@@ -254,8 +257,8 @@ async function setUnread (chat, unread) {
 }
 
 const section = computed(() => route.name || 'chats')
-const selectedAgent = computed(() => section.value === 'chats' ? store.catalog.agents?.find(agent => agent.id === route.query.agent) : null)
-const heading = computed(() => selectedAgent.value?.name || ({ chats: 'Chats', workflows: 'Workflows', runs: 'Runs' }[section.value]))
+const selectedAgent = computed(() => ['chats', 'dashboards'].includes(section.value) ? store.catalog.agents?.find(agent => agent.id === route.query.agent) : null)
+const heading = computed(() => selectedAgent.value?.name || ({ chats: 'Chats', dashboards: 'Dashboards', workflows: 'Workflows', runs: 'Runs' }[section.value]))
 
 const matches = (haystack) => haystack.toLowerCase().includes(query.value.trim().toLowerCase())
 
@@ -279,6 +282,7 @@ async function startChat () {
 
 function refresh () {
   if (section.value === 'workflows') actions.loadWorkflows()
+  else if (section.value === 'dashboards') actions.loadDashboards()
   else actions.loadRuns()
 }
 </script>

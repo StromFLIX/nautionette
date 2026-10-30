@@ -4,6 +4,7 @@ const routes = [
   { path: '/', redirect: '/chats' },
   { path: '/chats/:id?', name: 'chats', component: () => import('./views/ChatPane.vue') },
   { path: '/workflows/:name?', name: 'workflows', component: () => import('./views/WorkflowPane.vue') },
+  { path: '/dashboards/:id?', name: 'dashboards', component: () => import('./views/DashboardPane.vue') },
   { path: '/runs/:id?', name: 'runs', component: () => import('./views/RunPane.vue') },
   { path: '/settings/:tab?', name: 'settings', component: () => import('./views/SettingsPane.vue') },
   { path: '/:catchAll(.*)', redirect: '/chats' }
@@ -15,7 +16,7 @@ const router = createRouter({
 })
 
 // The list a view sits on top of, and so the place its back button belongs.
-const UNDER = { chats: '/chats', workflows: '/workflows', runs: '/runs', settings: '/chats' }
+const UNDER = { chats: '/chats', dashboards: '/dashboards', workflows: '/workflows', runs: '/runs', settings: '/chats' }
 
 /**
  * Opening straight onto a detail view (deep link, reload, Android cold start) leaves
@@ -26,7 +27,7 @@ export async function seedHistory () {
   const entry = router.resolve(window.location.pathname + window.location.search + window.location.hash)
   const list = UNDER[entry.name]
   if (!list || entry.path === list) return
-  await router.replace({ path: list, query: entry.name === 'chats' ? entry.query : {} })
+  await router.replace({ path: list, query: ['chats', 'dashboards'].includes(entry.name) ? entry.query : {} })
   await router.push(entry.fullPath)
 }
 

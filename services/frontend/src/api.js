@@ -154,6 +154,12 @@ export const api = {
   updateChatReadState: (id, payload) => request(`/api/chats/${id}/read-state`, { method: 'PATCH', ...json(payload) }),
   deleteChat: (id) => request(`/api/chats/${id}`, { method: 'DELETE' }),
 
+  dashboards: (offset = 0) => request(`/api/dashboards?all_agents=true&offset=${offset}`),
+  dashboard: (id, signal) => request(`/api/dashboards/${encodeURIComponent(id)}/snapshot`, { signal }),
+  refreshDashboard: (id, signal) => request(`/api/dashboards/${encodeURIComponent(id)}/snapshot?refresh=true`, { signal }),
+  pinDashboard: (id, payload) => request(`/api/dashboards/${encodeURIComponent(id)}/pin`, { method: 'PATCH', ...json(payload) }),
+  dashboardAction: (id, action, payload) => request(`/api/dashboards/${encodeURIComponent(id)}/actions/${encodeURIComponent(action)}`, { method: 'POST', ...json(payload), signal: AbortSignal.timeout(60000) }),
+
   workflows: () => request('/api/workflows'),
   workflow: (name) => request(`/api/workflows/${name}`),
   workflowSettings: (name, payload) =>
@@ -199,6 +205,13 @@ export function chatStream (chatId, onSnapshot, onError) {
   return stream(`/api/chats/${encodeURIComponent(chatId)}/stream`, data => {
     if (data.type === 'snapshot') onSnapshot(data)
   }, onError)
+}
+
+export function dashboardStream (id, onSnapshot, onError, onOpen) {
+  return stream(`/api/dashboards/${encodeURIComponent(id)}/stream`, data => {
+    if (data.type === 'snapshot') onSnapshot(data.snapshot)
+    else if (data.type === 'unavailable') onError({ status: data.status, message: 'Dashboard is no longer available.', permanent: true })
+  }, onError, onOpen)
 }
 
 /** Live system events, supervised across outages, sleep and credential failures. */

@@ -32,6 +32,7 @@ _PREFIXES = (
     "/api/system",
     "/api/settings",
     "/api/agents",
+    "/api/dashboards",
     "/api/model-integrations",
     "/api/mcp-servers",
 )
@@ -55,7 +56,11 @@ INSTRUCTIONS = (
     "A deployment is ready only when ready=true; inspect worker_restart on failure. "
     "Never claim a run succeeded until its results confirm it. Do not expose credentials. "
     "Output quota errors include a settings_url to Settings → Storage. Return that link and the actual "
-    "usage/limit instead of repeatedly retrying or calling a transport failure a file-generation failure."
+    "usage/limit instead of repeatedly retrying or calling a transport failure a file-generation failure. "
+    "Discover agent-owned dashboards with list_dashboards and dashboard_registry. Read/validate/publish "
+    "complete manifests with expected_revision; registered declarative recipes never require manual review. "
+    "Use dashboard_snapshot for freshness, resolved UI and action readiness; never invent live states. "
+    "After an uncertain workflow action response retry the SAME request ID and inputs, not a new invocation."
 )
 
 
@@ -69,6 +74,28 @@ def _schema(value: Any) -> Any:
     return value
 
 
+def _definitions_for(value: Any, definitions: dict[str, Any]) -> dict[str, Any]:
+    """Keep only reachable models: dashboard manifests must not bloat every unrelated tool."""
+    included: dict[str, Any] = {}
+
+    def visit(item: Any) -> None:
+        if isinstance(item, dict):
+            reference = item.get("$ref", "")
+            if isinstance(reference, str) and reference.startswith("#/$defs/"):
+                name = reference.split("/")[2]
+                if name in definitions and name not in included:
+                    included[name] = definitions[name]
+                    visit(included[name])
+            for child in item.values():
+                visit(child)
+        elif isinstance(item, list):
+            for child in item:
+                visit(child)
+
+    visit(value)
+    return included
+
+
 class BackendMCP:
     def __init__(self, app: FastAPI, routers: tuple[APIRouter, ...]) -> None:
         self.app = app
@@ -77,9 +104,15 @@ class BackendMCP:
         document = app.openapi()
         definitions = _schema(document.get("components", {}).get("schemas", {}))
         for route in (route for router in routers for route in router.routes):
-            if not isinstance(route, APIRoute) or not (
-                route.path in _EXACT
-                or any(route.path == prefix or route.path.startswith(prefix + "/") for prefix in _PREFIXES)
+            if (
+                not isinstance(route, APIRoute)
+                or not route.include_in_schema
+                or not (
+                    route.path in _EXACT
+                    or any(
+                        route.path == prefix or route.path.startswith(prefix + "/") for prefix in _PREFIXES
+                    )
+                )
             ):
                 continue
             for method in sorted(route.methods or []):
@@ -103,7 +136,7 @@ class BackendMCP:
                     "properties": properties,
                     "required": required,
                     "additionalProperties": False,
-                    "$defs": definitions,
+                    "$defs": _definitions_for(properties, definitions),
                 }
                 name = route.name
                 if name in self.operations:
