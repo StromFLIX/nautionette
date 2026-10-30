@@ -4,11 +4,14 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never \
     PYTHONUNBUFFERED=1 \
+    SEARCH_MODEL_CACHE=/opt/nautionette-search-model \
+    SEARCH_MODEL_LOCAL_ONLY=true \
+    HF_HUB_DISABLE_TELEMETRY=1 \
     PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
+    && apt-get install -y --no-install-recommends git ca-certificates libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Workspace root: every member's manifest is needed to resolve the lock.
@@ -20,6 +23,8 @@ COPY libs/ libs/
 COPY images/pi-base/artcraft/catalog.json /etc/nautionette/artcraft-catalog.json
 COPY services/backend/ services/backend/
 RUN uv sync --locked --no-dev --package nautionette-backend
+# Bake the ~67 MB CPU model into the image; no first-start download or API key.
+RUN python -c "from nautionette_backend.search_model import load_encoder; load_encoder('/opt/nautionette-search-model')"
 
 # Committed workflows travel with the image and are seeded into the volume.
 COPY workflows/ /seed/

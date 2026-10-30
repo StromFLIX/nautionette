@@ -46,6 +46,16 @@ export async function mockDesign (context) {
     if (path === '/api/workflows') return reply({ workflows: [workflow] })
     if (path === '/api/workflows/digest') return reply(workflow)
     if (path === '/api/chats') return reply({ chats: [data.chat] })
+    if (path === '/api/search/chats') {
+      const words = new URL(route.request().url()).searchParams.get('q').toLowerCase().split(/\s+/)
+      const matches = text => words.every(word => text.toLowerCase().includes(word))
+      const titleMatch = matches(data.chat.title)
+      const message = data.messages.find(item => matches(item.content))
+      return reply({
+        results: titleMatch || message ? [{ chat_id: data.chat.id, title: data.chat.title, message_id: titleMatch ? null : message.id, excerpt: titleMatch ? data.chat.title : message.content, match: 'keyword' }] : [],
+        semantic: { state: 'disabled', pending: 0 }
+      })
+    }
     if (path === '/api/chats/alpha/stream') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 1000\ndata: ${JSON.stringify({ type: 'snapshot', ...data })}\n\n` })
     if (path === '/api/chats/alpha/messages' && method === 'POST') {
       const payload = route.request().postDataJSON()

@@ -36,22 +36,25 @@
             <span v-if="selected?.key === result.key" class="material-icons command-palette__enter" aria-hidden="true">keyboard_return</span>
           </div>
         </div>
-        <p v-if="!results.length" class="command-palette__empty">No results for “{{ query }}”. Try another search.</p>
+        <p v-if="searching" class="command-palette__notice" role="status">Searching full conversations…</p>
+        <p v-if="searchError" class="command-palette__notice" role="alert">{{ searchError }}</p>
+        <p v-if="!results.length && !searching" class="command-palette__empty">No results for “{{ query }}”. Try another search.</p>
       </div>
       <div class="sr-only" role="status">{{ results.length }} results shown</div>
       <footer class="command-palette__footer">
         <span><kbd>↑</kbd> <kbd>↓</kbd> to navigate <kbd>↵</kbd> to open</span>
-        <span>Chats & settings</span>
+        <span>{{ searchHint }}</span>
       </footer>
     </q-card>
   </q-dialog>
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { store } from '../store'
 import { commandSearchGroups } from '../command-search'
+import { api } from '../api'
 
 const open = defineModel({ type: Boolean, default: false })
 const props = defineProps({ initialQuery: { type: String, default: '' } })
@@ -63,10 +66,56 @@ const scope = ref('all')
 const activeKey = ref('')
 const navigating = ref(false)
 const scopes = [{ key: 'all', label: 'All' }, { key: 'chats', label: 'Chats' }, { key: 'settings', label: 'Settings' }]
-const groups = computed(() => commandSearchGroups(store.chats, query.value, scope.value))
+const remoteResults = ref(null)
+const searching = ref(false)
+const searchError = ref('')
+const semanticState = ref('')
+const searchHint = computed(() => {
+  if (!query.value.trim() || scope.value === 'settings') return 'Chats & settings'
+  if (['ready', 'indexing'].includes(semanticState.value)) return semanticState.value === 'indexing' ? 'Hybrid search · indexing history' : 'Keyword + semantic search'
+  if (semanticState.value === 'loading') return 'Keyword search · loading semantic model'
+  return remoteResults.value === null ? 'Titles & latest previews' : 'Keyword search'
+})
+const groups = computed(() => commandSearchGroups(store.chats, query.value, scope.value, remoteResults.value))
 const results = computed(() => groups.value.flatMap(group => group.results))
 const selected = computed(() => results.value.find(result => result.key === activeKey.value) || results.value[0])
 const optionId = result => `command-option-${result.key}`
+
+let searchTimer = null
+let searchController = null
+let searchGeneration = 0
+function cancelSearch () {
+  clearTimeout(searchTimer)
+  searchController?.abort()
+  searchGeneration++
+}
+watch([open, query, scope], () => {
+  cancelSearch()
+  remoteResults.value = null
+  semanticState.value = ''
+  searchError.value = ''
+  searching.value = false
+  const text = query.value.trim()
+  if (!open.value || !text || scope.value === 'settings') return
+  searching.value = true
+  const version = searchGeneration
+  searchTimer = setTimeout(async () => {
+    searchController = new AbortController()
+    try {
+      const response = await api.searchChats(text, AbortSignal.any([searchController.signal, AbortSignal.timeout(5000)]))
+      if (version !== searchGeneration) return
+      if (!Array.isArray(response.results) || !response.semantic?.state) throw new Error('Invalid search response')
+      remoteResults.value = response.results
+      semanticState.value = response.semantic.state
+    } catch {
+      if (version !== searchGeneration) return
+      searchError.value = 'Full-history search unavailable. Showing title and latest-message matches.'
+    } finally {
+      if (version === searchGeneration) searching.value = false
+    }
+  }, 180)
+})
+onUnmounted(cancelSearch)
 
 let previousFocus = null
 function rememberFocus () { previousFocus = document.activeElement }
@@ -150,6 +199,7 @@ async function activate (result) {
 .command-palette__title { font-size: 0.875rem; font-weight: 550; }
 .command-palette__description { margin-top: 3px; font-size: 0.75rem; color: var(--text-dim); }
 .command-palette__enter { color: var(--accent); font-size: 1rem; }
+.command-palette__notice { padding: 8px 12px; color: var(--text-dim); font-size: 0.75rem; }
 .command-palette__empty { padding: 48px 20px; text-align: center; color: var(--text-muted); overflow-wrap: anywhere; }
 .command-palette__footer { display: flex; flex: none; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.6875rem; }
 .command-palette__footer kbd { font-size: inherit; }

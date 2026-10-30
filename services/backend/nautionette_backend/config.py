@@ -43,6 +43,11 @@ class Settings:
         self.output_storage_disk_path = os.environ.get("OUTPUT_STORAGE_DISK_PATH", "").strip()
         self.public_url = os.environ.get("APP_URL", "").strip().rstrip("/")
 
+        # CPU-only local embeddings; Docker bundles the model for offline startup.
+        self.search_semantic_enabled = _flag("SEARCH_SEMANTIC_ENABLED", True)
+        self.search_model_cache = os.environ.get("SEARCH_MODEL_CACHE", f"{self.data_dir}/search-model")
+        self.search_model_local_only = _flag("SEARCH_MODEL_LOCAL_ONLY", False)
+
         # Auth. Empty token means open mode, which is only sane on a laptop.
         self.app_token = os.environ.get("APP_TOKEN", "").strip()
         self.internal_token = os.environ.get("INTERNAL_TOKEN", "").strip()

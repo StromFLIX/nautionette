@@ -65,7 +65,8 @@
           {{ reconnecting ? 'Waiting for connection. No saved messages on this device.' : 'No messages yet.' }}
         </p>
         <MessageBubble
-          v-for="message in messages" :key="message.id"
+          v-for="message in messages" :key="message.id" :id="`message-${message.id}`" tabindex="-1"
+          :class="{ 'msg--search-match': route.hash === `#message-${message.id}` }"
           :role="message.role" :content="message.content"
           :meta="message.meta" :created-at="message.created_at" :chat-id="chatId"
           :delivery-state="message.delivery || ''" :delivery-error="message.deliveryError || ''"
@@ -199,7 +200,10 @@ function navigateTabs (event) {
   nextTick(() => document.getElementById(activeTab.value === 'chat' ? 'chat-conversation-tab' : 'chat-outputs-tab')?.focus())
 }
 watch(activeTab, (tab) => {
-  if (tab === 'chat') nextTick(() => { scrollDown('instant'); acknowledgeRead() })
+  if (tab === 'chat') nextTick(() => {
+    if (!revealSearchMessage(true)) scrollDown('instant')
+    acknowledgeRead()
+  })
 })
 const draft = ref('')
 const attachments = ref([])
@@ -307,8 +311,10 @@ function applySnapshot (data, cached = false) {
     delivery.reconcile(data.messages)
     reconnecting.value = false
   }
-  if (atBottom) scrollDown('instant')
-  if (!cached) nextTick(acknowledgeRead)
+  nextTick(() => {
+    if (!revealSearchMessage() && atBottom) scrollDown('instant')
+    if (!cached) acknowledgeRead()
+  })
 }
 
 function connectChat () {
@@ -348,6 +354,26 @@ function connectChat () {
     applySnapshot(data)
   }, () => { if (version === generation) reconnecting.value = true })
 }
+
+let revealedMessage = ''
+function revealSearchMessage (force = false) {
+  if (!route.hash.startsWith('#message-')) return false
+  const key = `${chatId.value}${route.hash}`
+  if (!force && revealedMessage === key) return false
+  const message = document.getElementById(route.hash.slice(1))
+  if (!message || !scroller.value?.contains(message)) return false
+  revealedMessage = key
+  message.scrollIntoView({ block: 'center', behavior: 'instant' })
+  message.focus({ preventScroll: true })
+  return true
+}
+watch(() => route.hash, () => {
+  revealedMessage = ''
+  if (route.hash.startsWith('#message-')) {
+    activeTab.value = 'chat'
+    nextTick(() => revealSearchMessage())
+  }
+})
 
 function scrollDown (behavior = 'smooth') {
   nextTick(() => {
@@ -589,7 +615,7 @@ watch(() => route.params.id, (id, previous) => {
 const stopNavigation = router.afterEach((to, from, failure) => {
   if (to.name === 'chats' && to.params.id === chatId.value &&
       isNavigationFailure(failure, NavigationFailureType.duplicated)) {
-    scrollDown('instant')
+    if (!revealSearchMessage(true)) scrollDown('instant')
   }
 })
 onUnmounted(stopNavigation)
@@ -629,6 +655,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.msg--search-match { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); scroll-margin: 24px; }
 .thread__queued-images { display: flex; flex-wrap: wrap; gap: 8px; }
 .thread {
   min-width: 0;

@@ -10,9 +10,13 @@ export function searchChats (chats, query) {
     .sort((a, b) => Number(matches(b.title)) - Number(matches(a.title)))
 }
 
-export function commandSearchGroups (chats, query, scope = 'all') {
+export function commandSearchGroups (chats, query, scope = 'all', remoteResults = null) {
   const text = query.trim()
-  const chatResults = searchChats(chats, text)
+  // null means no server result yet (or offline): retain the local fallback.
+  const chatResults = remoteResults === null ? searchChats(chats, text) : remoteResults.map(result => ({
+    id: result.chat_id, title: result.title, messageId: result.message_id,
+    last_message: { preview: `${result.match === 'semantic' ? 'Related · ' : ''}${result.excerpt}` }
+  }))
   const sections = !text || /^(settings|preferences|einstellungen)$/i.test(text)
   const settingResults = sections
     ? SETTINGS_SECTIONS.map(section => ({
@@ -25,7 +29,7 @@ export function commandSearchGroups (chats, query, scope = 'all') {
       results: chatResults.slice(0, text ? 30 : 8).map(chat => ({
         key: `chat-${chat.id}`, label: chat.title || 'Untitled chat',
         description: chat.last_message?.preview || 'Open conversation', icon: 'chat_bubble_outline',
-        to: { path: `/chats/${encodeURIComponent(chat.id)}` }
+        to: { path: `/chats/${encodeURIComponent(chat.id)}`, ...(chat.messageId ? { hash: `#message-${chat.messageId}` } : {}) }
       }))
     },
     {

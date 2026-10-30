@@ -15,6 +15,7 @@ from nautionette_backend import chat_outputs, main, output_maintenance, output_s
 from nautionette_backend.config import settings
 from nautionette_backend.db import Database
 from nautionette_backend.output_ids import publication_request_id
+from nautionette_backend.search_index import load_extension
 
 from .test_chat_outputs import payload, raster
 
@@ -492,6 +493,8 @@ def test_nullable_blob_schema_upgrade_retains_legacy_bytes_and_foreign_key_clean
     chat_id = database.one("SELECT id FROM chats")["id"]
     database._conn.close()
     raw = sqlite3.connect(path)
+    # This fixture downgrades a current DB; ALTER validates its vec0 triggers.
+    load_extension(raw)
     raw.execute("DROP TRIGGER output_file_deleted")
     raw.execute("ALTER TABLE chat_output_files RENAME TO temporary_files")
     raw.execute(

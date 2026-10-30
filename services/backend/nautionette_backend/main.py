@@ -19,6 +19,7 @@ from nautionette.telemetry import instrument_app
 from . import artcraft, github_mentions, mcp_servers, output_maintenance, pi_packages, runs
 from .backend_mcp import BackendMCP
 from .background import drain, spawn
+from .chat_search import search
 from .clients.http import close_shared
 from .config import settings
 from .conversations import recover_chat_agents, recover_interrupted
@@ -50,6 +51,7 @@ async def lifespan(_: FastAPI):
     spawn(recover_chat_agents(), name="chat-agent-recovery")
     spawn(github_mentions.consume(), name="github-mention-inbox")
     spawn(output_maintenance.run(), name="output-storage-maintenance")
+    spawn(search.run(), name="conversation-search-indexer")
     # agentgateway may still be starting, so this retries in the background
     # rather than holding the port closed.
     spawn(bootstrap(), name="integration-bootstrap")

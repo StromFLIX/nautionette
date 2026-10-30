@@ -104,6 +104,16 @@ Open Settings with **Ctrl/Command + ,** and focus its search with **/**.
 See [Frontend design system](docs/frontend-design.md) for the extension points,
 persistence model and testing guidance.
 
+## Conversation search
+
+On desktop, **Ctrl/Command + K** opens chat and settings search. Chats use **SQLite
+FTS5 + sqlite-vec** to search titles and full saved conversations by words and
+meaning. Results include matching passages and jump to the relevant message.
+Embeddings run locally on CPU with a pinned model bundled in the backend image;
+no provider key or separate search server is needed. Keyword search remains
+available during background semantic indexing. See [Conversation search](docs/conversation-search.md)
+for scope, privacy, configuration and indexing behavior.
+
 ## Defaults and reusable agents
 
 Configuration follows **global defaults → agent overrides → chat changes**.

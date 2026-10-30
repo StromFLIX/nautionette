@@ -19,6 +19,8 @@ from typing import Any
 from .config import settings
 from .migrations import add_agent_grouping, remove_internet_approval
 from .output_ids import publication_request_id
+from .search_index import install as install_search_index
+from .search_index import load_extension as load_search_extension
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -313,6 +315,7 @@ class Database:
         self._lock = threading.Lock()
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
+        load_search_extension(self._conn)
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA foreign_keys=ON")
         with self._lock:
@@ -407,6 +410,7 @@ class Database:
                     self._conn.execute(
                         "DELETE FROM settings WHERE key IN ('github_projects_app', 'github_projects_webhook')"
                     )
+            install_search_index(self._conn)
             self._conn.commit()
 
     # ------------------------------------------------------------------ basics

@@ -42,3 +42,17 @@ test('scopes, empty states and result limits remain independent of activity filt
   assert.equal(group.results.length, 30)
   assert.equal(group.count, 60)
 })
+
+test('remote full-history and semantic ranks replace local filtering and link to matching messages', () => {
+  const remote = [
+    { chat_id: 'not-in-sidebar', title: 'Archived discussion', message_id: 'old-message', excerpt: 'Cloud costs', match: 'semantic' },
+    { chat_id: 'title', title: 'Design review', message_id: null, excerpt: 'Design review', match: 'keyword' }
+  ]
+  const [group] = commandSearchGroups(chats, 'infrastructure expenses', 'chats', remote)
+  assert.deepEqual(group.results.map(result => result.label), ['Archived discussion', 'Design review'])
+  assert.equal(group.results[0].description, 'Related · Cloud costs')
+  assert.deepEqual(group.results[0].to, { path: '/chats/not-in-sidebar', hash: '#message-old-message' })
+  assert.deepEqual(group.results[1].to, { path: '/chats/title' })
+  assert.deepEqual(commandSearchGroups(chats, 'Design', 'chats', []), [])
+  assert.equal(commandSearchGroups(chats, 'Design', 'chats', null)[0].results.length, 2)
+})

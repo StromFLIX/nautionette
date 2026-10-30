@@ -125,6 +125,7 @@ export const api = {
   removeProject: (id) => request(`/api/projects/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   chats: () => request('/api/chats'),
+  searchChats: (query, signal) => request(`/api/search/chats?${new URLSearchParams({ q: query })}`, { signal }),
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
   chat: (id, signal = AbortSignal.timeout(15000)) => request(`/api/chats/${id}`, { signal }),
   projectChanges: (id, signal) => request(`/api/chats/${encodeURIComponent(id)}/project-changes`, { signal }),

@@ -73,6 +73,17 @@ jobs:
       - name: Agent defaults, profiles and durable chat configuration
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py
 
+      - name: Indexed conversation search, synchronization and fallback
+        run: uv run pytest tests/backend/test_chat_search.py
+
+      - name: Pinned local model and real semantic retrieval (offline inference)
+        env:
+          SEARCH_TEST_MODEL_CACHE: ${{ runner.temp }}/search-model
+          HF_HUB_DISABLE_TELEMETRY: '1'
+        run: |
+          uv run python -c "import os; from nautionette_backend.search_model import load_encoder; load_encoder(os.environ['SEARCH_TEST_MODEL_CACHE'])"
+          uv run pytest tests/backend/test_chat_search_model.py
+
       - name: Backend restart draining and safe crash recovery
         run: uv run pytest tests/backend/test_chat_draining.py tests/backend/test_chat_restart_process.py tests/backend/test_chat_recovery.py tests/backend/test_chat_queue.py tests/backend/test_chat_activity.py tests/backend/test_chat_sessions.py
 
@@ -114,7 +125,7 @@ jobs:
         run: >-
           npx playwright test
           tests/chat.spec.js tests/appearance.spec.js tests/workspace.spec.js
-          tests/projects.spec.js tests/settings-navigation.spec.js
+          tests/projects.spec.js tests/settings-navigation.spec.js tests/command-palette.spec.js tests/hybrid-search.spec.js
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js tests/agent-views.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
           tests/copilot-login.spec.js tests/tool-calls.spec.js tests/activity-timing.spec.js
