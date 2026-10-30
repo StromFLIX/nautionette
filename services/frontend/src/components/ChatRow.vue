@@ -25,10 +25,10 @@
     >
       <span class="material-icons" aria-hidden="true">more_vert</span>
       <q-menu v-model="menuOpen" anchor="bottom right" self="top right" class="pick-menu">
-        <button v-close-popup class="pick-menu__item" :disabled="readBusy === chat.id" @click="$emit('toggle-unread', chat, !chat.unread)">
-          <span class="material-icons" aria-hidden="true">{{ chat.unread ? 'mark_email_read' : 'mark_email_unread' }}</span>
-          {{ chat.unread ? 'Mark as read' : 'Mark as unread' }}
-        </button>
+        <ChatMenuItems :chat="chat" :unread="chat.unread" :read-busy="readBusy === chat.id"
+          :title-busy="titleBusy" :has-messages="Boolean(chat.message_count)" :settings-busy="settingsBusy"
+          @toggle-unread="$emit('toggle-unread', chat, $event)" @rename="rename" @regenerate-title="regenerateTitle"
+          @toggle-timeout="save({ timeout_exempt: $event })" @delete="remove" />
       </q-menu>
     </button>
   </div>
@@ -36,9 +36,15 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { useQuasar } from 'quasar'
+import { useRoute, useRouter } from 'vue-router'
 import { fullTime, shortTime } from '../format'
 import { chatActivityAt } from '../chat-order'
 import { chatLocation } from '../router'
+import { api } from '../api'
+import { actions } from '../store'
+import { chatCache } from '../chat-cache'
+import ChatMenuItems from './ChatMenuItems.vue'
 
 const props = defineProps({
   chat: { type: Object, required: true },
@@ -47,9 +53,77 @@ const props = defineProps({
 })
 defineEmits(['toggle-unread'])
 
+const $q = useQuasar()
+const route = useRoute()
+const router = useRouter()
 const menuOpen = ref(false)
+const titleBusy = ref(false)
+const settingsBusy = ref(false)
 const statusLabel = computed(() => props.chat.answering ? 'Active' : 'Inactive')
 const activityAt = computed(() => chatActivityAt(props.chat))
+
+// List actions must not open the conversation or act on whichever chat is open.
+async function save (fields) {
+  const id = props.chat.id
+  if (settingsBusy.value) return
+  settingsBusy.value = true
+  try {
+    await api.updateChat(id, fields)
+    await actions.loadChats()
+  } catch (error) {
+    $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    settingsBusy.value = false
+  }
+}
+
+function rename () {
+  const { id, title } = props.chat
+  $q.dialog({
+    title: 'Rename chat',
+    prompt: { model: title, type: 'text', outlined: true, dark: true },
+    cancel: true
+  }).onOk(async (title) => {
+    try {
+      await api.updateChat(id, { title })
+      await actions.loadChats()
+    } catch (error) {
+      $q.notify({ type: 'negative', message: error.message })
+    }
+  })
+}
+
+async function regenerateTitle () {
+  if (titleBusy.value) return
+  const id = props.chat.id
+  titleBusy.value = true
+  try {
+    await api.regenerateChatTitle(id)
+    await actions.loadChats()
+    $q.notify({ type: 'positive', message: 'Chat title regenerated' })
+  } catch (error) {
+    $q.notify({ type: 'negative', message: error.message })
+  } finally {
+    titleBusy.value = false
+  }
+}
+
+function remove () {
+  const { id, title } = props.chat
+  $q.dialog({ title: 'Delete chat', message: `Delete “${title}”?`, cancel: true })
+    .onOk(async () => {
+      try {
+        await api.deleteChat(id)
+        // Don't navigate away from another chat, including one opened while the
+        // confirmation or request was pending.
+        if (route.name === 'chats' && route.params.id === id) await router.push(chatLocation())
+        await chatCache.remove(id)
+        await actions.loadChats()
+      } catch (error) {
+        $q.notify({ type: 'negative', message: error.message })
+      }
+    })
+}
 </script>
 
 <style scoped>
