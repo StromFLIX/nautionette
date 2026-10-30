@@ -144,6 +144,9 @@ for (const width of [1440, 320]) {
 for (const instanceUrl of ['', 'https://instance.example.com']) {
   test(`public instance URL defaults to ${instanceUrl || 'the current browser origin'}`, async ({ page, context }) => {
     await mockProjects(context)
+    // This fake remote HTTPS instance only tests URL defaults, not live updates.
+    // Keep SSE offline rather than rewriting HTTPS requests to the local HTTP fixture.
+    await context.route('**/api/events', route => route.fulfill({ status: 503, body: 'Live updates unavailable' }))
     await context.addInitScript((url) => {
       if (url) localStorage.setItem('nautionette.server', url)
     }, instanceUrl)
