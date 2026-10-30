@@ -193,13 +193,15 @@ const configurationOpen = ref(false)
 const selectedAgent = computed(() => store.catalog.agents?.find(agent => agent.id === props.agentId) || null)
 const configurationToggle = ref(null)
 const configurationClose = ref(null)
-function openConfiguration () {
+let configurationTrigger = null
+function openConfiguration (event) {
+  configurationTrigger = event?.currentTarget || configurationToggle.value
   configurationOpen.value = true
   nextTick(() => configurationClose.value?.focus({ preventScroll: true }))
 }
 function closeConfiguration () {
   configurationOpen.value = false
-  nextTick(() => configurationToggle.value?.focus({ preventScroll: true }))
+  nextTick(() => (configurationTrigger?.isConnected ? configurationTrigger : configurationToggle.value)?.focus({ preventScroll: true }))
 }
 const profileDefaults = computed(() => agentConfig(store.catalog, props.agentId))
 const profileLabel = computed(() => props.agentId ? (profileDefaults.value?.agent_name || props.agentName || 'Removed agent') : 'Global defaults')
@@ -275,7 +277,10 @@ function submit () {
   emit('send')
   if (input.value) input.value.style.height = 'auto'
 }
-defineExpose({ focus: () => (configurationOpen.value ? configurationClose.value : input.value)?.focus() })
+defineExpose({
+  focus: () => (configurationOpen.value ? configurationClose.value : input.value)?.focus(),
+  openConfiguration, configurationOpen, configurationId
+})
 </script>
 
 <style scoped>

@@ -7,17 +7,21 @@
         <span class="material-icons">arrow_back</span>
         <span v-if="draftCount" class="pane-head__badge">{{ draftCount }}</span>
       </button>
-      <AgentAvatar v-if="profile" :agent="profile" />
-      <div v-else class="avatar-sm" :style="avatarStyle(chatId)">{{ initials(chat?.title || '?') }}</div>
-      <div class="grow">
-        <div class="pane-head__title truncate">{{ chat?.title || 'Chat' }}</div>
-        <div class="caption dim truncate">
-          {{ messages.length }} messages · {{ chat?.agent_name || chat?.agent_set }}
-          <span v-if="chat?.timeout_exempt" title="Agent timeout disabled for newly sent messages in this chat"> · No agent timeout</span>
-          <template v-if="reconnecting"> · Reconnecting...</template>
-          <template v-if="chat?.promoted_to"> · → {{ chat.promoted_to }}</template>
-        </div>
-      </div>
+      <button class="pane-head__preferences grow" type="button" :aria-label="`Chat settings for ${chat?.title || 'Chat'}`"
+        title="Chat settings" :aria-expanded="composer?.configurationOpen || false" :aria-controls="composer?.configurationId"
+        @click="openChatSettings">
+        <AgentAvatar v-if="profile" :agent="profile" />
+        <span v-else class="avatar-sm" :style="avatarStyle(chatId)">{{ initials(chat?.title || '?') }}</span>
+        <span class="pane-head__identity grow">
+          <span class="pane-head__title truncate">{{ chat?.title || 'Chat' }}</span>
+          <span class="caption dim truncate">
+            {{ messages.length }} messages · {{ chat?.agent_name || chat?.agent_set }}
+            <span v-if="chat?.timeout_exempt" title="Agent timeout disabled for newly sent messages in this chat"> · No agent timeout</span>
+            <template v-if="reconnecting"> · Reconnecting...</template>
+            <template v-if="chat?.promoted_to"> · → {{ chat.promoted_to }}</template>
+          </span>
+        </span>
+      </button>
       <RouterLink v-if="chat?.promoted_to" class="btn btn--outline btn--sm" :to="`/workflows/${chat.promoted_to}`">
         <span class="material-icons" style="font-size: 0.9375rem">account_tree</span>
         {{ chat.promoted_to }}
@@ -25,28 +29,9 @@
       <button v-if="chatId" class="btn btn--icon" aria-label="Chat options">
         <span class="material-icons">more_vert</span>
         <q-menu anchor="bottom right" self="top right" class="pick-menu">
-          <button v-close-popup class="pick-menu__item" @click="markUnread">
-            <span class="material-icons" aria-hidden="true">mark_email_unread</span>Mark as unread
-          </button>
-          <button class="pick-menu__item" @click="rename">
-            <span class="material-icons pick__icon">edit</span>Rename
-          </button>
-          <button v-close-popup class="pick-menu__item" :disabled="titleBusy || !savedMessages.length" @click="regenerateTitle">
-            <span class="material-icons pick__icon" aria-hidden="true">autorenew</span>{{ titleBusy ? 'Regenerating title…' : 'Regenerate title' }}
-          </button>
-          <button v-close-popup class="pick-menu__item" role="menuitemcheckbox" :aria-checked="Boolean(chat?.timeout_exempt)"
-            :disabled="!chat || settingsPending > 0" @click="patch({ timeout_exempt: !chat?.timeout_exempt })">
-            <span class="material-icons pick__icon" aria-hidden="true">{{ chat?.timeout_exempt ? 'timer_off' : 'timer' }}</span>
-            <span class="stack grow">
-              <span>Disable agent timeout</span>
-              <span class="caption dim">New messages only; running and queued unchanged</span>
-            </span>
-            <span v-if="chat?.timeout_exempt" class="material-icons pick-menu__check" aria-hidden="true">check</span>
-            <q-tooltip>Applies to newly sent messages in this chat, not running or queued messages. Stop and tool-specific limits still apply; usage can continue until stopped.</q-tooltip>
-          </button>
-          <button class="pick-menu__item" @click="remove">
-            <span class="material-icons pick__icon" style="color: var(--danger)">delete</span>Delete chat
-          </button>
+          <ChatMenuItems :chat="chat" :title-busy="titleBusy" :has-messages="Boolean(savedMessages.length)" :settings-busy="settingsPending > 0"
+            @toggle-unread="markUnread" @rename="rename" @regenerate-title="regenerateTitle"
+            @toggle-timeout="patch({ timeout_exempt: $event })" @delete="remove" />
         </q-menu>
       </button>
     </header>
@@ -156,6 +141,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from 'vue-router'
 import ChatWelcome from '../components/ChatWelcome.vue'
+import ChatMenuItems from '../components/ChatMenuItems.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
 import Composer from '../components/Composer.vue'
 import ProjectChanges from '../components/ProjectChanges.vue'
@@ -225,6 +211,11 @@ const creationError = ref('')
 const scroller = ref(null)
 const composer = ref(null)
 const composerKey = ref(0)
+
+function openChatSettings (event) {
+  activeTab.value = 'chat'
+  composer.value?.openConfiguration(event)
+}
 
 // /chats/new is a local draft, never a backend chat ID.
 const isNewChat = computed(() => route.name === 'chats' && route.params.id === 'new')
@@ -711,6 +702,31 @@ onUnmounted(() => {
   color: var(--accent);
   font-size: 0.75rem;
   font-weight: 650;
+}
+
+.pane-head__preferences {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pane-head__preferences:hover .pane-head__title {
+  color: var(--accent);
+}
+
+.pane-head__identity {
+  display: flex;
+  flex-direction: column;
 }
 
 .pane-head__back {
