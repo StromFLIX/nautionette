@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { mockAgents } from './agent-fixture.js'
 import { openChatConfiguration, closeChatConfiguration } from './helpers.js'
+import { THEMES, resolveTheme, contrastRatio } from '../src/themes.js'
 
 const portrait = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64')
 async function fixture (context) {
@@ -110,11 +111,11 @@ for (const width of [1440, 390, 320]) {
     const ada = page.getByRole('button', { name: 'Chats with Ada', exact: true })
     const grace = page.getByRole('button', { name: 'Chats with Grace', exact: true })
     await expect(all(page)).toHaveAccessibleDescription('4 agents running · 123 messages waiting')
-    await expect(all(page).locator('.agent-activity__badge--running')).toHaveText('play_arrow4')
-    await expect(all(page).locator('.agent-activity__badge--queued')).toHaveText('hourglass_top99+')
+    await expect(all(page).locator('.agent-activity__badge--running')).toHaveText('4')
+    await expect(all(page).locator('.agent-activity__badge--queued')).toHaveText('99+')
     await expect(ada).toHaveAccessibleDescription('2 agents running · 1 message waiting')
-    await expect(ada.locator('.agent-activity__badge--running')).toHaveText('play_arrow2')
-    await expect(ada.locator('.agent-activity__badge--queued')).toHaveText('hourglass_top1')
+    await expect(ada.locator('.agent-activity__badge--running')).toHaveText('2')
+    await expect(ada.locator('.agent-activity__badge--queued')).toHaveText('1')
     await expect(grace).toHaveAccessibleDescription('1 agent running · 120 messages waiting')
     // These are server-wide counts, unaffected by list scope or search.
     await page.getByRole('textbox', { name: 'Search chats' }).fill('No matches')
@@ -129,7 +130,7 @@ for (const width of [1440, 390, 320]) {
     state.chatActivity.queued = 122
     state.pendingEvents.push('chat.queue.changed')
     await expect(ada.locator('.agent-activity__badge--queued')).toHaveCount(0)
-    await expect(ada.locator('.agent-activity__badge--running')).toHaveText('play_arrow2')
+    await expect(ada.locator('.agent-activity__badge--running')).toHaveText('2')
     // Idle agents have no distracting badges; descriptions still report zero.
     state.chatActivity = { running: 0, queued: 0, agents: {} }
     state.pendingEvents.push('chat.answered')
@@ -139,7 +140,7 @@ for (const width of [1440, 390, 320]) {
     state.chatActivity = { running: 0, queued: 1, agents: { [research.id]: { running: 0, queued: 1 } } }
     state.pendingEvents.push('chat.queue.changed')
     await expect(ada).toHaveAccessibleDescription('0 agents running · 1 message waiting')
-    await expect(ada.locator('.agent-activity__badge--queued')).toHaveText('hourglass_top1')
+    await expect(ada.locator('.agent-activity__badge--queued')).toHaveText('1')
     await expect(ada.locator('.agent-activity__badge--running')).toHaveCount(0)
     await page.reload()
     await expect(ada).toHaveAccessibleDescription('0 agents running · 1 message waiting')
@@ -194,6 +195,59 @@ for (const width of [1440, 390, 320]) {
     expect(state.agents.at(-1).image).toBe('')
     expect(state.agents.at(-1).config).not.toHaveProperty('system_prompt')
     expect(await page.locator('.settings__body').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+  })
+}
+
+for (const width of [1440, 320]) {
+  test(`minimal activity counters follow every theme and stay inside the rail at ${width}px`, async ({ page, context }) => {
+    const { state, research, writer } = await fixture(context)
+    state.chatActivity = { running: 124, queued: 123, agents: { [research.id]: { running: 1, queued: 0 }, [writer.id]: { running: 123, queued: 123 } } }
+    await page.setViewportSize({ width, height: 900 })
+    const rgb = hex => `rgb(${[1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16)).join(', ')})`
+    const verify = async tokens => {
+      const rail = page.getByRole('navigation', { name: 'Chats by agent' })
+      const running = all(page).locator('.agent-activity__badge--running')
+      const queued = all(page).locator('.agent-activity__badge--queued')
+      await expect(running).toHaveText('99+')
+      await expect(queued).toHaveText('99+')
+      await expect(running).toHaveCSS('background-color', rgb(tokens.accent))
+      await expect(running).toHaveCSS('color', rgb(tokens['accent-text']))
+      await expect(queued).toHaveCSS('background-color', rgb(tokens['surface-raised']))
+      await expect(queued).toHaveCSS('color', rgb(tokens['text-muted']))
+      expect(contrastRatio(tokens['accent-text'], tokens.accent)).toBeGreaterThanOrEqual(4.5)
+      expect(contrastRatio(tokens['text-muted'], tokens['surface-raised'])).toBeGreaterThanOrEqual(4.5)
+      await expect(rail.locator('.agent-activity .material-icons')).toHaveCount(0)
+      const badges = rail.locator('.agent-activity__badge')
+      for (const badge of await badges.all()) {
+        await expect(badge).toHaveAttribute('aria-hidden', 'true')
+        await expect(badge).toHaveCSS('border-width', '0px')
+        await expect(badge).toHaveCSS('animation-name', 'none')
+        const box = await badge.boundingBox()
+        const button = await badge.locator('xpath=ancestor::button').boundingBox()
+        expect(box.height).toBe(16)
+        expect(box.x).toBeGreaterThanOrEqual(button.x)
+        expect(box.y).toBeGreaterThanOrEqual(button.y)
+        expect(box.x + box.width).toBeLessThanOrEqual(button.x + button.width)
+        expect(box.y + box.height).toBeLessThanOrEqual(button.y + button.height)
+      }
+      const runningBox = await running.boundingBox(), queuedBox = await queued.boundingBox()
+      expect(queuedBox.y + queuedBox.height).toBeLessThan(runningBox.y)
+      await expect(all(page)).toHaveAccessibleDescription('124 agents running · 123 messages waiting')
+      await expect(page.getByRole('button', { name: 'Chats with Ada', exact: true })).toHaveAccessibleDescription('1 agent running · 0 messages waiting')
+    }
+    for (const theme of THEMES) {
+      await page.goto('/settings/appearance')
+      await page.getByRole('button', { name: `${theme.name} theme`, exact: true }).click()
+      await page.goto('/chats')
+      await verify(resolveTheme(theme.id))
+      await page.screenshot({ path: test.info().outputPath(`activity-${theme.id}-${width}.png`) })
+    }
+    // Custom accents use the same accessible foreground as primary buttons.
+    await page.goto('/settings/appearance#token-accent')
+    await page.getByLabel('Accent', { exact: true }).fill('#551166')
+    await page.getByLabel('Accent', { exact: true }).press('Tab')
+    await page.goto('/chats')
+    await verify(resolveTheme(THEMES.at(-1).id, { accent: '#551166' }))
   })
 }
 
