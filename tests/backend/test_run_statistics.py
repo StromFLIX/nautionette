@@ -94,6 +94,17 @@ def test_tool_starts_and_finishes_are_one_call_with_explicit_provenance():
     assert "private" not in json.dumps(result)
 
 
+@pytest.mark.parametrize("identity", [{"id": "reused-provider-id"}, {}])
+def test_repeated_tool_executions_count_even_when_provider_reuses_or_omits_ids(identity):
+    stats = accounting.AgentStatistics()
+    for failed in [True, False]:
+        stats.observe({"type": "tool", "name": "search", "source": "mcp", **identity})
+        stats.observe({"type": "tool_done", "name": "search", "error": failed, **identity})
+    assert stats.snapshot()["tools"] == [
+        {"name": "search", "source": "mcp", "calls": 2, "failed": 1, "completed": 1}
+    ]
+
+
 def test_all_attempts_are_accounted_and_reads_survive_database_reopen(db, monkeypatch):
     row = db.record_run("digest", "wf", "r1", "manual", {})
     stats = accounting.AgentStatistics()

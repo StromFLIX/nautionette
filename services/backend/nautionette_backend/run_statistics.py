@@ -27,7 +27,8 @@ def token_counts(usage: Any) -> dict[str, int] | None:
 
 class AgentStatistics:
     def __init__(self) -> None:
-        self.tools: dict[str, dict[str, Any]] = {}
+        self.tools: list[dict[str, Any]] = []
+        self._latest_tool: dict[str, dict[str, Any]] = {}
         self.requests = 0
         self.reported = 0
         self.tokens = dict.fromkeys(TOKEN_FIELDS, 0)
@@ -36,15 +37,18 @@ class AgentStatistics:
     def observe(self, event: dict[str, Any]) -> bool:
         kind = event.get("type")
         if kind in {"tool", "tool_done"}:
-            call_id = event.get("id") or f"unidentified-{len(self.tools)}"
-            tool = self.tools.setdefault(
-                call_id,
-                {
+            call_id = event.get("id") or f"unidentified:{event.get('name') or ''}"
+            tool = self._latest_tool.get(call_id) if kind == "tool_done" else None
+            if tool is None:
+                # A provider may reuse a call ID in a later model turn. Count
+                # executions, not globally unique provider-generated IDs.
+                tool = {
                     "name": str(event.get("name") or "Unknown")[:512],
                     "source": event.get("source") if event.get("source") in {"mcp", "local"} else "extension",
                     "status": "running",
-                },
-            )
+                }
+                self.tools.append(tool)
+                self._latest_tool[call_id] = tool
             if kind == "tool_done":
                 tool["status"] = "failed" if event.get("error") else "completed"
             return True
@@ -83,7 +87,7 @@ class AgentStatistics:
 
     def snapshot(self) -> dict[str, Any]:
         grouped: dict[tuple[str, str], Counter] = {}
-        for tool in self.tools.values():
+        for tool in self.tools:
             counts = grouped.setdefault((tool["name"], tool["source"]), Counter())
             counts["calls"] += 1
             counts[tool["status"]] += 1
