@@ -149,6 +149,18 @@ component health and output storage connectivity. It never means "deploy whateve
 is now on main". It promotes source commits, not identical prebuilt image digests.
 No data copy happens on release.
 
+The read-only **Prepare Nautionette release** workflow checks the healthy staging
+commit, ancestry, unused/increasing stable version, and evidence-backed notes. Its
+source is tracked in `workflows/prepare_nautionette_release.py` and regression-tested
+in CI. It does not publish or deploy. It deliberately does **not** pin checksums of
+these docs, the Deploy Action, or its script: routine pipeline edits must not require
+updating an unrelated live workflow. Preparation does not certify deployment code
+or environment configuration; the current Deploy Action remains the authority for
+promotion and independently applies its staging, tag, environment and health gates.
+After editing the tracked preparation workflow, deploy that complete source with
+`write_workflow`, check worker readiness, run it, and inspect its completed result.
+Repository pushes do not overwrite an existing live workflow automatically.
+
 To manually retry/promote an **existing published stable release**, open
 **Actions → Deploy → Run workflow**, select branch **main**, and enter its exact
 `release_tag` (for example `v1.2.3`). Manual runs verify the published release using
