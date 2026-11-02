@@ -50,6 +50,7 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
                 "INTERNAL_TOKEN": "integration-test-internal",
                 "WORKFLOWS_VOLUME": namespace,
                 "AGENT_IMAGE_REGISTRY_PREFIX": "",
+                "MINIAPP_TEST_DIAGNOSTICS": "1",
             },
             volumes={
                 "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import threading
 from contextlib import asynccontextmanager
 from typing import Any
@@ -236,6 +237,8 @@ def deploy_miniapp(
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     except Exception as exc:
+        if os.environ.get("MINIAPP_TEST_DIAGNOSTICS") == "1":
+            daemon.log.exception("Mini-app integration test runtime failure")
         raise HTTPException(
             503, "Mini-app build/runtime unavailable; inspect status before retrying"
         ) from exc
