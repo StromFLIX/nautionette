@@ -381,12 +381,24 @@ def recover(app_id: str, config: dict) -> dict:
         with contextlib.suppress(NotFound):
             daemon.client().images.remove(name(app_id, f"release-{building}"))
         save(app_id, config)
+    retired = config.get("retiring")
+    if retired:
+        if retired["revision"] == (config.get("active") or {}).get("revision"):
+            raise RuntimeError("Refusing to retire the active release")
+        stop(app_id, retired, remove=True)
+        with contextlib.suppress(NotFound):
+            daemon.client().images.remove(name(app_id, f"release-{retired['revision']}"))
+        with contextlib.suppress(FileNotFoundError):
+            shutil.rmtree(root(app_id) / str(retired["revision"]))
+        config.pop("retiring")
+        save(app_id, config)
     candidate = config.get("candidate")
     if candidate:
         stop(app_id, candidate, remove=True)
         with contextlib.suppress(NotFound):
             daemon.client().images.remove(name(app_id, f"release-{candidate['revision']}"))
-        shutil.rmtree(root(app_id) / str(candidate["revision"]), ignore_errors=True)
+        with contextlib.suppress(FileNotFoundError):
+            shutil.rmtree(root(app_id) / str(candidate["revision"]))
         config.pop("candidate")
         save(app_id, config)
     return config
@@ -433,21 +445,17 @@ def deploy(app_id: str, revision: int, source: str, memory_mb: int, mode: str) -
                 stop(app_id, old)
             data_files(app_id, revision, old)
             ready(app_id, candidate)
-            save(app_id, {"active": candidate})
         except Exception:
-            stop(app_id, candidate, remove=True)
-            with contextlib.suppress(NotFound):
-                daemon.client().images.remove(name(app_id, f"release-{candidate['revision']}"))
-            shutil.rmtree(root(app_id) / str(revision), ignore_errors=True)
-            save(app_id, {"active": old} if old else {})
+            recover(app_id, load(app_id))
             if old:
                 ready(app_id, old)
             raise
-        if old:
-            stop(app_id, old, remove=True)
-            shutil.rmtree(root(app_id) / str(old["revision"]), ignore_errors=True)
-            with contextlib.suppress(Exception):
-                daemon.client().images.remove(name(app_id, f"release-{old['revision']}"))
+        # A failed/ambiguous fsync here must not blindly roll back an activation
+        # already visible on disk. Reconciliation reads the journal instead.
+        save(app_id, {"active": candidate, **({"retiring": old} if old else {})})
+        # The activation commit records retirement before removing old resources.
+        # A crash or failed unlink cannot leak one old data/image set per publish.
+        recover(app_id, load(app_id))
         _last_used[app_id] = time.monotonic()
         return snapshot(app_id)
 

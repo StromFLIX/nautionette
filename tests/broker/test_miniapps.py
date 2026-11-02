@@ -146,6 +146,66 @@ def test_interrupted_candidate_discarded_not_promoted(runtime, monkeypatch):
     assert stopped == [2] and not (apps.root("one") / "2").exists()
 
 
+def test_activation_retirement_survives_crash_and_failed_unlink(runtime, monkeypatch):
+    apps.data_files("one", 1, None)
+    apps.data_files("one", 2, config(1))
+    journal = {"active": config(2), "retiring": config(1)}
+    apps.save("one", journal)
+    stopped = Mock()
+    monkeypatch.setattr(apps, "stop", stopped)
+    original = apps.shutil.rmtree
+    monkeypatch.setattr(apps.shutil, "rmtree", Mock(side_effect=OSError("disk busy")))
+    with pytest.raises(OSError):
+        apps.recover("one", apps.load("one"))
+    assert apps.load("one") == journal
+    monkeypatch.setattr(apps.shutil, "rmtree", original)
+    assert apps.recover("one", apps.load("one")) == {"active": config(2)}
+    assert not (apps.root("one") / "1").exists()
+    assert (apps.root("one") / "2" / "state.db").exists()
+    assert all(call.args[1]["revision"] == 1 for call in stopped.call_args_list)
+
+
+def test_ambiguous_activation_commit_is_reconciled_not_rolled_back(runtime, monkeypatch):
+    apps.data_files("one", 1, None)
+    apps.save("one", {"active": config(1)})
+    original_save = apps.save
+
+    def lose_commit_reply(app_id, state):
+        original_save(app_id, state)
+        if state.get("retiring"):
+            raise OSError("directory fsync failed after rename")
+
+    monkeypatch.setattr(apps, "save", lose_commit_reply)
+    monkeypatch.setattr(apps, "build", Mock(return_value="image-2"))
+    monkeypatch.setattr(apps, "ready", Mock())
+    stop = Mock()
+    monkeypatch.setattr(apps, "stop", stop)
+    with pytest.raises(OSError):
+        apps.deploy("one", 2, "source", 64, "on-demand")
+    assert apps.load("one")["active"]["revision"] == 2
+    assert not any(call.args[1]["revision"] == 2 for call in stop.call_args_list)
+    monkeypatch.setattr(apps, "save", original_save)
+    recovered = apps.recover("one", apps.load("one"))
+    assert recovered["active"]["revision"] == 2 and "retiring" not in recovered
+    assert (apps.root("one") / "2" / "state.db").exists()
+
+
+def test_failed_candidate_cleanup_keeps_journal_for_retry(runtime, monkeypatch):
+    apps.data_files("one", 1, None)
+    apps.data_files("one", 2, config(1))
+    journal = {"active": config(1), "candidate": config(2)}
+    apps.save("one", journal)
+    monkeypatch.setattr(apps, "stop", Mock())
+    original = apps.shutil.rmtree
+    monkeypatch.setattr(apps.shutil, "rmtree", Mock(side_effect=OSError("disk busy")))
+    with pytest.raises(OSError):
+        apps.recover("one", apps.load("one"))
+    assert apps.load("one") == journal
+    monkeypatch.setattr(apps.shutil, "rmtree", original)
+    assert apps.recover("one", apps.load("one")) == {"active": config(1)}
+    assert (apps.root("one") / "1" / "state.db").exists()
+
+
 def test_suspend_rotates_token_preserves_data_and_revokes_requests(runtime, monkeypatch):
     apps.data_files("one", 1, None)
     apps.save("one", {"active": config()})
