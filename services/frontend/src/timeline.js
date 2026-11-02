@@ -48,14 +48,23 @@ export function foldEvent (steps, event) {
   })
 }
 
-/** Group consecutive calls only; narration stays visible between disclosures. */
+/** Group consecutive calls and show one status per compaction, without changing history. */
 export function groupToolCalls (parts) {
-  if (!parts.some((part) => part.kind === 'tool')) return parts
+  if (!parts.some((part) => part.kind === 'tool' || part.kind === 'compaction')) return parts
   const grouped = []
   let group = null
+  let pendingCompaction = null
   parts.forEach((part, index) => {
     // Invisible streaming deltas should not create separate disclosures.
     if (part.kind === 'text' && !part.text.trim()) return
+    if (part.kind === 'compaction') {
+      if (part.state === 'completed' && pendingCompaction !== null) {
+        grouped[pendingCompaction] = part
+        pendingCompaction = null
+        return
+      }
+      pendingCompaction = part.state === 'started' ? grouped.length : null
+    }
     if (part.kind === 'tool') {
       if (!group) {
         // The first call's position stays stable as the timeline grows, even

@@ -118,7 +118,67 @@ test('native compaction markers survive reload and are not prose or tool calls',
   foldEvent(steps, { type: 'compaction', state: 'completed', tokens_before: 120000, aborted: false })
   foldEvent(steps, { type: 'delta', text: 'Continued' })
   const restored = JSON.parse(JSON.stringify(steps))
-  assert.deepEqual(groupToolCalls(restored).map(part => part.kind), ['tool-group', 'compaction', 'compaction', 'text'])
-  assert.equal(restored[2].tokens_before, 120000)
+  const grouped = groupToolCalls(restored)
+  assert.deepEqual(grouped.map(part => part.kind), ['tool-group', 'compaction', 'text'])
+  assert.equal(grouped[1].state, 'completed')
+  assert.equal(grouped[1].tokens_before, 120000)
   assert.equal(summarizeToolCalls(restored).label, 'Ran 1 tool call')
+  assert.deepEqual(restored, JSON.parse(JSON.stringify(steps)))
+})
+
+for (const outcome of [
+  { state: 'completed', tokens_before: 120000, aborted: false },
+  { state: 'completed', aborted: true },
+  { state: 'completed', error: 'Compaction failed' }
+]) test(`compaction completion replaces its pending status without tools: ${JSON.stringify(outcome)}`, () => {
+  const steps = []
+  foldEvent(steps, { type: 'compaction', state: 'started' })
+  assert.deepEqual(groupToolCalls(steps).map(part => part.state), ['started'])
+  foldEvent(steps, { type: 'compaction', ...outcome })
+  const original = structuredClone(steps)
+  assert.deepEqual(groupToolCalls(steps), [steps[1]])
+  assert.deepEqual(groupToolCalls(JSON.parse(JSON.stringify(steps))), JSON.parse(JSON.stringify([steps[1]])))
+  assert.deepEqual(steps, original)
+})
+
+test('compaction updates in place across intervening activity without shifting tool group keys', () => {
+  const steps = [
+    tool('read'),
+    { kind: 'compaction', state: 'started' },
+    text('Waiting'),
+    { kind: 'recovery', message: 'Reconnecting' },
+    tool('bash', null)
+  ]
+  const before = groupToolCalls(steps)
+  steps.push({ kind: 'compaction', state: 'completed', tokens_before: 120000 })
+  const original = structuredClone(steps)
+  const after = groupToolCalls(steps)
+  assert.deepEqual(after.map(part => part.kind), ['tool-group', 'compaction', 'text', 'recovery', 'tool-group'])
+  assert.equal(after[1], steps[5])
+  assert.deepEqual(after.filter(part => part.kind === 'tool-group').map(part => part.id),
+    before.filter(part => part.kind === 'tool-group').map(part => part.id))
+  assert.equal(before[1].state, 'started')
+  assert.deepEqual(steps, original)
+})
+
+test('separate compactions keep their own outcomes and an unmatched start stays pending', () => {
+  const steps = [
+    { kind: 'compaction', state: 'started' },
+    { kind: 'compaction', state: 'completed', aborted: true },
+    text('Retrying'),
+    { kind: 'compaction', state: 'started' },
+    { kind: 'compaction', state: 'completed', tokens_before: 120000 },
+    { kind: 'compaction', state: 'started' }
+  ]
+  assert.deepEqual(groupToolCalls(steps), [steps[1], steps[2], steps[4], steps[5]])
+})
+
+test('standalone compaction completions remain visible and do not consume a later start', () => {
+  const steps = [
+    { kind: 'compaction', state: 'completed' },
+    { kind: 'compaction', state: 'started' },
+    { kind: 'compaction', state: 'completed', error: 'Failed' },
+    { kind: 'compaction', state: 'completed' }
+  ]
+  assert.deepEqual(groupToolCalls(steps), [steps[0], steps[2], steps[3]])
 })

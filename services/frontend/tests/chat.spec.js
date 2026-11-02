@@ -166,6 +166,40 @@ async function openRowMenu (page, title = 'alpha') {
 }
 
 for (const width of [390, 1440]) {
+  for (const outcome of [
+    { aborted: false, label: 'Context compacted · original history retained' },
+    { aborted: true, label: 'Context compaction did not complete' },
+    { error: 'Compaction failed', label: 'Context compaction did not complete' }
+  ]) test(`compaction status is replaced live and after reload at ${width}px (${JSON.stringify(outcome)})`, async ({ page, context }) => {
+    const state = initial()
+    const data = state.chats.alpha
+    data.active_turn = { id: 'turn', steps: [{ kind: 'compaction', state: 'started' }], status: '' }
+    await mockChats(context, state)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats/alpha')
+    const notices = page.locator('.bubble__recovery')
+    await expect(notices).toHaveCount(1)
+    await expect(notices).toContainText('Compacting context…')
+
+    const { label, ...result } = outcome
+    data.active_turn.steps.push({ kind: 'compaction', state: 'completed', tokens_before: 120000, ...result })
+    await expect(notices).toHaveCount(1)
+    await expect(notices).toContainText(label)
+    await expect(page.getByText('Compacting context…', { exact: true })).toHaveCount(0)
+
+    // Persist the original event pair, as existing saved chats do.
+    data.messages.push({ id: 'answer', role: 'assistant', content: 'Continued',
+      meta: { steps: [...data.active_turn.steps, { kind: 'text', text: 'Continued' }] } })
+    data.active_turn = null
+    await expect(page.getByText('Continued', { exact: true })).toBeVisible()
+    await expect(notices).toHaveCount(1)
+    await page.reload()
+    await expect(notices).toHaveCount(1)
+    await expect(notices).toContainText(label)
+    await expect(page.getByText('Compacting context…', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('Continued', { exact: true })).toBeVisible()
+  })
+
   test(`chat list and conversation offer the same actions at ${width}px`, async ({ page, context }) => {
     const state = initial()
     state.chats.alpha.messages = [{ id: 'reply', role: 'assistant', content: 'Saved reply', meta: {} }]
