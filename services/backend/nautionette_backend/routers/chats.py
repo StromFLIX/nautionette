@@ -390,6 +390,11 @@ async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool 
         attachments=user_message["meta"].get("attachments", []),
         supports_images=model_info.get("supports_images"),
         model_api=model_info.get("api"),
+        model_limits={
+            "context_window": model_info.get("context_length"),
+            "max_input_tokens": model_info.get("max_input_tokens"),
+            "max_output_tokens": model_info.get("max_output_tokens"),
+        },
         reasoning_effort=effort,
         model_reasoning={
             "supported": model_info.get("supports_reasoning"),

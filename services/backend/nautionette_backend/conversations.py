@@ -118,6 +118,8 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
                             "model",
                             "reasoning_effort",
                             "model_reasoning",
+                            "model_api",
+                            "model_limits",
                             "tools",
                             "project_ids",
                             "packages",

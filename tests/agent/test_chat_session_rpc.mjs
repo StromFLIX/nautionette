@@ -18,7 +18,7 @@ import { prepareSession } from '../../images/pi-base/chat-session.mjs'
 const runner = readFileSync(new URL('../../images/pi-base/agent-run.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '')
 const extension = fileURLToPath(new URL('../../images/pi-base/chat-session-extension.mjs', import.meta.url))
 
-test('native RPC continuity across tools, manual compaction, model change and attachment restore', { timeout: 30000 }, async () => {
+test('native RPC budgets and continuity across failed/successful compaction, model change and attachment restore', { timeout: 30000 }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'native-chat-rpc-'))
   const workspace = join(dir, 'workspace'), config = join(dir, 'agent'), state = join(dir, 'state')
   mkdirSync(workspace); mkdirSync(config)
@@ -45,22 +45,27 @@ test('native RPC continuity across tools, manual compaction, model change and at
       } }] }); chunk({}, 'tool_calls')
     } else {
       chunk({ content: phase === 'compact' ? 'Summary: a write-once operation completed; verify old evidence with chat_history.' : `Completed ${phase}.` })
-      chunk({}, 'stop')
+      chunk({}, phase === 'compact' && (request.max_completion_tokens ?? request.max_tokens) <= 8192 ? 'length' : 'stop')
     }
+    if (phase === 'first') res.write(`data: ${JSON.stringify({
+      id: 'usage', object: 'chat.completion.chunk', choices: [],
+      usage: { prompt_tokens: 250000, completion_tokens: 100, total_tokens: 250100 }
+    })}\n\n`)
     res.end('data: [DONE]\n\n')
   })
   try {
     server.listen(0, '127.0.0.1'); await once(server, 'listening')
     writeFileSync(join(config, 'settings.json'), JSON.stringify({ retry: { enabled: false }, compaction: { keepRecentTokens: 1, reserveTokens: 1000 } }))
     const provider = join(dir, 'provider.mjs')
-    writeFileSync(provider, `export default pi => { pi.registerProvider('nautionette', {
+    writeFileSync(provider, `import { modelLimits } from ${JSON.stringify(fileURLToPath(new URL('../../images/agent-sets/default/extensions/nautionette/model-limits.ts', import.meta.url)))};
+    export default pi => { pi.registerProvider('nautionette', {
       baseUrl: 'http://127.0.0.1:${server.address().port}/v1', apiKey: 'offline-test', api: 'openai-completions',
       models: ['test-model', 'text-model'].map(id => ({ id, name: id, reasoning: false, input: ['text'],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32000, maxTokens: 2048 }))
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, ...modelLimits() }))
     }); pi.on('session_start', (_e, ctx) => {
       if (!ctx.sessionManager.getEntries().some(e => e.customType === 'test.state')) pi.appendEntry('test.state', { counter: 7 });
     }); }`)
-    async function run(job) {
+    async function run(job, ok = true) {
       const output = []; outputs.push(output)
       await runInNewContext(runner.replace('const workspace = "/workspace";', `const workspace = ${JSON.stringify(workspace)};`), {
         Buffer, console, createChatControl, createChatRecovery, fileReferences,
@@ -70,25 +75,42 @@ test('native RPC continuity across tools, manual compaction, model change and at
         mkdirSync, existsSync: path => path === '/workspace-defaults' || path === '/root/.pi/agent' ? false : existsSync(path), writeFileSync,
         readFileSync, preparePackages () { return {} }, projectEnvironment () { return {} }, contextUsage () { return null },
         listenForChatControl () { return { close () {} } },
-        process: { env: { AGENT_JOB: Buffer.from(JSON.stringify({ chat_id: 'native-test', model: 'test-model', ...job })).toString('base64') },
+        process: { env: { AGENT_JOB: Buffer.from(JSON.stringify({ chat_id: 'native-test', model: 'test-model', model_limits: {
+          context_window: 1050000, max_input_tokens: 922000, max_output_tokens: 128000
+        }, ...job })).toString('base64') },
           stdout: { write (line) { output.push(JSON.parse(line)) } } },
         spawn (command, args, options) {
-          args = args.map(arg => arg.endsWith('/chat-session-extension.mjs') ? extension : arg)
+          args = args.map(arg => arg.endsWith('/chat-session-extension.mjs') ? extension
+            : arg.endsWith('/chat-compaction-extension.mjs')
+              ? fileURLToPath(new URL('../../images/pi-base/chat-compaction-extension.mjs', import.meta.url)) : arg)
           child = spawnChild(command, [...args, '--no-extensions', '-e', provider, '--no-context-files', '--no-skills', '--no-prompt-templates'], {
             ...options, env: { ...options.env, PATH: process.env.PATH, HOME: dir, PI_CODING_AGENT_DIR: config, PI_OFFLINE: '1', PI_TELEMETRY: '0' }
           }); return child
         }
       })
-      assert.equal(output.at(-1).ok, true, JSON.stringify(output))
+      assert.equal(output.at(-1).ok, ok, JSON.stringify(output))
       return output
     }
     const attachment = { id: 'a'.repeat(32), name: 'source.txt', mime_type: 'text/plain', data: Buffer.from('original bytes').toString('base64') }
     const first = await run({ turn_id: 'one', prompt: 'Perform this once.', files: [attachment] })
     assert.equal(first.filter(e => e.type === 'tool').length, 1)
+    assert.equal(first.filter(e => e.type === 'compaction').length, 0,
+      '250k tokens must not trigger the obsolete 200k context threshold')
+    assert.equal(requests.filter(r => r.phase === 'first').length, 2)
     assert.ok(first.find(e => e.type === 'tool_done').result.length < evidence.length)
     phase = 'compact'
+    const before = readFileSync(join(state, 'session.jsonl'), 'utf8')
+    const failed = await run({ turn_id: 'old-budget', prompt: '/compact Preserve the completed operation.',
+      model_limits: { context_window: 200000, max_output_tokens: 8192 } }, false)
+    assert.match(failed.at(-1).error, /token cap/)
+    const after = readFileSync(join(state, 'session.jsonl'), 'utf8')
+    assert.ok(after.startsWith(before), 'failed compaction never rewrites the original log')
+    assert.ok(!after.split('\n').filter(Boolean).map(JSON.parse).some(e => e.type === 'compaction'),
+      'an incomplete summary must never become a native checkpoint')
+    assert.equal(requests.at(-1).request.max_completion_tokens ?? requests.at(-1).request.max_tokens, 8192)
     const compact = await run({ turn_id: 'two', prompt: '/compact Preserve the completed operation.' })
     assert.ok(compact.some(e => e.type === 'compaction' && e.state === 'completed'))
+    assert.equal(requests.at(-1).request.max_completion_tokens ?? requests.at(-1).request.max_tokens, 128000)
     // Delete scratch state; originals survive outside /workspace.
     rmSync(workspace, { recursive: true }); mkdirSync(workspace)
     phase = 'resumed'

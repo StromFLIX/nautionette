@@ -116,7 +116,8 @@ test('history has native roles/images and current images reach RPC, never argv o
   const result = await run({ chat_id: 'chat', prompt: 'Compare these', model: 'vision',
     history: [{ role: 'user', content: 'Before', images: [image('older')] }, { role: 'assistant', content: 'Reply' }],
     images: [image('newer'), image('last')], model_api: 'openai-completions', reasoning_effort: 'max',
-    model_reasoning: { supported: true, efforts: ['low', 'max'], format: 'openrouter' } })
+    model_reasoning: { supported: true, efforts: ['low', 'max'], format: 'openrouter' },
+    model_limits: { context_window: 1050000, max_input_tokens: 922000, max_output_tokens: 128000 } })
   const command = result.commands.find((c) => c.type === 'prompt')
   assert.deepEqual(command.images, [image('newer'), image('last')])
   assert.match(command.message, /Compare these\n\[Attached image 1\]\n\[Attached image 2\]/)
@@ -127,6 +128,9 @@ test('history has native roles/images and current images reach RPC, never argv o
   assert.ok(result.spawnArgs.includes('--session'))
   assert.equal(result.spawnOptions.env.NAUTIONETTE_MODEL_IMAGES, 'true')
   assert.equal(result.spawnOptions.env.NAUTIONETTE_MODEL_API, 'openai-completions')
+  assert.deepEqual(JSON.parse(result.spawnOptions.env.NAUTIONETTE_MODEL_LIMITS), {
+    context_window: 1050000, max_input_tokens: 922000, max_output_tokens: 128000
+  })
   assert.equal(result.spawnOptions.env.NAUTIONETTE_REASONING_EFFORT, 'max')
   assert.deepEqual(JSON.parse(result.spawnOptions.env.NAUTIONETTE_MODEL_REASONING), {
     supported: true, efforts: ['low', 'max'], format: 'openrouter'
@@ -145,6 +149,7 @@ test('image-only prompts have useful text and text-only model declarations stay 
   const textOnly = await run({ chat_id: 'chat', prompt: 'hello', supports_images: false })
   assert.equal(textOnly.spawnOptions.env.NAUTIONETTE_MODEL_IMAGES, 'false')
   assert.equal(textOnly.spawnOptions.env.NAUTIONETTE_MODEL_API, '')
+  assert.equal(textOnly.spawnOptions.env.NAUTIONETTE_MODEL_LIMITS, '{}')
   assert.equal(textOnly.spawnOptions.env.NAUTIONETTE_REASONING_EFFORT, '')
   assert.equal(textOnly.spawnOptions.env.NAUTIONETTE_MODEL_REASONING, '{}')
   assert.equal(textOnly.commands.find((c) => c.type === 'prompt').images, undefined)

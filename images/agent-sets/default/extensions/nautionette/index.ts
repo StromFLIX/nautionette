@@ -10,6 +10,7 @@
 import { writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { modelApi } from "./model-api.ts";
+import { modelLimits } from "./model-limits.ts";
 import { reasoningConfig, reasoningPayload } from "./reasoning.ts";
 import { allowedTools } from "./tool-selection.ts";
 import { isOutputTransportTool, loadOutputGrant, registerOutputTools } from "./outputs.ts";
@@ -92,8 +93,7 @@ export default async function (pi: ExtensionAPI) {
         // Unknown catalogs must not cause Pi to silently strip image blocks.
         input: process.env.NAUTIONETTE_MODEL_IMAGES === "false" ? ["text"] : ["text", "image"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 200000,
-        maxTokens: 8192,
+        ...modelLimits(),
       },
     ],
   });

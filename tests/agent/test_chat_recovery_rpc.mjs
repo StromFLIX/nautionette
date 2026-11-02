@@ -7,6 +7,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { createChatControl } from '../../images/pi-base/chat-control.mjs'
@@ -17,7 +18,7 @@ const piAvailable = spawnSync('pi', ['--version']).status === 0
 const source = (await readFile(new URL('../../images/pi-base/agent-run.mjs', import.meta.url), 'utf8'))
   .replace(/^import .*;\n/gm, '')
 
-for (const outcome of ['recovered', 'exhausted', 'permanent', 'SIGTERM', 'SIGKILL']) {
+for (const outcome of ['recovered', 'exhausted', 'permanent', 'compaction', 'SIGTERM', 'SIGKILL']) {
   test(`real RPC ${outcome}: completed tool runs once and continuation retains its result`, { skip: !piAvailable, timeout: 30000 }, async () => {
     const dir = await mkdtemp(join(tmpdir(), 'pi-chat-recovery-'))
     const operation = join(dir, 'operation.txt')
@@ -35,7 +36,7 @@ for (const outcome of ['recovered', 'exhausted', 'permanent', 'SIGTERM', 'SIGKIL
         child.kill(outcome)
         return
       }
-      if (requests.length > 1 && !(outcome === 'recovered' && requests.length === 3)) {
+      if (requests.length > 1 && outcome !== 'compaction' && !(outcome === 'recovered' && requests.length === 3)) {
         res.writeHead(outcome === 'permanent' ? 403 : 503, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ error: { message: outcome === 'permanent' ? 'Permission denied' : 'Service unavailable' } }))
         return
@@ -52,8 +53,12 @@ for (const outcome of ['recovered', 'exhausted', 'permanent', 'SIGTERM', 'SIGKIL
         } }] })
         chunk({}, 'tool_calls')
       } else {
-        chunk({ content: 'Resumed from the completed tool without repeating it.' })
-        chunk({}, 'stop')
+        chunk({ content: outcome === 'compaction' ? 'Incomplete checkpoint' : 'Resumed from the completed tool without repeating it.' })
+        chunk({}, outcome === 'compaction' ? 'length' : 'stop')
+      }
+      if (outcome === 'compaction' && requests.length === 1) {
+        res.write(`data: ${JSON.stringify({ id: 'usage', object: 'chat.completion.chunk', choices: [],
+          usage: { prompt_tokens: 20000, completion_tokens: 100, total_tokens: 20100 } })}\n\n`)
       }
       res.end('data: [DONE]\n\n')
     })
@@ -63,7 +68,9 @@ for (const outcome of ['recovered', 'exhausted', 'permanent', 'SIGTERM', 'SIGKIL
       const config = join(dir, 'agent')
       await mkdir(config)
       // Force the terminal-failure path rather than let native retries conceal it.
-      await writeFile(join(config, 'settings.json'), JSON.stringify({ retry: { enabled: false, provider: { maxRetries: 0 } } }))
+      await writeFile(join(config, 'settings.json'), JSON.stringify({
+        retry: { enabled: false, provider: { maxRetries: 0 } }, compaction: { keepRecentTokens: 1 }
+      }))
       const provider = join(dir, 'provider.ts')
       await writeFile(provider, `export default function (pi) {
         pi.registerProvider('nautionette', {
@@ -84,6 +91,8 @@ for (const outcome of ['recovered', 'exhausted', 'permanent', 'SIGTERM', 'SIGKIL
           prompt: 'Perform the operation once, then report it.', model: 'test-model' })).toString('base64') },
         stdout: { write (line) { output.push(JSON.parse(line)) } } },
         spawn (command, args, options) {
+          args = args.map(arg => arg.endsWith('/chat-compaction-extension.mjs')
+            ? fileURLToPath(new URL('../../images/pi-base/chat-compaction-extension.mjs', import.meta.url)) : arg)
           child = spawnChild(command, [...args, '--no-extensions', '-e', provider,
             '--no-context-files', '--no-skills', '--no-prompt-templates'], {
             ...options, cwd: dir,
@@ -97,13 +106,13 @@ for (const outcome of ['recovered', 'exhausted', 'permanent', 'SIGTERM', 'SIGKIL
       const result = output.at(-1)
       assert.equal(result.type, 'result', stderr)
       assert.equal(result.ok, outcome === 'recovered', JSON.stringify(result) + stderr)
-      assert.equal(requests.length, { recovered: 3, exhausted: 4, permanent: 2, SIGTERM: 2, SIGKILL: 2 }[outcome])
+      assert.equal(requests.length, { recovered: 3, exhausted: 4, permanent: 2, compaction: 2, SIGTERM: 2, SIGKILL: 2 }[outcome])
       assert.equal(await readFile(operation, 'utf8'), 'once\n')
       assert.equal(output.filter(event => event.type === 'tool').length, 1)
       assert.equal(output.filter(event => event.type === 'tool_done').length, 1)
       assert.equal(output.filter(event => event.type === 'input_consumed').length, 0)
       assert.equal(output.filter(event => event.type === 'result').length, 1)
-      assert.equal(output.filter(event => event.type === 'recovery').length, { recovered: 1, exhausted: 2, permanent: 0, SIGTERM: 0, SIGKILL: 0 }[outcome])
+      assert.equal(output.filter(event => event.type === 'recovery').length, { recovered: 1, exhausted: 2, permanent: 0, compaction: 0, SIGTERM: 0, SIGKILL: 0 }[outcome])
       for (const request of requests.slice(2)) {
         assert.ok(request.messages.some(message => message.role === 'tool' && message.tool_call_id === 'write-once' && message.content.includes('operation-complete')))
         assert.ok(request.messages.some(message => message.role === 'user' && JSON.stringify(message.content).includes('automatic recovery notice')))
@@ -111,6 +120,11 @@ for (const outcome of ['recovered', 'exhausted', 'permanent', 'SIGTERM', 'SIGKIL
       if (outcome === 'recovered') {
         assert.equal(result.text, 'Resumed from the completed tool without repeating it.')
         assert.equal(output.some(event => event.type === 'error'), false)
+      } else if (outcome === 'compaction') {
+        assert.match(result.error, /token cap/)
+        assert.ok(!requests[1].tools?.length, 'the second request is native summarization, not more task work')
+        assert.equal(output.filter(event => event.type === 'compaction' && event.state === 'started').length, 1)
+        assert.equal(output.filter(event => event.type === 'compaction' && event.error).length, 1)
       } else if (outcome === 'exhausted') assert.match(result.error, /stopped after 2 attempt/)
       else if (outcome.startsWith('SIG')) {
         // Pi can handle SIGTERM and exit numerically; Node only reports a

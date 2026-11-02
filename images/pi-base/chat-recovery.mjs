@@ -29,6 +29,7 @@ Do not change permissions, credentials, model, configuration, or the scope of th
 export function createChatRecovery({ control, emit, finish, schedule = setTimeout, cancel = clearTimeout }) {
   let modelError = "";
   let compactionError = "";
+  let compactionStopped = false;
   let fatalError = "";
   let promptId = null;
   let lastStopReason = null;
@@ -84,8 +85,21 @@ export function createChatRecovery({ control, emit, finish, schedule = setTimeou
       // the container will be discarded anyway. Pre-answer/overflow failures do.
       const afterAnswer = event.reason === "threshold" && lastStopReason === "stop";
       if (event.aborted && !afterAnswer) cancelled = true;
-      // Pi already owns compact-and-retry. Do not bypass its failure/cancellation.
-      if (event.errorMessage && !afterAnswer) compactionError = event.errorMessage;
+      // Pi's between-tool threshold check may continue after a failed summary.
+      // Waiting for agent_settled would then retry the same deterministic failure
+      // after every tool batch, and a successful model message would erase it.
+      // Native summarization retries have already finished by compaction_end.
+      // Stop at this tool-free boundary; never persist a partial checkpoint or
+      // inject a replay/continuation into a context that was not repaired.
+      if (event.errorMessage && !afterAnswer) {
+        compactionError = event.errorMessage;
+        if (control && !fatalError) {
+          fatalError = `${compactionError}. Completed work and original history were retained; resume in a new message after checking the model's token limits.`;
+          emit({ type: "error", message: fatalError });
+          compactionStopped = true;
+          finish();
+        }
+      }
     }
     if (control && event.type === "auto_retry_start") emit({
       type: "status", state: "retrying",
@@ -97,7 +111,7 @@ export function createChatRecovery({ control, emit, finish, schedule = setTimeou
   }
 
   function settle() {
-    if (!control || closed || settled || continuationPending) return;
+    if (!control || closed || settled || continuationPending || compactionStopped) return;
     if (tools.size) fatalError ||= "A tool did not report its result. Automatic continuation is unsafe; verify its outcome before retrying.";
     if (!modelError && !compactionError && !cancelled && lastStopReason !== "stop") {
       fatalError ||= "The model stopped before completing its response. Partial work was retained.";

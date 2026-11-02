@@ -24,6 +24,22 @@ manual compaction, and the UI records compaction start/completion/failure. Nativ
 session-replacing extension commands are cancelled rather than silently switching
 the chat to an ephemeral file; start a new Nautionette chat instead.
 
+Each accepted turn pins the serving integration's advertised context, input and
+output limits into its durable job. Pi uses the smaller of the context and input
+ceilings, plus its normal safety reserve; native summaries can use the model's
+advertised output budget, including reasoning. Unknown limits alone retain the
+conservative 200,000-context/8,192-output defaults. Changing those pins starts a
+fresh process rather than steering into a process with different model limits.
+
+Pi never saves an incomplete, token-capped summary as a checkpoint. After native
+summarization retries are exhausted, a pre-answer failure aborts inside Pi's
+boundary hook and ends the turn with the original error. It does not keep calling
+the task model and failing compaction after every tool batch. Completed tools and
+raw history remain intact; a fresh message resumes that same session with current
+model settings. Optional post-answer compaction failure does not invalidate an
+already completed answer. This safeguard neither replays tools nor substitutes
+SQL history for native state.
+
 The local read-only `chat_history` tool retrieves bounded pre-compaction evidence,
 with optional case-insensitive search and native entry-ID pagination. It returns
 all branches as evidence, not as instructions or commands to execute. The
@@ -134,7 +150,9 @@ No backend provider key or persistent sandbox credentials are introduced.
 - `NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_chat_sessions_docker.py`
 
 RPC tests use the real production runner and a loopback-only fake model: original
-full tool evidence survives fresh processes, native manual compaction persists,
+full tool evidence survives fresh processes, summaries request the pinned model
+output budget, token-capped partial summaries never become checkpoints, threshold
+failures stop before another task request, native manual compaction persists,
 read-only history retrieves summarized results, model switches apply new
 instructions, extension entries survive and attachments outlive scratch space.
 The Docker tests validate actual subpath isolation and disposal as UID 10001,

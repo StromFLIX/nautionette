@@ -196,6 +196,7 @@ async function main() {
   const interactive = Boolean(job.chat_id);
   const args = ["--mode", interactive ? "rpc" : "json", ...(historyFile ? ["--session", historyFile] : ["--no-session"]),
                 "--provider", "nautionette", "--model", model, "--approve"];
+  if (interactive) args.push("--extension", "/usr/local/lib/nautionette/chat-compaction-extension.mjs");
   if (continuity) args.push("--extension", "/usr/local/lib/nautionette/chat-session-extension.mjs");
   const systemInstructions = [job.system_prompt];
   if (continuity) systemInstructions.push(
@@ -227,6 +228,7 @@ async function main() {
       AGENT_MODEL: model,
       NAUTIONETTE_MODEL_IMAGES: job.supports_images === false ? "false" : "true",
       NAUTIONETTE_MODEL_API: job.model_api || "",
+      NAUTIONETTE_MODEL_LIMITS: JSON.stringify(job.model_limits || {}),
       NAUTIONETTE_MODEL_REASONING: JSON.stringify(job.model_reasoning || {}),
       NAUTIONETTE_REASONING_EFFORT: job.reasoning_effort ?? "",
       NAUTIONETTE_MODE: mode,
@@ -414,7 +416,8 @@ async function main() {
       case "compaction_start":
       case "compaction_end":
         emit({ type: "compaction", state: event.type === "compaction_start" ? "started" : "completed",
-          tokens_before: event.result?.tokensBefore, aborted: event.aborted, error: event.errorMessage });
+          tokens_before: event.result?.tokensBefore, tokens_after: event.result?.estimatedTokensAfter,
+          reason: event.reason, aborted: event.aborted, error: event.errorMessage });
         emit({ type: "phase", phase: "other" });
         break;
       case "auto_retry_start":

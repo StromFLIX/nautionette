@@ -33,7 +33,11 @@ INTEGRATION_TYPES: dict[str, dict[str, Any]] = {
         "auth": {"kind": "key", "env": "OPENROUTER_API_KEY"},
         "discovery": {
             "url": "https://openrouter.ai/api/v1/models",
-            "models": {**_OPENAI_MODELS, "context": ["context_length"]},
+            "models": {
+                **_OPENAI_MODELS,
+                "context": ["context_length"],
+                "output": ["top_provider.max_completion_tokens"],
+            },
         },
         "default": True,
     },
@@ -66,6 +70,8 @@ INTEGRATION_TYPES: dict[str, dict[str, Any]] = {
                     "capabilities.limits.max_context_window_tokens",
                     "capabilities.limits.max_prompt_tokens",
                 ],
+                "input": ["capabilities.limits.max_prompt_tokens"],
+                "output": ["capabilities.limits.max_output_tokens"],
             },
         },
         "fields": [

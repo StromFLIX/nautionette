@@ -75,6 +75,7 @@ async def model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
         route = route_for_model(model["id"], config) or {}
         identifier = str(route.get("id") or "")
         serving = identifier.removeprefix(RESOURCE_PREFIX) if identifier.startswith(RESOURCE_PREFIX) else ""
+        metadata = by_instance.get(serving, {}).get(model["id"], {})
         out.append(
             {
                 "id": model["id"],
@@ -83,8 +84,11 @@ async def model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
                 # Attribution follows the winning route, so the label matches where calls go.
                 "gateway": (instance_label(serving) if serving else str(route.get("provider") or "gateway")),
                 "integration": serving or None,
-                "context_length": model.get("context_length"),
-                **model_capabilities(model["id"], by_instance.get(serving, {}).get(model["id"], {})),
+                # A losing route must not inflate the limits of the serving model.
+                "context_length": metadata.get("context_length"),
+                "max_input_tokens": metadata.get("max_input_tokens"),
+                "max_output_tokens": metadata.get("max_output_tokens"),
+                **model_capabilities(model["id"], metadata),
                 "alias": alias,
             }
         )

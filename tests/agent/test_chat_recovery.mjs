@@ -6,6 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { createChatControl } from '../../images/pi-base/chat-control.mjs'
 import { prepareFiles, fileReferences } from '../../images/pi-base/chat-files.mjs'
 import { createChatRecovery, recoveryReason, RECOVERY_DELAYS_MS } from '../../images/pi-base/chat-recovery.mjs'
+import compactionGuard from '../../images/pi-base/chat-compaction-extension.mjs'
 
 const failed = (error = '503 service unavailable') => ({ type: 'message_end', message: {
   role: 'assistant', stopReason: 'error', errorMessage: error
@@ -14,6 +15,24 @@ const answered = (text = 'Recovered') => ({ type: 'message_end', message: {
   role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text }]
 } })
 const settled = { type: 'agent_settled' }
+
+test('native guard stops failed pre-answer summaries, not cancellations or post-answer maintenance', () => {
+  const handlers = {}, ctx = { abort () { aborts++ } }
+  let aborts = 0
+  compactionGuard({ on (name, handler) { handlers[name] = handler } })
+  const failure = { reason: 'threshold', errorMessage: 'token cap', aborted: false }
+  handlers.agent_start()
+  handlers.session_compact_failed(failure, ctx)
+  assert.equal(aborts, 1)
+  handlers.session_compact_failed({ ...failure, aborted: true }, ctx)
+  handlers.session_compact_failed({ ...failure, errorMessage: '' }, ctx)
+  handlers.message_end(answered())
+  handlers.session_compact_failed(failure, ctx)
+  assert.equal(aborts, 1)
+  handlers.agent_start() // A previous answer must not mask the next turn's failure.
+  handlers.session_compact_failed(failure, ctx)
+  assert.equal(aborts, 2)
+})
 
 function harness (interactive = true) {
   const sent = [], events = [], timers = new Map(), delays = []
@@ -349,16 +368,46 @@ test('a compaction failure before the next assistant response remains a failure'
   h.receive({ type: 'compaction_end', reason: 'threshold', errorMessage: '503 compaction failed' })
   h.receive(settled)
   assert.equal(h.finishes, 1)
-  assert.equal(h.recovery.error, '503 compaction failed')
+  assert.match(h.recovery.error, /503 compaction failed/)
   assert.equal(h.recovery.attempts, 0)
 })
 
-test('native steering can recover an earlier compaction failure without a stale error', () => {
+test('pre-answer compaction failure stops immediately and cannot be erased by later model work', () => {
   const h = harness()
-  h.receive({ type: 'compaction_end', errorMessage: '503 compaction failed' })
-  h.receive(answered('Continued'))
+  h.receive({ type: 'compaction_end', reason: 'threshold', errorMessage: 'generation hit the token cap' })
+  // Threshold compaction failures otherwise leave Pi's tool loop running.
+  assert.equal(h.finishes, 1)
+  assert.equal(h.recovery.settled, false) // Unconsumed/uncertain steering stays fenced.
+  assert.equal(h.events.filter(event => event.type === 'error').length, 1)
+  h.receive(answered('Continued despite failed compaction'))
   h.receive(settled)
-  assert.equal(h.recovery.error, '')
+  assert.equal(h.finishes, 1)
+  assert.match(h.recovery.error, /generation hit the token cap/)
+  assert.match(h.recovery.error, /Completed work and original history were retained/)
+  assert.equal(h.recovery.attempts, 0)
+  assert.equal(h.sent.length, 0)
+})
+
+test('the production wrapper reports failed compaction without waiting for settlement', async () => {
+  const output = await runWrapper([
+    { type: 'compaction_start', reason: 'threshold' },
+    { type: 'compaction_end', reason: 'threshold', errorMessage: 'summary hit the token cap', aborted: false }
+  ])
+  assert.equal(output.at(-1).ok, false)
+  assert.match(output.at(-1).error, /summary hit the token cap/)
+  assert.equal(output.filter(event => event.type === 'recovery').length, 0)
+})
+
+test('compaction diagnostics include the trigger and estimated repaired size', async () => {
+  const output = await runWrapper([
+    { type: 'compaction_start', reason: 'threshold' },
+    { type: 'compaction_end', reason: 'threshold', result: { tokensBefore: 186000, estimatedTokensAfter: 24000 }, aborted: false },
+    answered(), settled
+  ])
+  assert.equal(output.at(-1).ok, true)
+  assert.deepEqual(output.find(event => event.type === 'compaction' && event.state === 'completed'), {
+    type: 'compaction', state: 'completed', reason: 'threshold', tokens_before: 186000, tokens_after: 24000, aborted: false
+  })
 })
 
 test('settlement without a completed assistant response is not success', () => {

@@ -31,6 +31,14 @@ def _pluck(item: dict[str, Any], path: str) -> Any:
     return value
 
 
+def token_limit(item: dict[str, Any], paths: list[str]) -> int | None:
+    """Only positive JSON-safe integers are usable as model token limits."""
+    return next(
+        (value for path in paths if type(value := _pluck(item, path)) is int and 0 < value <= 2**53 - 1),
+        None,
+    )
+
+
 def image_support(item: dict[str, Any]) -> bool | None:
     """Unknown is not text-only: many OpenAI-compatible catalogs omit capabilities."""
     modalities = _pluck(item, "architecture.input_modalities")
@@ -73,10 +81,7 @@ async def discover_models(instance: str) -> list[dict[str, Any]]:
             continue
         vendor = _pluck(item, mapping["vendor"]) if mapping.get("vendor") else None
         label = _pluck(item, mapping["name"]) if mapping.get("name") else None
-        window = next(
-            (value for path in mapping.get("context", []) if isinstance(value := _pluck(item, path), int)),
-            None,
-        )
+        window = token_limit(item, mapping.get("context", []))
         owner, separator, _ = identifier.partition("/")
         models.append(
             {
@@ -87,6 +92,8 @@ async def discover_models(instance: str) -> list[dict[str, Any]]:
                 ),
                 "instance": instance,
                 "context_length": window,
+                "max_input_tokens": token_limit(item, mapping.get("input", [])),
+                "max_output_tokens": token_limit(item, mapping.get("output", [])),
                 "supports_images": image_support(item),
                 "supported_endpoints": item.get("supported_endpoints"),
                 **reasoning_metadata(item, type_id),
