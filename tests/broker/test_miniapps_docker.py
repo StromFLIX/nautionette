@@ -239,7 +239,9 @@ pub fn handle(_: &mut Context,req:&Request)->Result<Value>{
                     "/miniapps/counter/request",
                     json={"revision": active_revision, "request": {"method": "GET", "path": "/state"}},
                 ).status_code
-                == 422
+                # Broker RPC errors are deliberately conservative (possibly
+                # executed). The public API rejects archived apps before RPC.
+                == 503
             )
             assert http.post("/miniapps/counter/control", json={"action": "resume"}).status_code == 200
             assert rpc("/state") == {"value": 1}
