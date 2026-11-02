@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import threading
 
-from . import artcraft, daemon, images, packages, workers
+from . import artcraft, daemon, images, miniapps, packages, workers
 from .config import RECONCILE_SECONDS
 
 
 def run(stopping: threading.Event) -> None:
     while not stopping.is_set():
-        for reconcile in (images.reconcile, workers.reconcile, packages.reconcile, artcraft.reconcile):
+        for reconcile in (
+            images.reconcile,
+            workers.reconcile,
+            packages.reconcile,
+            artcraft.reconcile,
+            miniapps.start_reconcile,
+        ):
             try:
                 reconcile()
             except Exception:

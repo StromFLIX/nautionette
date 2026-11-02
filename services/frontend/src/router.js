@@ -5,6 +5,7 @@ const routes = [
   { path: '/chats/:id?', name: 'chats', component: () => import('./views/ChatPane.vue') },
   { path: '/workflows/:name?', name: 'workflows', component: () => import('./views/WorkflowPane.vue') },
   { path: '/runs/:id?', name: 'runs', component: () => import('./views/RunPane.vue') },
+  { path: '/apps/:id?', name: 'apps', component: () => import('./views/MiniAppPane.vue') },
   { path: '/settings/:tab?', name: 'settings', component: () => import('./views/SettingsPane.vue') },
   { path: '/:catchAll(.*)', redirect: '/chats' }
 ]
@@ -15,7 +16,7 @@ const router = createRouter({
 })
 
 // The list a view sits on top of, and so the place its back button belongs.
-const UNDER = { chats: '/chats', workflows: '/workflows', runs: '/runs', settings: '/chats' }
+const UNDER = { chats: '/chats', workflows: '/workflows', runs: '/runs', apps: '/apps', settings: '/chats' }
 
 /**
  * Opening straight onto a detail view (deep link, reload, Android cold start) leaves

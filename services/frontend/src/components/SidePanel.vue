@@ -78,6 +78,7 @@
     <div class="side__list scroll-y grow" :class="{ 'side__list--grouped': section === 'chats' && groupBy !== 'none' }">
       <!-- chats -->
       <template v-if="section === 'chats'">
+        <RouterLink v-for="app in pinnedApps" :key="app.id" :to="`/apps/${app.id}`" class="row-item caption"><span class="material-icons" aria-hidden="true">apps</span><span class="truncate">{{ app.title }}</span></RouterLink>
         <div v-for="group in chatGroups" :key="group.key" class="side__chat-group">
           <h2 v-if="group.key !== '__all__'" class="side__group side__group--chats">
             <span class="truncate" :class="{ 'side__group-date': groupBy === 'date' }" :title="group.label">{{ group.label }}</span>
@@ -105,6 +106,21 @@
           Nothing active in the last {{ activeLabel }}.
           <button type="button" class="side__empty-link" @click="showOlder = true">Show older chats</button>
         </p>
+      </template>
+
+      <template v-else-if="section === 'apps'">
+        <label class="caption">Agent
+          <select class="field" :value="route.query.agent || ''" @change="router.push({ path: '/apps', query: $event.target.value ? { agent: $event.target.value } : {} })">
+            <option value="">All agents</option><option v-for="agent in store.catalog.agents" :key="agent.id" :value="agent.id">{{ agent.name }}</option>
+          </select>
+        </label>
+        <RouterLink v-for="app in filteredApps" :key="app.id" :to="{ path: `/apps/${app.id}`, query: route.query }" class="row-item" :class="{ 'row-item--active': route.params.id === app.id }">
+          <div class="avatar avatar--square" :style="avatarStyle(app.id)"><span class="material-icons">apps</span></div>
+          <div class="grow"><div class="row-item__title truncate">{{ app.title }}</div><div class="row-item__sub truncate">{{ app.archived ? 'Archived' : `Release ${app.active_revision || 'pending'}` }}</div></div>
+          <span v-if="app.pinned" class="material-icons row-item__pin" aria-label="Pinned">push_pin</span>
+        </RouterLink>
+        <p v-if="store.appsError" class="side__error caption" role="alert">{{ store.appsError }}</p>
+        <p v-else-if="!filteredApps.length" class="side__empty caption">{{ query ? 'Nothing matches that.' : 'No apps yet. Ask an agent to build one.' }}</p>
       </template>
 
       <!-- workflows -->
@@ -255,7 +271,7 @@ async function setUnread (chat, unread) {
 
 const section = computed(() => route.name || 'chats')
 const selectedAgent = computed(() => section.value === 'chats' ? store.catalog.agents?.find(agent => agent.id === route.query.agent) : null)
-const heading = computed(() => selectedAgent.value?.name || ({ chats: 'Chats', workflows: 'Workflows', runs: 'Runs' }[section.value]))
+const heading = computed(() => selectedAgent.value?.name || ({ chats: 'Chats', workflows: 'Workflows', runs: 'Runs', apps: 'Apps' }[section.value]))
 
 const matches = (haystack) => haystack.toLowerCase().includes(query.value.trim().toLowerCase())
 
@@ -268,6 +284,9 @@ const filteredWorkflows = computed(() =>
 const filteredDrafts = computed(() =>
   store.drafts.filter((draft) => matches(`${draft.name} ${draft.description || ''}`)))
 
+const filteredApps = computed(() => store.apps.filter(app => belongsToAgent(app, route.query.agent) && matches(`${app.title} ${app.id}`)))
+const pinnedApps = computed(() => store.apps.filter(app => app.pinned && !app.archived && belongsToAgent(app, route.query.agent)))
+
 const filteredRuns = computed(() =>
   store.runs.filter((run) => matches(`${run.workflow} ${run.status} ${run.trigger}`)))
 
@@ -278,7 +297,8 @@ async function startChat () {
 }
 
 function refresh () {
-  if (section.value === 'workflows') actions.loadWorkflows()
+  if (section.value === 'apps') actions.loadMiniapps()
+  else if (section.value === 'workflows') actions.loadWorkflows()
   else actions.loadRuns()
 }
 </script>

@@ -32,6 +32,7 @@ _PREFIXES = (
     "/api/system",
     "/api/settings",
     "/api/agents",
+    "/api/miniapps",
     "/api/model-integrations",
     "/api/mcp-servers",
 )
@@ -55,7 +56,11 @@ INSTRUCTIONS = (
     "A deployment is ready only when ready=true; inspect worker_restart on failure. "
     "Never claim a run succeeded until its results confirm it. Do not expose credentials. "
     "Output quota errors include a settings_url to Settings → Storage. Return that link and the actual "
-    "usage/limit instead of repeatedly retrying or calling a transport failure a file-generation failure."
+    "usage/limit instead of repeatedly retrying or calling a transport failure a file-generation failure. "
+    "For interactive mini-apps, read miniapp_contract, then publish versioned HTML/CSS/JS plus an optional "
+    "Rust/SQLite module. Use exact app-scoped MCP/HTTPS grants and resource constraints. Never expose the "
+    "instance token to app code. A pending publication is not a successful release; inspect its status. "
+    "Ordinary app buttons call its backend, not workflows."
 )
 
 

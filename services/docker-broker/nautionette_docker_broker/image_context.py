@@ -11,7 +11,9 @@ from pathlib import Path
 
 def context_hash(root: Path) -> str:
     digest = hashlib.sha256()
-    for file in sorted(p for p in root.rglob("*") if p.is_file()):
+    for file in sorted(
+        p for p in root.rglob("*") if p.is_file() and "target" not in p.relative_to(root).parts
+    ):
         digest.update(str(file.relative_to(root)).encode())
         digest.update(file.read_bytes())
     return digest.hexdigest()[:12]
@@ -33,3 +35,4 @@ if __name__ == "__main__":
     root = Path("images")
     print(f"base={base_hash(root)}")
     print(f"default={agent_set_hash(root, 'default')}")
+    print(f"miniapp={context_hash(Path('services/miniapp-sdk'))}")

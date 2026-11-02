@@ -23,6 +23,37 @@ from .search_index import install as install_search_index
 from .search_index import load_extension as load_search_extension
 
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS mini_apps (
+    id TEXT PRIMARY KEY,
+    revision INTEGER NOT NULL DEFAULT 0,
+    active_revision INTEGER,
+    agent_id TEXT REFERENCES agent_profiles(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 1,
+    archived INTEGER NOT NULL DEFAULT 0,
+    updated_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS mini_app_releases (
+    app_id TEXT NOT NULL REFERENCES mini_apps(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL,
+    manifest TEXT NOT NULL,
+    state TEXT NOT NULL,
+    error TEXT NOT NULL DEFAULT '',
+    created_at REAL NOT NULL,
+    PRIMARY KEY (app_id, revision)
+);
+CREATE TABLE IF NOT EXISTS mini_app_calls (
+    app_id TEXT NOT NULL REFERENCES mini_apps(id) ON DELETE CASCADE,
+    channel TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    request_hash TEXT NOT NULL,
+    revision INTEGER NOT NULL,
+    state TEXT NOT NULL,
+    response TEXT,
+    created_at REAL NOT NULL,
+    PRIMARY KEY (app_id, channel, request_id)
+);
+CREATE INDEX IF NOT EXISTS mini_app_calls_age ON mini_app_calls(created_at);
 CREATE TABLE IF NOT EXISTS chats (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,

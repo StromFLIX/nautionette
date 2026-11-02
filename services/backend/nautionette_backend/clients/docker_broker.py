@@ -73,6 +73,27 @@ class BrokerClient:
         response.raise_for_status()
         return response.json()
 
+    async def miniapp(self, app_id: str, action: str = "", payload: dict | None = None) -> Any:
+        # Fixed verbs only. Callers validate app IDs; never accept arbitrary URLs.
+        from urllib.parse import quote
+
+        path = f"{self.base_url}/miniapps/{quote(app_id, safe='')}"
+        method = "GET"
+        if action == "remove":
+            method = "DELETE"
+        elif action == "state":
+            path += "/state"
+        elif action in {"deploy", "request", "control"}:
+            path += "/" + action
+            method = "POST"
+        elif action:
+            raise ValueError("Unknown mini-app broker operation")
+        response = await shared().request(
+            method, path, headers=internal_headers(), json=payload, timeout=250 if action == "deploy" else 40
+        )
+        response.raise_for_status()
+        return response.json()
+
     async def restart_worker(self) -> dict[str, Any]:
         response = await shared().post(
             f"{self.base_url}/worker/restart", headers=internal_headers(), timeout=120

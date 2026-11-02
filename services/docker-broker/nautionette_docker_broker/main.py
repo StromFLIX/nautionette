@@ -10,16 +10,18 @@ endpoint, and no shell. Two things happen here:
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Body, FastAPI, Header, HTTPException
+from fastapi import Body, FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from nautionette.telemetry import instrument_app
 from opentelemetry import propagate
+from pydantic import BaseModel, ConfigDict, Field
 
-from . import agent_run, artcraft, daemon, git_credentials, images, monitor, packages, workers
+from . import agent_run, artcraft, daemon, git_credentials, images, miniapps, monitor, packages, workers
 from .config import INTERNAL_TOKEN
 
 
@@ -42,6 +44,21 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="nautionette docker-broker", docs_url=None, redoc_url=None, lifespan=lifespan)
 instrument_app(app, "nautionette-docker-broker")
+
+
+@app.middleware("http")
+async def control_boundary(request: Request, call_next):
+    # Reject runtime credentials BEFORE FastAPI parses an administrative body.
+    # Mini-apps can reach the broker, but cannot spend unbounded host RAM by
+    # sending large JSON to privileged routes with an invalid/missing token.
+    if request.url.path not in {"/miniapps/capability", "/healthz"}:
+        try:
+            _check_internal(request.headers.get("x-internal-token"))
+        except HTTPException as exc:
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    return await call_next(request)
 
 
 @app.get("/healthz")
@@ -199,3 +216,104 @@ def agent_control(
     ):
         raise HTTPException(status_code=422, detail="Valid chat, turn and command are required")
     return {"ok": agent_run.control(chat_id, turn_id, command)}
+
+
+class MiniAppDeploy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision: int = Field(ge=1, le=1000000)
+    source: str = Field(min_length=1, max_length=65536)
+    memory_mb: int = 64
+    mode: str = "on-demand"
+
+
+@app.post("/miniapps/{app_id}/deploy")
+def deploy_miniapp(
+    app_id: str, payload: MiniAppDeploy, x_internal_token: str | None = Header(default=None)
+) -> dict:
+    _check_internal(x_internal_token)
+    try:
+        return miniapps.deploy(app_id, **payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            503, "Mini-app build/runtime unavailable; inspect status before retrying"
+        ) from exc
+
+
+@app.get("/miniapps/{app_id}")
+def miniapp_status(app_id: str, x_internal_token: str | None = Header(default=None)) -> dict:
+    _check_internal(x_internal_token)
+    try:
+        return miniapps.snapshot(app_id)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(503, "Mini-app runtime unavailable") from exc
+
+
+@app.get("/miniapps/{app_id}/state")
+def miniapp_state(app_id: str, x_internal_token: str | None = Header(default=None)):
+    _check_internal(x_internal_token)
+    config = miniapps.load(app_id)
+    return {
+        "revision": (config.get("active") or {}).get("revision"),
+        "disabled": bool(config.get("disabled")),
+        "deleting": bool(config.get("deleting")),
+    }
+
+
+@app.post("/miniapps/{app_id}/request")
+def request_miniapp(
+    app_id: str, payload: dict = Body(...), x_internal_token: str | None = Header(default=None)
+):
+    _check_internal(x_internal_token)
+    if set(payload) != {"revision", "request"} or len(json.dumps(payload).encode()) > 65536:
+        raise HTTPException(422, "Invalid app request")
+    try:
+        return miniapps.request(app_id, payload["revision"], payload["request"])
+    except Exception as exc:
+        raise HTTPException(
+            503, "Mini-app request unavailable; a mutation may already have executed"
+        ) from exc
+
+
+@app.delete("/miniapps/{app_id}")
+def remove_miniapp(app_id: str, x_internal_token: str | None = Header(default=None)) -> dict:
+    _check_internal(x_internal_token)
+    try:
+        return miniapps.remove(app_id)
+    except Exception as exc:
+        raise HTTPException(503, "Mini-app cleanup incomplete; retry the same removal") from exc
+
+
+@app.post("/miniapps/{app_id}/control")
+def control_miniapp(
+    app_id: str, payload: dict = Body(...), x_internal_token: str | None = Header(default=None)
+) -> dict:
+    _check_internal(x_internal_token)
+    if set(payload) != {"action"}:
+        raise HTTPException(422, "Provide a fixed mini-app action")
+    try:
+        return miniapps.control(app_id, payload["action"])
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(503, "Mini-app control failed; inspect its state") from exc
+
+
+@app.post("/miniapps/capability")
+async def miniapp_capability(request: Request, authorization: str = Header(default="")):
+    # This is the ONLY runtime-facing verb. Bound the raw body before JSON parsing.
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > 65536:
+            raise HTTPException(413, "Capability request exceeds 64 KiB")
+    try:
+        payload = json.loads(data)
+    except ValueError as exc:
+        raise HTTPException(422, "Invalid capability request") from exc
+    if not isinstance(payload, dict) or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Invalid mini-app credential")
+    return await asyncio.to_thread(miniapps.capability, authorization[7:], payload)

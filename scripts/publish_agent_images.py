@@ -65,15 +65,15 @@ def push_image(image: str) -> None:
 
 def main() -> None:
     repository = os.environ.get("REPOSITORY", "").lower()
-    hashes = [os.environ.get(name, "") for name in ("BASE_HASH", "DEFAULT_HASH")]
+    hashes = [os.environ.get(name, "") for name in ("BASE_HASH", "DEFAULT_HASH", "MINIAPP_HASH")]
     if not re.fullmatch(r"[a-z0-9_.-]+/[a-z0-9_.-]+", repository) or any(
         not re.fullmatch(r"[0-9a-f]{12}", value) for value in hashes
     ):
         raise ValueError("Expected a repository and exact image source fingerprints")
-    for name, fingerprint in zip(("base", "agent-default"), hashes, strict=True):
-        image = f"ghcr.io/{repository}/pi-{name}:{fingerprint}"
+    for name, fingerprint in zip(("pi-base", "pi-agent-default", "miniapp-builder"), hashes, strict=True):
+        image = f"ghcr.io/{repository}/{name}:{fingerprint}"
         subprocess.run(  # noqa: S603 - fixed Docker command, no shell
-            ["/usr/bin/docker", "tag", f"nautionette/pi-{name}:dev", image], check=True
+            ["/usr/bin/docker", "tag", f"nautionette/{name}:dev", image], check=True
         )
         push_image(image)
 

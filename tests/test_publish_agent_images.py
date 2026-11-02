@@ -85,11 +85,12 @@ def configure(monkeypatch):
     monkeypatch.setenv("REPOSITORY", "StromFLIX/nautionette")
     monkeypatch.setenv("BASE_HASH", "abcdef123456")
     monkeypatch.setenv("DEFAULT_HASH", "123456abcdef")
+    monkeypatch.setenv("MINIAPP_HASH", "abcdefabcdef")
 
 
-def test_both_images_must_be_published_from_local_tested_tags(monkeypatch):
+def test_all_images_must_be_published_from_local_tested_tags(monkeypatch):
     configure(monkeypatch)
-    calls, sleeps = fake_docker(monkeypatch, [(0, "Pushed\n"), (0, "Pushed\n")])
+    calls, sleeps = fake_docker(monkeypatch, [(0, "Pushed\n")] * 3)
     publish.main()
     default = "ghcr.io/stromflix/nautionette/pi-agent-default:123456abcdef"
     assert calls == [
@@ -97,6 +98,13 @@ def test_both_images_must_be_published_from_local_tested_tags(monkeypatch):
         ["/usr/bin/docker", "push", IMAGE],
         ["/usr/bin/docker", "tag", "nautionette/pi-agent-default:dev", default],
         ["/usr/bin/docker", "push", default],
+        [
+            "/usr/bin/docker",
+            "tag",
+            "nautionette/miniapp-builder:dev",
+            "ghcr.io/stromflix/nautionette/miniapp-builder:abcdefabcdef",
+        ],
+        ["/usr/bin/docker", "push", "ghcr.io/stromflix/nautionette/miniapp-builder:abcdefabcdef"],
     ]
     assert sleeps == []
 
@@ -113,7 +121,12 @@ def test_second_image_failure_is_not_reported_as_success(monkeypatch):
 
 @pytest.mark.parametrize(
     ("name", "value"),
-    [("REPOSITORY", "bad/repo:tag"), ("BASE_HASH", ""), ("DEFAULT_HASH", "latest")],
+    [
+        ("REPOSITORY", "bad/repo:tag"),
+        ("BASE_HASH", ""),
+        ("DEFAULT_HASH", "latest"),
+        ("MINIAPP_HASH", "latest"),
+    ],
 )
 def test_invalid_fingerprints_cannot_publish_mutable_tags(monkeypatch, name, value):
     configure(monkeypatch)

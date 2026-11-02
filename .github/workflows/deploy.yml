@@ -47,3 +47,9 @@ jobs:
           APP_TOKEN: ${{ secrets.APP_TOKEN }}
           DEPLOY_HEALTH_TIMEOUT_SECONDS: ${{ vars.DEPLOY_HEALTH_TIMEOUT_SECONDS }}
         run: python3 scripts/coolify_release.py
+      - name: Verify isolated mini-app lifecycle (staging only)
+        if: github.event_name == 'workflow_run'
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          APP_TOKEN: ${{ secrets.APP_TOKEN }}
+        run: python3 scripts/check_miniapps.py

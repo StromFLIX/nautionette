@@ -63,7 +63,7 @@ Five rules the diagram encodes:
 
 - The backend is the only service that publishes a port. Everything else stays on an internal network.
 - Only the broker has the Docker socket. It offers fixed commands (`run_agent`, `restart_worker`), never a general "run this container".
-- Every agent call goes through the backend, whether a user or a workflow asked for it. The broker answers to the backend and to nobody else.
+- Every agent call goes through the backend, whether a user or a workflow asked for it. Broker administration answers only to the backend. Mini-app runtimes have a separate, app-scoped capability adapter, never access to those administration verbs.
 - One shared volume holds the workflow files. Backend, workers and Pi runs all mount it.
 - Triggers come in and results go out through the backend only.
 
@@ -71,7 +71,7 @@ Five rules the diagram encodes:
 
 | Component | What it does |
 | --- | --- |
-| **Frontend** | One Quasar (Vue 3) codebase built with Vite. `npm run build` produces the web bundle served here; Capacitor wraps the same `dist/` as the app. The list is split into Chats and Workflows; every run appears as its own thread. |
+| **Frontend** | One Quasar (Vue 3) codebase built with Vite. `npm run build` produces the web bundle served here; Capacitor wraps the same `dist/` as the app. Navigation separates Chats, Workflows, Runs and Apps. |
 | **Website** | The promotional site. Static, its own container and its own domain, so the app and the pitch never share a deploy. |
 | **Backend** | The only entrypoint: auth, triggers, webhooks, streaming to clients. Also memory, search and metadata in a SQLite store. Calls the broker, but does not hold the Docker socket. |
 | **Docker broker** | Holds `/var/run/docker.sock`. Runs one Pi container per agent call (`docker run --rm`), builds missing agent images, and reconciles worker containers using fixed configuration and an image allowlist. |
@@ -81,6 +81,14 @@ Five rules the diagram encodes:
 | **Temporal** | Orchestrator and workers. Durable runs, retries, schedules and history, stored in PostgreSQL. A workflow step can call MCP tools, invoke Pi, or run plain Python. |
 | **MaxIO** | Private S3-compatible storage for generated chat originals, editable sources and sanitized previews. SQLite keeps manifests/ownership; agents stream through scoped signed URLs. No host ports are published. |
 | **Shared volume** | Where workflow files live. What an agent writes is what a worker loads. Workflow run artifacts and project worktrees remain on their own volumes, separate from output object storage. |
+
+## Mini-apps
+
+Ask an agent to build an interactive app. Agents publish self-contained HTML/CSS/JavaScript with an optional lightweight Rust backend and bundled SQLite; ordinary buttons call the app directly, not a workflow. The **Apps** section supports ownership, pins, retained releases, archiving, rebuilding and restoring code.
+
+Generated frontends run in opaque-origin iframes without the instance token or browser storage. Platform-owned offline builds produce `scratch` runtimes; exact MCP/resource and public-HTTPS grants are enforced server-side. Runtime state has bounded persistent files on the broker’s `miniapps` volume. Rust runtimes require **Docker Engine 28+** for isolated gateway networks. No extra domains or manually configured per-app containers are required.
+
+See [the publishing contract, limits, security and operations guide](docs/mini-apps.md).
 
 ## Workspace customization
 

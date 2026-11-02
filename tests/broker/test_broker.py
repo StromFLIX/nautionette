@@ -161,7 +161,11 @@ def test_ci_outputs_exactly_the_brokers_source_fingerprints(repo_root, monkeypat
     script = repo_root / "services/docker-broker/nautionette_docker_broker/image_context.py"
     runpy.run_path(str(script), run_name="__main__")
     outputs = dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines())
-    assert outputs == {"base": images.base_hash(), "default": images._agent_set_hash("default")}
+    assert outputs == {
+        "base": images.base_hash(),
+        "default": images._agent_set_hash("default"),
+        "miniapp": images.image_context.context_hash(repo_root / "services/miniapp-sdk"),
+    }
 
 
 def test_a_change_to_the_base_retags_every_agent_set(agent_images):

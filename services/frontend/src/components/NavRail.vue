@@ -54,7 +54,8 @@ const active = computed(() => route.name)
 const items = computed(() => [
   { name: 'chats', label: 'Chats', icon: 'chat_bubble_outline', to: chatLocation() },
   { name: 'workflows', label: 'Workflows', icon: 'account_tree', to: '/workflows', badge: draftCount.value || 0 },
-  { name: 'runs', label: 'Runs', icon: 'history', to: '/runs' }
+  { name: 'runs', label: 'Runs', icon: 'history', to: '/runs' },
+  { name: 'apps', label: 'Apps', icon: 'apps', to: '/apps' }
 ])
 </script>
 

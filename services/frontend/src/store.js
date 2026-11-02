@@ -27,6 +27,8 @@ const state = reactive({
   chats: [],
   chatActivity: null,
   projects: [],
+  apps: [],
+  appsError: '',
   workflows: [],
   drafts: [],
   runs: [],
@@ -133,6 +135,14 @@ export const actions = {
     if (data) state.runs = data.runs
   },
 
+  async loadMiniapps () {
+    const scope = chatCacheScope()
+    try {
+      const data = await guard(() => api.miniapps())
+      if (data && scope === chatCacheScope()) { state.apps = Array.isArray(data.apps) ? data.apps : []; state.appsError = '' }
+    } catch (error) { if (scope === chatCacheScope()) state.appsError = error.message }
+  },
+
   async loadEvents () {
     const data = await guard(() => api.events())
     if (data) state.events = data.events.slice().reverse()
@@ -145,6 +155,7 @@ export const actions = {
       actions.loadCatalog(),
       actions.loadChats(),
       actions.loadProjects(),
+      actions.loadMiniapps(),
       actions.loadWorkflows(),
       actions.loadRuns()
     ])
@@ -184,6 +195,8 @@ export const actions = {
     chatsRequest++
     state.chats = []
     state.chatActivity = null
+    state.apps = []
+    state.appsError = ''
     chatCache.list(scope).then((chats) => {
       if (scope === chatCacheScope() && !state.chats.length) state.chats = chats || []
     })
@@ -198,6 +211,7 @@ export const actions = {
       if (kind.startsWith('workflow.') || kind.startsWith('promote.')) actions.loadWorkflows().catch(() => {})
       if (kind.startsWith('chat.')) actions.loadChats().catch(() => {})
       if (kind.startsWith('project.')) actions.loadProjects().catch(() => {})
+      if (kind === 'miniapp.changed') actions.loadMiniapps().catch(() => {})
       if (['model.integration.changed', 'mcp.server.changed', 'settings.changed', 'agent.profile.changed'].includes(kind)) actions.loadCatalog(true).catch(() => {})
       emit(event)
     }, error => {

@@ -22,6 +22,7 @@ RUN mkdir -p /projects /chat-sessions \
 
 # The broker carries the build contexts so pruned Pi images can be rebuilt.
 COPY images/ /agent-images/
+COPY services/miniapp-sdk/ /miniapp-sdk/
 COPY images/pi-base/artcraft/catalog.json /etc/nautionette/artcraft-catalog.json
 
 # Runs as root: it needs the Docker socket. The API surface stays fixed instead.

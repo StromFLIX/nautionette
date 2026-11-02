@@ -74,7 +74,7 @@ jobs:
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py
 
       - name: Database upgrades, API retirement and workflow transports
-        run: uv run pytest tests/backend/test_db.py tests/backend/test_retired_features.py tests/backend/test_gateway_mcp.py tests/backend/test_temporal_schedules.py
+        run: uv run pytest tests/backend/test_db.py tests/backend/test_retired_features.py tests/backend/test_miniapps.py tests/broker/test_miniapps.py tests/backend/test_gateway_mcp.py tests/backend/test_temporal_schedules.py
 
       - name: Workflow history expiry, retention and run recovery
         run: uv run pytest tests/backend/test_run_retention.py tests/backend/test_runs.py tests/backend/test_execution_graph.py tests/backend/test_internal.py tests/backend/test_schedule_recovery.py tests/backend/test_run_statistics.py tests/worker/test_activities.py
@@ -135,11 +135,11 @@ jobs:
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js tests/agent-views.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
           tests/copilot-login.spec.js tests/tool-calls.spec.js tests/activity-timing.spec.js
-          tests/workflow-inputs.spec.js tests/run-retention.spec.js tests/run-statistics.spec.js tests/outputs.spec.js tests/creative-apps.spec.js tests/storage.spec.js tests/navigation.spec.js
+          tests/workflow-inputs.spec.js tests/run-retention.spec.js tests/run-statistics.spec.js tests/outputs.spec.js tests/creative-apps.spec.js tests/storage.spec.js tests/navigation.spec.js tests/miniapps.spec.js
           --workers=1 --reporter=dot,github
 
       - name: Live stream recovery and navigation (WebKit)
-        run: npx playwright test tests/live-connection.spec.js tests/navigation.spec.js --browser=webkit --workers=1 --reporter=dot,github
+        run: npx playwright test tests/live-connection.spec.js tests/navigation.spec.js tests/miniapps.spec.js --browser=webkit --workers=1 --reporter=dot,github
 
       - name: Mobile send focus and button activation (WebKit)
         run: >-
@@ -217,10 +217,30 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
 
+      - name: Build locked mini-app compiler
+        uses: docker/build-push-action@v7
+        with:
+          context: services/miniapp-sdk
+          load: true
+          tags: nautionette/miniapp-builder:dev
+          cache-from: type=gha,scope=miniapp-builder
+          cache-to: type=gha,mode=max,scope=miniapp-builder
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Build broker for real mini-app runtime tests
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: services/docker-broker/Dockerfile
+          load: true
+          tags: nautionette/docker-broker:dev
+          cache-from: type=gha,scope=miniapp-test-broker
+          cache-to: type=gha,mode=max,scope=miniapp-test-broker
+
       - name: Git credential rotation in a live unprivileged container (offline)
         run: |
           uv sync --locked --all-packages
-          NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_git_credentials_docker.py tests/broker/test_chat_sessions_docker.py
+          NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_git_credentials_docker.py tests/broker/test_chat_sessions_docker.py tests/broker/test_miniapps_docker.py
 
       # Publishing is part of CI, so Deploy cannot start before these images
       # exist. PR code never logs in or pushes (including same-repository PRs).
@@ -242,6 +262,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           BASE_HASH: ${{ steps.images.outputs.base }}
           DEFAULT_HASH: ${{ steps.images.outputs.default }}
+          MINIAPP_HASH: ${{ steps.images.outputs.miniapp }}
         run: python3 scripts/publish_agent_images.py
 
   compose:

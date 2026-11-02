@@ -136,6 +136,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - projects:/projects:ro
       - chat-sessions:/chat-sessions
+      - miniapps:/miniapps
     environment:
       <<: *telemetry
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
@@ -415,6 +416,12 @@ services:
   # runs one container per agent call.
   #   docker compose --profile images build
 
+  miniapp-builder:
+    build: ./services/miniapp-sdk
+    image: ${STACK_NAMESPACE:-nautionette}/miniapp-builder:dev
+    profiles: [images]
+    entrypoint: ["true"]
+
   pi-base:
     build: ./images/pi-base
     image: ${STACK_NAMESPACE:-nautionette}/pi-base:dev
@@ -519,6 +526,7 @@ volumes:
     name: ${STACK_NAMESPACE:-nautionette}-workflows
   projects:
     name: ${STACK_NAMESPACE:-nautionette}-projects
+  miniapps:
   chat-sessions:
   artifacts:
   backend-data:

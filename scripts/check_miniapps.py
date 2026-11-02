@@ -1,0 +1,172 @@
+"""Authenticated staging smoke. Temporary app only; no production/user data edits.
+
+Uses GitHub environment secrets directly, never prints tokens or response bodies.
+A lost publication reply is reconciled by GET, never by repeating the PUT.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+import uuid
+from urllib.parse import urlsplit
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+class APIError(RuntimeError):
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
+
+
+class API:
+    def __init__(self):
+        self.url = os.environ["APP_URL"].rstrip("/")
+        parsed = urlsplit(self.url)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("APP_URL must be direct HTTPS")
+        self.token = os.environ["APP_TOKEN"]
+        if not self.token:
+            raise ValueError("Configure the staging APP_TOKEN secret")
+
+    def call(self, path, method="GET", body=None, expected=200):
+        request = urllib.request.Request(  # noqa: S310 - validated HTTPS; redirects disabled
+            self.url + path,
+            method=method,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.build_opener(NoRedirect()).open(request, timeout=250) as response:
+                if response.status != expected:
+                    raise RuntimeError(f"Mini-app smoke: unexpected HTTP {response.status}")
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            if error.code == expected:
+                return None
+            raise APIError(
+                f"Mini-app smoke: {method} {path} returned HTTP {error.code}", error.code
+            ) from None
+        except (urllib.error.URLError, TimeoutError):
+            raise RuntimeError(
+                "Mini-app smoke: transport failed; inspect app status, never replay a mutation"
+            ) from None
+
+
+def run(api, app_id):
+    path = f"/api/miniapps/{app_id}"
+    contract = api.call("/api/miniapps/contract")
+    manifest = contract["example"]
+    manifest.update(
+        {
+            "title": "CI mini-app smoke",
+            "description": "Disposable Nautionette CI runtime verification",
+            "pinned": False,
+        }
+    )
+    created = False
+    try:
+        created = True  # Cleanup also checks after an ambiguous publication response.
+        try:
+            api.call(path, "PUT", {"expected_revision": 0, "manifest": manifest})
+        except RuntimeError as publication_error:
+            for _ in range(75):
+                time.sleep(4)
+                try:
+                    item = api.call(path)
+                except APIError as error:
+                    if error.status == 404:
+                        raise publication_error from None
+                    raise
+                if item["active_revision"] == 1:
+                    break
+                if item["releases"][0]["state"] == "failed":
+                    raise RuntimeError("Mini-app smoke: first compilation or health check failed") from None
+            else:
+                raise RuntimeError("Mini-app smoke: publication not confirmed; inspect status") from None
+
+        def invoke(revision, method="GET", request_id=""):
+            return api.call(
+                path + "/invoke",
+                "POST",
+                {
+                    "revision": revision,
+                    "method": method,
+                    "path": "/increment" if method == "POST" else "/state",
+                    "request_id": request_id,
+                },
+            )
+
+        if invoke(1) != {"value": 0}:
+            raise RuntimeError("Mini-app smoke: fresh SQLite state is invalid")
+        request_id = f"{int(time.time() * 1000)}-{uuid.uuid4().hex}"
+        if invoke(1, "POST", request_id) != {"value": 1} or invoke(1, "POST", request_id) != {"value": 1}:
+            raise RuntimeError("Mini-app smoke: mutation replay protection failed")
+        api.call(path + "/control", "POST", {"action": "restart"})
+        if invoke(1) != {"value": 1}:
+            raise RuntimeError("Mini-app smoke: state did not survive container replacement")
+        failed = dict(manifest)
+        failed["backend"] = {
+            "source": """use crate::{Context,Request,Result,Value,json};
+pub fn health(_: &mut Context)->Result<()> {Err("intentional CI health failure".into())}
+pub fn handle(_: &mut Context,_:&Request)->Result<Value>{Ok(json!({}))}"""
+        }
+        api.call(path, "PUT", {"expected_revision": 1, "manifest": failed}, expected=422)
+        if api.call(path)["active_revision"] != 1 or invoke(1) != {"value": 1}:
+            raise RuntimeError("Mini-app smoke: failed candidate replaced working code or data")
+        restored = api.call(path + "/restore", "POST", {"expected_revision": 2, "revision": 1})
+        if restored["active_revision"] != 3 or invoke(3) != {"value": 1}:
+            raise RuntimeError("Mini-app smoke: code restore lost current data")
+        api.call(path, "PATCH", {"expected_revision": 3, "archived": True})
+        api.call(path + "/invoke", "POST", {"revision": 3, "path": "/state"}, expected=409)
+        api.call(path, "PATCH", {"expected_revision": 3, "archived": False})
+        if invoke(3) != {"value": 1}:
+            raise RuntimeError("Mini-app smoke: unarchive lost state")
+        metrics = api.call(path + "/status")["runtime"]
+        print(
+            json.dumps(
+                {
+                    "miniapp_smoke": "passed",
+                    "memory_bytes": metrics["memory_bytes"],
+                    "image_bytes": metrics["image_bytes"],
+                    "data_bytes": metrics["data_bytes"],
+                }
+            )
+        )
+    finally:
+        if created:
+            # Never enumerate or alter another app; this ID is unique to this run.
+            unwinding = sys.exc_info()[0] is not None
+            try:
+                item = api.call(path)
+                api.call(path, "PATCH", {"expected_revision": item["revision"], "archived": True})
+                api.call(path + f"?expected_revision={item['revision']}", "DELETE")
+            except APIError as error:
+                if error.status != 404 and not unwinding:
+                    raise
+                if error.status != 404:
+                    print(f"Mini-app cleanup unconfirmed: {app_id}", file=sys.stderr)
+            except RuntimeError:
+                if not unwinding:
+                    raise
+                print(f"Mini-app cleanup unconfirmed: {app_id}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    # This script is invoked only by the staging job, never the release/promotion job.
+    run(API(), "ci-smoke-" + uuid.uuid4().hex[:24])
