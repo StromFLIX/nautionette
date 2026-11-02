@@ -121,8 +121,9 @@ class TemporalGateway:
         )
         if current.config.workflow_execution_retention_ttl.ToTimedelta() == desired:
             return
+        # UpdateNamespace is a patch, not a replacement. Echoing the read config
+        # re-registers search-attribute aliases and fails with "already allocated".
         config = NamespaceConfig()
-        config.CopyFrom(current.config)
         config.workflow_execution_retention_ttl.FromTimedelta(desired)
         await client.workflow_service.update_namespace(
             UpdateNamespaceRequest(namespace=settings.temporal_namespace, config=config)

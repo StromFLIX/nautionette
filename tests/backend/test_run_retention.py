@@ -101,11 +101,27 @@ def test_history_expiring_between_describe_and_fetch_is_handled(
 async def test_retention_reconciles_existing_namespace_without_changing_other_config(monkeypatch):
     monkeypatch.setattr(settings, "temporal_namespace", "isolated-test")
     monkeypatch.setattr(settings, "temporal_history_retention_days", 7)
-    config = NamespaceConfig(history_archival_uri="s3://existing-archive", history_archival_state=2)
+    config = NamespaceConfig(
+        history_archival_uri="s3://existing-archive",
+        history_archival_state=2,
+        custom_search_attribute_aliases={"Keyword07": "CustomKeywordField"},
+    )
     config.workflow_execution_retention_ttl.FromTimedelta(timedelta(days=1))
     response = DescribeNamespaceResponse(config=config)
+
+    async def update(request):
+        # Temporal treats alias entries as allocations, even if they match the read config.
+        if request.config.custom_search_attribute_aliases:
+            raise RPCError(
+                "Custom search attribute field name already allocated.", RPCStatusCode.INVALID_ARGUMENT, b""
+            )
+        # UpdateNamespace patches only supplied fields; other namespace policy survives.
+        response.config.workflow_execution_retention_ttl.CopyFrom(
+            request.config.workflow_execution_retention_ttl
+        )
+
     service = SimpleNamespace(
-        describe_namespace=AsyncMock(return_value=response), update_namespace=AsyncMock()
+        describe_namespace=AsyncMock(return_value=response), update_namespace=AsyncMock(side_effect=update)
     )
     gateway = TemporalGateway()
     monkeypatch.setattr(gateway, "client", AsyncMock(return_value=SimpleNamespace(workflow_service=service)))
@@ -114,10 +130,11 @@ async def test_retention_reconciles_existing_namespace_without_changing_other_co
     request = service.update_namespace.call_args.args[0]
     assert request.namespace == "isolated-test"
     assert request.config.workflow_execution_retention_ttl.ToTimedelta() == timedelta(days=7)
-    assert request.config.history_archival_uri == "s3://existing-archive"
-    assert request.config.history_archival_state == 2
+    assert [field.name for field, _ in request.config.ListFields()] == ["workflow_execution_retention_ttl"]
+    assert response.config.history_archival_uri == "s3://existing-archive"
+    assert response.config.history_archival_state == 2
+    assert dict(response.config.custom_search_attribute_aliases) == {"Keyword07": "CustomKeywordField"}
     # No extra writes once the configured policy matches.
-    response.config.CopyFrom(request.config)
     await gateway.ensure_retention()
     assert service.update_namespace.await_count == 1
 
