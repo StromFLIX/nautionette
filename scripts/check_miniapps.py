@@ -85,6 +85,11 @@ def run(api, app_id):
         try:
             api.call(path, "PUT", {"expected_revision": 0, "manifest": manifest})
         except RuntimeError as publication_error:
+            if isinstance(publication_error, APIError) and publication_error.status == 409:
+                # An explicit create conflict means this ID is NOT ours. Never
+                # reconcile, archive or delete the pre-existing app.
+                created = False
+                raise
             for _ in range(75):
                 time.sleep(4)
                 try:

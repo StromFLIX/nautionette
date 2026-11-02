@@ -388,6 +388,23 @@ def test_deleted_owner_does_not_break_source_restore(client, db):
     assert reply.json()["active"]["manifest"]["agent_id"] is None
 
 
+def test_staging_smoke_never_cleans_up_an_existing_app_after_create_conflict():
+    from scripts import check_miniapps as smoke
+
+    calls = []
+
+    class API:
+        def call(self, path, method="GET", body=None, expected=200):
+            calls.append((method, path))
+            if path == "/api/miniapps/contract":
+                return {"example": {}}
+            raise smoke.APIError("pre-existing app", 409)
+
+    with pytest.raises(smoke.APIError):
+        smoke.run(API(), "existing")
+    assert calls == [("GET", "/api/miniapps/contract"), ("PUT", "/api/miniapps/existing")]
+
+
 @pytest.mark.parametrize("lost_reply", [False, True])
 def test_staging_smoke_checks_real_api_and_never_repeats_publication(client, live, monkeypatch, lost_reply):
     from scripts import check_miniapps as smoke
