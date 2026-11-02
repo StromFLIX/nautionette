@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 import pytest
 from nautionette_worker import activities
@@ -174,6 +175,46 @@ async def test_a_protocol_error_fails_the_activity(http):
 async def test_a_call_without_a_tool_name_goes_nowhere():
     with pytest.raises(ValueError, match="needs a tool name"):
         await activities.mcp_call({})
+
+
+@pytest.mark.parametrize("failed", [False, True])
+async def test_mcp_statistics_identify_each_attempt_without_payloads(env, http, failed):
+    seen = []
+
+    def record(request):
+        seen.append((str(request.url), json.loads(request.content)))
+        return json_body({"ok": True})(request)
+
+    http[BACKEND] = record
+    http["http://agentgateway:4000"] = mcp_route({"isError": failed})
+    for attempt in [1, 2]:
+        env.info = replace(
+            env.info, workflow_id="wf", workflow_run_id="r1", activity_id="a1", attempt=attempt
+        )
+        if failed:
+            with pytest.raises(RuntimeError, match="failed"):
+                await env.run(activities.mcp_call, {"tool": "search", "arguments": {"token": "private"}})
+        else:
+            await env.run(activities.mcp_call, {"tool": "search", "arguments": {"token": "private"}})
+    assert [payload["call_id"] for _, payload in seen] == ["r1:a1:1", "r1:a1:1", "r1:a1:2", "r1:a1:2"]
+    assert [payload["status"] for _, payload in seen] == ["running", "failed" if failed else "completed"] * 2
+    assert all(url.endswith("/internal/runs/wf/mcp-calls") for url, _ in seen)
+    assert "private" not in json.dumps(seen)
+
+
+async def test_mcp_accounting_outage_never_replays_a_successful_tool(env, http):
+    calls = []
+    route = mcp_route({"content": [{"type": "text", "text": "done"}]})
+
+    def handler(request):
+        if json.loads(request.content).get("method") == "tools/call":
+            calls.append(request)
+        return route(request)
+
+    http["http://agentgateway:4000"] = handler
+    result = await env.run(activities.mcp_call, {"tool": "search"})
+    assert result["text"] == "done"
+    assert len(calls) == 1
 
 
 def test_every_activity_a_workflow_may_name_is_registered():

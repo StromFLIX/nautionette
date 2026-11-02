@@ -12,17 +12,20 @@ const source = ['chat-files.mjs', 'agent-run.mjs'].map(name =>
     .replace(/^#!.*\n/, '').replace(/^import .*;\n/gm, '').replace(/^export /gm, '')
 ).join('\n')
 
-async function run (job, events = null) {
+async function run (job, events = null, mcpNames = null) {
   const commands = [], output = [], writes = [], removed = []
   let spawnArgs, spawnOptions
   await runInNewContext(source, {
     Buffer, console, createChatRecovery, dirname,
     createTelemetry: (job) => createTelemetry(job, { OTEL_SDK_DISABLED: 'true' }),
-    mkdirSync () {}, existsSync () { return false },
+    mkdirSync () {}, existsSync (path) { return path.startsWith('/tmp/nautionette-mcp-') && mcpNames !== null },
     lstatSync () { return { isDirectory: () => true } },
     openSync () { return 1 }, closeSync () {}, fsyncSync () {},
     writeFileSync (path, value, options) { writes.push([path, value, options]) },
-    readFileSync (path) { assert.equal(path, '/tmp/nautionette-job.json'); return JSON.stringify(job) },
+    readFileSync (path) {
+      if (path.startsWith('/tmp/nautionette-mcp-')) return JSON.stringify(mcpNames)
+      assert.equal(path, '/tmp/nautionette-job.json'); return JSON.stringify(job)
+    },
     unlinkSync (path) { removed.push(path) },
     projectEnvironment () { return {} }, contextUsage () { return null },
     preparePackages () { return {} }, randomUUID () { return 'a'.repeat(32) },
@@ -200,4 +203,28 @@ test('extension command discovery and model-free completion do not hang or invok
   assert.deepEqual(result.output.find(event => event.type === 'commands').commands, commands)
   assert.ok(result.commands.some(command => command.type === 'get_state'))
   assert.equal(result.output.at(-1).text, 'Extension command completed.')
+})
+
+test('every assistant response emits its own usage, independently of context and final usage', async () => {
+  const first = { input: 10, output: 4, cacheRead: 2, cacheWrite: 1 }
+  const second = { input: 20, output: 8, cacheRead: 3, cacheWrite: 0 }
+  const result = await run({ chat_id: 'chat', prompt: 'work' }, [
+    { type: 'message_end', message: { role: 'assistant', usage: first } },
+    { type: 'message_end', message: { role: 'toolResult' } },
+    { type: 'message_end', message: { role: 'assistant', usage: second } },
+    { type: 'message_end', message: { role: 'assistant' } },
+    { type: 'agent_end' }, { type: 'agent_settled' },
+  ])
+  assert.deepEqual(result.output.filter(event => event.type === 'usage').map(event => event.usage), [first, second, null])
+})
+
+test('tool provenance comes from discovery, not a namespace naming heuristic', async () => {
+  const events = ['plain_remote_name', 'bash', 'local_extension_tool'].flatMap((name, index) => [
+    { type: 'tool_execution_start', toolCallId: String(index), toolName: name, args: {} },
+    { type: 'tool_execution_end', toolCallId: String(index), toolName: name, isError: index === 0 },
+  ])
+  const result = await run({ chat_id: 'chat', prompt: 'work' }, [...events, { type: 'agent_end' }, { type: 'agent_settled' }], ['plain_remote_name'])
+  assert.deepEqual(result.output.filter(event => event.type === 'tool').map(event => event.source), ['mcp', 'local', 'extension'])
+  assert.deepEqual(result.output.filter(event => event.type === 'tool_done').map(event => event.source), ['mcp', 'local', 'extension'])
+  assert.ok(result.spawnOptions.env.NAUTIONETTE_MCP_CATALOG_FILE.startsWith('/tmp/nautionette-mcp-'))
 })

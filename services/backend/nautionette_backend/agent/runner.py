@@ -7,7 +7,7 @@ container, so the history the model sees is exactly what we hand over here.
 from __future__ import annotations
 
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 from nautionette.agent_limits import chat_timeout_exempt
@@ -173,7 +173,9 @@ async def stream_agent(job: dict[str, Any]) -> AsyncIterator[dict[str, Any]]:
             yield event
 
 
-async def call_agent(job: dict[str, Any]) -> dict[str, Any]:
+async def call_agent(
+    job: dict[str, Any], *, on_event: Callable[[dict[str, Any]], None] | None = None
+) -> dict[str, Any]:
     """Collect a whole agent run into one object. This is what an activity gets."""
     text_parts: list[str] = []
     result: dict[str, Any] | None = None
@@ -181,6 +183,8 @@ async def call_agent(job: dict[str, Any]) -> dict[str, Any]:
     tools: list[str] = []
 
     async for event in stream_agent(job):
+        if on_event:
+            on_event(event)
         kind = event.get("type")
         if kind == "delta":
             text_parts.append(event.get("text", ""))

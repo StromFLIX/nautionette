@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+import uuid
+from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends
+from pydantic import BaseModel, Field
 
-from .. import runs
+from .. import run_statistics, runs
 from ..agent import agent_job, call_agent
 from ..clients import temporal
 from ..db import db
@@ -18,6 +21,7 @@ from ..security import require_internal
 from .workflows import delete_workflow
 
 router = APIRouter(dependencies=[Depends(require_internal)])
+log = logging.getLogger(__name__)
 
 
 @router.post("/internal/agent/call")
@@ -35,9 +39,57 @@ async def internal_agent_call(payload: dict[str, Any] = Body(...)) -> dict[str, 
         timeout_seconds=int(payload.get("timeout_seconds") or 900),
     )
     bus.publish("agent.activity", {"run_id": job["run_id"], "agent_set": job["agent_set"]})
-    result = await call_agent(job)
-    remember_agent_result(bool(result.get("ok")))
-    return result
+    call_id = uuid.uuid4().hex
+    accounting = run_statistics.AgentStatistics()
+
+    def save(status: str = "running") -> None:
+        try:
+            run_statistics.record_call(
+                job["run_id"],
+                call_id,
+                "agent",
+                job["agent_set"],
+                status,
+                model=job["model"],
+                statistics=accounting.snapshot(),
+            )
+        except Exception:  # noqa: BLE001 - statistics must never replay an agent's side effects
+            log.warning("Could not record agent statistics for run %s", job["run_id"])
+
+    def observe(event: dict[str, Any]) -> None:
+        if accounting.observe(event):
+            save()
+
+    save()
+    status = "interrupted"
+    try:
+        result = await call_agent(job, on_event=observe)
+        status = "completed" if result.get("ok") else "failed"
+        remember_agent_result(bool(result.get("ok")))
+        return result
+    finally:
+        save(status)
+        bus.publish("run.statistics", {"workflow_id": job["run_id"]})
+
+
+class McpCallObservation(BaseModel):
+    call_id: str = Field(min_length=1, max_length=512)
+    tool: str = Field(min_length=1, max_length=512)
+    status: Literal["running", "completed", "failed", "interrupted"]
+
+
+@router.post("/internal/runs/{workflow_id}/mcp-calls")
+async def record_mcp_call(workflow_id: str, payload: McpCallObservation) -> dict[str, bool]:
+    """Idempotent observations only; never persist tool arguments or results."""
+    run_statistics.record_call(
+        workflow_id,
+        f"mcp:{payload.call_id}",
+        "mcp",
+        payload.tool,
+        payload.status,
+    )
+    bus.publish("run.statistics", {"workflow_id": workflow_id})
+    return {"ok": True}
 
 
 @router.post("/internal/events")
@@ -89,6 +141,7 @@ async def internal_run(workflow_id: str, limit: int = 200) -> dict[str, Any]:
         "result": (row or {}).get("result"),
         "events": events,
         "history_status": history_status,
+        "statistics": run_statistics.statistics(workflow_id, row),
     }
     if info and info.get("status") == "COMPLETED" and detail["result"] is None:
         detail["result"] = await attempt(temporal.result(workflow_id, timeout=5), None)

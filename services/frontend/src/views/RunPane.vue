@@ -22,9 +22,12 @@
       <span>{{ detail.note }}</span>
     </div>
     <nav class="tabs" aria-label="Run views">
-      <button v-for="item in ['Flow', 'Details']" :key="item" class="tab" :class="{ 'tab--active': tab === item }" @click="tab = item">{{ item }}</button>
+      <button v-for="item in ['Flow', 'Details', 'Statistics']" :key="item" class="tab" :class="{ 'tab--active': tab === item }" @click="tab = item">{{ item }}</button>
     </nav>
     <ExecutionFlow v-if="tab === 'Flow'" :key="id" :workflow-id="id" @status="updateStatus" @saved-details="tab = 'Details'" />
+    <div v-else-if="tab === 'Statistics'" class="pane-body scroll-y grow">
+      <RunStatistics :statistics="detail.statistics" />
+    </div>
     <div v-else class="pane-body scroll-y grow">
       <section class="block">
         <div class="facts">
@@ -76,6 +79,7 @@ import { actions, onLiveEvent } from '../store'
 import { api } from '../api'
 import ExecutionFlow from '../components/ExecutionFlow.vue'
 import EmptyState from '../components/EmptyState.vue'
+import RunStatistics from '../components/RunStatistics.vue'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -84,6 +88,7 @@ const tab = ref('Flow')
 const loadError = ref('')
 let loadVersion = 0
 let off = () => {}
+let refreshTimer
 
 const id = computed(() => route.params.id || '')
 const run = computed(() => detail.value?.run)
@@ -99,7 +104,7 @@ async function load () {
     const result = await api.run(id.value)
     if (version === loadVersion) {
       detail.value = result
-      if (result.history_status === 'expired') tab.value = 'Details'
+      if (result.history_status === 'expired' && tab.value === 'Flow') tab.value = 'Details'
     }
   } catch (error) {
     if (version === loadVersion) loadError.value = error.message
@@ -128,11 +133,14 @@ async function cancel () {
 watch(id, () => { detail.value = null; tab.value = 'Flow'; load() })
 onMounted(() => {
   load()
+  refreshTimer = setInterval(() => {
+    if (tab.value === 'Statistics' && isLive.value && !document.hidden) load()
+  }, 5000)
   off = onLiveEvent((event) => {
     if (event.workflow_id && event.workflow_id === id.value) load()
   })
 })
-onUnmounted(() => off())
+onUnmounted(() => { off(); clearInterval(refreshTimer); loadVersion++ })
 </script>
 
 <style scoped>

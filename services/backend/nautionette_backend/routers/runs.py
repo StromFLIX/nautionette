@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
-from .. import runs
+from .. import run_statistics, runs
 from ..clients import temporal
 from ..config import settings
 from ..db import db
@@ -49,13 +49,14 @@ async def get_run(workflow_id: str) -> dict[str, Any]:
             "temporal": None,
             "history_status": "expired",
             "note": runs.HISTORY_EXPIRED_NOTE,
+            "statistics": run_statistics.statistics(workflow_id, row),
         }
     if info["status"] == "COMPLETED" and (not row or row.get("result") is None):
         try:
             info["result"] = await temporal.result(workflow_id, timeout=10)
         except Exception:  # noqa: BLE001
             info["result"] = None
-    return {"run": row, "temporal": info}
+    return {"run": row, "temporal": info, "statistics": run_statistics.statistics(workflow_id, row)}
 
 
 @router.get("/api/runs/{workflow_id}/graph", dependencies=[Depends(require_user)])

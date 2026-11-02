@@ -967,6 +967,26 @@ execution states, retry attempts, durations, inputs, results, and failures. Refr
 preserve the camera and selection. The active step opens in view on short screens;
 node details become a bottom sheet on mobile.
 
+Open a run's **Statistics** tab for agent-call counts grouped by agent set/model,
+model-response counts, token usage (uncached input, output, cache reads/writes), and
+named tool-call counts with failures and active/interrupted calls. Direct workflow
+MCP calls are distinguished from MCP calls inside an agent and local/extension tools.
+Counts include retry attempts; tool start/end events count as one call. Statistics
+refresh every five seconds while this tab is visible on a live run, and are also
+available in the run-detail and run-history APIs.
+
+Statistics are stored separately from Temporal history, including for silent or
+failed runs. Tokens are summed across reported model responses, not just the last
+response of an agent's tool loop. Missing usage is unknown, never zero; incomplete
+usage and older agent images' last-response-only totals are labeled partial. Runs
+created before accounting was introduced show that statistics were not recorded.
+The default agent bridge supplies MCP provenance from discovery, not tool-name
+heuristics; unclassified tools stay separate. Extension-managed child agents and
+child workflow internals are not included. The ledger contains only identities,
+counts, and status—never prompts, tool arguments/results, or credentials. Agent
+and direct MCP accounting failures are logged without retrying an otherwise
+successful side effect. Rebuild the worker and agent images together with the backend.
+
 Detailed execution histories are retained for **7 days after completion** by default
 (`TEMPORAL_HISTORY_RETENTION_DAYS`). Auto-setup applies the policy to new namespaces;
 the backend reconciles the configured namespace on startup and every minute, including

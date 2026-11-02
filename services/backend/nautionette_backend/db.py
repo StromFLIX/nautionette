@@ -154,6 +154,16 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 CREATE INDEX IF NOT EXISTS runs_workflow ON runs(workflow, created_at);
 CREATE INDEX IF NOT EXISTS runs_workflow_id ON runs(workflow_id);
+CREATE TABLE IF NOT EXISTS workflow_calls (
+    workflow_id TEXT NOT NULL,
+    call_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'running',
+    statistics TEXT NOT NULL DEFAULT '{}',
+    PRIMARY KEY (workflow_id, call_id)
+);
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     scope TEXT NOT NULL,
@@ -300,6 +310,7 @@ CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
 
 # Applied on every start; each one fails harmlessly once it is already in place.
 _MIGRATIONS = (
+    "ALTER TABLE runs ADD COLUMN statistics_version INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE projects ADD COLUMN connection_id TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE pi_package_installations ADD COLUMN default_revision_id TEXT",
     "ALTER TABLE chat_turns ADD COLUMN context TEXT",
@@ -1032,7 +1043,7 @@ class Database:
         row_id = uuid.uuid4().hex[:12]
         self.execute(
             "INSERT INTO runs (id, workflow, workflow_id, run_id, trigger, input, status, created_at,"
-            " updated_at) SELECT ?,?,?,?,?,?,?,?,?"
+            " updated_at, statistics_version) SELECT ?,?,?,?,?,?,?,?,?,1"
             " WHERE NOT EXISTS (SELECT 1 FROM runs WHERE workflow_id = ?)",
             (
                 row_id,

@@ -38,6 +38,7 @@ _TABLES = (
     "github_app_setups",
     "github_webhook_deliveries",
     "runs",
+    "workflow_calls",
     "events",
     "settings",
     "agent_profiles",

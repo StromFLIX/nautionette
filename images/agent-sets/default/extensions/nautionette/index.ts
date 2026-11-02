@@ -7,6 +7,7 @@
  *  2. bridge whatever MCP tools the gateway federates into Pi tools, so adding
  *     a tool to the gateway is enough to give the agent a new capability.
  */
+import { writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { modelApi } from "./model-api.ts";
 import { reasoningConfig, reasoningPayload } from "./reasoning.ts";
@@ -125,6 +126,12 @@ export default async function (pi: ExtensionAPI) {
     const listed = await rpc("tools/list");
     const all: any[] = listed.tools ?? [];
     const tools = all.filter((tool) => !isOutputTransportTool(tool.name) && !CRAFT_TOOL_NAMES.has(tool.name) && (ALLOWED === null || ALLOWED.has(tool.name)));
+
+    // Payload-free provenance for the supervisor's workflow accounting. Tool
+    // names come from discovery, never namespace/name heuristics.
+    if (process.env.NAUTIONETTE_MCP_CATALOG_FILE) {
+      writeFileSync(process.env.NAUTIONETTE_MCP_CATALOG_FILE, JSON.stringify(tools.map(tool => tool.name)), { mode: 0o600 });
+    }
 
     for (const tool of tools) {
       pi.registerTool({

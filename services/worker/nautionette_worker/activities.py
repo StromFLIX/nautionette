@@ -12,6 +12,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from temporalio import activity
@@ -165,29 +166,58 @@ async def mcp_call(params: dict[str, Any]) -> dict[str, Any]:
         if session:
             headers["Mcp-Session-Id"] = session
         await client.post(MCP_URL, headers=headers, json=rpc(None, "notifications/initialized"))
-        called = await client.post(
-            MCP_URL,
-            headers=headers,
-            json=rpc(2, "tools/call", {"name": tool, "arguments": params.get("arguments") or {}}),
-        )
-        called.raise_for_status()
-        frame = _mcp_frame(called)
 
-    if frame.get("error"):
-        raise RuntimeError(f"mcp tool {tool} failed: {frame['error'].get('message', 'unknown')}")
-    result = frame.get("result") or {}
-    text = "\n".join(
-        part.get("text", "")
-        for part in result.get("content", [])
-        if isinstance(part, dict) and part.get("type") == "text"
-    )
-    if result.get("isError"):
-        raise RuntimeError(f"mcp tool {tool} failed: {text[:400]}")
-    try:
-        parsed = json.loads(text) if text else None
-    except ValueError:
-        parsed = None
-    return {"ok": True, "text": text, "json": parsed}
+        async def observe(status: str) -> None:
+            if not activity.in_activity():
+                return
+            info = activity.info()
+            payload = {
+                "call_id": f"{info.workflow_run_id}:{info.activity_id}:{info.attempt}",
+                "tool": tool,
+                "status": status,
+            }
+            try:
+                async with httpx.AsyncClient(timeout=5) as recorder:
+                    response = await recorder.post(
+                        f"{BACKEND_URL}/internal/runs/{quote(info.workflow_id, safe='')}/mcp-calls",
+                        json=payload,
+                        headers=_headers(),
+                    )
+                    response.raise_for_status()
+            except Exception:  # noqa: BLE001 - accounting must not replay a successful side effect
+                log.warning("Could not record MCP call statistics for activity %s", info.activity_id)
+
+        await observe("running")
+        status = "interrupted"
+        try:
+            called = await client.post(
+                MCP_URL,
+                headers=headers,
+                json=rpc(2, "tools/call", {"name": tool, "arguments": params.get("arguments") or {}}),
+            )
+            called.raise_for_status()
+            frame = _mcp_frame(called)
+            if frame.get("error"):
+                raise RuntimeError(f"mcp tool {tool} failed: {frame['error'].get('message', 'unknown')}")
+            result = frame.get("result") or {}
+            text = "\n".join(
+                part.get("text", "")
+                for part in result.get("content", [])
+                if isinstance(part, dict) and part.get("type") == "text"
+            )
+            if result.get("isError"):
+                raise RuntimeError(f"mcp tool {tool} failed: {text[:400]}")
+            try:
+                parsed = json.loads(text) if text else None
+            except ValueError:
+                parsed = None
+            status = "completed"
+            return {"ok": True, "text": text, "json": parsed}
+        except Exception:
+            status = "failed"
+            raise
+        finally:
+            await observe(status)
 
 
 ALL = [agent_call, http_fetch, mcp_call, emit_event, save_artifact, read_artifact]

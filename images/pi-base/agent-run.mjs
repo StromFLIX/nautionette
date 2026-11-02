@@ -159,6 +159,16 @@ async function main() {
   const mode = job.mode ?? "interactive";
   const model = job.model || process.env.AGENT_MODEL || "openai/gpt-4o-mini";
   const workspace = "/workspace";
+  // One supervisor per disposable container; no state survives the call.
+  const mcpCatalogFile = "/tmp/nautionette-mcp-tools.json";
+  let mcpTools;
+  const toolSource = (name) => {
+    if (!mcpTools && existsSync(mcpCatalogFile)) {
+      try { mcpTools = new Set(JSON.parse(readFileSync(mcpCatalogFile, "utf8"))); } catch { /* No provenance yet. */ }
+    }
+    if (mcpTools?.has(name)) return "mcp";
+    return ["read", "write", "edit", "bash", "grep", "find", "ls"].includes(name) ? "local" : "extension";
+  };
 
   mkdirSync(workspace, { recursive: true });
   if ((job.chat_id || job.project_ids?.length) && existsSync("/root/.pi/agent")) {
@@ -220,6 +230,7 @@ async function main() {
       NAUTIONETTE_MODEL_REASONING: JSON.stringify(job.model_reasoning || {}),
       NAUTIONETTE_REASONING_EFFORT: job.reasoning_effort ?? "",
       NAUTIONETTE_MODE: mode,
+      NAUTIONETTE_MCP_CATALOG_FILE: mcpCatalogFile,
       NAUTIONETTE_TURN_ID: job.turn_id || '',
       NAUTIONETTE_ARTCRAFT_JSON: job.artcraft === undefined ? "" : JSON.stringify(job.artcraft),
       // JSON preserves null (all) versus [] (none) and tool names containing commas.
@@ -361,7 +372,7 @@ async function main() {
       }
       case "tool_execution_start":
         toolSpans.set(event.toolCallId, telemetry.start("tool.call", { "gen_ai.tool.name": event.toolName, "gen_ai.operation.name": "execute_tool" }));
-        emit({ type: "tool", id: event.toolCallId, name: event.toolName, args: event.args });
+        emit({ type: "tool", id: event.toolCallId, name: event.toolName, source: toolSource(event.toolName), args: event.args });
         break;
       case "tool_execution_end":
         telemetry.end(toolSpans.get(event.toolCallId), Boolean(event.isError));
@@ -370,6 +381,7 @@ async function main() {
           type: "tool_done",
           id: event.toolCallId,
           name: event.toolName,
+          source: toolSource(event.toolName),
           error: Boolean(event.isError),
           result: toolResultText(event.result),
         });
@@ -384,7 +396,9 @@ async function main() {
           modelSpan = null;
           context = contextUsage(message, model);
           usage = context ? message.usage : null;
-          emit({ type: "usage", context });
+          // Context remains the latest response; accounting needs every response
+          // separately, including tool-loop turns and partially failed requests.
+          emit({ type: "usage", context, usage: message.usage ?? null });
           const text = (message.content ?? [])
             .filter((part) => part.type === "text")
             .map((part) => part.text)
