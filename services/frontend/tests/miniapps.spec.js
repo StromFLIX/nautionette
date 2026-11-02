@@ -83,12 +83,15 @@ test('opaque frame cannot read host credentials, forge host requests, load exter
       document.querySelector('#value').textContent='checked';
     });`
   const { calls, network } = await mockApps(context, js)
+  await context.addCookies([{ name: 'host-cookie', value: 'host-cookie-isolation-sentinel', url: 'http://127.0.0.1:9012' }])
   await page.goto('/apps/counter')
+  expect(await page.evaluate(() => document.cookie)).toContain('host-cookie-isolation-sentinel')
   const app = page.frameLocator('iframe[title="Counter"]')
   await expect(app.locator('#value')).toHaveText('checked')
   const frame = page.frames().find(frame => frame.parentFrame())
   const checks = await frame.evaluate(() => window.checks)
-  expect(checks).toEqual({ parentToken: 'denied', ownStorage: 'denied', parentDOM: 'denied', cookie: 'denied', popup: true, badPath: 'denied', nonJSON: 'denied', cyclic: 'denied', result: { value: 0 } })
+  // Chromium throws for opaque cookies; WebKit exposes an empty cookie jar.
+  expect(checks).toEqual({ parentToken: 'denied', ownStorage: 'denied', parentDOM: 'denied', cookie: expect.stringMatching(/^(denied)?$/), popup: true, badPath: 'denied', nonJSON: 'denied', cyclic: 'denied', result: { value: 0 } })
   expect(calls).toHaveLength(1)
   expect(calls[0].headers.authorization).toBe('Bearer host-secret-for-isolation-test')
   expect(JSON.stringify(checks)).not.toContain('host-secret-for-isolation-test')
