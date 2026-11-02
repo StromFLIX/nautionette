@@ -83,13 +83,17 @@ class BrokerClient:
             method = "DELETE"
         elif action == "state":
             path += "/state"
-        elif action in {"deploy", "request", "control"}:
+        elif action in {"deploy", "request", "control", "check"}:
             path += "/" + action
             method = "POST"
         elif action:
             raise ValueError("Unknown mini-app broker operation")
         response = await shared().request(
-            method, path, headers=internal_headers(), json=payload, timeout=250 if action == "deploy" else 40
+            method,
+            path,
+            headers=internal_headers(),
+            json=payload,
+            timeout=250 if action in {"deploy", "check"} else 40,
         )
         response.raise_for_status()
         return response.json()

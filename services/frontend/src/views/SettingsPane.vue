@@ -99,7 +99,7 @@ const sectionsIn = group => SETTINGS_SECTIONS.filter(item => item.group === grou
 const resultCount = key => results.value.filter(item => item.section.key === key).length
 
 function back () {
-  if (/^\/(chats|workflows|runs)(\/|$)/.test(window.history.state?.back || '')) router.back()
+  if (/^\/(chats|workflows|runs|apps)(\/|$)/.test(window.history.state?.back || '')) router.back()
   else router.push('/chats')
 }
 function choosePackage (source) { query.value = ''; router.replace({ path: '/settings/packages', query: { source } }) }

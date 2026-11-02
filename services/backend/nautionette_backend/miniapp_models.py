@@ -92,8 +92,15 @@ class Backend(StrictModel):
 class Manifest(StrictModel):
     title: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=500)
+    icon: str = Field(default="apps", pattern=r"^[a-z][a-z0-9_]{0,47}$", description="Material icon name")
+    image: str = Field(
+        default="",
+        max_length=32768,
+        pattern=r"^(?:|data:image/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2})$",
+        description="Optional small inline PNG/JPEG/WebP avatar. No SVG or remote URLs.",
+    )
     agent_id: str | None = Field(default=None, max_length=64)
-    pinned: bool = True
+    pinned: bool = False
     frontend: Frontend
     backend: Backend | None = None
 
@@ -131,9 +138,16 @@ class AppRequest(StrictModel):
 class Restore(StrictModel):
     expected_revision: int = Field(ge=1)
     revision: int = Field(ge=1)
+    pinned: bool = False
 
 
 class EditApp(StrictModel):
     expected_revision: int = Field(ge=1)
     pinned: bool | None = None
+    pin_revision: int | None = Field(default=None, ge=1)
     archived: bool | None = None
+
+
+class ValidateApp(StrictModel):
+    manifest: Manifest
+    compile: bool = False

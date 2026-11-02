@@ -79,6 +79,9 @@ def run(api, app_id):
             "pinned": False,
         }
     )
+    validation = api.call("/api/miniapps/validate", "POST", {"manifest": manifest, "compile": True})
+    if not validation.get("compiled") or not validation.get("artifact_bytes"):
+        raise RuntimeError("Mini-app smoke: offline draft compilation failed")
     created = False
     try:
         created = True  # Cleanup also checks after an ambiguous publication response.
@@ -119,6 +122,9 @@ def run(api, app_id):
 
         if invoke(1) != {"value": 0}:
             raise RuntimeError("Mini-app smoke: fresh SQLite state is invalid")
+        pinned = api.call(path, "PATCH", {"expected_revision": 1, "pinned": True, "pin_revision": 1})
+        if pinned["pinned_revision"] != 1:
+            raise RuntimeError("Mini-app smoke: release pin was not saved")
         request_id = f"{int(time.time() * 1000)}-{uuid.uuid4().hex}"
         if invoke(1, "POST", request_id) != {"value": 1} or invoke(1, "POST", request_id) != {"value": 1}:
             raise RuntimeError("Mini-app smoke: mutation replay protection failed")
@@ -142,6 +148,12 @@ pub fn handle(_: &mut Context,_:&Request)->Result<Value>{Ok(json!({}))}"""
         api.call(path, "PATCH", {"expected_revision": 3, "archived": False})
         if invoke(3) != {"value": 1}:
             raise RuntimeError("Mini-app smoke: unarchive lost state")
+        diagnostics = api.call(path + "/diagnostics")
+        if not diagnostics["operations"] or not diagnostics["mutations"]:
+            raise RuntimeError("Mini-app smoke: request diagnostics missing")
+        overview = api.call("/api/miniapps/overview")
+        if not any(row["app"]["id"] == app_id for row in overview["apps"]):
+            raise RuntimeError("Mini-app smoke: runtime overview omitted the active app")
         metrics = api.call(path + "/status")["runtime"]
         print(
             json.dumps(

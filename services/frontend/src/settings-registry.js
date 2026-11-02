@@ -96,6 +96,11 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
+    key: 'app-runtimes', label: 'App runtimes', icon: 'apps', group: 'Operations', scope: 'Instance',
+    load: () => import('./components/settings/MiniAppsPane.vue'),
+    entries: [entry('app-runtimes', 'App runtimes & resources', 'Running, sleeping and archived apps with memory, CPU, SQLite storage and image usage.', 'mini apps agents containers diagnostics debug limits RAM OOM processes')]
+  },
+  {
     key: 'storage', label: 'Storage', icon: 'storage', group: 'Operations', scope: 'Instance',
     load: () => import('./components/settings/StoragePane.vue'),
     entries: [

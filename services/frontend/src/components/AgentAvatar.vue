@@ -2,14 +2,14 @@
   <span class="agent-avatar" :style="avatarStyle(agent?.id || 'all')" aria-hidden="true">
     <img v-if="agent?.image && !failed" :src="agent.image" alt="" @error="failed = true" />
     <span v-else-if="agent" class="agent-avatar__initials">{{ initials(agent.name) }}</span>
-    <span v-else class="material-icons">forum</span>
+    <span v-else class="material-icons">{{ icon }}</span>
   </span>
 </template>
 
 <script setup>
 import { ref, watch } from 'vue'
 import { avatarStyle, initials } from '../format'
-const props = defineProps({ agent: { type: Object, default: null } })
+const props = defineProps({ agent: { type: Object, default: null }, icon: { type: String, default: 'forum' } })
 const failed = ref(false)
 watch(() => props.agent?.image, () => { failed.value = false })
 </script>

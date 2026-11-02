@@ -244,6 +244,25 @@ def deploy_miniapp(
         ) from exc
 
 
+class MiniAppCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    source: str = Field(min_length=1, max_length=65536)
+
+
+@app.post("/miniapps/{app_id}/check")
+def check_miniapp(
+    app_id: str, payload: MiniAppCheck, x_internal_token: str | None = Header(default=None)
+) -> dict:
+    _check_internal(x_internal_token)
+    try:
+        miniapps.checked(app_id)
+        return miniapps.build(app_id, 1, payload.source, validate_only=True)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(503, "Mini-app compiler unavailable") from exc
+
+
 @app.get("/miniapps/{app_id}")
 def miniapp_status(app_id: str, x_internal_token: str | None = Header(default=None)) -> dict:
     _check_internal(x_internal_token)

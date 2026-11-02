@@ -398,11 +398,17 @@ def test_staging_smoke_never_cleans_up_an_existing_app_after_create_conflict():
             calls.append((method, path))
             if path == "/api/miniapps/contract":
                 return {"example": {}}
+            if path == "/api/miniapps/validate":
+                return {"compiled": True, "artifact_bytes": 100}
             raise smoke.APIError("pre-existing app", 409)
 
     with pytest.raises(smoke.APIError):
         smoke.run(API(), "existing")
-    assert calls == [("GET", "/api/miniapps/contract"), ("PUT", "/api/miniapps/existing")]
+    assert calls == [
+        ("GET", "/api/miniapps/contract"),
+        ("POST", "/api/miniapps/validate"),
+        ("PUT", "/api/miniapps/existing"),
+    ]
 
 
 @pytest.mark.parametrize("lost_reply", [False, True])
@@ -413,6 +419,8 @@ def test_staging_smoke_checks_real_api_and_never_repeats_publication(client, liv
     deployed = []
 
     async def broker(app_id, action="", payload=None):
+        if action == "check":
+            return {"valid": True, "artifact_bytes": 123}
         if action == "deploy":
             revision = payload["revision"]
             deployed.append(revision)
@@ -430,7 +438,7 @@ def test_staging_smoke_checks_real_api_and_never_repeats_publication(client, liv
             if payload["request"]["method"] != "GET":
                 state["count"] += 1
             return {"value": state["count"]}
-        return {**state, "memory_bytes": 1000, "image_bytes": 2000, "data_bytes": 3000}
+        return {**state, "status": "running", "memory_bytes": 1000, "image_bytes": 2000, "data_bytes": 3000}
 
     monkeypatch.setattr(live.broker, "miniapp", broker)
     monkeypatch.setattr(smoke.time, "sleep", lambda _: None)

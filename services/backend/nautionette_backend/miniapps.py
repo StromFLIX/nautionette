@@ -68,7 +68,7 @@ def release(app_id: str, revision: int) -> dict:
 
 
 def list_apps() -> list[dict]:
-    return db.query("SELECT * FROM mini_apps ORDER BY pinned DESC, updated_at DESC")
+    return db.query("SELECT * FROM mini_apps ORDER BY pinned DESC, pinned_at DESC, updated_at DESC, id")
 
 
 def details(app_id: str) -> dict:
@@ -95,8 +95,20 @@ def activate(app_id: str, revision: int, manifest: dict) -> None:
         if not changed.rowcount:
             return  # A delayed recovery reply cannot revert newer activation or metadata edits.
         conn.execute(
-            "UPDATE mini_apps SET active_revision=?,title=?,agent_id=?,pinned=?,updated_at=? WHERE id=?",
-            (revision, manifest["title"], owner, int(manifest["pinned"]), time.time(), app_id),
+            "UPDATE mini_apps SET active_revision=?,title=?,agent_id=?,icon=?,image=?,pinned=?,"
+            "pinned_revision=?,pinned_at=?,updated_at=? WHERE id=?",
+            (
+                revision,
+                manifest["title"],
+                owner,
+                manifest.get("icon", "apps"),
+                manifest.get("image", ""),
+                int(manifest["pinned"]),
+                revision if manifest["pinned"] else None,
+                time.time() if manifest["pinned"] else 0,
+                time.time(),
+                app_id,
+            ),
         )
     bus.publish("miniapp.changed", {"app_id": app_id, "revision": revision})
 
@@ -138,7 +150,8 @@ async def publish(app_id: str, publication: Publication) -> dict:
         revision = publication.expected_revision + 1
         if not existing:
             conn.execute(
-                "INSERT INTO mini_apps(id,title,updated_at) VALUES(?,?,?)", (app_id, manifest["title"], now)
+                "INSERT INTO mini_apps(id,title,updated_at,pinned) VALUES(?,?,?,0)",
+                (app_id, manifest["title"], now),
             )
         conn.execute("UPDATE mini_apps SET revision=? WHERE id=?", (revision, app_id))
         conn.execute(
@@ -319,6 +332,8 @@ async def dispatch(
     request_id, cached = begin(app_id, revision, channel, payload) if mutation else ("", None)
     if cached is not None:
         return cached["result"]
+    started = time.monotonic()
+    outcome = "failed"
     try:
         result = await operation()
         encoded = json.dumps({"result": result}, ensure_ascii=False, allow_nan=False)
@@ -334,14 +349,49 @@ async def dispatch(
             "miniapp.operation",
             {"app_id": app_id, "revision": revision, "channel": channel, "mutation": mutation},
         )
+        outcome = "complete"
         return result
     except BaseException:
         if mutation:
+            outcome = "uncertain"
             db.execute(
                 "UPDATE mini_app_calls SET state='uncertain' WHERE app_id=? AND channel=? AND request_id=?",
                 (app_id, channel, request_id),
             )
         raise
+    finally:
+        # Bounded, structured diagnostics only: never store request/response data,
+        # tool arguments, URLs, credentials or application exception messages.
+        operation_name = (
+            f"{payload['method']} {payload['path']}"
+            if channel == "app"
+            else "MCP capability"
+            if payload.get("kind") == "mcp"
+            else "HTTPS capability"
+        )
+        try:
+            with db.transaction() as conn:
+                conn.execute(
+                    "INSERT INTO mini_app_events(app_id,revision,channel,operation,request_id,outcome,"
+                    "duration_ms,created_at) VALUES(?,?,?,?,?,?,?,?)",
+                    (
+                        app_id,
+                        revision,
+                        channel,
+                        operation_name,
+                        request_id,
+                        outcome,
+                        int((time.monotonic() - started) * 1000),
+                        time.time(),
+                    ),
+                )
+                conn.execute(
+                    "DELETE FROM mini_app_events WHERE app_id=? AND id NOT IN "
+                    "(SELECT id FROM mini_app_events WHERE app_id=? ORDER BY id DESC LIMIT 100)",
+                    (app_id, app_id),
+                )
+        except Exception:
+            log.warning("Mini-app diagnostic recording unavailable for %s", app_id)
 
 
 async def request(app_id: str, payload: AppRequest) -> Any:

@@ -281,7 +281,7 @@ def stop(app_id: str, config: dict, *, remove: bool = False) -> None:
             container.stop(timeout=5)
 
 
-def build(app_id: str, revision: int, source: str) -> str:
+def build(app_id: str, revision: int, source: str, *, validate_only: bool = False) -> str | dict:
     if not isinstance(source, str) or not 1 <= len(source.encode()) <= BODY_LIMIT:
         raise ValueError("Rust module must be 1..65536 bytes")
     if not _build_slot.acquire(blocking=False):
@@ -348,6 +348,8 @@ def build(app_id: str, revision: int, source: str) -> str:
                 raise ValueError("Rust artifact exceeds 16 MiB")
         if not binary.startswith(b"\x7fELF"):
             raise ValueError("Compiler did not produce an ELF executable")
+        if validate_only:
+            return {"valid": True, "artifact_bytes": len(binary), "sdk_fingerprint": BUILDER_HASH}
         context = io.BytesIO()
         with tarfile.open(fileobj=context, mode="w") as tar:
             dockerfile = (
@@ -469,17 +471,38 @@ def snapshot(app_id: str) -> dict:
         container = owned_container(app_id, config)
         state = "suspended"
         memory = 0
+        cpu_percent = None
+        pids = 0
+        runtime_state = {}
         if container:
             container.reload()
+            runtime_state = container.attrs.get("State", {})
             state = "running" if container.status == "running" else "suspended"
             if state == "running":
                 stats = container.stats(stream=False)
                 memory = stats.get("memory_stats", {}).get("usage", 0)
+                cpu = stats.get("cpu_stats", {})
+                before = stats.get("precpu_stats", {})
+                delta = cpu.get("cpu_usage", {}).get("total_usage", 0) - before.get("cpu_usage", {}).get(
+                    "total_usage", 0
+                )
+                system = cpu.get("system_cpu_usage", 0) - before.get("system_cpu_usage", 0)
+                if system > 0 and delta >= 0:
+                    cpu_percent = round(100 * delta / system * cpu.get("online_cpus", 1), 2)
+                pids = stats.get("pids_stats", {}).get("current", 0)
         size = sum(p.stat().st_size for p in (root(app_id) / str(config["revision"])).glob("state.db*"))
         return {
             "revision": config["revision"],
             "status": state,
             "memory_bytes": memory,
+            "cpu_percent": cpu_percent,
+            "cpu_limit": 0.25,
+            "pids": pids,
+            "pid_limit": 32,
+            "oom_killed": bool(runtime_state.get("OOMKilled")),
+            "exit_code": runtime_state.get("ExitCode"),
+            "started_at": runtime_state.get("StartedAt"),
+            "sampled_at": time.time(),
             "image_bytes": daemon.client().images.get(config["image"]).attrs.get("Size", 0),
             "data_bytes": size,
             "persistent_limit_bytes": 3 * FILE_LIMIT,

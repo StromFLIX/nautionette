@@ -333,6 +333,48 @@ def test_compiler_reads_private_tmpfs_and_ignores_forgeable_log_markers(runtime,
     compiler.remove.assert_called_once_with(force=True)
 
 
+def test_compile_check_discards_artifact_without_images_data_or_runtime(runtime):
+    compiler = runtime.containers.create.return_value
+    compiler.status = "running"
+    compiler.exec_run.side_effect = [
+        Mock(exit_code=0),
+        Mock(output=iter([b"\x7fELF", b"controlled-artifact"])),
+    ]
+    result = apps.build("source-check", 1, "pub fn health() {}", validate_only=True)
+    assert result == {"valid": True, "artifact_bytes": 23, "sdk_fingerprint": apps.BUILDER_HASH}
+    runtime.images.build.assert_not_called()
+    runtime.images.remove.assert_not_called()
+    compiler.remove.assert_called_once_with(force=True)
+    assert not apps.root("source-check").exists()
+    assert runtime.containers.create.call_args.kwargs["network_mode"] == "none"
+
+
+def test_runtime_snapshot_reports_resources_without_starting_sleeping_apps(runtime, monkeypatch):
+    apps.save("one", {"active": config()})
+    container = Mock(status="running")
+    container.attrs = {"State": {"OOMKilled": True, "ExitCode": 137, "StartedAt": "2026-11-02T00:00:00Z"}}
+    container.stats.return_value = {
+        "memory_stats": {"usage": 1234},
+        "pids_stats": {"current": 3},
+        "cpu_stats": {"cpu_usage": {"total_usage": 100}, "system_cpu_usage": 1000, "online_cpus": 2},
+        "precpu_stats": {"cpu_usage": {"total_usage": 50}, "system_cpu_usage": 500},
+    }
+    monkeypatch.setattr(apps, "owned_container", lambda *args: container)
+    runtime.images.get.return_value.attrs = {"Size": 42}
+    result = apps.snapshot("one")
+    assert result["memory_bytes"] == 1234 and result["cpu_percent"] == 20.0
+    assert result["pids"] == 3 and result["cpu_limit"] == 0.25
+    assert result["oom_killed"] and result["exit_code"] == 137
+    container.start.assert_not_called()
+    container.status = "exited"
+    container.stats.reset_mock()
+    result = apps.snapshot("one")
+    assert result["status"] == "suspended" and result["memory_bytes"] == 0
+    assert result["cpu_percent"] is None
+    container.stats.assert_not_called()
+    container.start.assert_not_called()
+
+
 def test_app_locks_do_not_collide_or_retain_deleted_ids():
     first = apps.lock("one")
     assert apps.lock("one") is first

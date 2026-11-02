@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS mini_apps (
     active_revision INTEGER,
     agent_id TEXT REFERENCES agent_profiles(id) ON DELETE SET NULL,
     title TEXT NOT NULL,
-    pinned INTEGER NOT NULL DEFAULT 1,
+    pinned INTEGER NOT NULL DEFAULT 0,
     archived INTEGER NOT NULL DEFAULT 0,
     updated_at REAL NOT NULL
 );
@@ -54,6 +54,18 @@ CREATE TABLE IF NOT EXISTS mini_app_calls (
     PRIMARY KEY (app_id, channel, request_id)
 );
 CREATE INDEX IF NOT EXISTS mini_app_calls_age ON mini_app_calls(created_at);
+CREATE TABLE IF NOT EXISTS mini_app_events (
+    id INTEGER PRIMARY KEY,
+    app_id TEXT NOT NULL REFERENCES mini_apps(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL,
+    channel TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    outcome TEXT NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS mini_app_events_app ON mini_app_events(app_id, id DESC);
 CREATE TABLE IF NOT EXISTS chats (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -284,6 +296,10 @@ CREATE TABLE IF NOT EXISTS github_webhook_deliveries (
 
 # Applied on every start; each one fails harmlessly once it is already in place.
 _MIGRATIONS = (
+    "ALTER TABLE mini_apps ADD COLUMN icon TEXT NOT NULL DEFAULT 'apps'",
+    "ALTER TABLE mini_apps ADD COLUMN image TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE mini_apps ADD COLUMN pinned_revision INTEGER",
+    "ALTER TABLE mini_apps ADD COLUMN pinned_at REAL NOT NULL DEFAULT 0",
     "ALTER TABLE runs ADD COLUMN statistics_version INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE projects ADD COLUMN connection_id TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE pi_package_installations ADD COLUMN default_revision_id TEXT",
@@ -367,6 +383,10 @@ class Database:
                     self._conn.execute(statement)
                 except sqlite3.OperationalError:
                     pass  # already applied
+            self._conn.execute(
+                "UPDATE mini_apps SET pinned_revision=active_revision, pinned_at=updated_at "
+                "WHERE pinned=1 AND pinned_revision IS NULL AND active_revision IS NOT NULL"
+            )
             self._conn.execute(
                 "UPDATE chat_outputs SET next_revision = MAX(next_revision, "
                 "COALESCE((SELECT MAX(revision) + 1 FROM chat_output_revisions "

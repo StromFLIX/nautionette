@@ -1,17 +1,17 @@
 <template>
-  <nav class="agents" aria-label="Chats by agent">
+  <nav class="agents" :aria-label="appsMode ? 'Apps by agent' : 'Chats by agent'">
     <div class="agents__list">
-      <button class="agents__item agents__all" type="button" aria-label="Show all chats" aria-describedby="agent-activity-all" :aria-pressed="!selectedId" @click="select(null)">
-        <AgentAvatar /><span class="sr-only">All</span>
-        <AgentActivity :counts="store.chatActivity" description-id="agent-activity-all" />
-        <q-tooltip anchor="center right" self="center left" :offset="[10, 10]">All · {{ store.chats.length }} chats · {{ activityLabel(store.chatActivity) }}</q-tooltip>
+      <button class="agents__item agents__all" type="button" :aria-label="appsMode ? 'Show all apps' : 'Show all chats'" :aria-describedby="appsMode ? undefined : 'agent-activity-all'" :aria-pressed="!selectedId" @click="select(null)">
+        <AgentAvatar :icon="appsMode ? 'apps' : 'forum'" /><span class="sr-only">All</span>
+        <AgentActivity v-if="!appsMode" :counts="store.chatActivity" description-id="agent-activity-all" />
+        <q-tooltip anchor="center right" self="center left" :offset="[10, 10]">{{ appsMode ? `All · ${store.apps.length} apps` : `All · ${store.chats.length} chats · ${activityLabel(store.chatActivity)}` }}</q-tooltip>
       </button>
       <div class="agents__divider" aria-hidden="true" />
       <div class="agents__people">
-        <button v-for="agent in agents" :key="agent.id" class="agents__item" type="button" :aria-label="`Chats with ${agent.name}`" :aria-describedby="`agent-activity-${agent.id}`" :aria-pressed="selectedId === agent.id" @click="select(agent.id)" @keydown="openAgentMenu($event, agent.id)">
+        <button v-for="agent in agents" :key="agent.id" class="agents__item" type="button" :aria-label="`${appsMode ? 'Apps by' : 'Chats with'} ${agent.name}`" :aria-describedby="appsMode ? undefined : `agent-activity-${agent.id}`" :aria-pressed="selectedId === agent.id" @click="select(agent.id)" @keydown="openAgentMenu($event, agent.id)">
           <AgentAvatar :agent="agent" /><span class="sr-only">{{ agent.name }}</span>
-          <AgentActivity :counts="agentActivity(store.chatActivity, agent.id)" :description-id="`agent-activity-${agent.id}`" />
-          <q-tooltip anchor="center right" self="center left" :offset="[10, 10]">{{ agent.name }} · {{ activityLabel(agentActivity(store.chatActivity, agent.id)) }}</q-tooltip>
+          <AgentActivity v-if="!appsMode" :counts="agentActivity(store.chatActivity, agent.id)" :description-id="`agent-activity-${agent.id}`" />
+          <q-tooltip anchor="center right" self="center left" :offset="[10, 10]">{{ agent.name }} · {{ appsMode ? `${store.apps.filter(app => app.agent_id === agent.id).length} apps` : activityLabel(agentActivity(store.chatActivity, agent.id)) }}</q-tooltip>
           <q-menu :ref="menu => registerMenu(agent.id, menu)" context-menu class="pick-menu" @before-show="openAgentMenus.add(agent.id)" @hide="openAgentMenus.delete(agent.id)">
             <RouterLink v-close-popup class="pick-menu__item agents__menu-link" :to="editorLocation(agent)"><span class="material-icons" aria-hidden="true">edit</span>Edit agent</RouterLink>
             <RouterLink v-close-popup class="pick-menu__item agents__menu-link" :to="editorLocation(agent, true)"><span class="material-icons" aria-hidden="true">add_photo_alternate</span>Change image</RouterLink>
@@ -34,13 +34,17 @@ import AgentActivity from './AgentActivity.vue'
 import { agentActivity, activityLabel } from '../agent-activity'
 
 const route = useRoute(), router = useRouter()
+const appsMode = computed(() => route.name === 'apps')
 const agents = computed(() => store.catalog.agents || [])
 const selectedId = computed(() => typeof route.query.agent === 'string' ? route.query.agent : null)
 const openAgentMenus = new Set()
 function select (id) {
   // Touch release can synthesize a click after a long-press opens the menu.
   if (openAgentMenus.has(id)) return
-  router.push(chatLocation('', id))
+  router.push(location('', id))
+}
+function location (id, agent) {
+  return appsMode.value ? { path: id ? `/apps/${id}` : '/apps', query: agent ? { agent } : {} } : chatLocation(id, agent)
 }
 const agentMenus = new Map()
 function registerMenu (id, menu) {
@@ -58,7 +62,7 @@ function editorLocation (agent, image = false) {
 // A removed or invalid selection must not leave the user in an empty dead end.
 watch([agents, () => store.catalogLoaded, selectedId], () => {
   if (store.catalogLoaded && selectedId.value && !agents.value.some(agent => agent.id === selectedId.value)) {
-    router.replace(chatLocation(route.params.id || '', null))
+    router.replace(location(route.params.id || '', null))
   }
 }, { immediate: true })
 </script>

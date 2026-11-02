@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Response
 
 from .. import miniapps
 from ..clients import broker
 from ..db import db
 from ..events import bus
-from ..miniapp_models import AppRequest, EditApp, Manifest, Publication, Restore
+from ..miniapp_models import AppRequest, EditApp, Manifest, Publication, Restore, ValidateApp
 from ..security import require_internal, require_user
 
 router = APIRouter(tags=["mini-apps"])
@@ -32,7 +35,24 @@ def miniapp_contract() -> dict:
     No Dockerfile, host token or workflow required.
     """
     return {
-        "version": 1,
+        "version": 2,
+        "authoring": (
+            "Set agent_id to the owning saved agent. icon is a Material icon name; image is an optional "
+            "inline PNG/JPEG/WebP avatar (32 KiB maximum). Apps are not pinned by default. "
+            "Pin the active release via PATCH with pinned=true and pin_revision=active_revision. "
+            "The five most recently pinned active apps appear above chats. Publishing without pinned=true "
+            "unpins the old version; failed releases never change pins. Restore with pinned=true to use "
+            "and pin retained source as a new release."
+        ),
+        "debugging": (
+            "POST /api/miniapps/validate with {manifest,compile:false} checks a draft without publishing. "
+            "compile:true runs the exact offline Rust compiler, returning artifact size or compiler errors; "
+            "Creates no runtime, release, data or image. Does NOT run health or grant network access. "
+            "GET /api/miniapps/{id}/diagnostics returns recent bounded operation timings, outcomes, mutation "
+            "IDs/states and build errors, never payloads/results/credentials. GET .../releases/{revision} "
+            "retrieves retained source. Use /invoke for a targeted operation test; mutations may be real. "
+            "Read-only status/overview do not wake suspended apps."
+        ),
         "publishing": (
             "PUT /api/miniapps/{app_id} with expected_revision=0 to create; read before updating. "
             "IDs are lowercase slugs. Keep at most five recent release sources plus the active release. "
@@ -97,6 +117,7 @@ def miniapp_contract() -> dict:
         "manifest_schema": Manifest.model_json_schema(),
         "example": {
             "title": "Persistent counter",
+            "icon": "exposure_plus_1",
             "frontend": {
                 "html": "<h1>Counter</h1><p id='count'>Loading…</p><button id='increment'>Increment</button>",
                 "css": (
@@ -134,6 +155,77 @@ pub fn handle(ctx:&mut Context,req:&Request)->Result<Value> {
 @router.get("/api/miniapps", dependencies=user)
 def list_miniapps() -> dict:
     return {"apps": miniapps.list_apps()}
+
+
+@router.post("/api/miniapps/validate", dependencies=user)
+async def validate_miniapp(body: ValidateApp) -> dict:
+    """Check a draft, optionally compiling Rust offline, without publishing or touching app data.
+
+    Compilation validates syntax/types/SDK use, not health, migrations or upstream permissions.
+    """
+    if body.manifest.agent_id and not db.query(
+        "SELECT 1 FROM agent_profiles WHERE id=?", (body.manifest.agent_id,)
+    ):
+        raise HTTPException(422, "Unknown owning agent profile")
+    result = {"valid": True, "compiled": False, "warnings": []}
+    if not body.manifest.agent_id:
+        result["warnings"].append("Set agent_id to group this app under its owning agent.")
+    if body.compile and body.manifest.backend:
+        try:
+            result.update(
+                await broker.miniapp("source-check", "check", {"source": body.manifest.backend.source})
+            )
+            result["compiled"] = True
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 422:
+                raise HTTPException(
+                    422, str(exc.response.json().get("detail", "Compilation failed"))[:7000]
+                ) from exc
+            raise HTTPException(503, "Mini-app compiler unavailable") from exc
+        except Exception as exc:
+            raise HTTPException(503, "Mini-app compiler unavailable") from exc
+    return result
+
+
+async def runtime_status(item: dict) -> dict:
+    if db.query("SELECT 1 FROM mini_app_releases WHERE app_id=? AND state='building'", (item["id"],)):
+        return {"status": "building"}
+    if not item["active_revision"]:
+        return {"status": "absent"}
+    if not miniapps.release(item["id"], item["active_revision"])["manifest"]["backend"]:
+        return {"status": "frontend-only"}
+    return await broker.miniapp(item["id"])
+
+
+@router.get("/api/miniapps/overview", dependencies=user)
+async def miniapp_overview() -> dict:
+    """Read resource samples for every app. Does not start or resume runtimes.
+
+    Unavailable/building apps remain visible; totals include measured samples only.
+    """
+    slots = asyncio.Semaphore(4)
+
+    async def sample(item):
+        async with slots:
+            try:
+                async with asyncio.timeout(8):
+                    runtime = await runtime_status(item)
+                if not isinstance(runtime, dict) or not isinstance(runtime.get("status"), str):
+                    raise ValueError("Invalid runtime sample")
+                return {"app": item, "runtime": runtime}
+            except Exception:
+                return {"app": item, "runtime": {"status": "unavailable"}}
+
+    apps = await asyncio.gather(*(sample(item) for item in miniapps.list_apps()))
+    return {
+        "apps": apps,
+        "sampled_at": time.time(),
+        "totals": {
+            key: sum(row["runtime"].get(key, 0) or 0 for row in apps)
+            for key in ("memory_bytes", "data_bytes", "image_bytes")
+        },
+        "incomplete": any(row["runtime"]["status"] in {"unavailable", "building", "absent"} for row in apps),
+    }
 
 
 @router.get("/api/miniapps/{app_id}", dependencies=user)
@@ -177,6 +269,7 @@ async def restore_miniapp(app_id: str, body: Restore) -> dict:
     Failed candidates never modify the previous release's data.
     """
     manifest = miniapps.release(app_id, body.revision)["manifest"]
+    manifest["pinned"] = body.pinned
     if manifest["agent_id"] and not db.query(
         "SELECT 1 FROM agent_profiles WHERE id=?", (manifest["agent_id"],)
     ):
@@ -190,16 +283,36 @@ async def restore_miniapp(app_id: str, body: Restore) -> dict:
 @router.get("/api/miniapps/{app_id}/status", dependencies=user)
 async def miniapp_status(app_id: str) -> dict:
     item = miniapps.app(app_id)
-    if (
-        not item["active_revision"]
-        or not miniapps.release(app_id, item["active_revision"])["manifest"]["backend"]
-    ):
-        return {"app": item, "runtime": {"status": "frontend-only"}}
     try:
-        status = await broker.miniapp(app_id)
+        status = await runtime_status(item)
     except Exception as exc:
         raise HTTPException(503, "Mini-app runtime status unavailable") from exc
     return {"app": item, "runtime": status}
+
+
+@router.get("/api/miniapps/{app_id}/diagnostics", dependencies=user)
+def miniapp_diagnostics(app_id: str) -> dict:
+    """Read build errors, last 100 operation timings and uncertain mutation IDs.
+
+    No logs, request/response bodies, tool arguments, data values or credentials are returned.
+    Does not wake the app or repeat any operation.
+    """
+    item = miniapps.app(app_id)
+    return {
+        "app_id": app_id,
+        "active_revision": item["active_revision"],
+        "releases": miniapps.details(app_id)["releases"],
+        "operations": db.query(
+            "SELECT revision,channel,operation,request_id,outcome,duration_ms,created_at "
+            "FROM mini_app_events WHERE app_id=? ORDER BY id DESC LIMIT 100",
+            (app_id,),
+        ),
+        "mutations": db.query(
+            "SELECT revision,channel,request_id,state,created_at FROM mini_app_calls "
+            "WHERE app_id=? ORDER BY created_at DESC LIMIT 100",
+            (app_id,),
+        ),
+    }
 
 
 def pending(app_id: str):
@@ -215,6 +328,11 @@ async def edit_miniapp(app_id: str, body: EditApp) -> dict:
     if body.expected_revision != item["revision"]:
         raise HTTPException(409, "Revision changed; read before editing")
     pending(app_id)
+    if body.pinned:
+        if item["archived"] or body.archived is True or not item["active_revision"]:
+            raise HTTPException(409, "Only a healthy, unarchived release can be pinned")
+        if body.pin_revision != item["active_revision"]:
+            raise HTTPException(409, "Set pin_revision to the active release; read before pinning")
     if body.archived is not None:
         # Revoke server grants before contacting the broker. Failed suspension is
         # visibly an error, but cannot leave a valid capability behind.
@@ -229,7 +347,15 @@ async def edit_miniapp(app_id: str, body: EditApp) -> dict:
             except Exception as exc:
                 raise HTTPException(503, "Lifecycle update incomplete; retry the same edit") from exc
     if body.pinned is not None:
-        db.execute("UPDATE mini_apps SET pinned=? WHERE id=?", (int(body.pinned), app_id))
+        db.execute(
+            "UPDATE mini_apps SET pinned=?,pinned_revision=?,pinned_at=? WHERE id=?",
+            (
+                int(body.pinned),
+                item["active_revision"] if body.pinned else None,
+                time.time() if body.pinned else 0,
+                app_id,
+            ),
+        )
     bus.publish("miniapp.changed", {"app_id": app_id})
     return miniapps.details(app_id)
 
@@ -291,8 +417,6 @@ async def miniapp_capability(app_id: str, body: dict):
         or not isinstance(body["request"], dict)
     ):
         raise HTTPException(422, "Invalid capability envelope")
-    import asyncio
-
     try:
         async with asyncio.timeout(22):
             return await miniapps.capability(app_id, body["revision"], body["request"])

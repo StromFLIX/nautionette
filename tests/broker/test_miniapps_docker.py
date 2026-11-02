@@ -75,6 +75,15 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
             else:
                 pytest.fail("Broker did not start: " + broker.logs(tail=40).decode())
             source = (ROOT / "services/miniapp-sdk/src/app.rs").read_text()
+            check = http.post("/miniapps/counter/check", json={"source": source})
+            assert check.status_code == 200, check.text
+            assert check.json()["valid"] and check.json()["artifact_bytes"] > 0
+            assert check.json()["sdk_fingerprint"] == fingerprint
+            assert http.get("/miniapps/counter").json()["status"] == "absent"
+            assert broker.exec_run(["test", "!", "-e", "/miniapps/counter"]).exit_code == 0
+            app_labels = [f"nautionette.deployment={namespace}", "nautionette.miniapp=counter"]
+            assert not client.images.list(filters={"label": app_labels})
+            assert not client.containers.list(all=True, filters={"label": app_labels})
             started = time.monotonic()
             reply = http.post(
                 "/miniapps/counter/deploy",
