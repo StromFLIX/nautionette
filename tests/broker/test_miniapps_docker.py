@@ -87,11 +87,13 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
             assert 0 < metrics["image_bytes"] < 16 * 1024 * 1024
             print(json.dumps({"build_seconds": time.monotonic() - started, **metrics}))
 
+            active_revision = 1
+
             def rpc(path, method="GET"):
                 result = http.post(
                     "/miniapps/counter/request",
                     json={
-                        "revision": 1,
+                        "revision": active_revision,
                         "request": {
                             "path": path,
                             "method": method,
@@ -126,6 +128,13 @@ pub fn handle(_: &mut Context,_:&Request)->Result<Value>{Ok(json!({}))}
             assert failed.status_code == 422, failed.text
             assert http.get("/miniapps/counter").json()["revision"] == 1
             assert rpc("/state") == {"value": 1}
+            restored = http.post(
+                "/miniapps/counter/deploy",
+                json={"revision": 3, "source": source, "memory_mb": 64, "mode": "on-demand"},
+            )
+            assert restored.status_code == 200, restored.text
+            active_revision = 3
+            assert rpc("/state") == {"value": 1}
             runtimes = client.containers.list(
                 all=True,
                 filters={"label": [f"nautionette.deployment={namespace}", "nautionette.miniapp=counter"]},
@@ -141,14 +150,12 @@ pub fn handle(_: &mut Context,_:&Request)->Result<Value>{Ok(json!({}))}
                 m["Destination"] in ["/data/state.db", "/data/state.db-wal", "/data/state.db-shm"]
                 for m in active.attrs["Mounts"]
             )
-            assert active.attrs["Config"]["Env"] == [
-                "MINIAPP_TOKEN="
-                + next(
-                    v.split("=", 1)[1]
-                    for v in active.attrs["Config"]["Env"]
-                    if v.startswith("MINIAPP_TOKEN=")
-                )
-            ]
+            # Docker adds a default PATH even to FROM scratch. It conveys no
+            # credentials; every other environment key must be app-scoped.
+            assert {v.split("=", 1)[0] for v in active.attrs["Config"]["Env"]} == {
+                "MINIAPP_TOKEN",
+                "PATH",
+            }
             networks = list(active.attrs["NetworkSettings"]["Networks"])
             assert len(networks) == 1
             net = client.networks.get(networks[0])
@@ -179,7 +186,7 @@ pub fn handle(_: &mut Context,req:&Request)->Result<Value>{
  let xattr=unsafe{fsetxattr(file.as_raw_fd(),c"user.probe".as_ptr(),b"x".as_ptr(),1,0)}==-1 && denied();
  Ok(json!({"remote":remote,"host":host,"bridge":bridge,
     "allocation_denied":allocation,"ioctl_denied":ioctl_denied,"xattr_denied":xattr,
-    "other_data":std::path::Path::new("/miniapps/counter/1/state.db").exists(),
+    "other_data":std::path::Path::new("/miniapps/counter/3/state.db").exists(),
     "shell":std::path::Path::new("/bin/sh").exists(),
     "instance_token":std::env::var("APP_TOKEN").is_ok(),
     "ipv6_disabled":std::fs::read_to_string("/proc/sys/net/ipv6/conf/all/disable_ipv6")?.trim()=="1"}))}
@@ -230,7 +237,7 @@ pub fn handle(_: &mut Context,req:&Request)->Result<Value>{
             assert (
                 http.post(
                     "/miniapps/counter/request",
-                    json={"revision": 1, "request": {"method": "GET", "path": "/state"}},
+                    json={"revision": active_revision, "request": {"method": "GET", "path": "/state"}},
                 ).status_code
                 == 422
             )
