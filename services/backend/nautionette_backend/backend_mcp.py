@@ -32,7 +32,6 @@ _PREFIXES = (
     "/api/system",
     "/api/settings",
     "/api/agents",
-    "/api/dashboards",
     "/api/model-integrations",
     "/api/mcp-servers",
 )
@@ -56,11 +55,7 @@ INSTRUCTIONS = (
     "A deployment is ready only when ready=true; inspect worker_restart on failure. "
     "Never claim a run succeeded until its results confirm it. Do not expose credentials. "
     "Output quota errors include a settings_url to Settings → Storage. Return that link and the actual "
-    "usage/limit instead of repeatedly retrying or calling a transport failure a file-generation failure. "
-    "Discover agent-owned dashboards with list_dashboards and dashboard_registry. Read/validate/publish "
-    "complete manifests with expected_revision; registered declarative recipes never require manual review. "
-    "Use dashboard_snapshot for freshness, resolved UI and action readiness; never invent live states. "
-    "After an uncertain workflow action response retry the SAME request ID and inputs, not a new invocation."
+    "usage/limit instead of repeatedly retrying or calling a transport failure a file-generation failure."
 )
 
 
@@ -75,7 +70,7 @@ def _schema(value: Any) -> Any:
 
 
 def _definitions_for(value: Any, definitions: dict[str, Any]) -> dict[str, Any]:
-    """Keep only reachable models: dashboard manifests must not bloat every unrelated tool."""
+    """Keep only reachable models so unrelated schemas do not bloat every tool."""
     included: dict[str, Any] = {}
 
     def visit(item: Any) -> None:

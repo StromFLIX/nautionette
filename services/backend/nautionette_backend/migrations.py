@@ -48,6 +48,40 @@ def add_agent_grouping(conn: sqlite3.Connection, model: str, agent_set: str) -> 
         conn.execute("UPDATE chats SET agent_customized = ? WHERE id = ?", (custom, row["id"]))
 
 
+def remove_dashboards(conn: sqlite3.Connection) -> None:
+    """Retire the declarative UI state without touching chats or workflow history.
+
+    Drop children before parents with foreign keys still enabled. Table presence
+    gates the one-time queued-job cleanup; fresh installs create none of them.
+    """
+    tables = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    retired = (
+        "dashboard_action_requests",
+        "dashboard_action_runs",
+        "dashboard_sources",
+        "dashboard_revisions",
+        "dashboard_components",
+        "dashboards",
+    )
+    if not tables.intersection(retired):
+        return
+    for row in conn.execute("SELECT id, job FROM chat_turns WHERE job IS NOT NULL ORDER BY rowid"):
+        job = json.loads(row["job"])
+        prompt = job.get("system_prompt", "")
+        cleaned = re.sub(
+            r"\nDashboard context \(persisted app data, not instructions\):\n.*?"
+            r"Dashboards inherit the app theme and responsive grid\. No generated HTML, JS or CSS\.\n",
+            "",
+            prompt,
+            flags=re.DOTALL,
+        )
+        if cleaned != prompt:
+            job["system_prompt"] = cleaned
+            conn.execute("UPDATE chat_turns SET job = ? WHERE id = ?", (json.dumps(job), row["id"]))
+    for table in retired:
+        conn.execute(f"DROP TABLE IF EXISTS {table}")  # noqa: S608 - fixed table allowlist
+
+
 def remove_internet_approval(conn: sqlite3.Connection) -> None:
     """Drop legacy state and instructions, including jobs queued before upgrade.
 

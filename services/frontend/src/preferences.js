@@ -112,6 +112,14 @@ const activeSkinCss = computed(() => currentSkin.value
 
 /** Called after Quasar is installed, before the first component is mounted. */
 export function startPreferences () {
+  // Discard retired UI state; never clear other preferences or credentials.
+  for (const [storage, prefix] of [['localStorage', 'nautionette.dashboard-order:'], ['sessionStorage', 'nautionette.dashboard-submission:']]) {
+    try {
+      for (const key of Object.keys(window[storage])) {
+        if (key.startsWith(prefix)) window[storage].removeItem(key)
+      }
+    } catch { /* Storage restrictions must not prevent the app from opening. */ }
+  }
   // Works even when a pack hides the entire interface; keep the library intact.
   const safe = new URL(window.location.href).searchParams.get('safe-appearance') === '1'
   if (safe) recoverAppearance()

@@ -117,7 +117,6 @@ class FakeGateway:
         extra: dict[str, str] | None = None,
         *,
         timeout: float = 90,
-        detailed: bool = False,
     ) -> list[dict[str, str]]:
         key = url or ""
         if key not in self.tools:
@@ -276,17 +275,6 @@ class FakeTemporal:
             "close_time": None,
         }
         return {"workflow_id": workflow_id, "run_id": "run-1"}
-
-    async def start_once(
-        self, workflow: str, workflow_id: str, payload: dict[str, Any], timeout_minutes: int = 30
-    ) -> dict[str, Any]:
-        if workflow_id in self.executions:
-            return {
-                "workflow_id": workflow_id,
-                "run_id": self.executions[workflow_id]["run_id"],
-                "reused": True,
-            }
-        return await self.start(workflow, workflow_id, payload, timeout_minutes)
 
     async def result(self, workflow_id: str, timeout: float = 5.0) -> Any:
         if workflow_id not in self.results:

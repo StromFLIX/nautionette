@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import settings
-from .migrations import add_agent_grouping, remove_internet_approval
+from .migrations import add_agent_grouping, remove_dashboards, remove_internet_approval
 from .output_ids import publication_request_id
 from .search_index import install as install_search_index
 from .search_index import load_extension as load_search_extension
@@ -184,63 +184,6 @@ CREATE TABLE IF NOT EXISTS agent_profiles (
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
-CREATE TABLE IF NOT EXISTS dashboards (
-    id TEXT PRIMARY KEY,
-    agent_id TEXT,
-    revision INTEGER NOT NULL,
-    archived INTEGER NOT NULL DEFAULT 0,
-    created_at REAL NOT NULL,
-    updated_at REAL NOT NULL
-);
-CREATE INDEX IF NOT EXISTS dashboards_agent ON dashboards(agent_id, updated_at);
-CREATE TABLE IF NOT EXISTS dashboard_revisions (
-    dashboard_id TEXT NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
-    revision INTEGER NOT NULL,
-    manifest TEXT NOT NULL,
-    created_at REAL NOT NULL,
-    PRIMARY KEY (dashboard_id, revision)
-);
-CREATE TABLE IF NOT EXISTS dashboard_components (
-    id TEXT NOT NULL,
-    revision INTEGER NOT NULL,
-    recipe TEXT NOT NULL,
-    created_at REAL NOT NULL,
-    PRIMARY KEY (id, revision)
-);
-CREATE TABLE IF NOT EXISTS dashboard_sources (
-    dashboard_id TEXT NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
-    source_id TEXT NOT NULL,
-    fingerprint TEXT NOT NULL,
-    data TEXT,
-    observed_at REAL,
-    attempted_at REAL NOT NULL,
-    error TEXT NOT NULL DEFAULT '',
-    PRIMARY KEY (dashboard_id, source_id)
-);
-CREATE TABLE IF NOT EXISTS dashboard_action_runs (
-    dashboard_id TEXT NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
-    action_id TEXT NOT NULL,
-    request_id TEXT NOT NULL,
-    request_hash TEXT NOT NULL,
-    request TEXT NOT NULL,
-    workflow TEXT NOT NULL,
-    workflow_id TEXT NOT NULL UNIQUE,
-    input TEXT NOT NULL,
-    state TEXT NOT NULL,
-    created_at REAL NOT NULL,
-    PRIMARY KEY (dashboard_id, action_id, request_id)
-);
-CREATE TABLE IF NOT EXISTS dashboard_action_requests (
-    dashboard_id TEXT NOT NULL,
-    action_id TEXT NOT NULL,
-    request_id TEXT NOT NULL,
-    request_hash TEXT NOT NULL,
-    workflow_id TEXT NOT NULL REFERENCES dashboard_action_runs(workflow_id) ON DELETE CASCADE,
-    PRIMARY KEY (dashboard_id, action_id, request_id)
-);
-CREATE UNIQUE INDEX IF NOT EXISTS dashboard_action_active
-    ON dashboard_action_runs(dashboard_id, action_id)
-    WHERE state IN ('starting', 'uncertain', 'running');
 CREATE TABLE IF NOT EXISTS pi_package_installations (
     id TEXT PRIMARY KEY,
     source TEXT NOT NULL,
@@ -422,6 +365,7 @@ class Database:
                 "UPDATE output_storage_objects SET state = 'delete', delete_after = 0 "
                 "WHERE key IN (OLD.object_key, OLD.preview_key); END;"
             )
+            remove_dashboards(self._conn)
             remove_internet_approval(self._conn)
             add_agent_grouping(self._conn, settings.agent_model, settings.default_agent_set)
             # Backfill only legacy rows, never overwrite live message timestamps on restart.
