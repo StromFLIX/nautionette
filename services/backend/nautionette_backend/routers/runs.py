@@ -42,8 +42,14 @@ async def list_runs(workflow: str | None = None) -> dict[str, Any]:
 
 @router.get("/api/runs/{workflow_id}", dependencies=[Depends(require_user)])
 async def get_run(workflow_id: str) -> dict[str, Any]:
-    info = await temporal.describe(workflow_id)
-    row = runs.stored_run(workflow_id)
+    row, info = await runs.describe_run(workflow_id)
+    if info is None:
+        return {
+            "run": row,
+            "temporal": None,
+            "history_status": "expired",
+            "note": runs.HISTORY_EXPIRED_NOTE,
+        }
     if info["status"] == "COMPLETED" and (not row or row.get("result") is None):
         try:
             info["result"] = await temporal.result(workflow_id, timeout=10)
@@ -54,9 +60,25 @@ async def get_run(workflow_id: str) -> dict[str, Any]:
 
 @router.get("/api/runs/{workflow_id}/graph", dependencies=[Depends(require_user)])
 async def get_run_graph(workflow_id: str) -> dict[str, Any]:
-    info = await temporal.describe(workflow_id)
-    history = await temporal.history(workflow_id, limit=2001, run_id=info.get("run_id"))
-    return execution_graph(info, history[:2000], truncated=len(history) > 2000)
+    row, info = await runs.describe_run(workflow_id)
+    history, history_status = await runs.retained_history(workflow_id, info, limit=2001)
+    if info is None:
+        saved = runs.digest(row)
+        info = {
+            "workflow_id": workflow_id,
+            "run_id": row.get("run_id"),
+            "workflow_type": row["workflow"],
+            "status": saved["status"],
+            "start_time": saved["started"],
+            "close_time": None,
+        }
+    graph = execution_graph(info, history[:2000], truncated=len(history) > 2000)
+    graph["history_status"] = history_status
+    if history_status == "expired":
+        graph["warnings"] = [runs.HISTORY_EXPIRED_NOTE]
+        if row:
+            graph["nodes"][0].update(input=row["input"], result=row["result"])
+    return graph
 
 
 @router.get("/api/runs/{workflow_id}/history", dependencies=[Depends(require_user)])

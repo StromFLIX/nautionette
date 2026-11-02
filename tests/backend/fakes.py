@@ -258,6 +258,9 @@ class FakeTemporal:
     async def healthy(self) -> bool:
         return self.up
 
+    async def ensure_retention(self) -> None:
+        pass
+
     async def start(
         self, workflow: str, workflow_id: str, payload: dict[str, Any], timeout_minutes: int = 30
     ) -> dict[str, Any]:
@@ -292,7 +295,9 @@ class FakeTemporal:
 
     async def describe(self, workflow_id: str) -> dict[str, Any]:
         if workflow_id not in self.executions:
-            raise RuntimeError("no such workflow")
+            from temporalio.service import RPCError, RPCStatusCode
+
+            raise RPCError("no such workflow", RPCStatusCode.NOT_FOUND, b"")
         return dict(self.executions[workflow_id])
 
     async def recent(self, limit: int = 50) -> list[dict[str, Any]]:

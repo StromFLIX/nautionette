@@ -5,7 +5,16 @@
       <span class="grow">{{ graph ? 'Live updates paused. ' : '' }}{{ error }}</span>
       <button class="btn btn--sm btn--outline" @click="refresh">Retry</button>
     </div>
-    <WorkflowGraph v-if="graph" :key="graph.nodes[0]?.run_id || workflowId" :graph="graph" :live-paused="Boolean(error)"><template #source><slot name="source"><span class="caption muted">Execution history</span></slot></template></WorkflowGraph>
+    <template v-if="graph?.history_status === 'expired'">
+      <div class="execution-flow__source"><slot name="source" /></div>
+      <div class="empty" role="status">
+        <span class="material-icons" aria-hidden="true">history</span>
+        <strong>Execution history expired</strong>
+        <span>Temporal no longer retains the detailed steps for this run.</span>
+        <RouterLink class="btn btn--outline" :to="`/runs/${encodeURIComponent(workflowId)}`" @click="emit('saved-details')">View saved run details</RouterLink>
+      </div>
+    </template>
+    <WorkflowGraph v-else-if="graph" :key="graph.nodes[0]?.run_id || workflowId" :graph="graph" :live-paused="Boolean(error)"><template #source><slot name="source"><span class="caption muted">Execution history</span></slot></template></WorkflowGraph>
     <div v-else-if="!error" class="empty"><q-spinner size="24px" /><span>Loading execution...</span></div>
   </div>
 </template>
@@ -17,7 +26,7 @@ import { onLiveEvent } from '../store'
 import WorkflowGraph from './WorkflowGraph.vue'
 
 const props = defineProps({ workflowId: { type: String, required: true } })
-const emit = defineEmits(['status'])
+const emit = defineEmits(['status', 'saved-details'])
 const graph = ref(null)
 const error = ref('')
 let timer
@@ -42,7 +51,7 @@ async function refresh () {
   } finally {
     if (version === generation && !disposed) {
       controller = null
-      if (error.value || graph.value?.status === 'running') timer = setTimeout(refresh, error.value ? 5000 : 3000)
+      if (graph.value?.history_status !== 'expired' && (error.value || graph.value?.status === 'running')) timer = setTimeout(refresh, error.value ? 5000 : 3000)
     }
   }
 }
@@ -75,6 +84,7 @@ onUnmounted(() => {
 
 <style scoped>
 .execution-flow { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.execution-flow__source:has(select) { padding: 10px 16px; }
 .execution-flow__error { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 0.75rem; background: var(--warning-soft); color: var(--warning); overflow-wrap: anywhere; }
 .execution-flow__error > .material-icons { font-size: 1.125rem; }
 </style>

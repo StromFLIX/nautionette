@@ -37,6 +37,7 @@ services:
       APP_TOKEN: ${APP_TOKEN:-}
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TEMPORAL_HISTORY_RETENTION_DAYS: ${TEMPORAL_HISTORY_RETENTION_DAYS:-7}
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-nautionette}
@@ -346,6 +347,8 @@ services:
       POSTGRES_PWD: ${POSTGRES_PASSWORD}
       POSTGRES_SEEDS: postgres
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
+      DEFAULT_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      DEFAULT_NAMESPACE_RETENTION: ${TEMPORAL_HISTORY_RETENTION_DAYS:-7}d
       # Temporal is on more than one network; without this it binds to whichever
       # interface it happens to see first and the rest of the stack gets refused.
       BIND_ON_IP: 0.0.0.0

@@ -17,6 +17,9 @@ class Settings:
         self.temporal_address = os.environ.get("TEMPORAL_ADDRESS", "temporal:7233")
         self.temporal_namespace = os.environ.get("TEMPORAL_NAMESPACE", "default")
         self.temporal_task_queue = os.environ.get("TEMPORAL_TASK_QUEUE", "nautionette")
+        self.temporal_history_retention_days = int(os.environ.get("TEMPORAL_HISTORY_RETENTION_DAYS", "7"))
+        if not 1 <= self.temporal_history_retention_days <= 36500:
+            raise ValueError("TEMPORAL_HISTORY_RETENTION_DAYS must be between 1 and 36500")
 
         self.gateway_url = os.environ.get("AGENTGATEWAY_URL", "http://agentgateway:4000")
         self.llm_base_url = os.environ.get("LLM_BASE_URL", f"{self.gateway_url}/v1")

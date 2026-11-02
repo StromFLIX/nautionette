@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
 from dataclasses import replace
 from datetime import timedelta
@@ -11,6 +12,8 @@ from typing import Any
 
 from nautionette.telemetry import temporal_interceptors
 from temporalio.api.enums.v1 import PendingActivityState
+from temporalio.api.namespace.v1 import NamespaceConfig
+from temporalio.api.workflowservice.v1 import DescribeNamespaceRequest, UpdateNamespaceRequest
 from temporalio.client import (
     Client,
     Schedule,
@@ -59,6 +62,7 @@ _HISTORY_EVENTS = {
 
 # Whoever reads a history pays for every character of it.
 _MAX_VALUE_CHARS = 2_000
+log = logging.getLogger(__name__)
 
 
 def _clip(value: Any) -> Any:
@@ -107,6 +111,27 @@ class TemporalGateway:
             self.last_error = str(exc)
             self._client = None
             return False
+
+    async def ensure_retention(self) -> None:
+        """Auto-setup only sets retention on creation; reconcile existing namespaces too."""
+        client = await self.client()
+        desired = timedelta(days=settings.temporal_history_retention_days)
+        current = await client.workflow_service.describe_namespace(
+            DescribeNamespaceRequest(namespace=settings.temporal_namespace)
+        )
+        if current.config.workflow_execution_retention_ttl.ToTimedelta() == desired:
+            return
+        config = NamespaceConfig()
+        config.CopyFrom(current.config)
+        config.workflow_execution_retention_ttl.FromTimedelta(desired)
+        await client.workflow_service.update_namespace(
+            UpdateNamespaceRequest(namespace=settings.temporal_namespace, config=config)
+        )
+        log.info(
+            "Temporal namespace %s history retention set to %d days",
+            settings.temporal_namespace,
+            settings.temporal_history_retention_days,
+        )
 
     async def start(
         self, workflow: str, workflow_id: str, payload: dict[str, Any], timeout_minutes: int = 30

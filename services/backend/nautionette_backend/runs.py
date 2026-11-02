@@ -19,6 +19,7 @@ from fastapi import HTTPException
 from nautionette import input_problems
 from temporalio.client import WorkflowFailureError
 from temporalio.exceptions import ApplicationError
+from temporalio.service import RPCError, RPCStatusCode
 
 from .background import spawn
 from .clients import authoring, broker, temporal
@@ -108,7 +109,7 @@ async def reconcile_schedule_timeouts() -> None:
 async def reconcile_schedules() -> None:
     """Temporal fires schedules itself, even while this backend is offline."""
     while True:
-        for operation in (discover_scheduled_runs, reconcile_schedule_timeouts):
+        for operation in (temporal.ensure_retention, discover_scheduled_runs, reconcile_schedule_timeouts):
             try:
                 await operation()
             except Exception:  # noqa: BLE001 - startup/outages must not kill the recovery loop
@@ -277,6 +278,41 @@ def stored_run(workflow_id: str) -> dict[str, Any] | None:
         row["input"] = json.loads(row["input"] or "{}")
         row["result"] = json.loads(row["result"]) if row["result"] else None
     return row
+
+
+HISTORY_EXPIRED_NOTE = (
+    "Detailed execution history has expired or was removed from Temporal. "
+    "Saved run status, input, and output are still available."
+)
+
+
+async def describe_run(workflow_id: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Only a genuine NOT_FOUND means history is gone, never an upstream outage."""
+    row = stored_run(workflow_id)
+    try:
+        info = await temporal.describe(workflow_id)
+    except RPCError as exc:
+        if exc.status != RPCStatusCode.NOT_FOUND:
+            raise HTTPException(503, "Temporal is unavailable. Please retry.") from exc
+        if row is None:
+            raise HTTPException(404, f"no run with id {workflow_id}") from exc
+        info = None
+    return row, info
+
+
+async def retained_history(
+    workflow_id: str, info: dict[str, Any] | None, limit: int
+) -> tuple[list[dict[str, Any]], str]:
+    if info is None:
+        return [], "expired"
+    try:
+        events = await temporal.history(workflow_id, limit=limit, run_id=info.get("run_id"))
+    except RPCError as exc:
+        # Retention can remove an execution between describe and fetching its history.
+        if exc.status == RPCStatusCode.NOT_FOUND:
+            return [], "expired"
+        raise HTTPException(503, "Temporal is unavailable. Please retry.") from exc
+    return events, "available"
 
 
 def _isotime(value: Any) -> str | None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends
 
 from .. import runs
 from ..agent import agent_job, call_agent
@@ -81,19 +81,20 @@ async def internal_runs(workflow: str | None = None, limit: int = 20) -> dict[st
 
 @router.get("/internal/runs/{workflow_id}")
 async def internal_run(workflow_id: str, limit: int = 200) -> dict[str, Any]:
-    row = runs.stored_run(workflow_id)
-    info = await attempt(temporal.describe(workflow_id), None)
-    if not row and not info:
-        raise HTTPException(status_code=404, detail=f"no run with id {workflow_id}")
+    row, info = await runs.describe_run(workflow_id)
+    events, history_status = await runs.retained_history(workflow_id, info, max(1, min(limit, 2000)))
     detail = {
         **runs.digest(row, info),
         "input": (row or {}).get("input") or {},
         "result": (row or {}).get("result"),
-        "events": await attempt(temporal.history(workflow_id, max(1, min(limit, 2000))), []),
+        "events": events,
+        "history_status": history_status,
     }
     if info and info.get("status") == "COMPLETED" and detail["result"] is None:
         detail["result"] = await attempt(temporal.result(workflow_id, timeout=5), None)
-    if not detail["events"]:
-        # An empty timeline is not the same as a run that did nothing.
-        detail["note"] = "Temporal has no history for this run; only what the app recorded is left."
+    if history_status == "expired":
+        detail["note"] = runs.HISTORY_EXPIRED_NOTE
+    elif not events:
+        # An empty timeline is not the same as an expired or unavailable run.
+        detail["note"] = "Temporal has no history events for this run yet."
     return detail

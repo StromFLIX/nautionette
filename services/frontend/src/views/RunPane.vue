@@ -17,10 +17,14 @@
       <button v-if="isLive" class="btn btn--danger btn--sm" @click="cancel">Cancel</button>
     </header>
 
+    <div v-if="detail.history_status === 'expired'" class="run-history-notice" role="status">
+      <span class="material-icons" aria-hidden="true">history</span>
+      <span>{{ detail.note }}</span>
+    </div>
     <nav class="tabs" aria-label="Run views">
       <button v-for="item in ['Flow', 'Details']" :key="item" class="tab" :class="{ 'tab--active': tab === item }" @click="tab = item">{{ item }}</button>
     </nav>
-    <ExecutionFlow v-if="tab === 'Flow'" :key="id" :workflow-id="id" @status="updateStatus" />
+    <ExecutionFlow v-if="tab === 'Flow'" :key="id" :workflow-id="id" @status="updateStatus" @saved-details="tab = 'Details'" />
     <div v-else class="pane-body scroll-y grow">
       <section class="block">
         <div class="facts">
@@ -85,7 +89,7 @@ const id = computed(() => route.params.id || '')
 const run = computed(() => detail.value?.run)
 const temporal = computed(() => detail.value?.temporal)
 const status = computed(() => (temporal.value?.status || run.value?.status || 'unknown').toLowerCase())
-const isLive = computed(() => ['running', 'started'].includes(status.value))
+const isLive = computed(() => detail.value?.history_status !== 'expired' && ['running', 'started'].includes(status.value))
 
 async function load () {
   const version = ++loadVersion
@@ -93,7 +97,10 @@ async function load () {
   if (!id.value) return
   try {
     const result = await api.run(id.value)
-    if (version === loadVersion) detail.value = result
+    if (version === loadVersion) {
+      detail.value = result
+      if (result.history_status === 'expired') tab.value = 'Details'
+    }
   } catch (error) {
     if (version === loadVersion) loadError.value = error.message
   }
@@ -137,6 +144,9 @@ onUnmounted(() => off())
   max-width: 860px;
   margin-bottom: 24px;
 }
+
+.run-history-notice { display: flex; align-items: center; gap: 10px; padding: 12px 22px; background: var(--warning-soft); color: var(--warning); font-size: 0.8125rem; overflow-wrap: anywhere; }
+.run-history-notice > .material-icons { font-size: 1.125rem; flex-shrink: 0; }
 
 .run-diagnostics > summary { font-size: 0.75rem; color: var(--text-muted); cursor: pointer; }
 

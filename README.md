@@ -967,6 +967,17 @@ execution states, retry attempts, durations, inputs, results, and failures. Refr
 preserve the camera and selection. The active step opens in view on short screens;
 node details become a bottom sheet on mobile.
 
+Detailed execution histories are retained for **7 days after completion** by default
+(`TEMPORAL_HISTORY_RETENTION_DAYS`). Auto-setup applies the policy to new namespaces;
+the backend reconciles the configured namespace on startup and every minute, including
+existing installations, retrying Temporal outages without blocking schedule recovery.
+Retention changes cannot restore already-deleted histories and do not guarantee that
+previously closed runs' already-scheduled deletions are postponed. Saved run summaries,
+inputs, and results remain in the app after the detailed history expires. Old runs open
+their saved details with an expiry notice; their Flow view does not fabricate steps or
+keep retrying. Unknown runs return 404; Temporal outages remain retryable errors, not
+expiry notices.
+
 Legacy drafts open with a visual comparison: green additions, amber changes, and dashed red
 removals, including changed connections. **Proposed**, **Deployed**, and **Code diff**
 remain available for inspection and deployment. Changes outside diagrammed steps are reflected on
