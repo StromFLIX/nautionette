@@ -1,7 +1,8 @@
 """GitHub Actions -> Coolify, pinning the tested commit. No chat notifications.
 
 Requires repository/environment configuration documented in docs/staging.md.
-Non-release events, prereleases and successful duplicate deliveries are silent.
+Automatic non-release events, prereleases and successful duplicate deliveries are silent.
+Manual production retries require a published stable release and the same staging gate.
 Never retry a deployment POST blindly: its response may have been lost.
 """
 
@@ -26,11 +27,15 @@ SHA = re.compile(r"[0-9a-f]{40}")
 def candidate(event_name: str, event: dict, repository: str) -> tuple[str, str] | None:
     if event.get("repository", {}).get("full_name") != repository:
         raise ValueError("Event repository does not match this repository")
-    if event_name == "release":
-        release = event.get("release", {})
+    if event_name in {"release", "workflow_dispatch"}:
+        release = (
+            manual_release(event, repository)
+            if event_name == "workflow_dispatch"
+            else event.get("release", {})
+        )
         tag = release.get("tag_name", "")
         if (
-            event.get("action") != "published"
+            (event_name == "release" and event.get("action") != "published")
             or release.get("draft") is not False
             or release.get("prerelease") is not False
             or not STABLE_TAG.fullmatch(tag)
@@ -42,6 +47,14 @@ def candidate(event_name: str, event: dict, repository: str) -> tuple[str, str] 
             ["/usr/bin/git", "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}"],
             text=True,
         ).strip()
+        if event_name == "workflow_dispatch":
+            # Dispatch SHA identifies main, not the requested tag. Compare the
+            # fetched tag with GitHub instead; never use main as the release pin.
+            remote = request(
+                f"https://api.github.com/repos/{repository}/commits/{tag}", required("GITHUB_TOKEN")
+            )
+            if not isinstance(remote, dict) or remote.get("sha") != commit:
+                raise ValueError("Release tag moved during manual verification; refusing to deploy")
         target = "production"
     elif event_name == "workflow_run":
         run = event.get("workflow_run", {})
@@ -98,6 +111,26 @@ def required(name: str) -> str:
     if not value:
         raise ValueError(f"Configure {name} in GitHub Actions first")
     return value
+
+
+def manual_release(event: dict, repository: str) -> dict:
+    if event.get("ref") not in {"main", "refs/heads/main"}:
+        raise ValueError("Run the manual release pipeline from main")
+    tag = event.get("inputs", {}).get("release_tag", "")
+    if not isinstance(tag, str) or not STABLE_TAG.fullmatch(tag):
+        raise ValueError("release_tag must be a stable vX.Y.Z tag")
+    release = request(
+        f"https://api.github.com/repos/{repository}/releases/tags/{tag}", required("GITHUB_TOKEN")
+    )
+    if (
+        not isinstance(release, dict)
+        or release.get("tag_name") != tag
+        or release.get("draft") is not False
+        or release.get("prerelease") is not False
+        or not release.get("published_at")
+    ):
+        raise ValueError("Manual promotion requires an existing published stable release")
+    return release
 
 
 def identifier(value: str) -> str:
@@ -381,11 +414,14 @@ def deploy(target: str, commit: str) -> str | None:
 
 def main() -> None:
     event = json.loads(Path(required("GITHUB_EVENT_PATH")).read_text())
-    selection = candidate(required("GITHUB_EVENT_NAME"), event, required("GITHUB_REPOSITORY"))
+    event_name = required("GITHUB_EVENT_NAME")
+    if event_name == "workflow_dispatch" and required("GITHUB_REF") != "refs/heads/main":
+        raise ValueError("Run the manual release pipeline from main")
+    selection = candidate(event_name, event, required("GITHUB_REPOSITORY"))
     if selection is None:
         return
     target, commit = selection
-    if target == "production" and commit != required("GITHUB_SHA"):
+    if target == "production" and event_name == "release" and commit != required("GITHUB_SHA"):
         raise ValueError("Release tag moved since the event; refusing to deploy")
     if target == "staging":
         current = subprocess.check_output(

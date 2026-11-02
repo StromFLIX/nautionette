@@ -55,6 +55,144 @@ def test_release_resolves_the_tag_not_target_commitish(monkeypatch):
     assert calls[0][-1] == "refs/tags/v1.2.3^{commit}"
 
 
+def manual_event(**fields):
+    return event(ref="refs/heads/main", inputs={"release_tag": "v1.2.3"}, **fields)
+
+
+@pytest.fixture
+def manual_api(monkeypatch):
+    state = {
+        "release": {
+            "tag_name": "v1.2.3",
+            "draft": False,
+            "prerelease": False,
+            "published_at": "2026-01-01T00:00:00Z",
+            "target_commitish": "main",
+        },
+        "commit": {"sha": COMMIT},
+        "calls": [],
+    }
+
+    def get(url, token, method="GET", payload=None):
+        assert token == "test-github-token"
+        assert method == "GET" and payload is None
+        state["calls"].append(url)
+        if url == f"https://api.github.com/repos/{REPO}/releases/tags/v1.2.3":
+            return state["release"]
+        assert url == f"https://api.github.com/repos/{REPO}/commits/v1.2.3"
+        return state["commit"]
+
+    def resolve(args, **kwargs):
+        assert args == ["/usr/bin/git", "rev-parse", "--verify", "refs/tags/v1.2.3^{commit}"]
+        return COMMIT + "\n"
+
+    monkeypatch.setenv("GITHUB_TOKEN", "test-github-token")
+    monkeypatch.setattr(release, "request", get)
+    monkeypatch.setattr(release.subprocess, "check_output", resolve)
+    return state
+
+
+def test_manual_release_resolves_published_tag_not_main(manual_api):
+    assert release.candidate("workflow_dispatch", manual_event(), REPO) == ("production", COMMIT)
+    assert len(manual_api["calls"]) == 2
+
+
+@pytest.mark.parametrize("ref", ["main", "refs/heads/main"])
+def test_manual_event_accepts_main_ref_formats(manual_api, ref):
+    data = manual_event()
+    data["ref"] = ref
+    assert release.candidate("workflow_dispatch", data, REPO) == ("production", COMMIT)
+
+
+@pytest.mark.parametrize("ref", ["feature", "refs/heads/feature", "refs/tags/v1.2.3", None])
+def test_manual_release_rejects_non_main_refs_before_network(manual_api, ref):
+    data = manual_event()
+    data["ref"] = ref
+    with pytest.raises(ValueError, match="from main"):
+        release.candidate("workflow_dispatch", data, REPO)
+    assert manual_api["calls"] == []
+
+
+@pytest.mark.parametrize("tag", ["v1.2.3-rc.1", "v01.2.3", "main", "v1.2", "v1.2.3;echo bad", "", None])
+def test_invalid_manual_tags_fail_before_network(manual_api, tag):
+    data = manual_event()
+    data["inputs"] = {"release_tag": tag}
+    with pytest.raises(ValueError, match="stable vX.Y.Z"):
+        release.candidate("workflow_dispatch", data, REPO)
+    assert manual_api["calls"] == []
+
+
+@pytest.mark.parametrize(
+    "override",
+    [{"draft": True}, {"prerelease": True}, {"published_at": None}, {"tag_name": "v1.2.4"}],
+)
+def test_manual_release_requires_published_stable_metadata(manual_api, override):
+    manual_api["release"].update(override)
+    with pytest.raises(ValueError, match="published stable release"):
+        release.candidate("workflow_dispatch", manual_event(), REPO)
+    assert len(manual_api["calls"]) == 1
+
+
+def test_manual_release_fails_closed_when_release_lookup_fails(manual_api, monkeypatch):
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("Deployment API returned HTTP 404")
+
+    monkeypatch.setattr(release, "request", unavailable)
+    with pytest.raises(RuntimeError, match="HTTP 404"):
+        release.candidate("workflow_dispatch", manual_event(), REPO)
+
+
+@pytest.mark.parametrize("remote", [{"sha": "b" * 40}, {}, []])
+def test_manual_release_rejects_changed_or_unverified_tag(manual_api, remote):
+    manual_api["commit"] = remote
+    with pytest.raises(ValueError, match="tag moved"):
+        release.candidate("workflow_dispatch", manual_event(), REPO)
+
+
+def manual_main(tmp_path, monkeypatch):
+    path = tmp_path / "manual-event.json"
+    path.write_text(json.dumps(manual_event()))
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(path))
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    monkeypatch.setenv("GITHUB_SHA", "b" * 40)  # Dispatch points at main, not the release tag.
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
+
+
+def test_manual_main_uses_tag_sha_and_existing_staging_gate(tmp_path, monkeypatch, manual_api, api):
+    manual_main(tmp_path, monkeypatch)
+    with pytest.raises(RuntimeError, match="exact commit currently deployed successfully in staging"):
+        release.main()
+    assert all(method == "GET" for _, method, _ in api.calls)
+    api.already_deployed.add("stage")
+    release.main()
+    pins = [
+        payload for path, method, payload in api.calls if path == "/applications/prod" and method == "PATCH"
+    ]
+    assert pins == [{"git_commit_sha": COMMIT, "is_auto_deploy_enabled": False}]
+
+
+def test_manual_main_checks_runtime_ref_before_network(tmp_path, monkeypatch, manual_api, api):
+    manual_main(tmp_path, monkeypatch)
+    monkeypatch.setenv("GITHUB_REF", "refs/tags/v1.2.3")
+    with pytest.raises(ValueError, match="from main"):
+        release.main()
+    assert manual_api["calls"] == []
+    assert api.calls == []
+
+
+def test_automatic_release_still_checks_event_sha(tmp_path, monkeypatch, api):
+    path = tmp_path / "release-event.json"
+    path.write_text(json.dumps(event()))
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(path))
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "release")
+    monkeypatch.setenv("GITHUB_SHA", "b" * 40)
+    monkeypatch.setattr(release, "candidate", lambda *args: ("production", COMMIT))
+    with pytest.raises(ValueError, match="tag moved since the event"):
+        release.main()
+    assert api.calls == []
+
+
 @pytest.mark.parametrize(
     "override",
     [

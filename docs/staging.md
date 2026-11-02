@@ -218,7 +218,16 @@ release webhook or a polling workflow. `.github/workflows/deploy.yml` handles:
 ```text
 main push -> CI success -> staging at that exact commit
 published stable release vX.Y.Z -> require that exact commit in staging -> production
+manual Deploy from main + published release_tag -> same staging gate -> production
 ```
+
+In GitHub's selected deployment branches/tags policy, allow branch `main` for both
+`staging` and `production`, and additionally a **tag** rule `v*` for `production`.
+Checking out main does not change the release event's tag ref. Do not remove the
+environment policy to bypass a rejection. For a manual retry, use **Actions →
+Deploy → Run workflow → main** and supply an existing published stable
+`release_tag`; the pipeline still verifies that tag's commit is staged. See the
+[environment policy and manual release guide](github-pipelines.md#2-routine-releases).
 
 Create GitHub environments named `staging` and `production` (no required reviewer
 is necessary if publishing a release is the intended human promotion action).

@@ -9,6 +9,12 @@ on:
     branches: [main]
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing published stable release to promote (vX.Y.Z); run from main'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -23,15 +29,17 @@ jobs:
     if: >-
       vars.COOLIFY_DEPLOY_ENABLED == 'true' &&
       ((github.event_name == 'release' && !github.event.release.draft && !github.event.release.prerelease) ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
         (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
         github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     # 30m Coolify deployment + up to 30m health grace + checkout/API overhead.
     timeout-minutes: 65
-    environment: ${{ github.event_name == 'release' && 'production' || 'staging' }}
+    environment: ${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
     steps:
-      # Never execute the control script from a PR artifact or release tag.
+      # Environment rules evaluate the event ref: production allows main + v* tags.
+      # Manual promotion is main-only. Always load trusted control code from main.
       - uses: actions/checkout@v7
         with:
           ref: main
@@ -39,6 +47,7 @@ jobs:
           persist-credentials: false
       - name: Pin, deploy, and verify
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           COOLIFY_URL: ${{ vars.COOLIFY_URL }}
           COOLIFY_APPLICATION_UUID: ${{ vars.COOLIFY_APPLICATION_UUID }}
           COOLIFY_STAGING_APPLICATION_UUID: ${{ vars.COOLIFY_STAGING_APPLICATION_UUID }}

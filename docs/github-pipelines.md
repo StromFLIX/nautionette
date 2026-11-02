@@ -18,13 +18,23 @@ Repository **Settings → Environments → New environment**:
 - `production`
 - `staging-refresh`
 
-Limit all three to the **main** deployment branch. The deploy job checks out its
-control script from main; stable release events also need access to `production`.
-In the production environment's deployment rules, allow release tags matching
-`v*` in addition to main (GitHub evaluates the event ref, not checkout's ref).
-Protect main and release tags against unreviewed changes/tag replacement.
-Environment reviewers are optional; publishing a stable release and explicitly
-confirming a destructive refresh are already deliberate operations.
+Use **Selected branches and tags** with these explicit rules:
+
+| Environment | Branch rule | Tag rule |
+| --- | --- | --- |
+| `staging` | `main` | None |
+| `production` | `main` | `v*` |
+| `staging-refresh` | `main` | None |
+
+GitHub evaluates the **event ref**, not checkout's ref: automatic releases arrive
+on `v*` tags, while manual promotions run from `main`. A branch rule named `v*`
+is not a tag rule. Keep the environment restrictions enabled; do not switch to
+unrestricted deployments to make a release run. The deploy job always checks out
+its control script from main. Protect main and release tags against unreviewed
+changes/tag replacement.
+Environment reviewers are optional; publishing a stable release, manually
+promoting an existing release, and explicitly confirming a destructive refresh
+are already deliberate operations.
 
 ### Staging environment
 
@@ -138,6 +148,21 @@ pins Coolify, verifies the queued deployment's actual commit, and checks authent
 component health and output storage connectivity. It never means "deploy whatever
 is now on main". It promotes source commits, not identical prebuilt image digests.
 No data copy happens on release.
+
+To manually retry/promote an **existing published stable release**, open
+**Actions → Deploy → Run workflow**, select branch **main**, and enter its exact
+`release_tag` (for example `v1.2.3`). Manual runs verify the published release using
+the job's read-only `GITHUB_TOKEN`, resolve the tag rather than main's SHA, detect
+tag changes during verification, and apply the same exact-commit staging and
+health gates. Drafts, prereleases, missing releases, invalid tags, and dispatches
+from other refs cannot promote. This does not create/publish a release, restage an
+older commit, copy data, or force a healthy duplicate deployment. Invalid release
+inputs fail visibly; unrelated automatic events remain silent no-ops.
+
+If GitHub rejects the job **before it starts** with a deployment-policy error,
+check the environment rules above: `production` needs both the `main` branch rule
+and the `v*` **tag** rule. After correcting that policy, rerun the blocked job or
+use the manual entry point; do not remove its environment or staging gate.
 
 Before queueing a deployment, the Action provisions random `MAXIO_ACCESS_KEY` and
 `MAXIO_SECRET_KEY` values only if missing/blank in that Coolify application, then
