@@ -28,7 +28,7 @@ from typing import Any
 from weakref import WeakValueDictionary
 
 import httpx
-from docker.errors import NotFound
+from docker.errors import APIError, NotFound
 from docker.types import Ulimit
 from fastapi import HTTPException
 
@@ -213,6 +213,7 @@ def create_runtime(app_id: str, config: dict):
         environment={"MINIAPP_TOKEN": config["token"]},
         user="65532:65532",
         network=net.name,
+        sysctls={"net.ipv6.conf.all.disable_ipv6": "1", "net.ipv6.conf.default.disable_ipv6": "1"},
         volumes=mounts,
         read_only=True,
         tmpfs={"/tmp": "size=8m,noexec,nosuid,nodev,mode=1777"},  # noqa: S108 - private container tmpfs
@@ -312,27 +313,33 @@ def build(app_id: str, revision: int, source: str) -> str:
         deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
             container.reload()
-            if b"BUILD_READY" in container.logs(stdout=True, stderr=False, tail=1):
-                break
             if container.status != "running":
                 diagnostic = container.logs(stdout=False, stderr=True, tail=30).decode("utf-8", "replace")[
                     -6000:
                 ]
                 raise ValueError(f"Rust compilation failed:\n{diagnostic}")
+            # Docker archive/cp cannot read a container's private tmpfs. These
+            # fixed execs run inside its mount namespace, without a shell or
+            # caller-selected arguments. A marker file also cannot be forged
+            # by compiler warning text as a stdout readiness marker could.
+            try:
+                if container.exec_run(["test", "-f", "/tmp/build.ready"]).exit_code == 0:  # noqa: S108
+                    break
+            except APIError:
+                pass  # The compiler may have exited between reload and exec.
             time.sleep(0.5)
         else:
             raise ValueError("Rust build exceeded 180 seconds")
-        chunks, _ = container.get_archive("/tmp/target/release/nautionette-miniapp")  # noqa: S108
-        archive = bytearray()
-        for chunk in chunks:
-            archive.extend(chunk)
-            if len(archive) > FILE_LIMIT + 65536:
+        binary = bytearray()
+        result = container.exec_run(
+            ["cat", "/tmp/target/release/nautionette-miniapp"],
+            stream=True,
+            stderr=False,  # noqa: S108
+        )
+        for chunk in result.output:
+            binary.extend(chunk)
+            if len(binary) > FILE_LIMIT:
                 raise ValueError("Rust artifact exceeds 16 MiB")
-        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
-            members = tar.getmembers()
-            if len(members) != 1 or not members[0].isfile() or members[0].size > FILE_LIMIT:
-                raise ValueError("Invalid compiler artifact")
-            binary = tar.extractfile(members[0]).read()
         if not binary.startswith(b"\x7fELF"):
             raise ValueError("Compiler did not produce an ELF executable")
         context = io.BytesIO()

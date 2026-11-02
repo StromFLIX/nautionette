@@ -60,7 +60,8 @@ def authorize(manifest: dict, request: dict) -> None:
                 or parsed.username
                 or parsed.password
                 or parsed.fragment
-                or "%" in parsed.path
+                or any(c in parsed.path for c in ("%", ";"))
+                or not parsed.path.isascii()
                 or ".." in parsed.path.split("/")
                 or "\\" in request["url"]
                 or any(ord(c) < 33 for c in request["url"])

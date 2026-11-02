@@ -50,6 +50,10 @@ def test_runtime_mounts_and_limits_are_fixed(runtime, monkeypatch):
     assert not allowed.intersection(
         {"fallocate", "ioctl", "io_uring_setup", "io_uring_enter", "io_uring_register"}
     )
+    assert args["sysctls"] == {
+        "net.ipv6.conf.all.disable_ipv6": "1",
+        "net.ipv6.conf.default.disable_ipv6": "1",
+    }
     assert args["nano_cpus"] == 250000000 and args["pids_limit"] == 32
     assert args["mem_limit"] == args["memswap_limit"] == "64m"
     assert set(
@@ -229,6 +233,25 @@ def test_recovery_reaps_only_namespace_owned_orphan_compilers(runtime):
     assert "nautionette.miniapp.build=true" in labels
     assert f"nautionette.deployment={apps.WORKFLOWS_VOLUME}" in labels
     assert not any("unused" in entry for entry in labels)
+
+
+def test_compiler_reads_private_tmpfs_and_ignores_forgeable_log_markers(runtime, monkeypatch):
+    compiler = runtime.containers.create.return_value
+    compiler.status = "running"
+    compiler.logs.return_value = b"BUILD_READY"
+    compiler.exec_run.side_effect = [
+        Mock(exit_code=1),
+        Mock(exit_code=0),
+        Mock(output=iter([b"\x7fELF", b"controlled-artifact"])),
+    ]
+    runtime.images.build.return_value = (Mock(id="scratch-image"), [])
+    monkeypatch.setattr(apps.time, "sleep", Mock())
+    assert apps.build("one", 1, "pub fn health() {}") == "scratch-image"
+    assert compiler.exec_run.call_count == 3
+    assert compiler.exec_run.call_args_list[0].args == (["test", "-f", "/tmp/build.ready"],)  # noqa: S108
+    assert compiler.exec_run.call_args.kwargs == {"stream": True, "stderr": False}
+    compiler.get_archive.assert_not_called()
+    compiler.remove.assert_called_once_with(force=True)
 
 
 def test_app_locks_do_not_collide_or_retain_deleted_ids():

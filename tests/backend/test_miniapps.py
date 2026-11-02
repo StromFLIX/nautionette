@@ -273,7 +273,13 @@ def test_https_path_boundaries_and_no_encoded_traversal():
         "method": "GET",
     }
     caps.authorize(manifest, request)
-    for path in ["/repos/allowed-other", "/repos/allowed/../secret", "/repos/allowed/%2e%2e/secret"]:
+    for path in [
+        "/repos/allowed-other",
+        "/repos/allowed/../secret",
+        "/repos/allowed/%2e%2e/secret",
+        "/repos/allowed/..;param/secret",
+        "/repos/allowed/．．/secret",
+    ]:
         with pytest.raises(HTTPException):
             caps.authorize(manifest, {**request, "url": "https://api.example.com" + path})
     with pytest.raises(HTTPException):

@@ -181,7 +181,8 @@ pub fn handle(_: &mut Context,req:&Request)->Result<Value>{
     "allocation_denied":allocation,"ioctl_denied":ioctl_denied,"xattr_denied":xattr,
     "other_data":std::path::Path::new("/miniapps/counter/1/state.db").exists(),
     "shell":std::path::Path::new("/bin/sh").exists(),
-    "instance_token":std::env::var("APP_TOKEN").is_ok()}))}
+    "instance_token":std::env::var("APP_TOKEN").is_ok(),
+    "ipv6_disabled":std::fs::read_to_string("/proc/sys/net/ipv6/conf/all/disable_ipv6")?.trim()=="1"}))}
 """
             reply = http.post(
                 "/miniapps/probe/deploy",
@@ -223,6 +224,7 @@ pub fn handle(_: &mut Context,req:&Request)->Result<Value>{
                 "other_data": False,
                 "shell": False,
                 "instance_token": False,
+                "ipv6_disabled": True,
             }
             assert http.post("/miniapps/counter/control", json={"action": "suspend"}).status_code == 200
             assert (
