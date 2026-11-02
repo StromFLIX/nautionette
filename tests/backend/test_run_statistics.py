@@ -232,6 +232,9 @@ def test_mcp_observations_are_authenticated_bounded_and_idempotent(client, inter
     result = accounting.statistics("wf")
     assert result["mcp_calls"] == 1
     assert result["tools"][0]["completed"] == 1
+    # Per-tool accounting must not flood SSE/history or trigger a Temporal
+    # describe in every connected run view. Visible statistics poll in batches.
+    assert not db.recent_events()
     response = client.post(
         "/internal/runs/wf/mcp-calls", headers=internal_headers, json={**payload, "tool": "x" * 513}
     )

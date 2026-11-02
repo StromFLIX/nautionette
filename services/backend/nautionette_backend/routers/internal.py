@@ -69,7 +69,6 @@ async def internal_agent_call(payload: dict[str, Any] = Body(...)) -> dict[str, 
         return result
     finally:
         save(status)
-        bus.publish("run.statistics", {"workflow_id": job["run_id"]})
 
 
 class McpCallObservation(BaseModel):
@@ -88,7 +87,8 @@ async def record_mcp_call(workflow_id: str, payload: McpCallObservation) -> dict
         payload.tool,
         payload.status,
     )
-    bus.publish("run.statistics", {"workflow_id": workflow_id})
+    # The visible Statistics tab polls; broadcasting every start/end would
+    # trigger a Temporal describe per tool in every connected run view.
     return {"ok": True}
 
 
