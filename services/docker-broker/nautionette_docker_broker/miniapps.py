@@ -160,20 +160,26 @@ def network(app_id: str):
 def data_files(app_id: str, revision: int, previous: dict | None) -> None:
     folder = root(app_id) / str(revision)
     folder.mkdir(mode=0o755, parents=True, exist_ok=False)
+    # Enter persistent WAL mode while the parent is still writable. Switching
+    # an existing rollback-mode header to WAL needs a transient rollback journal,
+    # which the runtime's read-only /data intentionally cannot create.
+    if not previous:
+        with contextlib.closing(sqlite3.connect(folder / "state.db")) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA user_version=1")
+            conn.commit()
     for suffix in ("", "-wal", "-shm"):
         target = folder / ("state.db" + suffix)
         source = root(app_id) / str(previous["revision"]) / target.name if previous else None
-        if source and source.exists():
+        if source:
             if source.stat().st_size > FILE_LIMIT:
                 raise ValueError("SQLite file exceeds the app storage limit")
             shutil.copyfile(source, target)
         else:
+            # SQLite may unlink the bootstrap WAL/SHM on close; recreate the
+            # fixed mount files without truncating the initialized main DB.
             target.touch()
         target.chmod(0o666)
-    # A fresh DB must have a valid header before read-only-parent-directory WAL use.
-    if not previous:
-        with sqlite3.connect(folder / "state.db") as conn:
-            conn.execute("PRAGMA user_version=1")
 
 
 def runtime_seccomp() -> str:
@@ -332,9 +338,9 @@ def build(app_id: str, revision: int, source: str) -> str:
             raise ValueError("Rust build exceeded 180 seconds")
         binary = bytearray()
         result = container.exec_run(
-            ["cat", "/tmp/target/release/nautionette-miniapp"],
+            ["cat", "/tmp/target/release/nautionette-miniapp"],  # noqa: S108 - private compiler tmpfs
             stream=True,
-            stderr=False,  # noqa: S108
+            stderr=False,
         )
         for chunk in result.output:
             binary.extend(chunk)

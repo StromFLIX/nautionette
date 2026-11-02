@@ -1,6 +1,8 @@
 """Fixed mini-app Docker policy and crash-safe state machine (no Docker required)."""
 
+import contextlib
 import json
+import sqlite3
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -89,6 +91,23 @@ def test_plain_internal_network_and_old_engines_fail_closed(runtime):
         runtime.networks.create.call_args.kwargs["options"]["com.docker.network.bridge.gateway_mode_ipv4"]
         == "isolated"
     )
+
+
+def test_fresh_database_is_wal_ready_with_readonly_parent(runtime):
+    apps.data_files("one", 1, None)
+    folder = apps.root("one") / "1"
+    assert (folder / "state.db").read_bytes()[18:20] == b"\x02\x02"
+    assert {p.name for p in folder.iterdir()} == {"state.db", "state.db-wal", "state.db-shm"}
+    folder.chmod(0o555)
+    try:
+        with contextlib.closing(sqlite3.connect(folder / "state.db")) as conn:
+            assert conn.execute("PRAGMA journal_mode=WAL").fetchone()[0] == "wal"
+            conn.execute("CREATE TABLE smoke(value INTEGER)")
+            conn.execute("INSERT INTO smoke VALUES(1)")
+            conn.commit()
+            assert conn.execute("SELECT value FROM smoke").fetchone()[0] == 1
+    finally:
+        folder.chmod(0o755)
 
 
 def test_failed_health_preserves_previous_database(runtime, monkeypatch):

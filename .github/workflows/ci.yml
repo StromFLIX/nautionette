@@ -176,8 +176,43 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
+  miniapps:
+    name: Mini-app compiler and isolated runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v4
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Build locked mini-app compiler
+        uses: docker/build-push-action@v7
+        with:
+          context: services/miniapp-sdk
+          load: true
+          tags: nautionette/miniapp-builder:dev
+          cache-from: type=gha,scope=miniapp-builder
+          cache-to: type=gha,mode=max,scope=miniapp-builder
+      - name: Build broker for real mini-app runtime tests
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: services/docker-broker/Dockerfile
+          load: true
+          tags: nautionette/docker-broker:dev
+          cache-from: type=gha,scope=miniapp-test-broker
+          cache-to: type=gha,mode=max,scope=miniapp-test-broker
+      - name: Offline compiler, scratch runtime, SQLite, syscall and socket isolation
+        run: |
+          uv sync --locked --all-packages
+          NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_miniapps_docker.py
+
   agent-images:
     name: Image (agent sets)
+    needs: miniapps
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -227,20 +262,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=miniapp-builder
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
-      - name: Build broker for real mini-app runtime tests
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: services/docker-broker/Dockerfile
-          load: true
-          tags: nautionette/docker-broker:dev
-          cache-from: type=gha,scope=miniapp-test-broker
-          cache-to: type=gha,mode=max,scope=miniapp-test-broker
-
       - name: Git credential rotation in a live unprivileged container (offline)
         run: |
           uv sync --locked --all-packages
-          NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_git_credentials_docker.py tests/broker/test_chat_sessions_docker.py tests/broker/test_miniapps_docker.py
+          NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_git_credentials_docker.py tests/broker/test_chat_sessions_docker.py
 
       # Publishing is part of CI, so Deploy cannot start before these images
       # exist. PR code never logs in or pushes (including same-repository PRs).
