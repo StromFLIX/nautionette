@@ -75,6 +75,9 @@ test('opaque frame cannot read host credentials, forge host requests, load exter
       await fetch('/api/settings').catch(()=>{});
       parent.postMessage({kind:'request',path:'/api/settings',method:'GET',id:'forged'},'*');
       try { await nautionette.request('/../other-app'); checks.badPath='allowed'; } catch { checks.badPath='denied'; }
+      try { await nautionette.request('/state',{body:1n}); checks.nonJSON='allowed'; } catch { checks.nonJSON='denied'; }
+      const cyclic={}; cyclic.self=cyclic;
+      try { await nautionette.request('/state',{body:cyclic}); checks.cyclic='allowed'; } catch { checks.cyclic='denied'; }
       checks.result=await nautionette.request('/state');
       window.checks=checks;
       document.querySelector('#value').textContent='checked';
@@ -85,7 +88,7 @@ test('opaque frame cannot read host credentials, forge host requests, load exter
   await expect(app.locator('#value')).toHaveText('checked')
   const frame = page.frames().find(frame => frame.parentFrame())
   const checks = await frame.evaluate(() => window.checks)
-  expect(checks).toEqual({ parentToken: 'denied', ownStorage: 'denied', parentDOM: 'denied', cookie: 'denied', popup: true, badPath: 'denied', result: { value: 0 } })
+  expect(checks).toEqual({ parentToken: 'denied', ownStorage: 'denied', parentDOM: 'denied', cookie: 'denied', popup: true, badPath: 'denied', nonJSON: 'denied', cyclic: 'denied', result: { value: 0 } })
   expect(calls).toHaveLength(1)
   expect(calls[0].headers.authorization).toBe('Bearer host-secret-for-isolation-test')
   expect(JSON.stringify(checks)).not.toContain('host-secret-for-isolation-test')

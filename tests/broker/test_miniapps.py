@@ -229,3 +229,25 @@ def test_recovery_reaps_only_namespace_owned_orphan_compilers(runtime):
     assert "nautionette.miniapp.build=true" in labels
     assert f"nautionette.deployment={apps.WORKFLOWS_VOLUME}" in labels
     assert not any("unused" in entry for entry in labels)
+
+
+def test_app_locks_do_not_collide_or_retain_deleted_ids():
+    first = apps.lock("one")
+    assert apps.lock("one") is first
+    assert apps.lock("other") is not first
+    del first
+    assert "one" not in apps._locks
+
+
+def test_failed_file_removal_keeps_revoked_tombstone(runtime, monkeypatch):
+    apps.save("one", {"active": config()})
+    monkeypatch.setattr(apps, "stop", Mock())
+    runtime.networks.get.side_effect = NotFound("absent")
+    original = apps.shutil.rmtree
+    monkeypatch.setattr(apps.shutil, "rmtree", Mock(side_effect=OSError("filesystem unavailable")))
+    with pytest.raises(OSError):
+        apps.remove("one")
+    assert apps.load("one")["deleting"] and apps.load("one")["disabled"]
+    monkeypatch.setattr(apps.shutil, "rmtree", original)
+    assert apps.remove("one") == {"removed": True}
+    assert not apps.root("one").exists()

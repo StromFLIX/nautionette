@@ -1,7 +1,9 @@
 #!/bin/sh
 set -eu
-cp -a /sdk/template /tmp/build
-cp -a /sdk/target /tmp/target
+# Copy as the publisher UID; never preserve root ownership from the image.
+cp -R /sdk/template /tmp/build
+cp -R /sdk/target /tmp/target
+export CARGO_HOME=/tmp/cargo
 printf '%s' "$APP_SOURCE" | base64 -d > /tmp/build/src/app.rs
 unset APP_SOURCE
 cd /tmp/build

@@ -55,7 +55,9 @@ export function connectMiniapp (frame, invoke, theme) {
     const reply = result => { if (!closed) channel.port1.postMessage({ kind: 'response', id: data.id, ...result }) }
     if (Date.now() - windowStart > 60000) { windowStart = Date.now(); count = 0 }
     if (++count > 64 || controllers.size >= 4) return reply({ error: 'App request capacity reached' })
-    if (typeof data.path !== 'string' || !/^\/[a-zA-Z0-9/_.-]*$/.test(data.path) || data.path.split('/').includes('..') || !['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(data.method) || JSON.stringify(data).length > 48000) return reply({ error: 'Invalid app request' })
+    let serialized
+    try { serialized = JSON.stringify(data) } catch { return reply({ error: 'Provide JSON data, not cyclic objects or BigInt' }) }
+    if (typeof data.path !== 'string' || !/^\/[a-zA-Z0-9/_.-]*$/.test(data.path) || data.path.split('/').includes('..') || !['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(data.method) || serialized.length > 48000) return reply({ error: 'Invalid app request' })
     const controller = new AbortController()
     controllers.add(controller)
     const timer = setTimeout(() => controller.abort(), 35000)

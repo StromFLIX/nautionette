@@ -25,6 +25,7 @@ import threading
 import time
 from pathlib import Path
 from typing import Any
+from weakref import WeakValueDictionary
 
 import httpx
 from docker.errors import NotFound
@@ -44,7 +45,8 @@ FILE_LIMIT = 16 * 1024 * 1024
 BODY_LIMIT = 65536
 _namespace = hashlib.sha256(WORKFLOWS_VOLUME.encode()).hexdigest()[:12]
 _build_slot = threading.Lock()
-_locks = [threading.RLock() for _ in range(32)]
+_locks: WeakValueDictionary = WeakValueDictionary()
+_lock_index = threading.Lock()
 _calls = threading.BoundedSemaphore(16)
 _cap_calls = threading.BoundedSemaphore(8)
 _last_used: dict[str, float] = {}
@@ -57,7 +59,14 @@ def checked(app_id: str) -> str:
 
 
 def lock(app_id: str):
-    return _locks[int(hashlib.sha256(checked(app_id).encode()).hexdigest()[:8], 16) % len(_locks)]
+    # No striped-lock collisions: compiling one app must not freeze another.
+    checked(app_id)
+    with _lock_index:
+        guard = _locks.get(app_id)
+        if guard is None:
+            guard = threading.RLock()
+            _locks[app_id] = guard
+        return guard
 
 
 def root(app_id: str) -> Path:
@@ -534,7 +543,10 @@ def remove(app_id: str) -> dict:
             net = daemon.client().networks.get(name(app_id, "net"))
             net.disconnect(socket.gethostname(), force=True)
             net.remove()
-        shutil.rmtree(root(app_id), ignore_errors=True)
+        # A failed unlink is NOT a successful deletion. Retain the tombstone
+        # and backend source record so the same removal can be retried.
+        shutil.rmtree(root(app_id))
+        _last_used.pop(app_id, None)
         return {"removed": True}
 
 
