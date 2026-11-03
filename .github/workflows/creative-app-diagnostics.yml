@@ -1,0 +1,27 @@
+name: Creative app diagnostics
+
+# Read-only troubleshooting using staging's own credentials; no deployment or mutation.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/creative-app-diagnostics.yml
+      - scripts/check_artcraft_deployment.py
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Inspect creative-app readiness without printing service errors or secrets
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          APP_TOKEN: ${{ secrets.APP_TOKEN }}
+        run: python3 scripts/check_artcraft_deployment.py
