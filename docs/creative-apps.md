@@ -127,9 +127,14 @@ can be lost. Session shutdown/container cleanup reaps disposable processes.
 Version installation is a fixed authenticated broker verb, not a general shell
 or container API. Installers receive only the exact release specification and
 their own artifact volume: no Docker socket, projects, backend token or app data.
-They run on a separate bridge, with dropped capabilities, no-new-privileges,
+They share one temporary, deployment-owned bridge with inter-container
+communication disabled, with dropped capabilities, no-new-privileges,
 read-only root, bounded tmpfs/memory/CPU/PIDs, download/extraction limits and a
-300-second wait. Release archive paths and selected regular files are checked.
+300-second wait. The bridge is released when its last installer exits; offline
+verification needs no network. Sharing the bridge avoids consuming a separate
+Docker address pool for each concurrent installer. Reconciliation reaps only
+old, empty, deployment-owned installer networks, never application networks or
+artifact volumes. Release archive paths and selected regular files are checked.
 The app is executed only after the archive digest matches. Updates trust the
 upstream publisher's native code; digests are integrity checks, not an independent
 security audit or publisher signature.

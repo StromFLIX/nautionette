@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -20,6 +22,8 @@ SPEC = bundled_release("cadcraft")
 @pytest.fixture
 def docker(monkeypatch):
     monkeypatch.setattr(artcraft, "_verified", set())
+    monkeypatch.setattr(artcraft, "_installer_bridge", None)
+    monkeypatch.setattr(artcraft, "_installer_users", 0)
     container, volume, network = Mock(), Mock(), Mock()
     container.wait.return_value = {"StatusCode": 0}
     container.logs.return_value = json.dumps(SPEC).encode()
@@ -30,6 +34,8 @@ def docker(monkeypatch):
     client.volumes.get.side_effect = NotFound("missing")
     client.volumes.list.return_value = []
     client.networks.create.return_value = network
+    client.networks.get.side_effect = NotFound("missing")
+    client.networks.list.return_value = []
     monkeypatch.setattr(daemon, "client", lambda: client)
     monkeypatch.setattr(images, "has_image", lambda tag: True)
     monkeypatch.setattr(images, "snapshot", lambda: {"status": "ready"})
@@ -144,6 +150,7 @@ def test_stale_helpers_are_reaped_but_immutable_artifacts_are_never_deleted(dock
     container.labels = {**artcraft._labels(ID, SPEC), "nautionette.artcraft.installer": "true"}
     container.attrs = {"Created": (datetime.now(UTC) - timedelta(seconds=600)).isoformat()}
     client.containers.list.return_value = [container]
+    client.networks.get.side_effect = None
     client.networks.get.return_value = network
     artcraft.reconcile()
     container.remove.assert_called_once_with(force=True)
@@ -239,3 +246,63 @@ def test_mismatched_labels_are_never_reused_or_removed(docker):
         artcraft.install(ID, SPEC)
     old.remove.assert_not_called()
     client.containers.create.assert_not_called()
+
+
+def test_two_installers_share_one_isolated_bridge_and_release_it_after_both_finish(docker):
+    client, container, _, network = docker
+    barrier = threading.Barrier(2)
+
+    def wait(**kwargs):
+        barrier.wait(timeout=5)
+        return {"StatusCode": 0}
+
+    container.wait.side_effect = wait
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(artcraft.install, identifier, SPEC) for identifier in (ID, "c" * 32)]
+        assert [future.result(timeout=10) for future in futures] == [SPEC, SPEC]
+    client.networks.create.assert_called_once()
+    args = client.networks.create.call_args.kwargs
+    assert args["options"]["com.docker.network.bridge.enable_icc"] == "false"
+    assert args["labels"]["nautionette.deployment"] == artcraft.WORKFLOWS_VOLUME
+    assert args["labels"]["nautionette.artcraft.installer_network"] == "true"
+    assert all(call.kwargs["network"] == network.name for call in client.containers.create.call_args_list)
+    network.remove.assert_called_once()
+    assert artcraft._installer_users == 0 and artcraft._installer_bridge is None
+
+
+def test_unused_network_reaping_is_deployment_scoped_and_never_touches_active_networks(docker):
+    client, *_ = docker
+    labels = {
+        "nautionette.deployment": artcraft.WORKFLOWS_VOLUME,
+        "nautionette.artcraft.installer_network": "true",
+    }
+    old = (datetime.now(UTC) - timedelta(seconds=600)).isoformat()
+    stale = Mock(attrs={"Labels": labels, "Created": old, "Containers": {}})
+    active = Mock(attrs={"Labels": labels, "Created": old, "Containers": {"helper": {}}})
+    foreign = Mock(
+        attrs={"Labels": {**labels, "nautionette.deployment": "other"}, "Created": old, "Containers": {}}
+    )
+    application = Mock(
+        attrs={
+            "Labels": {"nautionette.deployment": artcraft.WORKFLOWS_VOLUME},
+            "Created": old,
+            "Containers": {},
+        }
+    )
+    recent = Mock(attrs={"Labels": labels, "Created": datetime.now(UTC).isoformat(), "Containers": {}})
+    client.networks.list.return_value = [stale, active, foreign, application, recent]
+    artcraft._reap_unused_networks()
+    stale.remove.assert_called_once()
+    for network in (active, foreign, application, recent):
+        network.remove.assert_not_called()
+
+
+def test_preexisting_shared_network_must_have_exact_ownership_and_icc_disabled(docker):
+    client, *_ = docker
+    client.networks.get.side_effect = None
+    foreign = Mock(attrs={"Labels": {}, "Driver": "bridge", "Options": {}})
+    client.networks.get.return_value = foreign
+    with pytest.raises(ValueError, match="ownership/isolation"):
+        artcraft.install(ID, SPEC)
+    client.containers.create.assert_not_called()
+    foreign.remove.assert_not_called()

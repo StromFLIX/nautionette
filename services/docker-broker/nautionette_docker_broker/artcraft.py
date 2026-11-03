@@ -27,6 +27,57 @@ _slots = threading.BoundedSemaphore(2)
 _install_lock = threading.Lock()
 _installing: set[str] = set()
 _verified: set[str] = set()
+_network_lock = threading.Lock()
+_installer_bridge: Any = None
+_installer_users = 0
+
+
+def _acquire_network():
+    """Two installers share one temporary ICC-disabled bridge, not two /16 pools."""
+    global _installer_bridge, _installer_users
+    with _network_lock:
+        if _installer_bridge is None:
+            client = daemon.client()
+            namespace = hashlib.sha256(WORKFLOWS_VOLUME.encode()).hexdigest()[:12]
+            name = f"nautionette-artcraft-installers-{namespace}"
+            labels = {
+                "nautionette.deployment": WORKFLOWS_VOLUME,
+                "nautionette.artcraft.installer_network": "true",
+            }
+            try:
+                network = client.networks.get(name)
+            except NotFound:
+                network = client.networks.create(
+                    name=name,
+                    driver="bridge",
+                    labels=labels,
+                    options={"com.docker.network.bridge.enable_icc": "false"},
+                )
+            else:
+                attrs = network.attrs
+                if (
+                    any((attrs.get("Labels") or {}).get(key) != value for key, value in labels.items())
+                    or attrs.get("Driver") != "bridge"
+                    or (attrs.get("Options") or {}).get("com.docker.network.bridge.enable_icc") != "false"
+                ):
+                    raise ValueError("ArtCraft installer network ownership/isolation mismatch")
+            _installer_bridge = network
+        _installer_users += 1
+        return _installer_bridge
+
+
+def _release_network():
+    global _installer_bridge, _installer_users
+    with _network_lock:
+        _installer_users -= 1
+        if _installer_users == 0:
+            network, _installer_bridge = _installer_bridge, None
+            try:
+                network.remove()
+            except DockerException:
+                # An uncertain/stale helper may still reference it. Reuse its
+                # verified isolation settings later; never disconnect a helper.
+                daemon.log.warning("ArtCraft installer bridge cleanup deferred")
 
 
 def volume_name(identifier: str) -> str:
@@ -65,6 +116,7 @@ def bundled_ready() -> bool:
 
 def ensure_bundled(*, image: str | None = None) -> None:
     """Reuse verified artifacts offline; a missing default is installed at deployment."""
+    _reap_unused_networks()
 
     def prepare(app):
         spec = bundled_release(app)
@@ -120,6 +172,38 @@ def reconcile() -> None:
         except NotFound:
             pass
         # Never delete a possibly published artifact after an ambiguous reply.
+    _reap_unused_networks()
+
+
+def _reap_unused_networks() -> None:
+    # Only deployment-owned installer networks, never application networks or
+    # artifact volumes. This also reclaims old per-artifact bridges after crashes.
+    for network in daemon.client().networks.list(
+        filters={"label": f"nautionette.deployment={WORKFLOWS_VOLUME}"}
+    ):
+        labels = network.attrs.get("Labels") or {}
+        if labels.get("nautionette.deployment") != WORKFLOWS_VOLUME or not (
+            labels.get("nautionette.artcraft")
+            or labels.get("nautionette.artcraft.installer_network") == "true"
+        ):
+            continue
+        with _network_lock:
+            if _installer_users and _installer_bridge is not None and _installer_bridge.name == network.name:
+                continue
+            try:
+                network.reload()
+            except NotFound:
+                continue
+            try:
+                created = datetime.fromisoformat(network.attrs["Created"].replace("Z", "+00:00"))
+            except (KeyError, ValueError):
+                continue
+            if network.attrs.get("Containers") != {} or (datetime.now(UTC) - created).total_seconds() < 420:
+                continue
+            try:
+                network.remove()  # Docker refuses removal if a container attached concurrently.
+            except DockerException:
+                daemon.log.warning("Unused ArtCraft installer network cleanup deferred")
 
 
 def _helper(identifier, spec, image, *, verify=False) -> None:
@@ -128,12 +212,7 @@ def _helper(identifier, spec, image, *, verify=False) -> None:
     labels = _labels(identifier, spec)
     try:
         if not verify:
-            network = client.networks.create(
-                name=name,
-                driver="bridge",
-                labels=labels,
-                options={"com.docker.network.bridge.enable_icc": "false"},
-            )
+            network = _acquire_network()
         container = client.containers.create(
             image,
             entrypoint=[
@@ -162,10 +241,12 @@ def _helper(identifier, spec, image, *, verify=False) -> None:
     finally:
         # Do not remove a network/volume if helper cleanup fails: the helper may
         # still be writing. The stale-helper reconciler can retry its removal.
-        if container is not None:
-            container.remove(force=True)
-        if network is not None:
-            network.remove()
+        try:
+            if container is not None:
+                container.remove(force=True)
+        finally:
+            if network is not None:
+                _release_network()
 
 
 def install(identifier: str, spec: dict[str, str], *, image: str | None = None) -> dict[str, str]:
