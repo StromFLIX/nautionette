@@ -26,6 +26,18 @@ def test_bundled_hashes_ignore_injected_build_arguments(tmp_path, monkeypatch):
     assert image_context.bundled_hash("miniapp") == canonical["miniapp"]
 
 
+def test_python_import_caches_do_not_change_source_identities(tmp_path):
+    root = tmp_path / "context"
+    root.mkdir()
+    (root / "module.py").write_text("print('source')\n")
+    original = image_context.context_hash(root)
+    (root / "__pycache__").mkdir()
+    (root / "__pycache__/module.cpython-313.pyc").write_bytes(b"generated import cache")
+    (root / "module.pyc").write_bytes(b"legacy generated import cache")
+    (root / "module.pyo").write_bytes(b"optimized generated import cache")
+    assert image_context.context_hash(root) == original
+
+
 def test_missing_lock_retains_local_source_hashing(tmp_path, monkeypatch):
     monkeypatch.setattr(image_context, "BUNDLED_LOCK", tmp_path / "absent.json")
     assert image_context.bundled_hash("miniapp") is None

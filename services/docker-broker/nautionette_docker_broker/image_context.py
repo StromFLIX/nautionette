@@ -20,7 +20,11 @@ SOURCE_LOCK = Path("images/source-fingerprints.json")
 def context_hash(root: Path) -> str:
     digest = hashlib.sha256()
     for file in sorted(
-        p for p in root.rglob("*") if p.is_file() and "target" not in p.relative_to(root).parts
+        p
+        for p in root.rglob("*")
+        if p.is_file()
+        and not {"target", "__pycache__"}.intersection(p.relative_to(root).parts)
+        and p.suffix not in {".pyc", ".pyo"}
     ):
         digest.update(str(file.relative_to(root)).encode())
         digest.update(file.read_bytes())
