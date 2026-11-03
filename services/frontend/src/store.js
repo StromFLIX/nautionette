@@ -8,11 +8,13 @@ import { delivery } from './delivery'
 import { chatCache, chatCacheScope, warmChatCache } from './chat-cache'
 import { agentConfig, globalChatConfig, resolveAgentConfig } from './agent-config'
 import { createChatSettings } from './new-chat-settings'
+import { createAgentNavigation } from './agent-navigation'
 import { preferenceError } from './preferences'
 import router from './router'
 
 export const chatSettings = createChatSettings({ scope: chatCacheScope, onError: message => { preferenceError.value = message } })
 
+const agentNavigation = createAgentNavigation({ scope: chatCacheScope, fetchAgents: () => guard(() => api.agents()) })
 const emptyCatalog = () => ({ agent_sets: [], agents: [], models: [], tools: [], default_model: '', default_agent_set: 'default', default_agent_id: null })
 const state = reactive({
   ready: false,
@@ -24,6 +26,7 @@ const state = reactive({
   needsServer: isNative && !server.url,
   system: { components: [], agent_sets: [] },
   catalog: emptyCatalog(),
+  agentNavigation: agentNavigation.state,
   chats: [],
   chatActivity: null,
   projects: [],
@@ -66,6 +69,8 @@ export const actions = {
     if (data) state.system = data
   },
 
+  loadAgents: () => agentNavigation.load(),
+
   async loadCatalog (refresh = false) {
     const scope = chatCacheScope()
     const request = ++catalogRequest
@@ -86,6 +91,7 @@ export const actions = {
     catalog.agents = (catalog.agents || []).map(agent => ({ ...agent, resolved: resolveAgentConfig(agent.config || {}, defaults) }))
     catalog.chat_defaults = agentConfig(catalog, catalog.default_agent_id ?? null)
     state.catalog = catalog
+    if (patch.agents) agentNavigation.sync(patch.agents)
   },
 
   applyAgentSettings (settings) {
@@ -152,6 +158,7 @@ export const actions = {
     if (state.needsServer) return
     await Promise.all([
       actions.loadSystem(),
+      actions.loadAgents(),
       actions.loadCatalog(),
       actions.loadChats(),
       actions.loadProjects(),
@@ -170,7 +177,9 @@ export const actions = {
     state.catalogError = ''
     state.catalogLoaded = false
     state.catalog = emptyCatalog()
+    agentNavigation.clear()
     server.url = value
+    agentNavigation.clear()
     state.needsServer = isNative && !server.url
     actions.connect()
     return actions.refreshAll()
@@ -180,6 +189,7 @@ export const actions = {
     state.catalogError = ''
     state.catalogLoaded = false
     state.catalog = emptyCatalog()
+    agentNavigation.clear()
     auth.token = value
     state.needsToken = false
     actions.connect()
@@ -212,6 +222,7 @@ export const actions = {
       if (kind.startsWith('chat.')) actions.loadChats().catch(() => {})
       if (kind.startsWith('project.')) actions.loadProjects().catch(() => {})
       if (kind === 'miniapp.changed') actions.loadMiniapps().catch(() => {})
+      if (kind === 'agent.profile.changed') actions.loadAgents()
       if (['model.integration.changed', 'mcp.server.changed', 'settings.changed', 'agent.profile.changed'].includes(kind)) actions.loadCatalog(true).catch(() => {})
       emit(event)
     }, error => {

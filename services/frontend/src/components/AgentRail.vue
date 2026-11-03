@@ -17,7 +17,10 @@
             <RouterLink v-close-popup class="pick-menu__item agents__menu-link" :to="editorLocation(agent, true)"><span class="material-icons" aria-hidden="true">add_photo_alternate</span>Change image</RouterLink>
           </q-menu>
         </button>
-        <span v-if="!store.catalogLoaded" class="agents__status caption dim" role="status">{{ store.catalogError ? 'Unavailable' : 'Loading…' }}</span>
+        <div v-if="!agents.length && !store.agentNavigation.loaded && !store.agentNavigation.error" class="agents__placeholders" role="status" aria-label="Loading agents">
+          <span v-for="slot in 3" :key="slot" class="agents__placeholder" aria-hidden="true"><span class="material-icons">person</span></span>
+        </div>
+        <button v-if="store.agentNavigation.error" class="agents__status caption dim" type="button" aria-label="Retry loading agents" title="Retry loading agents" @click="actions.loadAgents()"><span class="material-icons" aria-hidden="true">refresh</span></button>
       </div>
     </div>
     <RouterLink class="agents__manage" to="/settings/agents#agent-profiles" aria-label="Manage agents" title="Manage agents"><span class="material-icons" aria-hidden="true">person_add_alt</span></RouterLink>
@@ -27,7 +30,7 @@
 <script setup>
 import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { store } from '../store'
+import { actions, store } from '../store'
 import { chatLocation } from '../router'
 import AgentAvatar from './AgentAvatar.vue'
 import AgentActivity from './AgentActivity.vue'
@@ -35,7 +38,7 @@ import { agentActivity, activityLabel } from '../agent-activity'
 
 const route = useRoute(), router = useRouter()
 const appsMode = computed(() => route.name === 'apps')
-const agents = computed(() => store.catalog.agents || [])
+const agents = computed(() => store.agentNavigation.agents)
 const selectedId = computed(() => typeof route.query.agent === 'string' ? route.query.agent : null)
 const openAgentMenus = new Set()
 function select (id) {
@@ -60,8 +63,8 @@ function editorLocation (agent, image = false) {
   return { path: '/settings/agents', query: { edit: agent.id }, hash: image ? '#profile-image' : '#agent-profiles' }
 }
 // A removed or invalid selection must not leave the user in an empty dead end.
-watch([agents, () => store.catalogLoaded, selectedId], () => {
-  if (store.catalogLoaded && selectedId.value && !agents.value.some(agent => agent.id === selectedId.value)) {
+watch([agents, () => store.agentNavigation.loaded, selectedId], () => {
+  if (store.agentNavigation.loaded && selectedId.value && !agents.value.some(agent => agent.id === selectedId.value)) {
     router.replace(location(route.params.id || '', null))
   }
 }, { immediate: true })
@@ -83,11 +86,16 @@ watch([agents, () => store.catalogLoaded, selectedId], () => {
 .agents__manage .material-icons { font-size: 1.25rem; }
 .agents__menu-link { text-decoration: none; }
 .agents__menu-link .material-icons { font-size: 1.125rem; }
-.agents__status { padding: 8px 0; text-align: center; font-size: 0.625rem; overflow-wrap: anywhere; }
+.agents__placeholders { display: flex; flex-direction: column; gap: 4px; }
+.agents__placeholder { display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin: 4px; border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text-dim); }
+.agents__status { flex: none; padding: 8px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer; }
+.agents__status:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (max-width: 900px) {
   .agents { flex-direction: row; width: 100%; padding: calc(4px + env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) 4px max(6px, env(safe-area-inset-left)); border-right: 0; border-bottom: 1px solid var(--border); }
   .agents__list { flex-direction: row; min-width: 0; }
   .agents__people { flex-direction: row; overflow-y: hidden; overflow-x: auto; min-width: 0; }
+  .agents__placeholders { flex-direction: row; }
+  .agents__placeholder { width: 36px; height: 36px; margin: 6px 4px; }
   .agents__item { width: 44px; height: 48px; --agent-avatar-size: 36px; }
   .agents__item::before { left: auto; bottom: 0; width: 0; height: 3px; transition: width var(--transition); }
   .agents__item:hover::before { width: 12px; height: 3px; }

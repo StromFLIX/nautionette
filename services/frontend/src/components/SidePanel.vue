@@ -266,7 +266,7 @@ async function setUnread (chat, unread) {
 }
 
 const section = computed(() => route.name || 'chats')
-const selectedAgent = computed(() => ['chats', 'apps'].includes(section.value) ? store.catalog.agents?.find(agent => agent.id === route.query.agent) : null)
+const selectedAgent = computed(() => ['chats', 'apps'].includes(section.value) ? store.agentNavigation.agents.find(agent => agent.id === route.query.agent) : null)
 const heading = computed(() => selectedAgent.value?.name || ({ chats: 'Chats', workflows: 'Workflows', runs: 'Runs', apps: 'Apps' }[section.value]))
 
 const matches = (haystack) => haystack.toLowerCase().includes(query.value.trim().toLowerCase())

@@ -266,6 +266,109 @@ for (const width of [1440, 320]) {
   })
 }
 
+for (const width of [1440, 390]) {
+  test(`agent buttons load independently of discovery and stay usable before portraits at ${width}px`, async ({ page, context }) => {
+    const { state, research } = await fixture(context)
+    let releaseCatalog, releaseAgents, releaseImage
+    state.catalogGate = new Promise(resolve => { releaseCatalog = resolve })
+    const agentsGate = new Promise(resolve => { releaseAgents = resolve })
+    const imageGate = new Promise(resolve => { releaseImage = resolve })
+    research.image = '/portraits/ada.png'
+    await context.route('**/api/agents', async route => { await agentsGate; await route.fallback() })
+    await context.route('**/portraits/ada.png', async route => {
+      await imageGate
+      await route.fulfill({ contentType: 'image/png', body: portrait })
+    })
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats', { waitUntil: 'domcontentloaded' })
+    try {
+      const rail = page.getByRole('navigation', { name: 'Chats by agent' })
+      await expect(rail.getByRole('status', { name: 'Loading agents' })).toBeVisible()
+      await expect(rail.locator('.agents__placeholder')).toHaveCount(3)
+      await expect(all(page)).toBeEnabled()
+      releaseAgents()
+      const ada = rail.getByRole('button', { name: 'Chats with Ada', exact: true })
+      await expect(ada).toBeVisible()
+      await expect(rail.getByRole('status')).toHaveCount(0)
+      await expect(ada.locator('.agent-avatar__initials')).toBeVisible()
+      await expect(ada.locator('.agent-avatar__initials')).toHaveText('AD')
+      await expect(ada.locator('img')).toHaveAttribute('loading', 'lazy')
+      await expect(ada.locator('img')).toHaveAttribute('decoding', 'async')
+      await expect(ada.locator('img')).toHaveCSS('opacity', '0')
+      await page.screenshot({ path: test.info().outputPath(`agent-navigation-placeholder-${width}.png`) })
+      const bounds = await ada.boundingBox()
+      await ada.click()
+      await expect(page).toHaveURL(/\/chats\?agent=agent-1$/)
+      await expect(rows(page)).toHaveCount(1)
+      await expect(page.locator('.side__title')).toHaveText('Ada')
+      releaseImage()
+      await expect(ada.locator('img')).toHaveCSS('opacity', '1')
+      await expect(ada.locator('.agent-avatar__initials')).toBeHidden()
+      const loaded = await ada.boundingBox()
+      expect(loaded.width).toBe(bounds.width)
+      expect(loaded.height).toBe(bounds.height)
+      await page.screenshot({ path: test.info().outputPath(`agent-navigation-ready-${width}.png`) })
+    } finally { releaseAgents(); releaseImage(); releaseCatalog() }
+  })
+
+  test(`reload restores real agent buttons while both APIs are delayed at ${width}px`, async ({ page, context }) => {
+    const { state } = await fixture(context)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats?agent=agent-1')
+    await expect(page.getByRole('button', { name: 'Chats with Ada', exact: true }).locator('img')).toHaveCSS('opacity', '1')
+    let releaseCatalog, releaseAgents
+    state.catalogGate = new Promise(resolve => { releaseCatalog = resolve })
+    const gate = new Promise(resolve => { releaseAgents = resolve })
+    await context.route('**/api/agents', async route => { await gate; await route.fallback() })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    try {
+      const ada = page.getByRole('button', { name: 'Chats with Ada', exact: true })
+      const grace = page.getByRole('button', { name: 'Chats with Grace', exact: true })
+      await expect(ada).toBeVisible()
+      await expect(ada).toHaveAttribute('aria-pressed', 'true')
+      await expect(ada.locator('.agent-avatar__initials')).toBeVisible()
+      await expect(ada.locator('img')).toHaveCount(0)
+      await expect(page.locator('.agents__placeholders')).toHaveCount(0)
+      await page.screenshot({ path: test.info().outputPath(`agent-navigation-cached-${width}.png`) })
+      await grace.click()
+      await expect(page).toHaveURL(/\?agent=agent-2$/)
+      await expect(rows(page)).toHaveCount(2)
+      await expect(page.locator('.side__title')).toHaveText('Grace')
+      // Cached IDs must not trigger redirects until the fresh agent list arrives.
+      state.agents = state.agents.filter(agent => agent.name !== 'Grace')
+      releaseAgents()
+      await expect(page).toHaveURL(/\/chats$/)
+      await expect(grace).toHaveCount(0)
+      await expect(ada.locator('img')).toHaveCSS('opacity', '1')
+    } finally { releaseAgents(); releaseCatalog() }
+  })
+}
+
+test('agent navigation retries independently of model discovery and failed portraits retain initials', async ({ page, context }) => {
+  const { state, research } = await fixture(context)
+  let unavailable = true, releaseCatalog
+  state.catalogGate = new Promise(resolve => { releaseCatalog = resolve })
+  research.image = '/portraits/broken.png'
+  await context.route('**/portraits/broken.png', route => route.fulfill({ status: 404, body: '' }))
+  await context.route('**/api/agents', route => unavailable ? route.fulfill({ status: 503, json: { detail: 'Unavailable' } }) : route.fallback())
+  await page.goto('/chats')
+  try {
+    const retry = page.getByRole('button', { name: 'Retry loading agents' })
+    await expect(retry).toBeVisible()
+    unavailable = false
+    await retry.click()
+    const ada = page.getByRole('button', { name: 'Chats with Ada', exact: true })
+    await expect(ada).toBeVisible()
+    await expect(ada.locator('img')).toHaveCount(0)
+    await expect(ada.locator('.agent-avatar__initials')).toBeVisible()
+    research.image = `data:image/png;base64,${portrait.toString('base64')}`
+    state.pendingEvents.push('agent.profile.changed')
+    await expect(ada.locator('img')).toHaveCSS('opacity', '1')
+    await expect(ada.locator('.agent-avatar__initials')).toBeHidden()
+    await expect(retry).toHaveCount(0)
+  } finally { releaseCatalog() }
+})
+
 test('older list responses cannot resurrect finished agents or consumed queue counts', async ({ page, context }) => {
   const { state, research } = await fixture(context)
   state.chatActivity = { running: 1, queued: 2, agents: { [research.id]: { running: 1, queued: 2 } } }
