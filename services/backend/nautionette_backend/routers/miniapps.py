@@ -42,7 +42,9 @@ def miniapp_contract() -> dict:
             "Set agent_id to the owning saved agent. icon is a Material icon name; image is an optional "
             "inline PNG/JPEG/WebP avatar (32 KiB maximum). Apps are not pinned by default. "
             "Pin the active release via PATCH with pinned=true and pin_revision=active_revision. "
-            "The five most recently pinned active apps appear above chats. Publishing without pinned=true "
+            "The five most recently pinned active apps appear as avatars below chat/app search, scoped to "
+            "the selected agent or across agents in All chats/All apps. Hidden sidebars use a detail-pane "
+            "shortcut bar instead. Publishing without pinned=true "
             "unpins the old version; failed releases never change pins. Restore with pinned=true to use "
             "and pin retained source as a new release."
         ),

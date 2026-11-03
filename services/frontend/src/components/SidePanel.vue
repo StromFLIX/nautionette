@@ -51,6 +51,7 @@
           <span class="material-icons" style="font-size: 1rem">close</span>
         </button>
       </div>
+      <PinnedApps v-if="showPinnedApps && ['chats', 'apps'].includes(section)" compact />
       <div v-if="section === 'chats'" v-show="showGroupControls" id="chat-group-controls" class="side__controls">
         <div class="side__control">
           <span class="side__control-label">Group</span>
@@ -110,7 +111,7 @@
       <template v-else-if="section === 'apps'">
         <RouterLink v-for="app in filteredApps" :key="app.id" :to="{ path: `/apps/${app.id}`, query: route.query }" class="row-item" :class="{ 'row-item--active': route.params.id === app.id }">
           <AppAvatar :app="app" />
-          <div class="grow"><div class="row-item__title truncate">{{ app.title }}</div><div class="row-item__sub truncate">{{ appOwner(app, store.catalog.agents) }} · {{ app.archived ? 'Archived' : `v${app.active_revision || 'pending'}` }}</div></div>
+          <div class="grow"><div class="row-item__title truncate">{{ app.title }}</div><div class="row-item__sub truncate">{{ appOwner(app, store.agentNavigation.agents) }} · {{ app.archived ? 'Archived' : `v${app.active_revision || 'pending'}` }}</div></div>
           <span v-if="app.pinned" class="material-icons row-item__pin" aria-label="Pinned">push_pin</span>
         </RouterLink>
         <p v-if="store.appsError" class="side__error caption" role="alert">{{ store.appsError }}</p>
@@ -201,6 +202,7 @@ import { actions, health, store } from '../store'
 import { api } from '../api'
 import ChatRow from './ChatRow.vue'
 import AppAvatar from './AppAvatar.vue'
+import PinnedApps from './PinnedApps.vue'
 import { appOwner } from '../miniapps'
 import { preferences } from '../preferences'
 import { CHAT_GROUP_OPTIONS, groupChats } from '../chat-groups'
@@ -209,6 +211,7 @@ import { chatLocation } from '../router'
 
 const props = defineProps({
   showCollapseButton: { type: Boolean, default: false },
+  showPinnedApps: { type: Boolean, default: true },
   isChatActive: { type: Function, required: true }
 })
 defineEmits(['collapse-sidebar', 'open-search'])

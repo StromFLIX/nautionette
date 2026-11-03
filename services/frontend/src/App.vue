@@ -10,7 +10,7 @@
     <AgentRail v-if="['chats', 'apps'].includes(route.name)" v-show="!sideCollapsed" class="shell__agents" />
     <template v-if="!fullPage">
       <aside v-show="!sideCollapsed" data-skin-part="sidebar" id="shell-sidebar" class="shell__side" :style="{ width: `${sideWidth}px` }">
-        <SidePanel ref="sidePanel" :show-collapse-button="!mobile" :is-chat-active="isChatActive" @collapse-sidebar="collapseSidebar" @open-search="openSearch" />
+        <SidePanel ref="sidePanel" :show-collapse-button="!mobile" :show-pinned-apps="!detailPins" :is-chat-active="isChatActive" @collapse-sidebar="collapseSidebar" @open-search="openSearch" />
         <div
           class="shell__grip"
           :class="{ 'shell__grip--active': dragging }"
@@ -23,7 +23,7 @@
     </template>
 
     <main class="shell__main" data-skin-part="main">
-      <PinnedApps v-if="route.name === 'chats'" />
+      <PinnedApps v-if="detailPins" />
       <RouterView />
     </main>
 
@@ -94,6 +94,10 @@ const mobile = ref(mobileMedia.matches)
 const updateMobile = event => { mobile.value = event.matches }
 // Keep the desktop preference without hiding the list on narrow screens.
 const sideCollapsed = computed(() => !mobile.value && preferences.sideCollapsed)
+// Keep one shortcut bar: beside search when the list is visible, otherwise in
+// the detail pane so collapsed sidebars and mobile chats/apps retain access.
+const detailPins = computed(() => ['chats', 'apps'].includes(route.name) &&
+  (sideCollapsed.value || (mobile.value && hasSelection.value)))
 
 function openSidebar () {
   if (!mobile.value) preferences.sideCollapsed = false

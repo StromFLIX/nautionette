@@ -84,7 +84,7 @@ Five rules the diagram encodes:
 
 ## Mini-apps
 
-Ask an agent to build an interactive app. Agents publish self-contained HTML/CSS/JavaScript with an optional lightweight Rust backend and bundled SQLite; ordinary buttons call the app directly, not a workflow. The **Apps** section supports ownership, pins, retained releases, archiving, rebuilding and restoring code.
+Ask an agent to build an interactive app. Agents publish self-contained HTML/CSS/JavaScript with an optional lightweight Rust backend and bundled SQLite; ordinary buttons call the app directly, not a workflow. The **Apps** section supports ownership, pins, retained releases, archiving, rebuilding and restoring code. Pinned app avatars appear below chat/app search for their owning agent, or across agents in **All chats** and **All apps**. When the list is hidden on mobile or the sidebar is collapsed, shortcuts remain above the open chat/app.
 
 Generated frontends run in opaque-origin iframes without the instance token or browser storage. Platform-owned offline builds produce `scratch` runtimes; exact MCP/resource and public-HTTPS grants are enforced server-side. Runtime state has bounded persistent files on the broker’s `miniapps` volume. Rust runtimes require **Docker Engine 28+** for isolated gateway networks. No extra domains or manually configured per-app containers are required.
 
