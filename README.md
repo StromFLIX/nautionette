@@ -512,7 +512,8 @@ image together; Compose provisions the private MaxIO service/bucket.
 
 ### Native creative apps
 
-The default agent image bundles all 13 ArtCraft native CLIs: PhotoCraft,
+Deployment prepares all 13 ArtCraft native CLIs in verified, read-only tool
+volumes, keeping their binaries out of the Pi image: PhotoCraft,
 VectorCraft, FilmCraft, LightCraft, PdfCraft, EffectCraft, DesignCraft, FigCraft,
 WordCraft, SoundCraft, DeckCraft, CADCraft and GridCraft. Agents discover and use
 headless tools through `craft_apps`, `craft_tools` and `craft_call`; no browser
@@ -520,10 +521,14 @@ connection or manual MCP setup is required. Ask for a deliverable, then find its
 published source, exports and preview under **Outputs**. Later turns can restore
 and revise the source.
 
-**Settings → Creative apps** enables/disables apps, discovers upstream releases,
-installs an exact version with checksum/MCP verification, and restores bundled
-versions. New agent runs get the updated selection; running containers retain
-their pinned binaries. Failed updates keep the working version. Engines start on
+**Settings → Creative apps** immediately shows cached latest-version/update
+badges, checks releases, updates one app or **Update all**, and offers opt-in
+hourly **Automatically update all apps**. Exact pins/default restore remain under
+**Version options**. Updates queue persistently with two checksum/MCP-verifying
+installers at a time; failures keep the working version. Automatic updates include
+disabled apps and replace manual pins, but never downgrade a newer selected
+version. New turns receive the updated selection; running containers retain
+their pinned binaries. Engines start on
 demand and share the existing sandbox's resource/security boundary; desktop-only
 commands and embedded interactive editors are not included.
 

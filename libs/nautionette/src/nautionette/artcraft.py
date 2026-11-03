@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import platform
 import re
@@ -71,6 +72,16 @@ def bundled_release(app: str) -> dict[str, str]:
     return {"app": app, "version": item["version"], "arch": arch, "sha256": item["sha256"][arch]}
 
 
+def release_installation_id(spec: dict[str, str]) -> str:
+    """Content-addressed defaults survive image upgrades and pin queued turns."""
+    return hashlib.sha256(json.dumps(release(spec), sort_keys=True).encode()).hexdigest()[:32]
+
+
+def bundled_selection(app: str) -> dict[str, Any]:
+    spec = bundled_release(app)
+    return {"app": app, "release": spec, "installation_id": release_installation_id(spec)}
+
+
 def runtime_selection(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list) or len(value) > len(catalog()):
         raise ValueError("Invalid ArtCraft runtime selection")
@@ -87,6 +98,7 @@ def runtime_selection(value: Any) -> list[dict[str, Any]]:
             raise ValueError("ArtCraft app/release mismatch")
         if "installation_id" in item:
             installation_id(item["installation_id"])
-        elif spec != bundled_release(app):
-            raise ValueError("Unbundled ArtCraft releases require a verified installation")
+        # Legacy queued jobs have no installation ID. The broker derives their
+        # exact content-addressed volume and fails closed if it is not prepared.
+        # Never substitute the current default for a previously pinned release.
     return value

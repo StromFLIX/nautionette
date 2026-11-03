@@ -30,6 +30,7 @@ def test_agents_start_without_a_network_decision(monkeypatch, job):
     monkeypatch.setattr(chat_sessions, "claim", lambda chat_id: nullcontext([]))
     monkeypatch.setattr(agent_run.images, "discovered_agent_sets", lambda: ["default"])
     monkeypatch.setattr(agent_run.images, "has_image", lambda tag: True)
+    monkeypatch.setattr(agent_run.images, "snapshot", lambda: {"status": "ready"})
     monkeypatch.setattr(agent_run.images, "image_tag", lambda name: "test-image")
     events = list(agent_run.run(job))
     assert not any('"type": "error"' in event for event in events)

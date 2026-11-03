@@ -8,7 +8,7 @@ from unittest.mock import Mock
 import pytest
 from docker.errors import NotFound
 from fastapi.testclient import TestClient
-from nautionette.artcraft import bundled_release
+from nautionette.artcraft import bundled_release, bundled_selection, release_installation_id
 from nautionette_docker_broker import artcraft, daemon, images, main
 
 from ..conftest import INTERNAL_TOKEN
@@ -19,6 +19,7 @@ SPEC = bundled_release("cadcraft")
 
 @pytest.fixture
 def docker(monkeypatch):
+    monkeypatch.setattr(artcraft, "_verified", set())
     container, volume, network = Mock(), Mock(), Mock()
     container.wait.return_value = {"StatusCode": 0}
     container.logs.return_value = json.dumps(SPEC).encode()
@@ -31,6 +32,7 @@ def docker(monkeypatch):
     client.networks.create.return_value = network
     monkeypatch.setattr(daemon, "client", lambda: client)
     monkeypatch.setattr(images, "has_image", lambda tag: True)
+    monkeypatch.setattr(images, "snapshot", lambda: {"status": "ready"})
     return client, container, volume, network
 
 
@@ -75,12 +77,17 @@ def test_failed_verification_reaps_unpublished_artifacts_and_releases_slot(docke
     artcraft._slots.release()
 
 
-def test_never_overwrites_an_existing_artifact_and_bounds_volume_count(docker):
-    client, *_ = docker
+def test_reuses_only_verified_existing_artifacts_and_bounds_volume_count(docker):
+    client, container, volume, network = docker
     client.volumes.get.side_effect = None
-    with pytest.raises(ValueError, match="never overwritten"):
-        artcraft.install(ID, SPEC)
+    client.volumes.get.return_value = SimpleNamespace(attrs={"Labels": artcraft._labels(ID, SPEC)})
+    assert artcraft.install(ID, SPEC) == SPEC
+    args = client.containers.create.call_args.kwargs
+    assert args["entrypoint"][-1] == "--verify"
+    assert args["network"] == "none" and args["volumes"][artcraft.volume_name(ID)]["mode"] == "ro"
     client.volumes.create.assert_not_called()
+    client.networks.create.assert_not_called()
+    client.volumes.get.side_effect = NotFound("missing")
     client.volumes.list.return_value = [object()] * 128
     with pytest.raises(ValueError, match="storage limit"):
         artcraft.install(ID, SPEC)
@@ -112,7 +119,13 @@ def test_override_mounts_are_read_only_scoped_to_deployment_app_release_and_dige
     mount = artcraft.mounts([item])[0]
     assert mount["ReadOnly"] and mount["Target"] == "/opt/artcraft/cadcraft"
     assert mount["Source"] == artcraft.volume_name(ID)
-    assert artcraft.mounts([{"app": "cadcraft", "release": SPEC}]) == []
+    default = bundled_selection("cadcraft")
+    client.volumes.get.return_value = SimpleNamespace(
+        attrs={"Labels": artcraft._labels(default["installation_id"], SPEC)}
+    )
+    assert artcraft.mounts([{"app": "cadcraft", "release": SPEC}])[0]["Source"] == artcraft.volume_name(
+        default["installation_id"]
+    )
     for field in ("sha256", "version", "app"):
         labels = artcraft._labels(ID, SPEC)
         labels[f"nautionette.artcraft.{field}"] = "wrong"
@@ -153,3 +166,76 @@ def test_only_authenticated_fixed_endpoint_can_install(docker, monkeypatch):
     assert not calls
     assert client.post(path, headers=headers, json=body).json() == SPEC
     assert calls == [(ID, SPEC)]
+
+
+def test_defaults_are_prepared_once_reverified_offline_and_pruned_volumes_are_detected(docker, monkeypatch):
+    client, container, volume, _ = docker
+    stored = {}
+    monkeypatch.setattr(artcraft, "catalog", lambda: {"cadcraft": {}})
+
+    def get(name):
+        if name not in stored:
+            raise NotFound("missing")
+        return stored[name]
+
+    def create(name, labels):
+        stored[name] = SimpleNamespace(attrs={"Labels": labels})
+        return volume
+
+    client.volumes.get.side_effect = get
+    client.volumes.create.side_effect = create
+    assert not artcraft.bundled_ready()
+    artcraft.ensure_bundled()
+    assert artcraft.bundled_ready()
+    assert client.containers.create.call_count == 1
+    identifier = release_installation_id(SPEC)
+    assert client.volumes.create.call_args.kwargs["name"] == artcraft.volume_name(identifier)
+    assert artcraft.mounts([bundled_selection("cadcraft")])[0]["ReadOnly"]
+    artcraft.ensure_bundled()
+    assert client.containers.create.call_count == 1
+    artcraft._verified.clear()  # broker restart must not blindly trust labels
+    artcraft.ensure_bundled()
+    assert client.containers.create.call_count == 2
+    assert client.containers.create.call_args.kwargs["network"] == "none"
+    assert client.volumes.create.call_count == 1
+    stored.clear()
+    assert not artcraft.bundled_ready()
+    artcraft.ensure_bundled()
+    assert client.volumes.create.call_count == 2 and artcraft.bundled_ready()
+
+
+def test_partial_unreferenced_artifact_is_replaced_not_overwritten(docker):
+    client, container, volume, _ = docker
+    client.volumes.get.side_effect = None
+    old = Mock(attrs={"Labels": artcraft._labels(ID, SPEC)})
+    client.volumes.get.return_value = old
+    container.wait.side_effect = [{"StatusCode": 1}, {"StatusCode": 0}]
+    assert artcraft.install(ID, SPEC) == SPEC
+    old.remove.assert_called_once_with()
+    assert client.containers.create.call_count == 2
+    assert client.containers.create.call_args_list[0].kwargs["network"] == "none"
+    assert client.containers.create.call_args_list[1].kwargs["network"] != "none"
+
+
+def test_invalid_artifact_in_use_cannot_be_deleted_or_rewritten(docker):
+    client, container, *_ = docker
+    client.volumes.get.side_effect = None
+    old = Mock(attrs={"Labels": artcraft._labels(ID, SPEC)})
+    old.remove.side_effect = RuntimeError("volume is in use")
+    client.volumes.get.return_value = old
+    container.wait.return_value = {"StatusCode": 1}
+    with pytest.raises(RuntimeError, match="in use"):
+        artcraft.install(ID, SPEC)
+    client.volumes.create.assert_not_called()
+    assert artcraft.volume_name(ID) not in artcraft._verified
+
+
+def test_mismatched_labels_are_never_reused_or_removed(docker):
+    client, *_ = docker
+    client.volumes.get.side_effect = None
+    old = Mock(attrs={"Labels": {**artcraft._labels(ID, SPEC), "nautionette.artcraft.sha256": "0" * 64}})
+    client.volumes.get.return_value = old
+    with pytest.raises(ValueError, match="ownership/release"):
+        artcraft.install(ID, SPEC)
+    old.remove.assert_not_called()
+    client.containers.create.assert_not_called()

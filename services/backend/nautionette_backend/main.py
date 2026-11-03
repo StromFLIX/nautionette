@@ -48,6 +48,7 @@ async def lifespan(_: FastAPI):
     recover_interrupted()
     pi_packages.recover_installations()
     artcraft.recover_installations()
+    spawn(artcraft.maintenance(), name="creative-app-maintenance")
     spawn(recover_chat_agents(), name="chat-agent-recovery")
     spawn(github_mentions.consume(), name="github-mention-inbox")
     spawn(output_maintenance.run(), name="output-storage-maintenance")

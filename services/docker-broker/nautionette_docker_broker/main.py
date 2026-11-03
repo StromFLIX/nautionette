@@ -87,7 +87,11 @@ def agent_sets(x_internal_token: str | None = Header(default=None)) -> dict[str,
     return {
         "agent_sets": [
             # Ask the daemon: an image built earlier can be pruned while the broker runs.
-            {"name": name, "image": tag, "ready": images.has_image(tag)}
+            {
+                "name": name,
+                "image": tag,
+                "ready": images.has_image(tag) and images.snapshot()["status"] == "ready",
+            }
             for name in images.discovered_agent_sets()
             if (tag := images.image_tag(name))
         ]
@@ -137,6 +141,8 @@ def install_artcraft(
     _check_internal(x_internal_token)
     if set(payload) != {"installation_id", "release"}:
         raise HTTPException(422, "Provide an installation ID and fixed ArtCraft release")
+    if images.snapshot()["status"] != "ready":
+        raise HTTPException(503, "Default app artifacts are being prepared; queued updates will retry")
     try:
         return artcraft.install(payload["installation_id"], payload["release"])
     except ValueError as exc:

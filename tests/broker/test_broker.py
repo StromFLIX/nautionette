@@ -14,7 +14,17 @@ import pytest
 import yaml
 from docker.models.containers import ContainerCollection
 from fastapi.testclient import TestClient
-from nautionette_docker_broker import agent_run, chat_sessions, config, daemon, images, main, monitor, workers
+from nautionette_docker_broker import (
+    agent_run,
+    artcraft,
+    chat_sessions,
+    config,
+    daemon,
+    images,
+    main,
+    monitor,
+    workers,
+)
 
 from ..conftest import INTERNAL_TOKEN
 
@@ -114,6 +124,10 @@ def docker(monkeypatch: pytest.MonkeyPatch) -> FakeDocker:
     monkeypatch.setattr(daemon, "client", lambda: fake)
     monkeypatch.setattr(images, "image_state", {"status": "pending", "images": {}, "log": [], "error": None})
     monkeypatch.setattr(images, "AGENT_IMAGE_REGISTRY_PREFIX", "")
+    # Artifact isolation/readiness is exercised with a volume-aware fake in
+    # test_artcraft.py. Image/container lifecycle tests do not download apps.
+    monkeypatch.setattr(artcraft, "ensure_bundled", lambda: None)
+    monkeypatch.setattr(artcraft, "bundled_ready", lambda: True)
     return fake
 
 
@@ -342,6 +356,25 @@ def test_pulled_base_is_used_by_hash_for_local_agent_build(agent_images, docker,
     images.ensure_images()
     assert images.snapshot()["status"] == "ready"
     assert build_args == [{"BASE_IMAGE": f"{config.IMAGE_PREFIX}base:{images.base_hash()}"}]
+
+
+def test_artifact_failure_blocks_image_and_agent_readiness_until_repaired(
+    agent_images, docker, client, monkeypatch
+):
+    def fail():
+        raise ValueError("Creative-app verification failed")
+
+    monkeypatch.setattr(artcraft, "ensure_bundled", fail)
+    images.ensure_images()
+    assert images.has_image(images.image_tag("default"))
+    assert images.snapshot()["status"] == "failed"
+    assert client.get("/agent-sets", headers=HEADERS).json()["agent_sets"][0]["ready"] is False
+    monkeypatch.setattr(artcraft, "ensure_bundled", lambda: None)
+    images.ensure_images()
+    assert images.snapshot()["status"] == "ready"
+    monkeypatch.setattr(artcraft, "bundled_ready", lambda: False)
+    assert images.snapshot()["status"] == "missing"
+    assert client.get("/agent-sets", headers=HEADERS).json()["agent_sets"][0]["ready"] is False
 
 
 # --------------------------------------------------------------------- health

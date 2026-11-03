@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import json
+import time
 
 import httpx
 import pytest
@@ -92,7 +94,7 @@ async def test_verified_updates_are_atomic_keep_active_turns_and_can_restore_bun
 ):
     before = artcraft.for_run()
     pending = await artcraft.configure("cadcraft", {"version": "1.0.0", "expected_revision": 0})
-    assert app()["status"] == "installing" and app()["version"] == bundled_release("cadcraft")["version"]
+    assert app()["status"] == "queued" and app()["version"] == bundled_release("cadcraft")["version"]
     assert artcraft.for_run() == before
 
     async def install(identifier, spec):
@@ -131,19 +133,17 @@ async def test_failed_update_never_switches_working_version_or_leaks_logs(db, re
     assert "secret-diagnostic" not in json.dumps(artcraft.apps())
 
 
-async def test_bounded_updates_and_restart_recovery(db, resolved):
-    await artcraft.configure("cadcraft", {"version": "1.0.0"})
+async def test_queued_updates_and_restart_recovery(db, resolved):
+    first = await artcraft.configure("cadcraft", {"version": "1.0.0"})
     await artcraft.configure("wordcraft", {"version": "1.0.0"})
     with pytest.raises(HTTPException) as same:
         await artcraft.configure("cadcraft", {"enabled": False})
     assert same.value.status_code == 409
-    with pytest.raises(HTTPException) as full:
-        await artcraft.configure("deckcraft", {"version": "1.0.0"})
-    assert full.value.status_code == 409
+    assert await artcraft.configure("deckcraft", {"version": "1.0.0"})
     artcraft.recover_installations()
-    assert app()["status"] == "ready" and "interrupted" in app()["error"]
+    assert app()["status"] == "queued" and not app()["error"]
     assert all(item["bundled"] for item in artcraft.apps())
-    assert await artcraft.configure("cadcraft", {"version": "1.0.0"})
+    assert artcraft._read("cadcraft")["pending"] == first
 
 
 def test_route_starts_background_install_but_does_not_claim_success(client, resolved, monkeypatch):
@@ -155,7 +155,7 @@ def test_route_starts_background_install_but_does_not_claim_success(client, reso
 
     monkeypatch.setattr(routes, "spawn", spawn)
     response = client.put("/api/artcraft/apps/cadcraft", json={"version": "1.0.0"})
-    assert response.status_code == 200 and response.json()["status"] == "installing"
+    assert response.status_code == 200 and response.json()["status"] == "queued"
     assert response.json()["pending_version"] == "1.0.0" and response.json()["bundled"]
     assert len(captured) == 1
 
@@ -227,3 +227,232 @@ def test_release_outages_are_retryable_and_do_not_change_settings(client, http):
     response = client.get("/api/artcraft/apps/cadcraft/releases")
     assert response.status_code == 502
     assert app()["revision"] == 0
+
+
+async def test_bulk_discovery_persists_latest_orders_semantically_and_isolates_outages(db, monkeypatch):
+    calls = []
+
+    async def available(name, refresh=False):
+        calls.append(name)
+        if name == "cadcraft":
+            raise HTTPException(502, "private upstream details")
+        return [{"release": {**bundled_release(name), "version": "1.10.0"}, "version": "1.10.0"}]
+
+    monkeypatch.setattr(artcraft, "releases", available)
+    assert artcraft.begin_check()
+    assert not artcraft.begin_check()
+    await artcraft.check_updates()
+    assert len(calls) == 13
+    assert not artcraft.updates()["checking"] and artcraft.updates()["checked_at"]
+    assert app("wordcraft")["latest_version"] == "1.10.0" and app("wordcraft")["update_available"]
+    assert not app()["update_available"] and "retry" in app()["update_error"]
+    assert "private upstream" not in json.dumps(artcraft.apps())
+    artcraft._releases.clear()  # a process cache reset must not erase Settings status
+    assert app("wordcraft")["latest_version"] == "1.10.0"
+    assert artcraft._version_key("1.10.0") > artcraft._version_key("1.9.9")
+    assert artcraft._version_key("1.0.0") > artcraft._version_key("1.0.0-beta")
+    assert all(item["status"] == "ready" for item in artcraft.apps())  # checking does not opt into updates
+
+
+async def seed_updates(db, *, automatic=False):
+    with db.transaction() as conn:
+        state = artcraft.updates(conn)
+        state.update(automatic=automatic, checked_at=time.time())
+        state["latest"] = {
+            name: {
+                "release": {**bundled_release(name), "version": "9.0.0"},
+                "checked_at": time.time(),
+                "error": "",
+            }
+            for name in catalog()
+        }
+        artcraft._write_updates(conn, state)
+
+
+async def test_update_all_is_bounded_idempotent_keeps_disabled_state_and_continues_after_failure(
+    db, monkeypatch
+):
+    await artcraft.configure("cadcraft", {"enabled": False})
+    before = copy.deepcopy(artcraft.for_run())
+    await seed_updates(db)
+    assert len(artcraft.enqueue_updates()) == 13
+    assert artcraft.enqueue_updates() == []
+    assert all(item["status"] == "queued" for item in artcraft.apps())
+    running, maximum, installed = 0, 0, []
+
+    async def install(identifier, spec):
+        nonlocal running, maximum
+        running += 1
+        maximum = max(maximum, running)
+        await asyncio.sleep(0.001)
+        running -= 1
+        installed.append(spec["app"])
+        if spec["app"] == "wordcraft":
+            raise RuntimeError("private error")
+        return spec
+
+    monkeypatch.setattr(artcraft.broker, "install_artcraft", install)
+    await asyncio.gather(artcraft.process_queue(), artcraft.process_queue(), artcraft.process_queue())
+    assert maximum == 2 and len(installed) == 13 and len(set(installed)) == 13
+    assert app()["version"] == "9.0.0" and not app()["enabled"]
+    assert app("wordcraft")["bundled"] and "previous version" in app("wordcraft")["error"]
+    assert all(item["status"] == "ready" for item in artcraft.apps())
+    assert before != artcraft.for_run()
+    assert all(item["release"] == bundled_release(item["app"]) for item in before)
+    assert artcraft.enqueue_updates() == ["wordcraft"]  # retry only failed updates
+
+
+async def test_auto_update_opt_in_refresh_applies_all_and_off_switch_is_honored(db, monkeypatch):
+    async def available(name, refresh=False):
+        return [{"release": {**bundled_release(name), "version": "9.0.0"}, "version": "9.0.0"}]
+
+    async def install(identifier, spec):
+        return spec
+
+    monkeypatch.setattr(artcraft, "releases", available)
+    monkeypatch.setattr(artcraft.broker, "install_artcraft", install)
+    artcraft.configure_updates({"automatic": True, "expected_revision": 0})
+    assert artcraft.begin_check()
+    await artcraft.check_updates()
+    assert all(item["version"] == "9.0.0" for item in artcraft.apps())
+    artcraft.configure_updates({"automatic": False, "expected_revision": 1})
+    await artcraft.configure("cadcraft", {"version": "bundled"})
+    assert artcraft.begin_check()
+    await artcraft.check_updates()
+    assert app()["bundled"] and app()["update_available"]
+
+
+def test_update_routes_require_auth_validate_preferences_and_preserve_optimistic_revisions(
+    client, anonymous, monkeypatch
+):
+    captured = []
+
+    def spawn(coro, **kwargs):
+        captured.append(kwargs["name"])
+        coro.close()
+
+    monkeypatch.setattr(routes, "spawn", spawn)
+    assert anonymous.post("/api/artcraft/updates/check").status_code == 401
+    assert anonymous.post("/api/artcraft/updates/apply").status_code == 401
+    assert (
+        anonymous.put("/api/artcraft/updates", json={"automatic": True, "expected_revision": 0}).status_code
+        == 401
+    )
+    assert client.post("/api/artcraft/updates/check").json()["updates"]["checking"]
+    assert client.post("/api/artcraft/updates/check").status_code == 200
+    assert captured == ["artcraft-release-check"]
+    for payload in (
+        {},
+        {"automatic": "true", "expected_revision": 0},
+        {"automatic": True, "expected_revision": True},
+        {"automatic": True, "expected_revision": 0, "url": "evil"},
+    ):
+        assert client.put("/api/artcraft/updates", json=payload).status_code == 422
+    assert client.put("/api/artcraft/updates", json={"automatic": True, "expected_revision": 0}).json()[
+        "updates"
+    ]["automatic"]
+    assert (
+        client.put("/api/artcraft/updates", json={"automatic": False, "expected_revision": 0}).status_code
+        == 409
+    )
+
+
+async def test_discovery_does_not_downgrade_newer_pins_or_queue_failed_checks(db, resolved):
+    await seed_updates(db)
+    pending = await artcraft.configure("cadcraft", {"version": "10.0.0"})
+    with db.transaction() as conn:
+        state = artcraft._read("cadcraft", conn)
+        state.update(active=pending, pending=None)
+        artcraft._write(conn, "cadcraft", state)
+        discovery = artcraft.updates(conn)
+        discovery["latest"]["wordcraft"]["error"] = "Lookup failed"
+        artcraft._write_updates(conn, discovery)
+    queued = artcraft.enqueue_updates()
+    assert "cadcraft" not in queued and "wordcraft" not in queued and len(queued) == 11
+
+
+async def test_restart_requeues_the_same_verified_identity_and_resets_discovery_flag(
+    db, resolved, monkeypatch
+):
+    pending = await artcraft.configure("cadcraft", {"version": "1.0.0"})
+    with db.transaction() as conn:
+        state = artcraft._read("cadcraft", conn)
+        state["installing"] = True
+        artcraft._write(conn, "cadcraft", state)
+    assert artcraft.begin_check()
+    artcraft.recover_installations()
+    assert not artcraft.updates()["checking"]
+    assert app()["status"] == "queued"
+    seen = []
+
+    async def install(identifier, spec):
+        seen.append(identifier)
+        return spec
+
+    monkeypatch.setattr(artcraft.broker, "install_artcraft", install)
+    await artcraft.process_queue()
+    assert seen == [pending["installation_id"]] and app()["version"] == "1.0.0"
+
+
+@pytest.mark.parametrize("failure", ["busy", "unavailable", "transport"])
+async def test_transient_installer_outages_keep_the_exact_queued_identity_without_busy_loop(
+    db, resolved, monkeypatch, failure
+):
+    pending = await artcraft.configure("cadcraft", {"version": "1.0.0"})
+    seen = []
+
+    async def install(identifier, spec):
+        seen.append(identifier)
+        if len(seen) == 1:
+            request = httpx.Request("POST", "http://broker/artcraft/install")
+            if failure == "transport":
+                raise httpx.ReadTimeout("uncertain reply", request=request)
+            response = httpx.Response(
+                422 if failure == "busy" else 503,
+                json={"detail": "This ArtCraft artifact is already being prepared; retry shortly"},
+                request=request,
+            )
+            raise httpx.HTTPStatusError("unavailable", request=request, response=response)
+        return spec
+
+    monkeypatch.setattr(artcraft.broker, "install_artcraft", install)
+    await artcraft.process_queue()
+    assert seen == [pending["installation_id"]]
+    assert app()["status"] == "queued" and "will retry" in app()["error"]
+    assert artcraft._read("cadcraft")["pending"] == pending
+    await artcraft.process_queue()
+    assert seen == [pending["installation_id"]] * 2
+    assert app()["version"] == "1.0.0" and not app()["error"]
+
+
+async def test_maintenance_checks_hourly_and_drains_updates_without_settings_requests(db, monkeypatch):
+    calls = []
+    with db.transaction() as conn:
+        state = artcraft.updates(conn)
+        state.update(automatic=True, checked_at=time.time() - artcraft.CHECK_INTERVAL - 1)
+        artcraft._write_updates(conn, state)
+
+    async def check():
+        calls.append("check")
+        assert artcraft.updates()["checking"]
+
+    async def process():
+        calls.append("queue")
+
+    async def stop(seconds):
+        assert seconds == 30
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(artcraft, "check_updates", check)
+    monkeypatch.setattr(artcraft, "process_queue", process)
+    monkeypatch.setattr(artcraft.asyncio, "sleep", stop)
+    with pytest.raises(asyncio.CancelledError):
+        await artcraft.maintenance()
+    assert calls == ["check", "queue"]
+
+
+def test_release_discovery_uses_semantic_order_and_never_promotes_prerelease_tags(client, http):
+    http["https://api.github.com/repos/storytold/cadcraft/releases"] = lambda request: httpx.Response(
+        200, json=[release_data("1.9.9"), release_data("1.10.0"), release_data("9.0.0-beta")]
+    )
+    assert client.get("/api/artcraft/apps/cadcraft/releases").json() == {"versions": ["1.10.0", "1.9.9"]}

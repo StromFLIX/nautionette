@@ -27,7 +27,43 @@ async def list_creative_apps() -> dict[str, Any]:
 
     Changes apply to new agent turns. Existing turns retain their pinned binaries.
     """
-    return {"apps": artcraft.apps(), "architecture": architecture()}
+    state = artcraft.updates()
+    return {
+        "apps": artcraft.apps(),
+        "architecture": architecture(),
+        "updates": {key: value for key, value in state.items() if key != "latest"},
+    }
+
+
+@router.post("/api/artcraft/updates/check")
+async def check_creative_app_updates() -> dict[str, Any]:
+    """Refresh all release statuses in the background without enabling updates."""
+    if artcraft.begin_check():
+        spawn(artcraft.check_updates(), name="artcraft-release-check")
+    return await list_creative_apps()
+
+
+@router.put("/api/artcraft/updates")
+async def configure_creative_app_updates(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    """Opt into hourly verified stable updates for all apps, including disabled ones.
+
+    This replaces manual version pins. Disabling does not cancel already queued updates.
+    """
+    artcraft.configure_updates(payload)
+    if payload["automatic"] and artcraft.begin_check():
+        spawn(artcraft.check_updates(), name="artcraft-auto-update-check")
+    return await list_creative_apps()
+
+
+@router.post("/api/artcraft/updates/apply")
+async def update_all_creative_apps() -> dict[str, Any]:
+    """Queue every known newer verified stable release, with at most two installers.
+
+    Disabled apps stay disabled. Failed or unknown discovery states are skipped.
+    """
+    queued = artcraft.enqueue_updates()
+    spawn(artcraft.process_queue(), name="artcraft-update-queue")
+    return {**await list_creative_apps(), "queued": queued}
 
 
 @router.get("/api/artcraft/apps/{app}/releases")
@@ -38,7 +74,7 @@ async def list_creative_app_releases(app: str, refresh: bool = False) -> dict[st
 
 @router.put("/api/artcraft/apps/{app}")
 async def configure_creative_app(app: str, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
-    """Enable an app or install an exact version; 'bundled' restores the image default.
+    """Enable an app or install an exact version; 'bundled' restores the deployment default.
 
     Installation is asynchronous: poll list_creative_apps until ready. Failed
     verification preserves the previous version. Do not claim a started update succeeded.
@@ -46,5 +82,5 @@ async def configure_creative_app(app: str, payload: dict[str, Any] = Body(...)) 
     app = _app(app)
     pending = await artcraft.configure(app, payload)
     if pending:
-        spawn(artcraft.finish_install(pending), name=f"artcraft-{pending['installation_id']}")
+        spawn(artcraft.process_queue(), name="artcraft-update-queue")
     return next(item for item in artcraft.apps() if item["id"] == app)

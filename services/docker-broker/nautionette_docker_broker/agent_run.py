@@ -153,9 +153,9 @@ def _await_image(tag: str, stopped: threading.Event | None = None) -> Iterator[s
     while True:
         if stopped is not None and stopped.is_set():
             return
-        if images.has_image(tag):
-            return
         state = images.snapshot()
+        if images.has_image(tag) and state["status"] == "ready":
+            return
         elapsed = time.monotonic() - started
         if state["status"] in {"ready", "failed"}:
             reason = state["error"] or f"{tag} was not produced by the build"
@@ -274,10 +274,11 @@ def _run(
         yield _ndjson({"type": "error", "message": f"unknown agent set '{agent_set}'"})
         return
     tag = images.image_tag(agent_set)
-    if not images.has_image(tag):
-        # The image can vanish under us: an idle host prunes it between calls.
+    if not images.has_image(tag) or images.snapshot()["status"] != "ready":
+        # Wait for both the image and all default artifact volumes. A present
+        # image alone is no longer sufficient to run creative tools offline.
         yield from _await_image(tag, stopped)
-        if not images.has_image(tag):
+        if not images.has_image(tag) or images.snapshot()["status"] != "ready":
             return  # _await_image already said why
 
     timeout = min(int(job.get("timeout_seconds") or RUN_TIMEOUT), RUN_TIMEOUT)

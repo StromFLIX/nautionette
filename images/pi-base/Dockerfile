@@ -26,11 +26,10 @@ RUN npm install -g --ignore-scripts playwright@${PLAYWRIGHT_VERSION} \
   && npm cache clean --force \
   && rm -rf /var/lib/apt/lists/*
 
-# Bundle the whole native catalog, but only CLIs and upstream licenses (no GUI,
-# WASM or background daemons). The installer verifies pinned SHA-256 digests and
-# initializes every app's headless MCP interface during the build.
+# Keep only the pinned catalog and fixed installer in the image. The broker
+# prepares verified, immutable CLI volumes before advertising agent readiness.
+# Runtime mounts are read-only; no app downloads or extra capabilities in turns.
 COPY artcraft/ /usr/local/lib/nautionette/artcraft/
-RUN python3 /usr/local/lib/nautionette/artcraft/install.py --bundle
 
 # Pi updates must not invalidate the much larger Chromium/OS dependency layer.
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.4.0 \

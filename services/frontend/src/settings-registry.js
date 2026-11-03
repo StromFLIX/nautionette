@@ -55,7 +55,7 @@ export const SETTINGS_SECTIONS = [
     key: 'creative-apps', label: 'Creative apps', icon: 'draw', group: 'Connections', scope: 'Instance',
     load: () => import('./components/settings/CreativeAppsPane.vue'),
     entries: [
-      entry('creative-apps', 'ArtCraft applications', 'Native creative tools for chat outputs. Enable apps and pin or update release versions.', 'PhotoCraft VectorCraft FilmCraft LightCraft PdfCraft EffectCraft DesignCraft FigCraft WordCraft SoundCraft DeckCraft CADCraft GridCraft images PDF CAD spreadsheets slides audio video Rust headless')
+      entry('creative-apps', 'ArtCraft applications', 'Native creative tools. See outdated apps, update all, enable automatic updates or choose exact versions.', 'PhotoCraft VectorCraft FilmCraft LightCraft PdfCraft EffectCraft DesignCraft FigCraft WordCraft SoundCraft DeckCraft CADCraft GridCraft images PDF CAD spreadsheets slides audio video Rust headless latest automatic updates outdated releases')
     ]
   },
   {

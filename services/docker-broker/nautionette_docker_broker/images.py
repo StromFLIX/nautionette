@@ -41,6 +41,12 @@ def snapshot() -> dict[str, Any]:
         state["missing"] = missing
         if missing:
             state["status"] = "missing"
+        else:
+            from . import artcraft
+
+            if not artcraft.bundled_ready():
+                state["status"] = "missing"
+                state["error"] = "Default creative-app artifacts are not ready; preparing verified volumes"
     return state
 
 
@@ -143,6 +149,10 @@ def ensure_images(force: bool = False) -> None:
             else:
                 note(f"{tag} already present")
             images[agent_set] = tag
+        from . import artcraft
+
+        note("preparing verified creative-app artifacts")
+        artcraft.ensure_bundled()
         with state_lock:
             image_state["images"] = images
             image_state["status"] = "ready"

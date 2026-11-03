@@ -172,6 +172,7 @@ def test_cleanup_racing_container_creation_prevents_a_late_start(agents, monkeyp
     monkeypatch.setattr(chat_sessions, "claim", lambda chat_id: nullcontext([]))
     monkeypatch.setattr(agent_run.images, "discovered_agent_sets", lambda: ["default"])
     monkeypatch.setattr(agent_run.images, "has_image", lambda tag: True)
+    monkeypatch.setattr(agent_run.images, "snapshot", lambda: {"status": "ready"})
     monkeypatch.setattr(agent_run.images, "image_tag", lambda name: "test-image")
     with ThreadPoolExecutor() as executor:
         run = executor.submit(lambda: list(agent_run.run({"chat_id": "chat", "turn_id": "turn"})))

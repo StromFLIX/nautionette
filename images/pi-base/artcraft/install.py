@@ -184,8 +184,21 @@ def install(spec: dict[str, str], target: Path) -> dict[str, str]:
     return spec
 
 
+def verify(spec: dict[str, str], target: Path) -> dict[str, str]:
+    spec = validate(spec)
+    if json.loads((target / "manifest.json").read_text()) != spec:
+        raise ValueError("Artifact manifest does not match the pinned release")
+    binary = target / "bin" / f"{spec['app']}-cli"
+    if binary.is_symlink() or not binary.is_file():
+        raise ValueError("Artifact has no regular native CLI")
+    probe(target, spec["app"])
+    return spec
+
+
 def main() -> None:
-    if len(sys.argv) == 2 and sys.argv[1] == "--bundle":
+    if len(sys.argv) == 2 and sys.argv[1] == "--verify":
+        print(json.dumps(verify(json.loads(os.environ["ARTCRAFT_RELEASE"]), Path("/artifact"))), flush=True)
+    elif len(sys.argv) == 2 and sys.argv[1] == "--bundle":
         for app, item in CATALOG.items():
             spec = {
                 "app": app,

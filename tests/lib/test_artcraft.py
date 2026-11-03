@@ -12,8 +12,10 @@ from nautionette.artcraft import (
     architecture,
     asset_name,
     bundled_release,
+    bundled_selection,
     catalog,
     release,
+    release_installation_id,
     runtime_selection,
 )
 
@@ -69,7 +71,6 @@ def test_runtime_pins_require_owned_artifacts_and_unique_apps():
         None,
         {},
         [item, item],
-        [updated],
         [{**updated, "installation_id": "../evil"}],
         [{**item, "args": ["--bad"]}],
         [{**item, "app": "wordcraft"}],
@@ -77,6 +78,14 @@ def test_runtime_pins_require_owned_artifacts_and_unique_apps():
         with pytest.raises(ValueError):
             runtime_selection(bad)
     assert runtime_selection([{**updated, "installation_id": "a" * 32}])
+    # Older queued defaults are still exact pins, not silently upgraded.
+    assert runtime_selection([updated]) == [updated]
+    selected = bundled_selection("cadcraft")
+    assert selected["installation_id"] == release_installation_id(item["release"])
+    assert (
+        release_installation_id(dict(reversed(list(item["release"].items())))) == selected["installation_id"]
+    )
+    assert release_installation_id(updated["release"]) != selected["installation_id"]
 
 
 def archive(tmp_path, entries):
@@ -203,3 +212,21 @@ def test_manifest_published_only_after_successful_probe_and_no_overwrite(install
     assert json.loads((target / "manifest.json").read_text()) == bundled_release("cadcraft")
     with pytest.raises(ValueError, match="empty"):
         installer.install(bundled_release("cadcraft"), target)
+
+
+def test_persisted_artifacts_require_matching_manifest_and_a_real_cli_before_reuse(
+    installer, tmp_path, monkeypatch
+):
+    target = tmp_path / "artifact"
+    (target / "bin").mkdir(parents=True)
+    spec = bundled_release("cadcraft")
+    (target / "manifest.json").write_text(json.dumps(spec))
+    calls = []
+    monkeypatch.setattr(installer, "probe", lambda *args: calls.append(args))
+    with pytest.raises(ValueError, match="regular native CLI"):
+        installer.verify(spec, target)
+    (target / "bin/cadcraft-cli").write_bytes(b"CLI")
+    assert installer.verify(spec, target) == spec
+    assert calls == [(target, "cadcraft")]
+    with pytest.raises(ValueError, match="manifest"):
+        installer.verify({**spec, "version": "9.0.0"}, target)

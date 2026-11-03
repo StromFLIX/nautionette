@@ -1,6 +1,6 @@
 # Native creative applications
 
-Nautionette's default agent image includes the entire current ArtCraft catalog:
+Nautionette prepares the entire current ArtCraft catalog at deployment:
 PhotoCraft, VectorCraft, FilmCraft, LightCraft, PdfCraft, EffectCraft, DesignCraft,
 FigCraft, WordCraft, SoundCraft, DeckCraft, CADCraft and GridCraft.
 
@@ -39,53 +39,84 @@ in-memory state and local files alone are **not** durable. See
 
 ## Settings → Creative apps
 
-Every app defaults to **enabled** and the version bundled in the image.
+Every app defaults to **enabled** and the pinned deployment version.
 
-- Enable/disable apps for **new turns**.
-- **Check releases** lists recent stable releases from the app's fixed official
-  `storytold/<app>` GitHub repository that have a native CLI asset with a SHA-256
-  digest for this server architecture. Enter an exact version and **Apply
-  version**. Older exact pins are resolved through their release tag.
-- Updates run asynchronously. Settings continues to show the active version while
-  the release downloads, extracts and passes headless MCP initialization/tool
-  discovery. A successful verification atomically selects the new installation;
-  any failure keeps the previous active version and displays a retryable error.
-- **Use bundled** switches back to the current image default without a download.
-- Updates do not rebuild the agent image or replace a running container's
-  binaries, including compatible queued messages steered into that same live
-  session. A new agent run/container receives the updated selection. An override
-  remains pinned when the base image is upgraded. A bundled selection
-  follows future image defaults.
+- Latest stable versions and **Update available / Up to date / Check failed**
+  badges appear immediately from persisted discovery results, with outdated apps
+  first. Discovery checks all apps hourly even when Settings is closed. Opening
+  the pane triggers an asynchronous check if the cached status is older than an
+  hour. **Check for updates** refreshes it manually. An outage is never presented
+  as up to date; each failed lookup has a retry action.
+- **Update to …** queues one app. **Update all** queues all known newer verified
+  stable releases, including disabled apps (which remain disabled). Already
+  queued apps, failed/unknown release checks and newer manually selected versions
+  are skipped. Bulk actions use the exact discovered release/digest, not a mutable
+  `latest` download URL. Discovery accepts only fixed official `storytold/<app>`
+  assets for the server architecture with a SHA-256 digest; prereleases are excluded.
+- **Automatically update all apps** is opt-in and off by default. It checks and
+  installs newer stable versions hourly, without an open Settings page. It includes
+  disabled apps and replaces manual pins, but never downgrades newer versions.
+  Switching it off stops future automatic enqueueing, not already queued work.
+- **Version options & documentation** contains exact version entry, release lists,
+  and **Restore default**. Older exact pins are resolved through their release tag.
+  The API retains `version: "bundled"` for default restoration compatibility.
+- Settings keeps showing the working version while updates queue, download,
+  extract and pass headless MCP initialization/tool discovery. Verification
+  atomically selects an artifact; failures keep the previous active version and
+  show an error. Retry failed apps individually or with **Update all**. Automatic
+  mode retries on the next hourly check, not continuously.
+- Enable/disable and version changes apply to **new turns**. No update replaces
+  files mounted in a running container, including messages steered into that same
+  live session. Manual overrides remain pinned across deployments unless automatic
+  updating is enabled. Default selections follow future deployment defaults.
 
-Settings writes use optimistic revisions; stale saves and overlapping updates to
-one app are rejected. At most two updates may be pending. Interrupted updates are
-marked failed during backend startup, leaving the working selection intact.
-There is no automatic update/background polling of upstream releases.
+App and auto-update preference writes use optimistic revisions. A persistent
+queue allows all 13 updates while running **at most two installers** across
+manual, bulk and maintenance dispatchers. Queued/in-progress updates resume after
+backend restart using the same pinned release and installation ID. The broker
+can verify/reuse a completed artifact after a lost response. Release checks have
+three bounded concurrent requests; partial failures do not block healthy apps.
+The update filter and attention filter make pending work/failures easy to find.
 
 ## Packaging and runtime boundary
 
 `images/pi-base/artcraft/catalog.json` is the shared, pinned catalog, including
-Linux x86_64 and aarch64 release archive digests. `install.py --bundle` installs
-all CLIs, preserving upstream release documentation, licenses and font notices.
-It discards desktop/WASM payloads. VectorCraft uses `mcp --headless`; PdfCraft uses
-its dedicated CLI archive. Image builds verify all archive checksums and probe
-all engines before the image can pass CI.
+Linux x86_64 and aarch64 release archive digests. The Pi image contains only this
+catalog and the fixed installer, **not the native app binaries**. After acquiring
+the agent images, the broker prepares all 13 default artifacts before reporting
+agent/image readiness. Missing defaults download in isolated installer containers;
+existing defaults are reverified offline after broker restart. Corrupt/incomplete
+unreferenced artifacts can be removed and reinstalled, never overwritten in place;
+Docker refuses removal of any artifact referenced by a container. A failed
+preparation keeps readiness degraded and is retried by reconciliation. No default
+release discovery or app download occurs inside an agent turn.
+
+The installer preserves release documentation, licenses and font notices, and
+discards desktop/WASM payloads. VectorCraft uses `mcp --headless`; PdfCraft uses
+its dedicated CLI archive. CI prepares volumes using the real broker installer,
+reverifies them without network, then runs the full native app suite offline as
+an unprivileged user with all capabilities dropped and volumes read-only.
 
 The backend records app selections in `settings` under `artcraft.app.<app>`.
 Immediately before a turn starts it snapshots enabled apps and exact release
 identities. The broker validates this data. Updated binaries are immutable,
 deployment-namespaced Docker volumes, ownership/release/digest checked and
-mounted **read-only** at `/opt/artcraft/<app>`. Bundled binaries come from the
-pinned agent image; the agent's existing writable root-filesystem policy is
-unchanged. No global app MCP server or shared drawing is created.
+mounted **read-only** at `/opt/artcraft/<app>`. Defaults use a deterministic ID
+from the exact app/version/architecture/digest, so image upgrades cannot redirect
+queued turns to newer binaries. Updated versions retain their immutable IDs.
+Legacy queued jobs without an ID resolve their exact prepared default artifact,
+never the current default. Missing artifacts fail rather than creating an empty
+volume. Retained overrides are also verified offline on first use after broker
+restart. The agent's existing root-filesystem policy is unchanged. No global app
+MCP server or shared drawing is created.
 
 Each engine starts lazily over newline-delimited stdio MCP in the turn's working
 directory; at most **three** may be open at once. Engines inherit no gateway
 credentials, private output grants or package secret environment variables.
 They share the agent sandbox's OS trust domain, resource budgets, selected
 projects and allowed network access; this is **not** additional per-app isolation.
-Disabling an app hides its native tools, not its bundled executable from an agent
-that has shell access.
+Disabling an app hides its native tools and omits its artifact from new agents;
+it is not a general isolation boundary against an agent with shell access.
 
 Application calls have a 180-second timeout and a 32-MiB protocol frame limit.
 Cancellation, protocol failure, crash or timeout stops the process group and
@@ -103,8 +134,11 @@ The app is executed only after the archive digest matches. Updates trust the
 upstream publisher's native code; digests are integrity checks, not an independent
 security audit or publisher signature.
 
-Successful artifacts are retained so existing turns cannot lose a mounted
-version. Stale helper containers/networks are reaped; artifacts are not blindly
+Default and updated artifacts are retained so existing turns cannot lose a mounted
+version. Back up these deployment-namespaced volumes along with backend settings;
+restoring settings alone does not restore selected binaries. Moving roughly 1 GB
+out of the image does not eliminate the binaries' volume storage, but avoids the
+large compressed app image layer and repeated whole-bundle updates. Stale helper containers/networks are reaped; artifacts are not blindly
 removed after an ambiguous HTTP result. A deployment is capped at 128 artifacts.
 An administrator must reclaim **unreferenced** ArtCraft volumes if this cap is
 reached; there is currently no automatic artifact GC or Settings deletion button.
