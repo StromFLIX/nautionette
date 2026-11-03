@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from nautionette_backend import background, clients, main, output_storage, runtime
+from nautionette_backend import background, clients, main, output_storage, runs, runtime
 from nautionette_backend.db import db as database
 from nautionette_backend.integrations.registry import INITIALIZED_SETTING
 
@@ -87,8 +87,8 @@ def broker(monkeypatch: pytest.MonkeyPatch) -> FakeBroker:
 
 
 @pytest.fixture
-def authoring(monkeypatch: pytest.MonkeyPatch) -> FakeAuthoring:
-    return _install(monkeypatch, clients.authoring, FakeAuthoring())
+def authoring(monkeypatch: pytest.MonkeyPatch, broker) -> FakeAuthoring:
+    return _install(monkeypatch, clients.authoring, FakeAuthoring(restart_worker=runs.restart_worker))
 
 
 @pytest.fixture

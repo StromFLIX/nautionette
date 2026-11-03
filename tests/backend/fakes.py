@@ -168,9 +168,10 @@ class FakeBroker:
 
 
 class FakeAuthoring:
-    """workflow-mcp's REST side, over a dict of workflow files."""
+    """workflow-mcp's REST side, including its deletion restart callback."""
 
-    def __init__(self) -> None:
+    def __init__(self, restart_worker=None) -> None:
+        self._restart_worker = restart_worker
         self.workflows: dict[str, dict[str, Any]] = {}
         self.drafts: dict[str, dict[str, Any]] = {}
         self.validation: dict[str, Any] = {"valid": True, "errors": [], "warnings": [], "steps": []}
@@ -229,7 +230,10 @@ class FakeAuthoring:
 
     async def delete_workflow(self, name: str) -> dict[str, Any]:
         self.workflows.pop(name, None)
-        return {"name": name, "deleted": True}
+        result = {"name": name, "deleted": True}
+        if self._restart_worker:
+            result["worker_restart"] = await self._restart_worker()
+        return result
 
 
 class FakeModelCatalog:

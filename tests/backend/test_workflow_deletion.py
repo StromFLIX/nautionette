@@ -25,7 +25,11 @@ def test_deletion_cleans_schedule_settings_and_reloads_without_losing_history(
         if agent
         else client.delete(f"/api/workflows/{name}")
     )
-    assert response.json() == {"name": name, "deleted": True}
+    assert response.json() == {
+        "name": name,
+        "deleted": True,
+        "worker_restart": {"ok": True, "restarted": ["worker-1"], "grace_seconds": 60},
+    }
     assert name not in backend.authoring.workflows
     assert backend.temporal.schedule_specs == {}
     assert backend.db.query("SELECT * FROM workflow_settings") == []

@@ -76,8 +76,35 @@ def test_the_chat_mode_is_one_of_two_words(client, digest):
 
 def test_deleting_a_workflow_forgets_its_settings(client, digest):
     client.patch("/api/workflows/url_digest/settings", json={"disabled": True})
-    assert client.delete("/api/workflows/url_digest").json() == {"name": "url_digest", "deleted": True}
+    response = client.delete("/api/workflows/url_digest").json()
+    assert response == {
+        "name": "url_digest",
+        "deleted": True,
+        "worker_restart": {"ok": True, "restarted": ["worker-1"], "grace_seconds": 60},
+    }
+    assert digest.broker.restarts == 1
     assert digest.db.query("SELECT * FROM workflow_settings") == []
+
+
+@pytest.mark.parametrize("ok", [True, False])
+def test_deletion_preserves_authoring_restart_result_without_starting_a_second_restart(
+    client, digest, live, monkeypatch, ok
+):
+    from unittest.mock import AsyncMock
+
+    from nautionette_backend.routers import workflows
+
+    duplicate = AsyncMock()
+    monkeypatch.setattr(workflows, "restart_worker", duplicate)
+    result = {"name": "url_digest", "deleted": True, "worker_restart": {"ok": ok}}
+
+    async def authored(name):
+        assert name == "url_digest"
+        return result
+
+    monkeypatch.setattr(live.authoring, "delete_workflow", authored)
+    assert client.delete("/api/workflows/url_digest").json() == result
+    duplicate.assert_not_called()
 
 
 def test_validation_is_handed_straight_to_the_authoring_service(client, digest):

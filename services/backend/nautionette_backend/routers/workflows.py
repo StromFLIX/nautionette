@@ -7,7 +7,6 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, HTTPException
 from nautionette import input_problems
 
-from ..background import spawn
 from ..clients import authoring, temporal
 from ..db import db
 from ..deployment import WorkflowSource, deploy
@@ -90,7 +89,8 @@ async def delete_workflow(name: str) -> dict[str, Any]:
     result = await authoring.delete_workflow(name)
     db.forget_workflow(name)
     bus.publish("workflow.deleted", {"workflow": name})
-    spawn(restart_worker(), name=f"restart-worker-after-{name}")
+    # The authoring service already requested a worker restart and reports it
+    # in this result. A second background restart races the worker warming up.
     return result
 
 

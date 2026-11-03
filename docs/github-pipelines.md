@@ -155,6 +155,10 @@ health, mini-app lifecycle/workflow smoke, and creative-app artifact steps. A
 finished Coolify deployment with a failed smoke test cannot authorize production.
 The job uses read-only `actions: read` permission to verify this evidence; no new
 secret is needed. Production still requires the same commit to be live in staging.
+Deleting the disposable workflow requests one worker restart through the authoring
+service. The final readiness check waits up to 180 seconds for asynchronous worker
+recovery, retrying authenticated GETs only. It still requires ready artifacts,
+ready agent sets and ready workers; persistent failures and auth errors stay red.
 For hosts using `MINIAPP_NETWORK_CIDR`, validate a separate production pool after
 staging approval; never reuse staging's reserved range across environments.
 
