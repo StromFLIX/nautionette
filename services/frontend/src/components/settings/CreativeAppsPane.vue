@@ -52,8 +52,15 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api } from '../../api'
+import { onLiveEvent } from '../../store'
 const apps = ref([]), updates = ref({ automatic: false, revision: 0, checking: false }), draft = ref({}), releases = ref({}), busy = ref({}), errors = ref({}), loading = ref(true), error = ref(''), action = ref(false), filter = ref('all'), queued = ref('')
 let timer, disposed = false
+const unsubscribe = onLiveEvent(event => {
+  if (['artcraft.changed', 'connected', 'client.reconnect'].includes(event.kind) && !disposed) {
+    clearTimeout(timer)
+    timer = setTimeout(load, 150)
+  }
+})
 const outdated = computed(() => apps.value.filter(item => item.update_available))
 const attention = computed(() => apps.value.filter(item => item.error || item.update_error).length)
 const unchecked = computed(() => apps.value.some(item => !item.latest_version || item.update_error))
@@ -131,7 +138,7 @@ onMounted(async () => {
   await load()
   if (!disposed && !error.value && !updates.value.checking && (!updates.value.checked_at || Date.now() / 1000 - updates.value.checked_at >= 3600)) await checkUpdates()
 })
-onUnmounted(() => { disposed = true; clearTimeout(timer) })
+onUnmounted(() => { disposed = true; clearTimeout(timer); unsubscribe() })
 </script>
 <style scoped>
 .craft-updates { margin: 20px 0; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); }

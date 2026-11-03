@@ -3,12 +3,13 @@ import { mockAgents } from './agent-fixture.js'
 
 const names = ['PhotoCraft', 'VectorCraft', 'FilmCraft', 'LightCraft', 'PdfCraft', 'EffectCraft', 'DesignCraft', 'FigCraft', 'WordCraft', 'SoundCraft', 'DeckCraft', 'CADCraft', 'GridCraft']
 async function mockApps (context) {
-  await mockAgents(context)
+  const live = await mockAgents(context)
   const state = { writes: [], actions: [], fail: false, outage: false, releaseOutage: false, updates: { automatic: false, checking: false, checked_at: Date.now() / 1000, revision: 0 }, apps: names.map(name => ({
     id: name.toLowerCase(), name, description: `Native ${name} headless tools`, repository: `https://github.com/storytold/${name.toLowerCase()}`,
     version: '0.8.0', bundled_version: '0.8.0', bundled: true, enabled: true, revision: 0, status: 'ready', pending_version: null, error: '',
     latest_version: '1.0.0', update_available: true, checked_at: Date.now() / 1000, update_error: ''
   })) }
+  state.notify = () => live.pendingEvents.push('artcraft.changed')
   state.finish = (id, error = '') => {
     const app = state.apps.find(app => app.id === id)
     if (!error) { app.version = app.pending_version; app.bundled = false; app.update_available = app.version !== app.latest_version }
@@ -164,6 +165,24 @@ test('load/release outages are retryable, attention filtering works and rejected
   await expect(app.getByRole('alert')).toContainText('Release failed validation')
   await expect(app.getByLabel('Exact version', { exact: true })).toHaveValue('1.0.0')
   await expect(app).toContainText('Active: 0.8.0')
+})
+
+test('an open pane follows background checks and updates from other clients without reloading', async ({ page, context }) => {
+  const state = await mockApps(context)
+  await page.goto('/settings/creative-apps')
+  const card = page.getByRole('article', { name: 'CADCraft', exact: true })
+  await expect(card).toContainText('Latest stable: 1.0.0')
+  const app = state.apps.find(item => item.id === 'cadcraft')
+  app.latest_version = '2.0.0'
+  state.notify()
+  await expect(card).toContainText('Latest stable: 2.0.0')
+  Object.assign(app, { pending_version: '2.0.0', status: 'installing' })
+  state.notify()
+  await expect(card.getByRole('status')).toContainText('Installing and verifying 2.0.0')
+  state.finish('cadcraft')
+  state.notify()
+  await expect(card).toContainText('Active: 2.0.0')
+  await expect(card).toContainText('Up to date')
 })
 
 test('settings search discovers native apps without visiting the pane first', async ({ page, context }) => {
