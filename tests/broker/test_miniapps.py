@@ -46,12 +46,20 @@ def test_runtime_mounts_and_limits_are_fixed(runtime, monkeypatch):
     allowed = {
         name
         for group in profile["syscalls"]
-        if group["action"] == "SCMP_ACT_ALLOW"
+        if group["action"] == "SCMP_ACT_ALLOW" and not group.get("args")
         for name in group["names"]
     }
     assert not allowed.intersection(
         {"fallocate", "ioctl", "io_uring_setup", "io_uring_enter", "io_uring_register"}
     )
+    ioctl_rules = [g for g in profile["syscalls"] if "ioctl" in g["names"]]
+    assert ioctl_rules == [
+        {
+            "names": ["ioctl"],
+            "action": "SCMP_ACT_ALLOW",
+            "args": [{"index": 1, "value": 0x5421, "op": "SCMP_CMP_EQ"}],
+        }
+    ]
     assert args["sysctls"] == {
         "net.ipv6.conf.all.disable_ipv6": "1",
         "net.ipv6.conf.default.disable_ipv6": "1",
