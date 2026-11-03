@@ -36,24 +36,23 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
         broker = client.containers.run(
             "nautionette/docker-broker:dev",
             detach=True,
-            # Reproduce Coolify's deployment-time Dockerfile transformation.
-            # Runtime identity must still select the CI-published compiler, not
-            # attempt to pull/build a tag derived from these injected ARGs.
-            entrypoint=[
-                "sh",
-                "-c",
-                "printf '\\nARG COOLIFY_RESOURCE_UUID\\nARG APP_TOKEN\\n' >> /miniapp-sdk/Dockerfile; "
-                "exec uvicorn nautionette_docker_broker.main:app --host 0.0.0.0 --port 9100 --lifespan off",
-            ],
+            # Includes deployment-time Dockerfile transformation plus a private
+            # backend stub for the real SDK -> broker capability round trip.
+            entrypoint=["python", "/integration-broker.py"],
             environment={
                 "INTERNAL_TOKEN": "integration-test-internal",
                 "WORKFLOWS_VOLUME": namespace,
                 "AGENT_IMAGE_REGISTRY_PREFIX": "",
                 "MINIAPP_TEST_DIAGNOSTICS": "1",
+                "AGENT_BACKEND_URL": "http://127.0.0.1:18080",
             },
             volumes={
                 "/var/run/docker.sock": {"bind": "/var/run/docker.sock", "mode": "rw"},
                 volume.name: {"bind": "/miniapps", "mode": "rw"},
+                str(Path(__file__).with_name("miniapp_test_host.py")): {
+                    "bind": "/integration-broker.py",
+                    "mode": "ro",
+                },
             },
             ports={"9100/tcp": ("127.0.0.1", None)},
         )
@@ -175,24 +174,27 @@ pub fn handle(_: &mut Context,_:&Request)->Result<Value>{Ok(json!({}))}
             # listener would be reachable on an ordinary non-isolated bridge.
             probes = """use crate::{Context,Request,Result,Value,json};
 use std::os::fd::AsRawFd;
+use std::net::ToSocketAddrs;
 unsafe extern "C" {
  fn fallocate(fd:i32,mode:i32,offset:i64,len:i64)->i32;
  fn ioctl(fd:i32,request:u64,...)->i32;
  fn fsetxattr(fd:i32,name:*const std::ffi::c_char,value:*const u8,len:usize,flags:i32)->i32;
 }
 pub fn health(_: &mut Context)->Result<()> {Ok(())}
-pub fn handle(_: &mut Context,req:&Request)->Result<Value>{
+pub fn handle(ctx: &mut Context,req:&Request)->Result<Value>{
  let timeout=std::time::Duration::from_secs(1);
  let remote=std::net::TcpStream::connect_timeout(&"1.1.1.1:443".parse()?,timeout).is_ok();
  let host=std::net::TcpStream::connect_timeout(&req.body["host"].as_str().unwrap().parse()?,timeout).is_ok();
- let bridge=std::net::TcpStream::connect("miniapp-host:9100").is_ok();
+ let bridge_addr="miniapp-host:9100".to_socket_addrs()?.next().unwrap();
+ let bridge=std::net::TcpStream::connect_timeout(&bridge_addr,timeout).is_ok();
+ let callback=ctx.mcp("probe_transport",json!({}),"")?["sdk_callback"]==true;
  let file=std::fs::OpenOptions::new().write(true).open("/data/state.db")?;
  let denied=||std::io::Error::last_os_error().raw_os_error()==Some(1);
  let allocation=unsafe{fallocate(file.as_raw_fd(),1,0,32*1024*1024)}==-1 && denied();
  let mut available=0i32;
  let ioctl_denied=unsafe{ioctl(file.as_raw_fd(),0x541Bu64,&mut available as *mut i32)}==-1 && denied();
  let xattr=unsafe{fsetxattr(file.as_raw_fd(),c"user.probe".as_ptr(),b"x".as_ptr(),1,0)}==-1 && denied();
- Ok(json!({"remote":remote,"host":host,"bridge":bridge,
+ Ok(json!({"remote":remote,"host":host,"bridge":bridge,"sdk_callback":callback,
     "allocation_denied":allocation,"ioctl_denied":ioctl_denied,"xattr_denied":xattr,
     "other_data":std::path::Path::new("/miniapps/counter/3/state.db").exists(),
     "shell":std::path::Path::new("/bin/sh").exists(),
@@ -233,6 +235,7 @@ pub fn handle(_: &mut Context,req:&Request)->Result<Value>{
                 "remote": False,
                 "host": False,
                 "bridge": True,
+                "sdk_callback": True,
                 "allocation_denied": True,
                 "ioctl_denied": True,
                 "xattr_denied": True,

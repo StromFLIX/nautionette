@@ -213,6 +213,16 @@ def runtime_seccomp() -> str:
     }
     for group in profile["syscalls"]:
         group["names"] = [name for name in group["names"] if name not in forbidden]
+    # Rust's TcpStream::connect_timeout toggles O_NONBLOCK with FIONBIO.
+    # Permit ONLY that generic VFS command; allocation/cloning/device ioctls
+    # must stay denied. Blocking connect alone would silently lose the deadline.
+    profile["syscalls"].append(
+        {
+            "names": ["ioctl"],
+            "action": "SCMP_ACT_ALLOW",
+            "args": [{"index": 1, "value": 0x5421, "op": "SCMP_CMP_EQ"}],
+        }
+    )
     return "seccomp=" + json.dumps(profile, separators=(",", ":"))
 
 
