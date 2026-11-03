@@ -207,7 +207,8 @@ def workflow_smoke(api):
     name = "miniapp_smoke_" + suffix
     path = "/api/miniapps/ci-workflow-" + suffix[:24]
     workflow_path = "/api/workflows/" + name
-    api.call(workflow_path, expected=404)  # Never overwrite an existing workflow.
+    if any(item["name"] == name for item in api.call("/api/workflows")["workflows"]):
+        raise RuntimeError("Mini-app smoke: temporary workflow already exists; refusing to overwrite it")
     code = """from temporalio import workflow
 MANIFEST = {"schema":1,"name":"__NAME__","title":"Disposable mini-app workflow smoke",
  "inputs":{"type":"object","properties":{"version":{"type":"string"}},"required":["version"]},

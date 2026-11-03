@@ -18,6 +18,8 @@ class FakeAPI:
 
     def call(self, path, method="GET", body=None, expected=200):
         self.calls.append((path, method, body))
+        if path == "/api/workflows":
+            return {"workflows": []}
         if path.startswith("/api/workflows/"):
             self.name = path.split("/")[3]
             assert self.name.startswith("miniapp_smoke_")
