@@ -147,6 +147,8 @@ services:
       IMAGE_PREFIX: ${STACK_NAMESPACE:-nautionette}/pi-
       BASE_IMAGE: ${STACK_NAMESPACE:-nautionette}/pi-base:dev
       AGENT_IMAGE_REGISTRY_PREFIX: ${AGENT_IMAGE_REGISTRY_PREFIX:-}
+      # Optional reserved per-deployment pool: isolated /29 per mini-app, not /16.
+      MINIAPP_NETWORK_CIDR: ${MINIAPP_NETWORK_CIDR:-}
       WORKER_SERVICE_LABEL: com.docker.compose.service=worker
       WORKER_IMAGE: ${STACK_NAMESPACE:-nautionette}/worker:dev
       WORKER_REPLICAS: ${WORKER_REPLICAS:-1}

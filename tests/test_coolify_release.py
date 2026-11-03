@@ -308,6 +308,7 @@ def api(monkeypatch):
     fake = Fake()
     monkeypatch.setattr(release, "Coolify", lambda: fake)
     monkeypatch.setattr(release, "healthy", lambda target: None)
+    monkeypatch.setattr(release, "staging_verified", lambda repository, commit: True)
     monkeypatch.setenv("COOLIFY_APPLICATION_UUID", "prod")
     monkeypatch.setenv("COOLIFY_STAGING_APPLICATION_UUID", "stage")
     monkeypatch.setenv("APP_URL", "https://app.nautionette.stromflix.com")
@@ -319,6 +320,14 @@ def api(monkeypatch):
 
 def test_untested_release_never_patches_or_deploys(api):
     with pytest.raises(RuntimeError, match="staging"):
+        release.deploy("production", COMMIT)
+    assert all(method == "GET" for _, method, _ in api.calls)
+
+
+def test_failed_staging_smoke_blocks_promotion_before_any_writes(api, monkeypatch):
+    api.already_deployed.add("stage")
+    monkeypatch.setattr(release, "staging_verified", lambda repository, commit: False)
+    with pytest.raises(RuntimeError, match="requires successful staging"):
         release.deploy("production", COMMIT)
     assert all(method == "GET" for _, method, _ in api.calls)
 
@@ -694,3 +703,67 @@ def test_invalid_health_timeout_is_rejected_before_api_writes(api, monkeypatch, 
 def test_health_timeout_configuration(monkeypatch, value, expected):
     monkeypatch.setenv("DEPLOY_HEALTH_TIMEOUT_SECONDS", value)
     assert release.health_timeout() == expected
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        None,
+        "failed_run",
+        "pending_run",
+        "wrong_commit",
+        "production_event",
+        "fork",
+        "failed_smoke",
+        "missing_artifact_check",
+        "newer_failure",
+    ],
+)
+def test_only_complete_successful_staging_verification_can_authorize_production(monkeypatch, failure):
+    monkeypatch.setenv("GITHUB_TOKEN", "test-github-token")
+    run = {
+        "id": 123,
+        "head_sha": COMMIT,
+        "event": "workflow_run",
+        "head_branch": "main",
+        "head_repository": {"full_name": REPO},
+        "status": "completed",
+        "conclusion": "success",
+    }
+    steps = [
+        {"name": name, "conclusion": "success"}
+        for name in (
+            "Pin, deploy, and verify",
+            "Verify isolated mini-app lifecycle (staging only)",
+            "Creative-app artifact readiness diagnostics (staging only)",
+        )
+    ]
+    if failure == "failed_run":
+        run["conclusion"] = "failure"
+    elif failure == "pending_run":
+        run["status"] = "in_progress"
+    elif failure == "wrong_commit":
+        run["head_sha"] = "b" * 40
+    elif failure == "production_event":
+        run["event"] = "release"
+    elif failure == "fork":
+        run["head_repository"] = {"full_name": "other/repo"}
+    elif failure == "failed_smoke":
+        steps[1]["conclusion"] = "failure"
+    elif failure == "missing_artifact_check":
+        steps.pop()
+    runs = [run]
+    if failure == "newer_failure":
+        runs.insert(0, {**run, "id": 124, "conclusion": "failure"})
+
+    def get(url, token, method="GET", payload=None):
+        assert token == "test-github-token" and method == "GET" and payload is None
+        assert url.startswith(f"https://api.github.com/repos/{REPO}/actions/")
+        if "/workflows/" in url:
+            assert f"head_sha={COMMIT}" in url and "event=workflow_run" in url
+            return {"workflow_runs": runs}
+        assert url.endswith("/runs/123/jobs?per_page=100")
+        return {"jobs": [{"name": "deploy", "conclusion": "success", "steps": steps}]}
+
+    monkeypatch.setattr(release, "request", get)
+    assert release.staging_verified(REPO, COMMIT) is (failure is None)

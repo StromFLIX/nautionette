@@ -325,6 +325,47 @@ def wait_for_coolify_health(api: Coolify, app: str, commit: str, timeout: int) -
         time.sleep(min(10, deadline - now))
 
 
+def staging_verified(repository: str, commit: str) -> bool:
+    """A finished Coolify deployment alone is not proof its smoke tests passed."""
+    base = f"https://api.github.com/repos/{repository}"
+    runs = request(
+        f"{base}/actions/workflows/deploy.yml/runs?head_sha={commit}&event=workflow_run&per_page=20",
+        required("GITHUB_TOKEN"),
+    ).get("workflow_runs", [])
+    required_steps = {
+        "Pin, deploy, and verify",
+        "Verify isolated mini-app lifecycle (staging only)",
+        "Creative-app artifact readiness diagnostics (staging only)",
+    }
+    for run in runs:
+        if (
+            run.get("head_sha") != commit
+            or run.get("event") != "workflow_run"
+            or run.get("head_branch") != "main"
+            or (run.get("head_repository") or {}).get("full_name") != repository
+            or run.get("conclusion") == "skipped"
+        ):
+            continue
+        # A newer failed/in-progress verification supersedes an older success.
+        if (
+            run.get("status") != "completed"
+            or run.get("conclusion") != "success"
+            or type(run.get("id")) is not int
+        ):
+            return False
+        jobs = request(f"{base}/actions/runs/{run['id']}/jobs?per_page=100", required("GITHUB_TOKEN")).get(
+            "jobs", []
+        )
+        return any(
+            job.get("name") == "deploy"
+            and job.get("conclusion") == "success"
+            and required_steps
+            <= {step.get("name") for step in job.get("steps", []) if step.get("conclusion") == "success"}
+            for job in jobs
+        )
+    return False
+
+
 def deploy(target: str, commit: str) -> str | None:
     api = Coolify()
     app = identifier(required("COOLIFY_APPLICATION_UUID"))
@@ -342,6 +383,11 @@ def deploy(target: str, commit: str) -> str | None:
     if target == "production":
         if staging == app or not api.deployed(staging, commit):
             raise RuntimeError("Release must be the exact commit currently deployed successfully in staging")
+        if not staging_verified(required("GITHUB_REPOSITORY"), commit):
+            raise RuntimeError(
+                "Production promotion requires successful staging health, mini-app smoke "
+                "and creative-app checks for this exact commit"
+            )
     if any(row.get("status") in {"queued", "in_progress"} for row in api.history(app)):
         raise RuntimeError("Another deployment is active; refusing to change its commit")
     details = api.call(f"/applications/{app}")

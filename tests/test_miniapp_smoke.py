@@ -77,3 +77,51 @@ def test_lost_start_is_not_replayed():
     with pytest.raises(RuntimeError, match="Reply lost"):
         smoke.workflow_smoke(api)
     assert len(api.request_ids) == 1
+
+
+@pytest.mark.parametrize(
+    "error,category",
+    [
+        (
+            "Docker network address pools are exhausted. Configure MINIAPP_NETWORK_CIDR with a reserved pool",
+            "runtime_network_pool",
+        ),
+        ("Candidate health check failed; private-runtime-message", "runtime_health"),
+        ("Rust compilation failed: private-source", "rust_compilation"),
+        ("unknown-private-token", "build_or_health_unclassified"),
+    ],
+)
+def test_failure_categories_never_expose_runtime_details(error, category):
+    assert smoke.failure_category({"releases": [{"error": error}]}) == category
+    assert "private" not in smoke.failure_category({"releases": [{"error": error}]})
+
+
+def test_failed_first_publication_reports_safe_category_and_cleans_only_its_app(monkeypatch, capsys):
+    class CounterAPI:
+        calls = []
+
+        def call(self, path, method="GET", body=None, expected=200):
+            self.calls.append((path, method))
+            if path == "/api/miniapps/contract":
+                return {"example": {"title": "Counter"}}
+            if path == "/api/miniapps/validate":
+                return {"compiled": True, "artifact_bytes": 64}
+            if method == "PUT":
+                raise smoke.APIError("Unavailable", 422)
+            if method == "GET":
+                return {
+                    "revision": 1,
+                    "active_revision": None,
+                    "releases": [
+                        {"state": "failed", "error": "Configure MINIAPP_NETWORK_CIDR private-token"}
+                    ],
+                }
+            return {}
+
+    api = CounterAPI()
+    monkeypatch.setattr(smoke.time, "sleep", lambda seconds: None)
+    with pytest.raises(RuntimeError, match="runtime_network_pool"):
+        smoke.run(api, "ci-smoke-test")
+    assert "private-token" not in capsys.readouterr().out
+    assert api.calls[-1] == ("/api/miniapps/ci-smoke-test?expected_revision=1", "DELETE")
+    assert len([c for c in api.calls if c[1] == "PUT"]) == 1

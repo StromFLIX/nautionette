@@ -257,7 +257,11 @@ commit while switching triggers; never let merging these changes release arbitra
 the staging pin. This feature gate prevents a half-configured pipeline firing.
 
 Test the newly deployed staging app before publishing a non-prerelease release
-whose tag matches `v1.2.3`. Annotated/lightweight tags are resolved to full SHAs;
+whose tag matches `v1.2.3`. Production promotion also requires a completed,
+successful **Deploy** workflow for the exact commit, including component health,
+the complete mini-app lifecycle/workflow smoke, and creative-app artifact checks.
+A finished Coolify deployment alone is not sufficient; a newer failed or pending
+staging verification blocks promotion even if an earlier run passed. Annotated/lightweight tags are resolved to full SHAs;
 `target_commitish=main` is never used as a pin. Tag protections should forbid
 moving/replacing release tags. A late CI run for an older main commit is ignored.
 A release of an older commit than current staging is deliberately rejected;
@@ -291,6 +295,20 @@ app while the pipeline is running. No automatic rollback of databases is attempt
 This pins **source commits**, not identical prebuilt image digests. Compose builds
 can still resolve newer base images/dependencies. Immutable multi-image promotion
 can be a follow-up if byte-identical artifacts are required.
+
+## Staging mini-app network capacity
+
+On 2026-11-03 the staging mini-app smoke exposed exhaustion of the host's automatic
+Docker address pools (32 existing networks). Compiler and named-volume checks
+passed; isolated runtime network creation failed. A read-only host-route and
+Docker-IPAM check identified `10.240.0.0/24` as available, reserved **for staging
+only** via `MINIAPP_NETWORK_CIDR`. New per-app bridges use `/29`, retaining internal
+isolated gateway mode, no IPv6, no published ports and dropped capabilities.
+No daemon-wide pools or production networks were changed. See
+[mini-app network capacity](mini-apps.md#hosts-with-exhausted-docker-address-pools).
+Validate a separate free production pool before any later promotion; do not copy
+the staging range. Temporary diagnostic deployment hooks must be removed after
+inspection; they are not part of routine startup.
 
 ## Quiet no-op workflows
 

@@ -1,7 +1,8 @@
 """Prepare real deployment artifacts, then emit Docker mount arguments for offline CI.
 
 Run on the Docker host with `uv run python scripts/prepare_artcraft_test.py`.
-The image must already exist; downloads only occur in the isolated fixed installer.
+The image must already exist. The broker fetches pinned archives; extraction and
+native probes run only in isolated, network-none installer containers.
 """
 
 from nautionette.artcraft import bundled_selection, catalog

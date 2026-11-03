@@ -29,11 +29,11 @@ from weakref import WeakValueDictionary
 
 import httpx
 from docker.errors import APIError, DockerException, NotFound
-from docker.types import Ulimit
+from docker.types import IPAMConfig, IPAMPool, Ulimit
 from fastapi import HTTPException
 from requests.exceptions import RequestException
 
-from . import daemon, image_context
+from . import daemon, image_context, miniapp_networks
 from .config import AGENT_IMAGE_REGISTRY_PREFIX, INTERNAL_TOKEN, WORKFLOWS_VOLUME
 
 ROOT = Path(os.environ.get("MINIAPPS_DIR", "/miniapps"))
@@ -45,6 +45,8 @@ ID = re.compile(r"[a-z][a-z0-9-]{0,47}")
 FILE_LIMIT = 16 * 1024 * 1024
 BODY_LIMIT = 65536
 _namespace = hashlib.sha256(WORKFLOWS_VOLUME.encode()).hexdigest()[:12]
+NETWORK_CIDR = os.environ.get("MINIAPP_NETWORK_CIDR", "").strip()
+_network_creation = threading.Lock()
 _build_slot = threading.Lock()
 _locks: WeakValueDictionary = WeakValueDictionary()
 _lock_index = threading.Lock()
@@ -146,17 +148,42 @@ def network(app_id: str):
         raise ValueError("Mini-app runtimes require Docker Engine 28+ for isolated gateway networks")
     net_name = name(app_id, "net")
     isolated = {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}
-    try:
-        net = client.networks.get(net_name)
-    except NotFound:
-        net = client.networks.create(
-            net_name,
-            driver="bridge",
-            internal=True,
-            enable_ipv6=False,
-            options=isolated,
-            labels=labels(app_id),
-        )
+    # The daemon's automatic pools often allocate an entire /16 per bridge.
+    # Keep one isolated bridge per app, but optionally allocate compact /29s
+    # from an operator-reserved, deployment-specific pool. Existing networks
+    # remain unchanged, including legacy networks outside the configured pool.
+    with _network_creation:
+        try:
+            net = client.networks.get(net_name)
+        except NotFound:
+            ipam = {}
+            if NETWORK_CIDR:
+                selected = miniapp_networks.subnet(
+                    NETWORK_CIDR, net_name, WORKFLOWS_VOLUME, client.networks.list()
+                )
+                ipam["ipam"] = IPAMConfig(pool_configs=[IPAMPool(subnet=selected)])
+            try:
+                net = client.networks.create(
+                    net_name,
+                    driver="bridge",
+                    internal=True,
+                    enable_ipv6=False,
+                    options=isolated,
+                    labels=labels(app_id),
+                    **ipam,
+                )
+            except APIError as exc:
+                error = str(exc).lower()
+                if "address pools" in error or "fully subnetted" in error:
+                    raise ValueError(
+                        "Docker network address pools are exhausted. Configure MINIAPP_NETWORK_CIDR "
+                        "with a reserved, non-overlapping private pool for this deployment."
+                    ) from exc
+                if NETWORK_CIDR and "overlap" in error:
+                    raise ValueError(
+                        "MINIAPP_NETWORK_CIDR overlaps an allocated Docker network; check the reserved pool"
+                    ) from exc
+                raise
     if (
         net.attrs.get("Internal") is not True
         or net.attrs.get("EnableIPv6")

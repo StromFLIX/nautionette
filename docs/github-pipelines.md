@@ -149,6 +149,15 @@ component health and output storage connectivity. It never means "deploy whateve
 is now on main". It promotes source commits, not identical prebuilt image digests.
 No data copy happens on release.
 
+Promotion now also requires the latest non-skipped staging **Deploy** run for
+that exact commit to have completed successfully, with successful component
+health, mini-app lifecycle/workflow smoke, and creative-app artifact steps. A
+finished Coolify deployment with a failed smoke test cannot authorize production.
+The job uses read-only `actions: read` permission to verify this evidence; no new
+secret is needed. Production still requires the same commit to be live in staging.
+For hosts using `MINIAPP_NETWORK_CIDR`, validate a separate production pool after
+staging approval; never reuse staging's reserved range across environments.
+
 The read-only **Prepare Nautionette release** workflow checks the healthy staging
 commit, ancestry, unused/increasing stable version, and evidence-backed notes. Its
 source is tracked in `workflows/prepare_nautionette_release.py` and regression-tested

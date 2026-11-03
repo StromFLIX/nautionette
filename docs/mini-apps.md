@@ -87,6 +87,31 @@ The compiler is a source-fingerprinted, platform-owned Rust 1.91.1/Alpine image.
 
 Rust runtimes require **Docker Engine 28+**, because an ordinary `internal: true` Docker bridge still exposes services on the host's bridge address. Per-app networks require gateway mode `isolated`, disable IPv6 and connect only the app and broker. They have no published ports, external egress, gateway membership or other app members. Runtime bearer credentials authorize one fixed capability adapter, never broker administration. Missing internal authentication blocks backend publication. Older Docker engines fail closed for native apps without breaking chats/workflows/frontend-only apps.
 
+### Hosts with exhausted Docker address pools
+
+Docker's automatic allocator may reserve a whole `/16` per bridge and run out
+with only a few dozen networks. Do not solve this by using host networking,
+sharing app networks, weakening gateway isolation, or globally pruning networks.
+Set **`MINIAPP_NETWORK_CIDR` on the broker** to a private pool reserved for this
+one deployment, for example an unused `/24` verified against host routes and
+existing Docker IPAM allocations. Use a **different pool for each environment**.
+The setting accepts canonical RFC1918 IPv4 pools `/16` through `/24`; do not copy
+an example range without checking it on your host.
+
+New apps receive disjoint `/29` subnets (32 bridges per `/24`, enough for the
+16-app instance limit). Allocation is serialized, checks existing allocations,
+rejects overlap with unrelated/deployment-foreign networks, and relies on
+Docker's final atomic IPAM overlap check. Exhaustion fails closed with an
+operator-facing configuration error, never a fallback to a shared network.
+Existing owned isolated networks are reused without readdressing or stopping
+working apps. All isolation, IPv6 restrictions, capability drops, seccomp and
+resource limits remain unchanged. No Docker daemon restart is required.
+
+Blank retains Docker's automatic allocator for existing installations. Recreate
+only the affected broker/application after changing the environment setting.
+For promotion, reserve and validate a distinct production range **after staging
+verification**; staging configuration is not implicitly copied to production.
+
 Runtime controls:
 
 | Resource | Bound |

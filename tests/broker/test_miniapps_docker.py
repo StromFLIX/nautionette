@@ -44,6 +44,7 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
                 "WORKFLOWS_VOLUME": namespace,
                 "AGENT_IMAGE_REGISTRY_PREFIX": "",
                 "MINIAPP_TEST_DIAGNOSTICS": "1",
+                "MINIAPP_NETWORK_CIDR": "10.253.0.0/24",
                 "AGENT_BACKEND_URL": "http://127.0.0.1:18080",
             },
             volumes={
@@ -93,6 +94,11 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
             assert metrics["memory_bytes"] < metrics["memory_limit_bytes"] == 64 * 1024 * 1024
             assert 0 < metrics["image_bytes"] < 16 * 1024 * 1024
             print(json.dumps({"build_seconds": time.monotonic() - started, **metrics}))
+
+            networks = client.networks.list(filters={"label": app_labels})
+            assert len(networks) == 1
+            subnet = ipaddress.ip_network(networks[0].attrs["IPAM"]["Config"][0]["Subnet"])
+            assert subnet.prefixlen == 29 and subnet.subnet_of(ipaddress.ip_network("10.253.0.0/24"))
 
             active_revision = 1
 

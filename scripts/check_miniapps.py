@@ -68,6 +68,19 @@ class API:
             ) from None
 
 
+def failure_category(item):
+    """Classify fixed errors only; never log source/compiler output or response bodies."""
+    releases = item.get("releases") or []
+    error = str(releases[0].get("error", "")) if releases else ""
+    if "MINIAPP_NETWORK_CIDR" in error:
+        return "runtime_network_pool"
+    if "Candidate health check failed" in error:
+        return "runtime_health"
+    if "Rust compilation failed" in error or "Rust build exceeded" in error:
+        return "rust_compilation"
+    return "build_or_health_unclassified"
+
+
 def run(api, app_id):
     path = f"/api/miniapps/{app_id}"
     contract = api.call("/api/miniapps/contract")
@@ -104,7 +117,9 @@ def run(api, app_id):
                 if item["active_revision"] == 1:
                     break
                 if item["releases"][0]["state"] == "failed":
-                    raise RuntimeError("Mini-app smoke: first compilation or health check failed") from None
+                    category = failure_category(item)
+                    print(json.dumps({"miniapp_smoke": "failed", "category": category}), flush=True)
+                    raise RuntimeError(f"Mini-app smoke: first publication failed ({category})") from None
             else:
                 raise RuntimeError("Mini-app smoke: publication not confirmed; inspect status") from None
 

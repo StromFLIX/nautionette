@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 # Serialize staging and production together, including the promotion check.
 concurrency:
