@@ -54,7 +54,7 @@ jobs:
         run: uv run pytest tests/test_coolify_release.py tests/worker/test_prepare_release.py tests/test_publish_agent_images.py tests/test_miniapp_smoke.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py tests/broker/test_chat_sessions.py tests/broker/test_chat_recovery.py tests/broker/test_sandbox_network.py
 
       - name: Native creative app release contracts, installer isolation and Settings
-        run: uv run pytest tests/lib/test_artcraft.py tests/broker/test_artcraft.py tests/backend/test_artcraft.py
+        run: uv run pytest tests/lib/test_artcraft.py tests/broker/test_artcraft.py tests/broker/test_artcraft_offline.py tests/backend/test_artcraft.py tests/test_artcraft_deployment.py
 
       - name: OpenTelemetry privacy boundary
         run: uv run pytest tests/lib/test_telemetry.py tests/lib/test_telemetry_http.py

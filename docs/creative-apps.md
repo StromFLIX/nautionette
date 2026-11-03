@@ -84,8 +84,9 @@ The update filter and attention filter make pending work/failures easy to find.
 Linux x86_64 and aarch64 release archive digests. The Pi image contains only this
 catalog and the fixed installer, **not the native app binaries**. After acquiring
 the agent images, the broker prepares all 13 default artifacts before reporting
-agent/image readiness. Missing defaults download in isolated installer containers;
-existing defaults are reverified offline after broker restart. Corrupt/incomplete
+agent/image readiness. The broker downloads missing defaults as bounded, checksum-verified archives;
+fixed offline installer containers extract/probe them. Existing defaults are
+reverified offline after broker restart. Corrupt/incomplete
 unreferenced artifacts can be removed and reinstalled, never overwritten in place;
 Docker refuses removal of any artifact referenced by a container. A failed
 preparation keeps readiness degraded and is retried by reconciliation. No default
@@ -127,14 +128,18 @@ can be lost. Session shutdown/container cleanup reaps disposable processes.
 Version installation is a fixed authenticated broker verb, not a general shell
 or container API. Installers receive only the exact release specification and
 their own artifact volume: no Docker socket, projects, backend token or app data.
-They share one temporary, deployment-owned bridge with inter-container
-communication disabled, with dropped capabilities, no-new-privileges,
-read-only root, bounded tmpfs/memory/CPU/PIDs, download/extraction limits and a
-300-second wait. The bridge is released when its last installer exits; offline
-verification needs no network. Sharing the bridge avoids consuming a separate
-Docker address pool for each concurrent installer. Reconciliation reaps only
-old, empty, deployment-owned installer networks, never application networks or
-artifact volumes. Release archive paths and selected regular files are checked.
+All installers use **network none**, dropped capabilities, no-new-privileges,
+read-only root, bounded tmpfs/memory/CPU/PIDs, extraction limits and a 300-second
+wait. No new Docker bridge/address pool is required, even for first deployment.
+The broker streams only allowlisted HTTPS archives (at most 256 MiB each), checks
+the pinned digest, and stages the archive plus a fixed internal helper through
+Docker's archive API. It never extracts or executes upstream content itself.
+The offline helper independently checks the digest, removes its staging files,
+extracts safely, probes the CLI and only then publishes the manifest. The two
+installation slots also bound temporary broker disk usage; archives/tar streams
+are file-backed rather than accumulated in memory. Reconciliation reaps only
+old, empty, deployment-owned legacy installer networks, never application
+networks or artifact volumes. Release archive paths and selected regular files are checked.
 The app is executed only after the archive digest matches. Updates trust the
 upstream publisher's native code; digests are integrity checks, not an independent
 security audit or publisher signature.
