@@ -184,6 +184,112 @@ pub fn handle(_: &mut Context,_:&Request)->Result<Value>{Ok(json!({}))}"""
                 print(f"Mini-app cleanup unconfirmed: {app_id}", file=sys.stderr)
 
 
+def unpack_mcp(value):
+    for _ in range(8):
+        if isinstance(value, str):
+            value = json.loads(value)
+        elif isinstance(value, dict) and value.get("isError"):
+            raise RuntimeError("Mini-app smoke: workflow MCP call failed")
+        elif isinstance(value, dict) and "structuredContent" in value:
+            value = value["structuredContent"]
+        elif isinstance(value, dict) and "result" in value:
+            value = value["result"]
+        elif isinstance(value, dict) and "content" in value:
+            value = json.loads("\n".join(c["text"] for c in value["content"] if c["type"] == "text"))
+        else:
+            return value
+    raise RuntimeError("Mini-app smoke: invalid workflow MCP result")
+
+
+def workflow_smoke(api):
+    """A deterministic disposable workflow: no model, notification or release side effects."""
+    suffix = uuid.uuid4().hex
+    name = "miniapp_smoke_" + suffix
+    path = "/api/miniapps/ci-workflow-" + suffix[:24]
+    workflow_path = "/api/workflows/" + name
+    api.call(workflow_path, expected=404)  # Never overwrite an existing workflow.
+    code = """from temporalio import workflow
+MANIFEST = {"schema":1,"name":"__NAME__","title":"Disposable mini-app workflow smoke",
+ "inputs":{"type":"object","properties":{"version":{"type":"string"}},"required":["version"]},
+ "outputs":{"type":"object"},"timeout_minutes":2}
+@workflow.defn(name="__NAME__")
+class MiniappWorkflowSmoke:
+ @workflow.run
+ async def run(self, params: dict) -> dict:
+  return {"version":params["version"],"notify":False,"reason":"Disposable staging smoke"}
+""".replace("__NAME__", name)
+    app_created = False
+    try:
+        deployed = api.call(workflow_path + "/deploy", "POST", {"code": code})
+        if not deployed.get("ready"):
+            raise RuntimeError("Mini-app smoke: disposable workflow worker is not ready")
+        manifest = api.call("/api/miniapps/contract")["example"]
+        manifest["title"] = "CI scoped workflow smoke"
+        manifest["backend"]["source"] = """use crate::{Context,Request,Result,Value};
+pub fn health(_: &mut Context)->Result<()> {Ok(())}
+pub fn handle(ctx:&mut Context, req:&Request)->Result<Value> {
+ if req.method=="POST" && req.path=="/start" {
+  return ctx.mcp("workflows_run_workflow",
+   serde_json::json!({"name":"__NAME__","input":{"version":"minor"}}),&req.request_id);
+ }
+ if req.method=="GET" && req.path=="/runs" {
+  return ctx.mcp("workflows_list_runs",serde_json::json!({"workflow":"__NAME__","limit":5}),"");
+ }
+ Err("Unknown operation".into())
+}""".replace("__NAME__", name)
+        manifest["backend"]["permissions"] = {
+            "mcp": [
+                {"tool": "workflows_run_workflow", "arguments": {"name": name}},
+                {"tool": "workflows_list_runs", "arguments": {"workflow": name}},
+            ]
+        }
+        # Inspect a conflict before claiming ownership of the temporary app.
+        api.call(path, expected=404)
+        app_created = True
+        try:
+            api.call(path, "PUT", {"expected_revision": 0, "manifest": manifest})
+        except APIError as error:
+            if error.status == 409:
+                app_created = False
+            raise
+        request = {
+            "revision": 1,
+            "path": "/start",
+            "method": "POST",
+            "request_id": f"{int(time.time() * 1000)}-{uuid.uuid4().hex}",
+        }
+        result = unpack_mcp(api.call(path + "/invoke", "POST", request))
+        if unpack_mcp(api.call(path + "/invoke", "POST", request)) != result:
+            raise RuntimeError("Mini-app smoke: workflow start was not deduplicated")
+        workflow_id = result["workflow_id"]
+        for _ in range(30):
+            info = api.call("/api/runs/" + workflow_id)
+            row, live = info.get("run") or {}, info.get("temporal") or {}
+            if (live.get("status") or row.get("status", "")).lower() == "completed":
+                output = row.get("result") or live.get("result") or {}
+                if output.get("version") != "minor":
+                    raise RuntimeError("Mini-app smoke: workflow input/result mismatch")
+                break
+            time.sleep(2)
+        else:
+            raise RuntimeError("Mini-app smoke: workflow completion was not confirmed")
+        history = unpack_mcp(api.call(path + "/invoke", "POST", {"revision": 1, "path": "/runs"}))
+        if len(history.get("runs", [])) != 1 or history["runs"][0]["workflow_id"] != workflow_id:
+            raise RuntimeError("Mini-app smoke: scoped read-only history or start deduplication failed")
+        print(json.dumps({"miniapp_workflow_smoke": "passed", "status": "completed"}))
+    finally:
+        # UUID ownership was checked before creation; never inspect/delete user resources.
+        try:
+            if app_created:
+                item = api.call(path)
+                api.call(path, "PATCH", {"expected_revision": item["revision"], "archived": True})
+                api.call(path + f"?expected_revision={item['revision']}", "DELETE")
+        finally:
+            api.call(workflow_path, "DELETE")
+
+
 if __name__ == "__main__":
     # This script is invoked only by the staging job, never the release/promotion job.
-    run(API(), "ci-smoke-" + uuid.uuid4().hex[:24])
+    api = API()
+    run(api, "ci-smoke-" + uuid.uuid4().hex[:24])
+    workflow_smoke(api)

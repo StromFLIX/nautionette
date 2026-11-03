@@ -28,6 +28,8 @@ INSTRUCTIONS = (
 
 
 def _register(server: Any) -> None:
+    from mcp.types import ToolAnnotations
+
     @server.tool(description="List deployed workflows and any legacy drafts that remain on the volume.")
     def list_workflows() -> str:
         return json.dumps({"workflows": store.list_workflows(), "drafts": store.list_drafts()}, default=str)
@@ -105,7 +107,8 @@ def _register(server: Any) -> None:
         description=(
             "List recent workflow runs, newest first, with how each one ended. Pass a workflow "
             "name to see only its runs. Use it to find the workflow_id that read_run needs."
-        )
+        ),
+        annotations=ToolAnnotations(read_only_hint=True),
     )
     async def list_runs(workflow: str = "", limit: int = 20) -> str:
         try:

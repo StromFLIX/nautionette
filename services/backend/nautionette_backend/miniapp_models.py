@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 AppID = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,47}$")]
+
+# Explicit orchestration capabilities, not a general host-administration grant.
+# Canonical tool names only; aliases and arbitrary run inspection remain denied.
+WORKFLOW_TOOLS = {"workflows_run_workflow": "name", "workflows_list_runs": "workflow"}
 
 
 class StrictModel(BaseModel):
@@ -34,7 +39,11 @@ class MCPGrant(StrictModel):
     @model_validator(mode="after")
     def no_host_administration(self):
         name = self.tool.lower().replace(":", "_").replace("/", "_").replace(".", "_").replace("-", "_")
-        if name.startswith(("backend_", "workflows_", "workflow_")) or any(
+        if workflow_key := WORKFLOW_TOOLS.get(self.tool):
+            workflow = self.arguments.get(workflow_key)
+            if not isinstance(workflow, str) or not re.fullmatch(r"[a-z][a-z0-9_]{2,63}", workflow):
+                raise ValueError("Workflow tools require an exact fixed workflow name")
+        elif name.startswith(("backend_", "workflows_", "workflow_")) or any(
             word in name for word in ("env_values", "private_key", "get_token", "list_tokens")
         ):
             raise ValueError("Host administration and credential-returning tools cannot be granted")

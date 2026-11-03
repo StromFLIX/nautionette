@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from typing import Literal
 
@@ -13,7 +14,7 @@ from .. import miniapps
 from ..clients import broker
 from ..db import db
 from ..events import bus
-from ..miniapp_models import AppRequest, EditApp, Manifest, Publication, Restore, ValidateApp
+from ..miniapp_models import WORKFLOW_TOOLS, AppRequest, EditApp, Manifest, Publication, Restore, ValidateApp
 from ..security import require_internal, require_user
 
 router = APIRouter(tags=["mini-apps"])
@@ -35,7 +36,8 @@ def miniapp_contract() -> dict:
     No Dockerfile, host token or workflow required.
     """
     return {
-        "version": 2,
+        "version": 3,
+        "workflow_tools": {tool: {"required_fixed_argument": key} for tool, key in WORKFLOW_TOOLS.items()},
         "authoring": (
             "Set agent_id to the owning saved agent. icon is a Material icon name; image is an optional "
             "inline PNG/JPEG/WebP avatar (32 KiB maximum). Apps are not pinned by default. "
@@ -82,7 +84,11 @@ def miniapp_contract() -> dict:
             "ctx.http(https_url, method, json_body, request_id). "
             "Grant exact MCP tool names and fixed resource argument subsets, or exact public HTTPS origins, "
             "path prefixes and methods. Empty grants mean no access. "
-            "Host administration/credential tools are denied. MCP calls reuse sessions. "
+            "Host administration/credential tools are denied. The only workflow exceptions are "
+            "workflows_run_workflow (fixed name) and workflows_list_runs (fixed workflow). "
+            "These require an exact nonempty workflow name in the grant; editing/deploying workflows "
+            "and arbitrary run inspection remain denied. Workflow starts are mutations: retain IDs "
+            "and inspect run history after uncertain outcomes instead of retrying. MCP calls reuse sessions. "
             "There are no automatic tool-call retries. GET/readOnlyHint calls don't need IDs; mutations do: "
             "13-digit Unix milliseconds + '-' + 32 lowercase hex digits. "
             "Generate each ID once and retain it. "
@@ -180,6 +186,26 @@ async def validate_miniapp(body: ValidateApp) -> dict:
             if exc.response.status_code == 422:
                 raise HTTPException(
                     422, str(exc.response.json().get("detail", "Compilation failed"))[:7000]
+                ) from exc
+            try:
+                detail = exc.response.json().get("detail")
+            except (ValueError, AttributeError):
+                detail = None
+            if (
+                isinstance(detail, dict)
+                and detail.get("code") == "compiler_unavailable"
+                and detail.get("stage") in {"docker", "image", "container", "artifact", "runtime_image"}
+                and isinstance(detail.get("sdk_fingerprint"), str)
+                and re.fullmatch(r"[0-9a-f]{12}", detail["sdk_fingerprint"])
+            ):
+                raise HTTPException(
+                    503,
+                    {
+                        **{k: detail[k] for k in ("code", "stage", "sdk_fingerprint")},
+                        "message": (
+                            "Mini-app compiler unavailable; check the published SDK image and broker health"
+                        ),
+                    },
                 ) from exc
             raise HTTPException(503, "Mini-app compiler unavailable") from exc
         except Exception as exc:

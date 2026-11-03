@@ -23,6 +23,18 @@ def registered():
     return server.tools
 
 
+async def test_run_history_is_advertised_read_only():
+    from mcp.server.mcpserver import MCPServer
+
+    server = MCPServer("workflow-test")
+    tools._register(server)
+    catalog = {tool.name: tool for tool in await server.list_tools()}
+    assert catalog["list_runs"].annotations.read_only_hint is True
+    assert (
+        catalog["run_workflow"].annotations is None or not catalog["run_workflow"].annotations.read_only_hint
+    )
+
+
 async def test_write_deploys_through_backend_without_creating_a_draft(registered, workflows, monkeypatch):
     calls = []
 

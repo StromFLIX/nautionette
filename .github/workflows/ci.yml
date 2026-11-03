@@ -41,6 +41,9 @@ jobs:
       - name: Install workspace
         run: uv sync --locked --all-packages
 
+      - name: Canonical image fingerprints match repository source
+        run: python3 services/docker-broker/nautionette_docker_broker/image_context.py --check-lock
+
       - name: Lint
         run: uv run ruff check --output-format github .
 
@@ -48,7 +51,7 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Deployment, snapshot, gateway buffers and agent image safety tests
-        run: uv run pytest tests/test_coolify_release.py tests/worker/test_prepare_release.py tests/test_publish_agent_images.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py tests/broker/test_chat_sessions.py tests/broker/test_chat_recovery.py tests/broker/test_sandbox_network.py
+        run: uv run pytest tests/test_coolify_release.py tests/worker/test_prepare_release.py tests/test_publish_agent_images.py tests/test_miniapp_smoke.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py tests/broker/test_chat_sessions.py tests/broker/test_chat_recovery.py tests/broker/test_sandbox_network.py
 
       - name: Native creative app release contracts, installer isolation and Settings
         run: uv run pytest tests/lib/test_artcraft.py tests/broker/test_artcraft.py tests/backend/test_artcraft.py
@@ -74,7 +77,7 @@ jobs:
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py
 
       - name: Database upgrades, API retirement and workflow transports
-        run: uv run pytest tests/backend/test_db.py tests/backend/test_retired_features.py tests/backend/test_miniapps.py tests/backend/test_miniapp_development.py tests/broker/test_miniapps.py tests/backend/test_gateway_mcp.py tests/backend/test_temporal_schedules.py
+        run: uv run pytest tests/backend/test_db.py tests/backend/test_retired_features.py tests/backend/test_miniapps.py tests/backend/test_miniapp_development.py tests/broker/test_miniapps.py tests/broker/test_image_context.py tests/workflow_mcp/test_tools.py tests/backend/test_gateway_mcp.py tests/backend/test_temporal_schedules.py
 
       - name: Workflow history expiry, retention and run recovery
         run: uv run pytest tests/backend/test_run_retention.py tests/backend/test_runs.py tests/backend/test_execution_graph.py tests/backend/test_internal.py tests/backend/test_schedule_recovery.py tests/backend/test_run_statistics.py tests/worker/test_activities.py

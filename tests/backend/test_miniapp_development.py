@@ -137,6 +137,33 @@ def test_compile_errors_are_returned_without_creating_a_release(client, runtime)
     assert client.get("/api/miniapps").json()["apps"] == []
 
 
+def test_safe_compiler_stage_and_fingerprint_are_visible_without_registry_messages(client, runtime):
+    method, _ = runtime
+    detail = {
+        "code": "compiler_unavailable",
+        "stage": "image",
+        "sdk_fingerprint": "123456789abc",
+        "message": "secret registry authentication response",
+        "credentials": "do not forward",
+    }
+    method.side_effect = httpx.HTTPStatusError(
+        "failed",
+        request=httpx.Request("POST", "http://broker"),
+        response=httpx.Response(503, json={"detail": detail}),
+    )
+    body = {"manifest": publication(client, True)["manifest"], "compile": True}
+    response = client.post("/api/miniapps/validate", json=body)
+    assert response.status_code == 503
+    result = response.json()["detail"]
+    assert result["stage"] == "image" and result["sdk_fingerprint"] == "123456789abc"
+    assert "secret" not in response.text and "credentials" not in response.text
+    detail["stage"] = "secret arbitrary error"
+    method.side_effect.response = httpx.Response(503, json={"detail": detail})
+    assert (
+        client.post("/api/miniapps/validate", json=body).json()["detail"] == "Mini-app compiler unavailable"
+    )
+
+
 def test_overview_retains_unavailable_and_building_apps_without_waking_them(client, runtime, db):
     method, _ = runtime
     for name in ["working", "offline", "pending"]:

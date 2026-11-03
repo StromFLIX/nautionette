@@ -159,6 +159,7 @@ def test_ci_outputs_exactly_the_brokers_source_fingerprints(repo_root, monkeypat
     monkeypatch.chdir(repo_root)
     monkeypatch.setattr(images, "AGENT_IMAGES_DIR", str(repo_root / "images"))
     script = repo_root / "services/docker-broker/nautionette_docker_broker/image_context.py"
+    monkeypatch.setattr("sys.argv", [str(script)])
     runpy.run_path(str(script), run_name="__main__")
     outputs = dict(line.split("=", 1) for line in capsys.readouterr().out.splitlines())
     assert outputs == {

@@ -28,16 +28,17 @@ from typing import Any
 from weakref import WeakValueDictionary
 
 import httpx
-from docker.errors import APIError, NotFound
+from docker.errors import APIError, DockerException, NotFound
 from docker.types import Ulimit
 from fastapi import HTTPException
+from requests.exceptions import RequestException
 
 from . import daemon, image_context
 from .config import AGENT_IMAGE_REGISTRY_PREFIX, INTERNAL_TOKEN, WORKFLOWS_VOLUME
 
 ROOT = Path(os.environ.get("MINIAPPS_DIR", "/miniapps"))
 BUILDER_ROOT = Path(os.environ.get("MINIAPP_BUILDER_CONTEXT", "/miniapp-sdk"))
-BUILDER_HASH = image_context.context_hash(BUILDER_ROOT)
+BUILDER_HASH = image_context.bundled_hash("miniapp") or image_context.context_hash(BUILDER_ROOT)
 BUILDER = f"nautionette/miniapp-builder:{BUILDER_HASH}"
 BACKEND = os.environ.get("AGENT_BACKEND_URL", "http://backend:8080").rstrip("/")
 ID = re.compile(r"[a-z][a-z0-9-]{0,47}")
@@ -50,6 +51,19 @@ _lock_index = threading.Lock()
 _calls = threading.BoundedSemaphore(16)
 _cap_calls = threading.BoundedSemaphore(8)
 _last_used: dict[str, float] = {}
+
+
+class CompilerUnavailable(RuntimeError):
+    """Fixed diagnostics only: never return arbitrary Docker/registry/auth messages."""
+
+    def __init__(self, stage: str):
+        self.detail = {
+            "code": "compiler_unavailable",
+            "stage": stage,
+            "sdk_fingerprint": BUILDER_HASH,
+            "message": "Mini-app compiler unavailable; check the published SDK image and broker health",
+        }
+        super().__init__(self.detail["message"])
 
 
 def checked(app_id: str) -> str:
@@ -286,19 +300,24 @@ def build(app_id: str, revision: int, source: str, *, validate_only: bool = Fals
         raise ValueError("Rust module must be 1..65536 bytes")
     if not _build_slot.acquire(blocking=False):
         raise ValueError("Another mini-app build is running; retry after it completes")
-    client = daemon.client()
     container = None
     tag = name(app_id, f"release-{revision}")
+    stage = "docker"
     try:
+        client = daemon.client()
+        stage = "image"
         # Builder identity is derived from the bundled SDK, never caller-selected.
         try:
             client.images.get(BUILDER)
         except NotFound:
             if AGENT_IMAGE_REGISTRY_PREFIX:
                 image = client.images.pull(f"{AGENT_IMAGE_REGISTRY_PREFIX}/miniapp-builder:{BUILDER_HASH}")
-                image.tag(BUILDER)
+                repository, _, version = BUILDER.rpartition(":")
+                if not image.tag(repository, version):
+                    raise CompilerUnavailable(stage) from None
             else:
                 client.images.build(path=str(BUILDER_ROOT), tag=BUILDER, rm=True)
+        stage = "container"
         container = client.containers.create(
             BUILDER,
             network_mode="none",
@@ -336,6 +355,7 @@ def build(app_id: str, revision: int, source: str, *, validate_only: bool = Fals
             time.sleep(0.5)
         else:
             raise ValueError("Rust build exceeded 180 seconds")
+        stage = "artifact"
         binary = bytearray()
         result = container.exec_run(
             ["cat", "/tmp/target/release/nautionette-miniapp"],  # noqa: S108 - private compiler tmpfs
@@ -365,10 +385,13 @@ def build(app_id: str, revision: int, source: str, *, validate_only: bool = Fals
             member.mode = 0o555
             tar.addfile(member)
         context.seek(0)
+        stage = "runtime_image"
         image, _ = client.images.build(
             fileobj=context, custom_context=True, tag=tag, network_mode="none", rm=True, labels=labels(app_id)
         )
         return image.id
+    except (DockerException, RequestException) as exc:
+        raise CompilerUnavailable(stage) from exc
     finally:
         if container:
             with contextlib.suppress(Exception):

@@ -28,7 +28,7 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
     client = docker.from_env()
     assert int(client.version()["Version"].split(".")[0]) >= 28, "Isolated gateways require Docker 28+"
     fingerprint = image_context.context_hash(ROOT / "services/miniapp-sdk")
-    client.images.get("nautionette/miniapp-builder:dev").tag(f"nautionette/miniapp-builder:{fingerprint}")
+    client.images.get("nautionette/miniapp-builder:dev").tag("nautionette/miniapp-builder", fingerprint)
     namespace = "miniapp-test-" + uuid.uuid4().hex
     volume = client.volumes.create(name=namespace)
     broker = None
@@ -36,15 +36,14 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
         broker = client.containers.run(
             "nautionette/docker-broker:dev",
             detach=True,
+            # Reproduce Coolify's deployment-time Dockerfile transformation.
+            # Runtime identity must still select the CI-published compiler, not
+            # attempt to pull/build a tag derived from these injected ARGs.
             entrypoint=[
-                "uvicorn",
-                "nautionette_docker_broker.main:app",
-                "--host",
-                "0.0.0.0",  # noqa: S104 - inside test container; host port is loopback-only
-                "--port",
-                "9100",
-                "--lifespan",
-                "off",
+                "sh",
+                "-c",
+                "printf '\\nARG COOLIFY_RESOURCE_UUID\\nARG APP_TOKEN\\n' >> /miniapp-sdk/Dockerfile; "
+                "exec uvicorn nautionette_docker_broker.main:app --host 0.0.0.0 --port 9100 --lifespan off",
             ],
             environment={
                 "INTERNAL_TOKEN": "integration-test-internal",

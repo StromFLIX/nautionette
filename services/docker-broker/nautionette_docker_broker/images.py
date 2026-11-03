@@ -59,11 +59,13 @@ def discovered_agent_sets() -> list[str]:
 
 
 def base_hash() -> str:
-    return image_context.base_hash(Path(AGENT_IMAGES_DIR))
+    return image_context.bundled_hash("base") or image_context.base_hash(Path(AGENT_IMAGES_DIR))
 
 
 def _agent_set_hash(agent_set: str) -> str:
-    return image_context.agent_set_hash(Path(AGENT_IMAGES_DIR), agent_set)
+    return image_context.bundled_hash("agent_sets", agent_set) or image_context.agent_set_hash(
+        Path(AGENT_IMAGES_DIR), agent_set
+    )
 
 
 def image_tag(agent_set: str) -> str:

@@ -234,6 +234,8 @@ def deploy_miniapp(
     _check_internal(x_internal_token)
     try:
         return miniapps.deploy(app_id, **payload.model_dump())
+    except miniapps.CompilerUnavailable as exc:
+        raise HTTPException(503, exc.detail) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     except Exception as exc:
@@ -257,6 +259,8 @@ def check_miniapp(
     try:
         miniapps.checked(app_id)
         return miniapps.build(app_id, 1, payload.source, validate_only=True)
+    except miniapps.CompilerUnavailable as exc:
+        raise HTTPException(503, exc.detail) from exc
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     except Exception as exc:

@@ -214,6 +214,80 @@ def test_host_and_credential_tools_denied(tool):
         MCPGrant(tool=tool)
 
 
+@pytest.mark.parametrize(
+    "tool,key",
+    [
+        ("workflows_run_workflow", "name"),
+        ("workflows_list_runs", "workflow"),
+    ],
+)
+def test_workflow_grants_require_fixed_names(tool, key):
+    for value in [None, "", "*", "ab", "../release", "release/other", True, {"name": "release"}]:
+        with pytest.raises(ValueError):
+            MCPGrant(tool=tool, arguments={key: value})
+    grant = MCPGrant(tool=tool, arguments={key: "prepare_nautionette_release"})
+    manifest = {"backend": {"permissions": {"mcp": [grant.model_dump()]}}}
+    request = {"kind": "mcp", "tool": tool, "arguments": {key: "prepare_nautionette_release"}}
+    caps.authorize(manifest, request)
+    for args in [{}, {key: "another_workflow"}, {key: ""}, {key: True}]:
+        with pytest.raises(HTTPException) as error:
+            caps.authorize(manifest, {**request, "arguments": args})
+        assert error.value.status_code == 403
+    for other in [
+        "workflows_read_run",
+        "workflows_write_workflow",
+        "backend_run_workflow",
+        "workflows/run_workflow",
+        "workflows-run-workflow",
+        "WORKFLOWS_RUN_WORKFLOW",
+    ]:
+        with pytest.raises(ValueError):
+            MCPGrant(tool=other, arguments={key: "prepare_nautionette_release"})
+
+
+def test_workflow_start_is_deduplicated_and_unknown_outcomes_are_fenced(
+    client, internal_headers, runtime, monkeypatch
+):
+    body = publication(client, True)
+    body["manifest"]["backend"]["permissions"] = {
+        "mcp": [
+            {
+                "tool": "workflows_run_workflow",
+                "arguments": {"name": "release_test"},
+            }
+        ]
+    }
+    assert client.put("/api/miniapps/counter", json=body).status_code == 200
+    monkeypatch.setattr(caps, "describe", AsyncMock(return_value={"annotations": {"readOnlyHint": False}}))
+    invoke = AsyncMock(
+        return_value={"content": [{"type": "text", "text": '{"workflow_id":"release-test-run"}'}]}
+    )
+    monkeypatch.setattr(caps, "mcp", invoke)
+    payload = {
+        "revision": 1,
+        "request": {
+            "kind": "mcp",
+            "tool": "workflows_run_workflow",
+            "arguments": {"name": "release_test", "input": {"version": "minor"}},
+            "request_id": rid(),
+        },
+    }
+    path = "/internal/miniapps/counter/capability"
+    for _ in range(2):
+        assert client.post(path, json=payload, headers=internal_headers).status_code == 200
+    assert invoke.await_count == 1
+    assert invoke.call_args.args[1]["arguments"]["input"] == {"version": "minor"}
+    payload["request"]["arguments"]["name"] = "other_workflow"
+    assert client.post(path, json=payload, headers=internal_headers).status_code == 403
+    assert invoke.await_count == 1
+    payload["request"]["arguments"]["name"] = "release_test"
+    payload["request"]["request_id"] = rid()
+    invoke.side_effect = HTTPException(502, "Gateway reply lost")
+    assert client.post(path, json=payload, headers=internal_headers).status_code == 502
+    assert client.post(path, json=payload, headers=internal_headers).status_code == 409
+    assert invoke.await_count == 2
+
+
 def test_argument_constraints_are_recursive_and_type_exact():
     manifest = {
         "backend": {

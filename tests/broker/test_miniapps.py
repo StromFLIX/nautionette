@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from docker.errors import NotFound
+from docker.errors import DockerException, NotFound
 from fastapi import HTTPException
 from nautionette_docker_broker import miniapps as apps
 
@@ -347,6 +347,33 @@ def test_compile_check_discards_artifact_without_images_data_or_runtime(runtime)
     compiler.remove.assert_called_once_with(force=True)
     assert not apps.root("source-check").exists()
     assert runtime.containers.create.call_args.kwargs["network_mode"] == "none"
+
+
+def test_failed_docker_initialization_releases_the_compiler_slot(runtime, monkeypatch):
+    monkeypatch.setattr(apps.daemon, "client", Mock(side_effect=DockerException("sensitive daemon error")))
+    with pytest.raises(apps.CompilerUnavailable) as error:
+        apps.build("source-check", 1, "pub fn health() {}", validate_only=True)
+    assert error.value.detail["stage"] == "docker"
+    assert "sensitive" not in str(error.value.detail)
+    assert apps._build_slot.acquire(blocking=False)
+    apps._build_slot.release()
+
+
+def test_registry_failure_is_bounded_and_tagging_is_explicit(runtime, monkeypatch):
+    monkeypatch.setattr(apps, "AGENT_IMAGE_REGISTRY_PREFIX", "ghcr.io/example/app")
+    runtime.images.get.side_effect = NotFound("absent")
+    runtime.images.pull.side_effect = DockerException("registry credential must not leak")
+    with pytest.raises(apps.CompilerUnavailable) as error:
+        apps.build("source-check", 1, "pub fn health() {}", validate_only=True)
+    assert error.value.detail["stage"] == "image"
+    assert "credential" not in str(error.value.detail)
+    runtime.images.pull.side_effect = None
+    runtime.images.pull.return_value.tag.return_value = False
+    with pytest.raises(apps.CompilerUnavailable):
+        apps.build("source-check", 1, "pub fn health() {}", validate_only=True)
+    repository, _, version = apps.BUILDER.rpartition(":")
+    runtime.images.pull.return_value.tag.assert_called_once_with(repository, version)
+    runtime.containers.create.assert_not_called()
 
 
 def test_runtime_snapshot_reports_resources_without_starting_sleeping_apps(runtime, monkeypatch):
