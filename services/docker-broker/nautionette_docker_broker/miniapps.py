@@ -311,7 +311,11 @@ def build(app_id: str, revision: int, source: str, *, validate_only: bool = Fals
             client.images.get(BUILDER)
         except NotFound:
             if AGENT_IMAGE_REGISTRY_PREFIX:
-                image = client.images.pull(f"{AGENT_IMAGE_REGISTRY_PREFIX}/miniapp-builder:{BUILDER_HASH}")
+                # The existing setting is an image-name prefix (…/pi-), not
+                # a registry directory. The compiler is a sibling of pi-base.
+                parent = AGENT_IMAGE_REGISTRY_PREFIX.rpartition("/")[0]
+                remote = f"{parent + '/' if parent else ''}miniapp-builder:{BUILDER_HASH}"
+                image = client.images.pull(remote)
                 repository, _, version = BUILDER.rpartition(":")
                 if not image.tag(repository, version):
                     raise CompilerUnavailable(stage) from None

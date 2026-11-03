@@ -360,7 +360,7 @@ def test_failed_docker_initialization_releases_the_compiler_slot(runtime, monkey
 
 
 def test_registry_failure_is_bounded_and_tagging_is_explicit(runtime, monkeypatch):
-    monkeypatch.setattr(apps, "AGENT_IMAGE_REGISTRY_PREFIX", "ghcr.io/example/app")
+    monkeypatch.setattr(apps, "AGENT_IMAGE_REGISTRY_PREFIX", "ghcr.io/example/app/pi-")
     runtime.images.get.side_effect = NotFound("absent")
     runtime.images.pull.side_effect = DockerException("registry credential must not leak")
     with pytest.raises(apps.CompilerUnavailable) as error:
@@ -374,6 +374,28 @@ def test_registry_failure_is_bounded_and_tagging_is_explicit(runtime, monkeypatc
     repository, _, version = apps.BUILDER.rpartition(":")
     runtime.images.pull.return_value.tag.assert_called_once_with(repository, version)
     runtime.containers.create.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "prefix,parent",
+    [
+        ("ghcr.io/example/app/pi-", "ghcr.io/example/app"),
+        ("ghcr.io/example/app/custom-", "ghcr.io/example/app"),
+        ("ghcr.io/example/app/", "ghcr.io/example/app"),
+        ("registry.example:5000/org/name/pi-", "registry.example:5000/org/name"),
+    ],
+)
+def test_compiler_is_pulled_beside_agent_images_not_under_the_pi_prefix(runtime, monkeypatch, prefix, parent):
+    monkeypatch.setattr(apps, "AGENT_IMAGE_REGISTRY_PREFIX", prefix)
+    runtime.images.get.side_effect = NotFound("absent")
+    compiler = runtime.containers.create.return_value
+    compiler.status = "running"
+    compiler.exec_run.side_effect = [Mock(exit_code=0), Mock(output=iter([b"\x7fELFartifact"]))]
+    result = apps.build("source-check", 1, "pub fn health() {}", validate_only=True)
+    assert result["artifact_bytes"] > 0
+    runtime.images.pull.assert_called_once_with(f"{parent}/miniapp-builder:{apps.BUILDER_HASH}")
+    runtime.images.pull.return_value.tag.assert_called_once_with(*apps.BUILDER.rsplit(":", 1))
+    runtime.images.build.assert_not_called()
 
 
 def test_runtime_snapshot_reports_resources_without_starting_sleeping_apps(runtime, monkeypatch):
