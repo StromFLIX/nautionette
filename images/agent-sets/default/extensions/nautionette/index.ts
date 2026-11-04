@@ -10,6 +10,7 @@
 import { writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { modelApi } from "./model-api.ts";
+import { createMcpTransport } from "./mcp-transport.ts";
 import { modelLimits } from "./model-limits.ts";
 import { reasoningConfig, reasoningPayload } from "./reasoning.ts";
 import { allowedTools } from "./tool-selection.ts";
@@ -26,39 +27,8 @@ const ALLOWED = allowedTools(process.env.NAUTIONETTE_TOOLS_JSON, process.env.NAU
 
 type JsonRpcResult = Record<string, any>;
 
-let messageId = 0;
-let sessionId: string | undefined;
-
-async function rpc(method: string, params: Record<string, unknown> = {}, signal?: AbortSignal): Promise<JsonRpcResult> {
-  const isNotification = method.startsWith("notifications/");
-  const body: Record<string, unknown> = { jsonrpc: "2.0", method, params };
-  if (!isNotification) body.id = ++messageId;
-
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    accept: "application/json, text/event-stream",
-    "mcp-protocol-version": "2025-06-18",
-  };
-  if (sessionId) headers["mcp-session-id"] = sessionId;
-
-  const response = await fetch(MCP_URL, { method: "POST", headers, body: JSON.stringify(body), signal });
-  const returned = response.headers.get("mcp-session-id");
-  if (returned) sessionId = returned;
-  if (isNotification) return {};
-  if (!response.ok) throw new Error(`${method} -> HTTP ${response.status}`);
-
-  const raw = await response.text();
-  const payload = raw.includes("event:") || raw.startsWith("data:")
-    ? raw
-        .split("\n")
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trim())
-        .join("")
-    : raw;
-  const parsed = JSON.parse(payload);
-  if (parsed.error) throw new Error(`${method} -> ${parsed.error.message ?? "mcp error"}`);
-  return parsed.result ?? {};
-}
+const transport = createMcpTransport(MCP_URL);
+const rpc = transport.rpc;
 
 function renderToolResult(result: JsonRpcResult): string {
   const content = Array.isArray(result?.content) ? result.content : [];
@@ -120,14 +90,10 @@ export default async function (pi: ExtensionAPI) {
   // Tools are discovered, not hard-coded: federate a new MCP server behind the
   // gateway and this agent set picks it up on its next run.
   try {
-    await rpc("initialize", {
-      protocolVersion: "2025-06-18",
-      capabilities: {},
-      clientInfo: { name: "nautionette-agent-set", version: "1.0.0" },
-    });
-    await rpc("notifications/initialized");
+    await transport.connect();
     const listed = await rpc("tools/list");
     const all: any[] = listed.tools ?? [];
+    transport.setReadOnlyTools(all.filter(tool => tool.annotations?.readOnlyHint === true).map(tool => tool.name));
     const tools = all.filter((tool) => !isOutputTransportTool(tool.name) && !SUBAGENT_TOOLS.has(tool.name) && !CRAFT_TOOL_NAMES.has(tool.name) && (ALLOWED === null || ALLOWED.has(tool.name)));
 
     // Payload-free provenance for the supervisor's workflow accounting. Tool
@@ -143,8 +109,8 @@ export default async function (pi: ExtensionAPI) {
         description: tool.description ?? `MCP tool ${tool.name}`,
         promptSnippet: tool.description?.split("\n")[0],
         parameters: tool.inputSchema ?? { type: "object", properties: {} },
-        async execute(_toolCallId: string, params: unknown) {
-          const result = await rpc("tools/call", { name: tool.name, arguments: params ?? {} });
+        async execute(_toolCallId: string, params: unknown, signal?: AbortSignal) {
+          const result = await rpc("tools/call", { name: tool.name, arguments: params ?? {} }, signal);
           const text = renderToolResult(result);
           if (result?.isError) throw new Error(text);
           return { content: [{ type: "text", text }], details: result ?? {} };

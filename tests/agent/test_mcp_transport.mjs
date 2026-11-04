@@ -1,0 +1,88 @@
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import { createMcpTransport } from '../../images/agent-sets/default/extensions/nautionette/mcp-transport.ts'
+
+function fixture (tool) {
+  const requests = []
+  let sessions = 0
+  const transport = createMcpTransport('http://gateway/mcp', async (_url, options) => {
+    const request = JSON.parse(options.body)
+    requests.push({ ...request, session: options.headers['mcp-session-id'] })
+    if (request.method === 'initialize') {
+      sessions++
+      assert.equal(options.headers['mcp-session-id'], undefined)
+      return Response.json({ result: { protocolVersion: '2025-06-18' } }, { headers: { 'mcp-session-id': `session-${sessions}` } })
+    }
+    if (request.method === 'notifications/initialized') return new Response(null, { status: 202 })
+    if (request.method === 'tools/list') return Response.json({ result: { tools: [] } })
+    return tool(request, options, sessions)
+  })
+  transport.setReadOnlyTools(['read'])
+  return { transport, requests, sessions: () => sessions }
+}
+
+for (const status of [400, 404]) test(`stale ${status} session reinitializes once and retries an explicitly read-only tool`, async () => {
+  const { transport, requests, sessions } = fixture((_request, _options, session) => session === 1
+    ? new Response('private upstream details', { status })
+    : Response.json({ result: { content: [{ type: 'text', text: 'healthy' }] } }))
+  const result = await transport.rpc('tools/call', { name: 'read' })
+  assert.equal(result.content[0].text, 'healthy')
+  assert.equal(sessions(), 2)
+  assert.deepEqual(requests.filter(r => r.method === 'tools/call').map(r => r.session), ['session-1', 'session-2'])
+})
+
+test('a rejected mutation restores the session but is never replayed', async () => {
+  let calls = 0
+  const { transport, sessions } = fixture(() => { calls++; return new Response('secret', { status: 400 }) })
+  await assert.rejects(transport.rpc('tools/call', { name: 'deploy' }), /NOT replayed; inspect/)
+  assert.equal(calls, 1)
+  assert.equal(sessions(), 2)
+  // Subsequent independent calls use the restored session.
+  await transport.rpc('tools/list')
+  assert.equal(sessions(), 2)
+})
+
+for (const status of [401, 403, 429, 500, 503]) test(`HTTP ${status} is not mistaken for an expired session`, async () => {
+  const { transport, sessions } = fixture(() => new Response('upstream secret', { status }))
+  await assert.rejects(transport.rpc('tools/call', { name: 'read' }), error => {
+    assert.match(error.message, new RegExp(`HTTP ${status}`))
+    assert.ok(!error.message.includes('secret'))
+    return true
+  })
+  assert.equal(sessions(), 1)
+})
+
+test('network failures and JSON-RPC errors are never automatically repeated', async () => {
+  for (const fail of [() => { throw new Error('network failed') }, () => Response.json({ error: { code: -32602, message: 'invalid parameters' } })]) {
+    let calls = 0
+    const { transport, sessions } = fixture(() => { calls++; return fail() })
+    await assert.rejects(transport.rpc('tools/call', { name: 'read' }))
+    assert.equal(calls, 1)
+    assert.equal(sessions(), 1)
+  }
+})
+
+test('simultaneous stale read calls share one fresh handshake', async () => {
+  const { transport, sessions } = fixture((_request, options) => options.headers['mcp-session-id'] === 'session-1'
+    ? new Response('', { status: 400 }) : Response.json({ result: { ok: true } }))
+  await transport.connect()
+  const results = await Promise.all([transport.rpc('tools/call', { name: 'read' }), transport.rpc('tools/call', { name: 'read' })])
+  assert.deepEqual(results, [{ ok: true }, { ok: true }])
+  assert.equal(sessions(), 2)
+})
+
+test('a second stale response is surfaced rather than looping forever', async () => {
+  let calls = 0
+  const { transport, sessions } = fixture(() => { calls++; return new Response('', { status: 400 }) })
+  await assert.rejects(transport.rpc('tools/call', { name: 'read' }), /HTTP 400/)
+  assert.equal(sessions(), 2)
+  assert.equal(calls, 2)
+})
+
+test('cancellation prevents both initial handshake and tool execution', async () => {
+  const { transport, requests } = fixture(() => assert.fail('must not execute'))
+  const controller = new AbortController()
+  controller.abort()
+  await assert.rejects(transport.rpc('tools/call', { name: 'read' }, controller.signal), /abort/i)
+  assert.equal(requests.length, 0)
+})
