@@ -66,6 +66,7 @@ for (const entry of ['sidebar', 'welcome']) {
     // Merely looking at another chat, or changing global defaults, is not "last used".
     state.chats.other = { chat: { ...state.data.chat, id: 'other', model: 'test/plain', tools: null }, messages: [], active_turn: null }
     await page.goto('/chats/other')
+    await openChatConfiguration(page)
     await expect(page.getByLabel('Select model', { exact: true })).toContainText('Plain')
     state.settings.default_model = 'test/plain'
     state.settings.default_tools = []

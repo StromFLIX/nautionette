@@ -45,7 +45,7 @@ async function speechFixture (context, { denied = false, cleanup = false } = {})
   return { state, uploads, cleanups }
 }
 
-for (const width of [320, 390, 1440]) test(`joined microphone/send and header context fit at ${width}px`, async ({ page, context }) => {
+for (const width of [320, 390, 1440]) test(`joined microphone/send and header context fit at ${width}px`, async ({ page, context }, testInfo) => {
   const { state, uploads } = await speechFixture(context)
   await page.setViewportSize({ width, height: 800 })
   await page.goto('/chats/alpha')
@@ -59,14 +59,14 @@ for (const width of [320, 390, 1440]) test(`joined microphone/send and header co
   await expect(page.locator('.voice-control__wave')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: `/workspace/dictation-recording-${width}.png` })
+  await page.screenshot({ path: testInfo.outputPath(`dictation-recording-${width}.png`) })
   await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
   await expect(draft).toHaveValue('Existing draft\nFix the test.')
   expect(uploads).toHaveLength(1)
   expect(uploads[0].query.cleanup).toBe('false')
   expect(state.sent).toHaveLength(0)
   expect(await page.evaluate(() => stoppedTracks)).toBe(1)
-  await page.screenshot({ path: `/workspace/dictation-draft-${width}.png` })
+  await page.screenshot({ path: testInfo.outputPath(`dictation-draft-${width}.png`) })
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
   await expect.poll(() => state.sent.length).toBe(1)
 })

@@ -293,7 +293,7 @@ test('unavailable selected projects can be removed without being silently replac
   await page.goto('/chats/alpha')
   await openChatConfiguration(page)
   await page.getByRole('button', { name: 'Select projects', exact: true }).click()
-  await expect(page.getByRole('checkbox')).toBeChecked()
+  await expect(page.locator('.project-picker').getByRole('checkbox')).toBeChecked()
   await expect(page.getByText('unavailable', { exact: true })).toBeVisible()
   const clear = page.getByRole('button', { name: 'Clear project selection' })
   await clear.hover()
