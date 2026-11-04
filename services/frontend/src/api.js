@@ -1,4 +1,5 @@
 import { liveConnection } from './live-connection.js'
+import { readSpeechEvents } from './speech.js'
 
 const TOKEN_KEY = 'nautionette.token'
 const SERVER_KEY = 'nautionette.server'
@@ -70,6 +71,24 @@ const json = (body) => ({ body: JSON.stringify(body ?? {}) })
 
 export const api = {
   health: () => request('/healthz', { signal: AbortSignal.timeout(5000) }),
+  speech: () => request('/api/speech'),
+  async cleanupDictation (text, { model = '', signal, onEvent }) {
+    const response = await fetch(endpoint('/api/speech/cleanup'), {
+      method: 'POST', headers: headers({ 'Content-Type': 'application/json' }), body: JSON.stringify({ text, model }), signal
+    })
+    if (!response.ok) throw new ApiError('Dictation cleanup unavailable.', response.status)
+    await readSpeechEvents(response.body, onEvent)
+  },
+  async transcribe (audio, { model = '', cleanup = false, language = '', signal, onEvent }) {
+    const response = await fetch(endpoint(`/api/speech/transcribe?${new URLSearchParams({ model, cleanup, language })}`), {
+      method: 'POST', headers: headers({ 'Content-Type': audio.type || 'audio/webm' }), body: audio, signal
+    })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}))
+      throw new ApiError(payload.detail || 'Dictation unavailable. Please try again.', response.status)
+    }
+    await readSpeechEvents(response.body, onEvent)
+  },
   system: () => request('/api/system'),
   catalog: (refresh = false) => request(`/api/catalog${refresh ? '?refresh=true' : ''}`),
   events: () => request('/api/events/recent'),

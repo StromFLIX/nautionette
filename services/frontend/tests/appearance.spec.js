@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { THEMES, resolveTheme } from '../src/themes.js'
 import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 import { mockDesign } from './design-fixture.js'
-import { closeChatConfiguration } from './helpers.js'
+import { openChatConfiguration, closeChatConfiguration } from './helpers.js'
 
 const rgb = hex => `rgb(${[1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16)).join(', ')})`
 const stored = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), PREFERENCES_KEY)
@@ -27,6 +27,7 @@ for (const theme of THEMES) {
     await expect(page.locator('.msg--user .bubble')).toHaveCSS('color', rgb(tokens['bubble-text']))
     await expect(page.locator('.code-block')).toHaveCSS('background-color', rgb(tokens['surface-code']))
     await expect(page.locator('.code-block .hljs-keyword')).toHaveCSS('color', rgb(tokens['syntax-keyword']))
+    await openChatConfiguration(page)
     await page.getByRole('button', { name: 'Select model', exact: true }).click()
     await expect(page.getByPlaceholder('Search models')).toBeVisible()
     await expect(page.locator('.q-menu')).toHaveCSS('background-color', rgb(tokens['surface-overlay']))
@@ -36,6 +37,7 @@ for (const theme of THEMES) {
     // Escape restores keyboard focus, which can show the model button's tooltip.
     // Leave both hover and focus before asserting an unobstructed screenshot.
     await page.mouse.move(0, 0)
+    await closeChatConfiguration(page)
     await page.getByRole('textbox', { name: 'Message', exact: true }).focus()
     await expect(page.getByRole('tooltip')).toHaveCount(0)
     await page.screenshot({ path: `/tmp/nautionette-theme-${theme.id}-chat.png` })

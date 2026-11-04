@@ -224,6 +224,63 @@ class GatewayClient:
         choices = payload.get("choices") or []
         return (choices[0].get("message", {}).get("content") or "") if choices else ""
 
+    async def dictation_cleanup(self, model: str, instructions: str, text: str):
+        """Stream a tool-free edit through the existing provider routing/auth."""
+        responses = model.startswith("copilot/")
+        endpoint = "responses" if responses else "chat/completions"
+        payload = {
+            "model": model,
+            "stream": True,
+            **(
+                {"instructions": instructions, "input": text, "max_output_tokens": 4096}
+                if responses
+                else {
+                    "messages": [
+                        {"role": "system", "content": instructions},
+                        {"role": "user", "content": text},
+                    ],
+                    "max_completion_tokens": 4096,
+                }
+            ),
+        }
+        complete = False
+        async with shared().stream(
+            "POST", f"{self.base_url}/v1/{endpoint}", json=payload, timeout=90
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    return
+                event = json.loads(data)
+                if not isinstance(event, dict):
+                    raise ValueError("Invalid dictation cleanup response")
+                if event.get("type") == "response.completed":
+                    complete = True
+                if event.get("error") or event.get("type") in {
+                    "error",
+                    "response.failed",
+                    "response.incomplete",
+                }:
+                    raise ValueError("Dictation cleanup failed")
+                if responses:
+                    delta = (
+                        event.get("delta", "") if event.get("type") == "response.output_text.delta" else ""
+                    )
+                else:
+                    choices = event.get("choices") or []
+                    if choices and choices[0].get("finish_reason") in {"length", "content_filter"}:
+                        raise ValueError("Dictation cleanup was incomplete")
+                    if choices and choices[0].get("finish_reason") == "stop":
+                        complete = True
+                    delta = (choices[0].get("delta", {}).get("content") or "") if choices else ""
+                if isinstance(delta, str) and delta:
+                    yield delta
+        if not complete:
+            raise ValueError("Dictation cleanup stream ended before completion")
+
     async def models(self) -> list[dict[str, Any]]:
         """Whatever the provider behind the gateway is willing to serve."""
         response = await shared().get(f"{self.base_url}/v1/models", timeout=15)

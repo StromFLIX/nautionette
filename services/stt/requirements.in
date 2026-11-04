@@ -1,0 +1,7 @@
+# CPU appliance dependencies; requirements.txt locks the full dependency graph.
+faster-whisper==1.2.1
+fastapi==0.162.0
+uvicorn==0.54.0
+python-multipart==0.0.33
+av==19.0.2
+numpy==2.5.4

@@ -11,6 +11,10 @@
     </div>
     <p v-if="!configurationReady" class="composer__notice caption" role="status">Loading chat defaults…</p>
     <p v-if="imageError" class="composer__notice caption" role="alert">{{ imageError }}</p>
+    <p v-if="voiceNotice" class="composer__notice caption" role="status">{{ voiceNotice }}</p>
+    <p v-if="voiceResult && modelValue === voiceResult.cleaned && !voiceActive" class="composer__voice-result caption">
+      Dictation cleaned up. <button type="button" @click="$emit('update:modelValue', voiceResult.original); voiceResult = null">Use original transcript</button>
+    </p>
     <p v-if="imageSupport !== true && hasImages" class="composer__notice caption" role="status">{{ imageNotice }}</p>
     <div v-if="commandSuggestions.length" class="composer__commands" aria-label="Pi command suggestions">
       <button v-for="command in commandSuggestions" :key="command.name" class="pick-menu__item" type="button" :disabled="busy" @click="chooseCommand(command.name)">
@@ -20,36 +24,28 @@
     <!-- Disabling or making the native editor readonly dismisses the IME.
          Freeze edits during preparation without taking away editor focus. -->
     <textarea ref="input" class="composer__input" :value="modelValue" :placeholder="placeholder" aria-label="Message"
-      :rows="variant === 'welcome' ? 3 : 1" :aria-disabled="busy || undefined"
-      @beforeinput="busy && $event.preventDefault()" @input="onInput"
+      :rows="variant === 'welcome' ? 3 : 1" :aria-disabled="busy || voiceActive || undefined"
+      @beforeinput="(busy || voiceActive) && $event.preventDefault()" @input="onInput"
       @focus="focused = true" @blur="focused = false" @keydown="onKeydown" />
 
     <input ref="fileInput" type="file" :disabled="busy" multiple hidden @change="chooseFiles" />
     <div class="composer__bar">
       <button class="pick pick--icon" type="button" :disabled="busy" :title="attachmentNotice" aria-label="Attach files" @click="fileInput?.click()">
-        <span class="material-icons" aria-hidden="true">attach_file</span>
+        <span class="material-icons" aria-hidden="true">add</span>
         <q-tooltip>{{ attachmentNotice }}</q-tooltip>
       </button>
-      <button class="pick composer__model" type="button" :disabled="configurationBusy" aria-label="Select model">
-        <span class="material-icons pick__icon" aria-hidden="true">memory</span>
-        <span class="truncate">{{ shortModel }}</span>
-        <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
-        <ModelPicker :model-value="model" @update:model-value="$emit('update:model', $event)" />
-        <q-tooltip>Model for this chat</q-tooltip>
-      </button>
-      <span class="grow" />
-      <div class="composer__context" :title="meter.title" :aria-label="meter.title" role="img" tabindex="0">
-        <div class="meter"><div class="meter__fill" :style="{ width: `${meter.width}%` }" :class="{ 'meter__fill--hot': meter.percent > 80 }" /></div>
-        <span class="sr-only">{{ meter.label }}</span>
-        <q-tooltip>{{ meter.title }}</q-tooltip>
-      </div>
       <button ref="configurationToggle" class="pick pick--icon composer__config-toggle" type="button"
         aria-label="Chat configuration" :aria-expanded="configurationOpen" :aria-controls="configurationId"
-        @click="openConfiguration">
+        :disabled="voiceActive" @click="openConfiguration">
         <span class="material-icons" aria-hidden="true">tune</span>
         <span v-if="customConfiguration && !configurationOpen" class="composer__configured" aria-label="Custom configuration" />
         <q-tooltip>Model, agent, reasoning, tools, projects & extensions{{ customConfiguration ? ' · customized' : '' }}</q-tooltip>
       </button>
+      <span class="grow" />
+      <div class="composer__actions" :class="{ 'composer__actions--recording': voiceActive }">
+      <VoiceControl v-model="voiceDraft" :model="model" :disabled="configurationBusy || !configurationReady" :cleanup="preferences.dictationCleanup" :language="preferences.dictationLanguage"
+        @active="voiceActive = $event" @processing="voiceProcessing = $event" @notice="voiceNotice = $event" @completed="voiceResult = $event" />
+      <span class="composer__divider" aria-hidden="true" />
       <button type="button" :class="showStop ? 'composer__stop' : ['composer__send', { 'composer__send--busy': busy }]"
         :aria-label="showStop ? 'Stop response' : running ? 'Queue message' : 'Send message'"
         :disabled="showStop ? stopping : !canSubmit" @mousedown="preserveDraftFocus" @click="showStop ? $emit('stop') : submit()">
@@ -58,6 +54,7 @@
              before mousedown, which can dismiss the keyboard without a blur. -->
         <q-tooltip v-if="!focused"><template v-if="showStop">{{ stopping ? 'Stopping response' : 'Stop response' }}</template><template v-else>{{ running ? 'Queue message' : 'Send message' }} · {{ preferences.sendShortcut === 'enter' ? 'Enter' : '⌘ / Ctrl + Enter' }}</template></q-tooltip>
       </button>
+      </div>
     </div>
     </div>
 
@@ -145,6 +142,12 @@
           </button>
         </div>
       </div>
+      <fieldset class="composer__dictation">
+        <legend>Dictation</legend>
+        <label><input type="checkbox" :checked="preferences.dictationCleanup" @change="setPreference('dictationCleanup', $event.target.checked)" /> Clean up with this chat's model</label>
+        <p>Optional punctuation and filler cleanup. The transcript is sent to the selected model; review it before sending.</p>
+        <label>Speech language <select :value="preferences.dictationLanguage" @change="setPreference('dictationLanguage', $event.target.value)"><option value="">Auto-detect</option><option value="en">English</option><option value="de">German</option></select></label>
+      </fieldset>
       <p v-if="!configurationReady" class="composer__configuration-notice caption" role="status">Loading chat defaults…</p>
       <p v-if="imageSupport !== true" class="composer__configuration-notice caption" role="status">{{ imageNotice }}</p>
       <div class="composer__configuration-foot"><span>{{ meter.label }}</span><RouterLink to="/settings/workspace">Workspace preferences<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink></div>
@@ -156,6 +159,7 @@
 <script setup>
 import { computed, nextTick, ref, useId } from 'vue'
 import ModelPicker from './ModelPicker.vue'
+import VoiceControl from './VoiceControl.vue'
 import AgentPicker from './AgentPicker.vue'
 import AgentAvatar from './AgentAvatar.vue'
 import { agentConfig, sameConfig } from '../agent-config'
@@ -167,7 +171,7 @@ import ToolPicker from './ToolPicker.vue'
 import ProjectPicker from './ProjectPicker.vue'
 import PackagePicker from './PackagePicker.vue'
 import { store } from '../store'
-import { preferences } from '../preferences'
+import { preferences, setPreference } from '../preferences'
 import { contextMeter, modelContextWindow } from '../context'
 
 const props = defineProps({
@@ -187,6 +191,16 @@ const input = ref(null)
 const focused = ref(false)
 const fileInput = ref(null)
 const imageError = ref('')
+const voiceActive = ref(false)
+const voiceProcessing = ref(false)
+const voiceNotice = ref('')
+const voiceResult = ref(null)
+const voiceDraft = computed({ get: () => props.modelValue, set: value => { emit('update:modelValue', value); nextTick(resizeInput) } })
+function resizeInput () {
+  if (!input.value) return
+  input.value.style.height = 'auto'
+  input.value.style.height = `${Math.min(220, input.value.scrollHeight)}px`
+}
 const configurationId = useId()
 // Preferences replace this composer's draft in place, never carried into other chats.
 const configurationOpen = ref(false)
@@ -195,6 +209,7 @@ const configurationToggle = ref(null)
 const configurationClose = ref(null)
 let configurationTrigger = null
 function openConfiguration (event) {
+  if (voiceActive.value) return
   configurationTrigger = event?.currentTarget || configurationToggle.value
   configurationOpen.value = true
   nextTick(() => configurationClose.value?.focus({ preventScroll: true }))
@@ -216,7 +231,7 @@ const hasDraft = computed(() => Boolean(props.modelValue.trim() || props.attachm
 const showStop = computed(() => props.running && !hasDraft.value)
 // Preparing a new chat gates server-dependent actions, never typing or attachments.
 const configurationBusy = computed(() => props.busy || props.preparing)
-const canSubmit = computed(() => !configurationBusy.value && props.configurationReady && hasDraft.value && !(hasImages.value && imageSupport.value === false))
+const canSubmit = computed(() => !voiceActive.value && !configurationBusy.value && props.configurationReady && hasDraft.value && !(hasImages.value && imageSupport.value === false))
 const imageNotice = computed(() => {
   if (imageSupport.value === true) return selectedModel.value?.image_support_reason || 'Image input supported.'
   if (imageSupport.value === false) return `${selectedModel.value?.image_support_reason || 'Image input is unavailable for this model/API route.'} Choose another model${hasImages.value ? ' or remove the images' : ''}.`
@@ -253,7 +268,7 @@ const commandSuggestions = computed(() => /^\/[^\s]*$/.test(props.modelValue)
 function chooseCommand (name) { emit('update:modelValue', `/${name} `); input.value?.focus() }
 function onInput (event) {
   // IME/autofill input is not always preceded by a cancelable beforeinput.
-  if (props.busy) { event.target.value = props.modelValue; return }
+  if (props.busy || voiceActive.value) { event.target.value = props.modelValue; return }
   emit('update:modelValue', event.target.value)
   event.target.style.height = 'auto'
   event.target.style.height = `${Math.min(220, event.target.scrollHeight)}px`
@@ -324,12 +339,18 @@ defineExpose({
 .pick__icon, .pick__caret { flex: none; font-size: 1rem; }
 .pick__caret { margin-left: auto; opacity: 0.6; }
 .composer__configured { position: absolute; top: 1px; right: 2px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
-.composer__context { flex: none; padding: 10px 6px; }
-.meter { width: 38px; height: 3px; border-radius: var(--radius-pill); background: var(--surface-active); overflow: hidden; }
-.meter__fill { height: 100%; background: var(--accent); transition: width 200ms var(--ease); }
-.meter__fill--hot { background: var(--warning); }
+.composer__actions { display: flex; align-items: center; flex: none; min-height: 40px; padding: 2px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-hover); transition: border-color var(--transition); }
+.composer__actions--recording { border-color: var(--accent); }
+.composer__divider { height: 20px; width: 1px; margin: 0 3px; background: var(--border-strong); }
+.composer__voice-result { margin: 6px 16px; color: var(--text-muted); }
+.composer__voice-result button { border: 0; background: none; color: var(--accent-text); text-decoration: underline; cursor: pointer; font: inherit; }
+.composer__dictation { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 18px 0 0; padding: 12px; font-size: .75rem; }
+.composer__dictation label { display: flex; align-items: center; gap: 8px; }
+.composer__dictation p { color: var(--text-dim); margin: 8px 0 12px; font-size: .6875rem; }
+.composer__dictation select { background: var(--surface-input); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px; }
 .composer__send, .composer__stop { position: relative; display: grid; place-items: center; flex: none; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--accent-text); cursor: pointer; }
-.composer__send::before { content: ''; position: absolute; inset: 0; background: var(--accent); clip-path: var(--octagon); transition: background var(--transition); }
+.composer__actions .composer__send, .composer__actions .composer__stop { width: 42px; height: 38px; }
+.composer__send::before { content: ''; position: absolute; inset: 0; background: var(--accent); border-radius: inherit; transition: background var(--transition); }
 .composer__send:not(:disabled):hover::before { background: var(--accent-hover); }
 .composer__send > .material-icons { position: relative; }
 .composer__stop { background: var(--danger-soft); color: var(--danger); }
@@ -354,9 +375,8 @@ defineExpose({
 .composer__configuration-foot .material-icons { font-size: 0.75rem; }
 @media (max-width: 1100px) { .composer__options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) {
-  .composer__context { display: none; }
-  .composer__model { flex: 0 1 auto; max-width: 190px; }
   .composer__bar { padding: 6px 8px 10px; gap: 3px; }
+  .composer__bar:has(.composer__actions--recording) > .pick { display: none; }
   .composer__input, .composer--welcome .composer__input { padding: 14px 14px 8px; }
   .composer__configuration-head { padding: 14px; }
   .composer__configuration-body { padding: 14px 14px 0; }
@@ -368,8 +388,6 @@ defineExpose({
   .composer__configuration-head p { display: none; }
 }
 @media (max-width: 380px) {
-  .composer__model { padding: 0 4px; }
-  .composer__model > .pick__icon { display: none; }
   .composer__send, .composer__stop, .pick--icon { width: 32px; }
 }
 @media (pointer: coarse) {
