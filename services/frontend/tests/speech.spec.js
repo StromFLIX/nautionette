@@ -8,7 +8,7 @@ async function speechFixture (context, { denied = false, cleanup = false } = {})
   const state = await mockDesign(context)
   const uploads = [], cleanups = []
   await context.addInitScript(({ denied, cleanup }) => {
-    if (cleanup) localStorage.setItem('nautionette.preferences.v1', JSON.stringify({ dictationCleanup: true }))
+    if (cleanup && !localStorage.getItem('nautionette.preferences.v1')) localStorage.setItem('nautionette.preferences.v1', JSON.stringify({ dictationCleanup: true }))
     window.stoppedTracks = 0
     Object.defineProperty(navigator, 'mediaDevices', { value: {
       async getUserMedia () {
@@ -91,7 +91,8 @@ test('cleanup uses the chat model and original transcript can be recovered', asy
   const { cleanups } = await speechFixture(context, { cleanup: true })
   await page.goto('/chats/alpha')
   await openChatConfiguration(page)
-  await expect(page.getByLabel("Clean up with this chat's model")).toBeChecked()
+  await expect(page.getByRole('group', { name: 'Dictation', exact: true })).toHaveCount(0)
+  await expect(page.getByLabel("Clean up with this chat's model")).toHaveCount(0)
   await closeChatConfiguration(page)
   await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
   await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
@@ -99,6 +100,28 @@ test('cleanup uses the chat model and original transcript can be recovered', asy
   expect(cleanups[0]).toMatchObject({ text: 'um fix the test', model: 'test/model' })
   await page.getByRole('button', { name: 'Use original transcript', exact: true }).click()
   await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('um fix the test')
+})
+
+test('dictation preferences live only in Settings and still configure chat recording', async ({ page, context }) => {
+  const { uploads, cleanups } = await speechFixture(context, { cleanup: true })
+  await page.goto('/settings/workspace')
+  const cleanup = page.getByRole('switch', { name: 'Clean up dictation', exact: true })
+  const language = page.getByLabel('Dictation language', { exact: true })
+  await expect(cleanup).toBeChecked()
+  await language.selectOption('de')
+  await page.reload()
+  await expect(cleanup).toBeChecked()
+  await expect(language).toHaveValue('de')
+  await page.goto('/chats/alpha')
+  await openChatConfiguration(page)
+  await expect(page.getByRole('group', { name: 'Dictation', exact: true })).toHaveCount(0)
+  await expect(page.getByLabel('Dictation language', { exact: true })).toHaveCount(0)
+  await closeChatConfiguration(page)
+  await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
+  await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
+  await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('Fix the test.')
+  expect(uploads[0].query.language).toBe('de')
+  expect(cleanups).toHaveLength(1)
 })
 
 test('cancel discards recording, releases the microphone and preserves the original typed text', async ({ page, context }) => {

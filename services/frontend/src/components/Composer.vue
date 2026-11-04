@@ -142,12 +142,6 @@
           </button>
         </div>
       </div>
-      <fieldset class="composer__dictation">
-        <legend>Dictation</legend>
-        <label><input type="checkbox" :checked="preferences.dictationCleanup" @change="setPreference('dictationCleanup', $event.target.checked)" /> Clean up with this chat's model</label>
-        <p>Optional punctuation and filler cleanup. The transcript is sent to the selected model; review it before sending.</p>
-        <label>Speech language <select :value="preferences.dictationLanguage" @change="setPreference('dictationLanguage', $event.target.value)"><option value="">Auto-detect</option><option value="en">English</option><option value="de">German</option></select></label>
-      </fieldset>
       <p v-if="!configurationReady" class="composer__configuration-notice caption" role="status">Loading chat defaults…</p>
       <p v-if="imageSupport !== true" class="composer__configuration-notice caption" role="status">{{ imageNotice }}</p>
       <div class="composer__configuration-foot"><span>{{ meter.label }}</span><RouterLink to="/settings/workspace">Workspace preferences<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink></div>
@@ -171,7 +165,7 @@ import ToolPicker from './ToolPicker.vue'
 import ProjectPicker from './ProjectPicker.vue'
 import PackagePicker from './PackagePicker.vue'
 import { store } from '../store'
-import { preferences, setPreference } from '../preferences'
+import { preferences } from '../preferences'
 import { contextMeter, modelContextWindow } from '../context'
 
 const props = defineProps({
@@ -344,10 +338,6 @@ defineExpose({
 .composer__divider { height: 20px; width: 1px; margin: 0 3px; background: var(--border-strong); }
 .composer__voice-result { margin: 6px 16px; color: var(--text-muted); }
 .composer__voice-result button { border: 0; background: none; color: var(--accent-text); text-decoration: underline; cursor: pointer; font: inherit; }
-.composer__dictation { border: 1px solid var(--border); border-radius: var(--radius-sm); margin: 18px 0 0; padding: 12px; font-size: .75rem; }
-.composer__dictation label { display: flex; align-items: center; gap: 8px; }
-.composer__dictation p { color: var(--text-dim); margin: 8px 0 12px; font-size: .6875rem; }
-.composer__dictation select { background: var(--surface-input); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px; }
 .composer__send, .composer__stop { position: relative; display: grid; place-items: center; flex: none; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--accent-text); cursor: pointer; }
 .composer__actions .composer__send, .composer__actions .composer__stop { width: 42px; height: 38px; }
 .composer__send::before { content: ''; position: absolute; inset: 0; background: var(--accent); border-radius: inherit; transition: background var(--transition); }

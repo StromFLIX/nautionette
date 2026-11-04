@@ -116,9 +116,10 @@ the HTTP URL does not change this client's rolling-window protocol.
 
 ## Optional LLM cleanup
 
-Chat preferences (and Settings → Workspace) offer **Clean up dictation**, off by
-default, plus automatic/English/German language selection. These are per-device
-preferences; the selected chat model is used when recording ends.
+**Settings → Workspace** offers **Clean up dictation**, off by default, plus
+automatic/English/German language selection. These per-device preferences live
+only in Settings, not in the chat preferences panel. The selected chat model is
+used when recording ends.
 
 With cleanup off, live recognized text is simply finalized. With cleanup on, the
 completed raw transcript is retained in memory and the LLM's edited text streams
