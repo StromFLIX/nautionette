@@ -467,12 +467,33 @@ def test_every_deployed_compose_service_has_a_healthcheck(repo_root):
         "maxio",
         "otel-collector",
         "postgres",
+        "stt",
         "temporal",
         "website",
         "worker",
         "workflow-mcp",
     }
     assert all(compose["services"][name].get("healthcheck", {}).get("test") for name in deployed)
+
+
+def test_stt_compose_is_private_bounded_replaceable_and_never_gates_chat_startup(repo_root):
+    compose = yaml.safe_load((repo_root / "docker-compose.yaml").read_text())
+    services = compose["services"]
+    stt, backend = services["stt"], services["backend"]
+    assert not stt.get("ports")
+    assert stt["networks"] == ["internal"]
+    assert stt["environment"]["STT_THREADS"] == "${STT_THREADS:-4}"
+    assert stt["cpus"] == "${STT_CPUS:-4}"
+    assert stt["mem_limit"] == "${STT_MEMORY:-3g}"
+    assert "stt-models:/models" in stt["volumes"]
+    assert any(path.startswith("/tmp:") for path in stt["tmpfs"])  # noqa: S108 - assert RAM-backed uploads
+    assert stt["healthcheck"]["start_period"] == "600s"
+    assert "stt" not in backend["depends_on"]
+    assert backend["environment"]["STT_BASE_URL"] == "${STT_BASE_URL-http://stt:8000/v1}"
+    dockerfile = (repo_root / "services/stt/Dockerfile").read_text()
+    assert "USER speech" in dockerfile
+    assert "--require-hashes" in dockerfile
+    assert "STT_API_KEY" not in stt["environment"]
 
 
 def test_maxio_compose_is_private_pinned_persistent_and_not_an_agent_credential_delivery(repo_root):
