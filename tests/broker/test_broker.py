@@ -467,6 +467,7 @@ def test_every_deployed_compose_service_has_a_healthcheck(repo_root):
         "maxio",
         "otel-collector",
         "postgres",
+        "stt",
         "temporal",
         "website",
         "worker",
