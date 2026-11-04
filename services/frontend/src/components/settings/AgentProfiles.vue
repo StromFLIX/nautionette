@@ -35,6 +35,14 @@
       <label class="profile-editor__label" for="profile-prompt">System prompt <span class="dim">optional</span></label>
       <textarea id="profile-prompt" class="field profile-editor__prompt" :value="draft.config.system_prompt || ''" rows="5" maxlength="32000" :disabled="busy" placeholder="How should this person think, speak and help?" @input="setPrompt($event.target.value)" />
       <p class="caption dim">Additional instructions for new chats. The app’s core operating rules still apply.</p>
+      <fieldset :disabled="busy" class="setting">
+        <legend class="setting__label">Allowed subagents</legend>
+        <p class="caption dim">None by default. Changes apply to the agent’s next delegation, including existing chats. Calls use the target agent’s configuration and instance-wide depth, width and parallel limits.</p>
+        <label v-for="agent in agents" :key="agent.id" class="row">
+          <input v-model="draft.allowed_subagents" type="checkbox" :value="agent.id" /> {{ agent.name }}
+        </label>
+        <p v-if="!agents.length" class="caption dim">Save another agent first.</p>
+      </fieldset>
       <AgentConfigFields v-model="draft.config" :defaults="globalConfig" inheritable :disabled="busy" />
       <AgentPackages :key="draft.id" :model-value="draft.config.packages || []" :disabled="busy" @update:model-value="draft.config.packages = $event" @busy="packageBusy = $event" />
       <div class="row profile-editor__actions">
@@ -88,7 +96,7 @@ const editing = ref(false)
 const busy = ref(false), packageBusy = ref(false)
 const error = ref('')
 const nameInput = ref(null)
-const draft = reactive({ id: null, name: '', description: '', image: '', config: {} })
+const draft = reactive({ id: null, name: '', description: '', image: '', config: {}, allowed_subagents: [] })
 const imageInput = ref(null), imageBusy = ref(false), imageError = ref('')
 let imageGeneration = 0
 function clearImage () { imageGeneration++; draft.image = ''; imageError.value = ''; if (imageInput.value) imageInput.value.value = '' }
@@ -130,7 +138,8 @@ function open (agent = null, duplicate = false) {
   Object.assign(draft, {
     id: duplicate ? null : agent?.id ?? null,
     name: agent ? `${agent.name}${duplicate ? ' copy' : ''}`.slice(0, 80) : '',
-    description: agent?.description || '', image: agent?.image || '', config: copyConfig(agent?.config || {})
+    description: agent?.description || '', image: agent?.image || '', config: copyConfig(agent?.config || {}),
+    allowed_subagents: [...(agent?.allowed_subagents || [])].filter(id => agents.value.some(item => item.id === id))
   })
   imageGeneration++; imageBusy.value = false; imageError.value = ''
   editing.value = true
@@ -157,7 +166,7 @@ async function save () {
   busy.value = true
   error.value = ''
   try {
-    const body = { name: draft.name.trim(), description: draft.description, image: draft.image, config: draft.config }
+    const body = { name: draft.name.trim(), description: draft.description, image: draft.image, config: draft.config, allowed_subagents: draft.allowed_subagents }
     const saved = draft.id ? await api.updateAgent(draft.id, body) : await api.createAgent(body)
     draft.id = saved.id // A failed refresh must not make a retry create a duplicate.
     actions.syncAgentCatalog({ agents: [...agents.value.filter(agent => agent.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name)) })

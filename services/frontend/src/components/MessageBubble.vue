@@ -1,6 +1,10 @@
 <template>
   <div class="msg" data-skin-part="message" :data-role="role" :class="`msg--${role}`">
     <div class="bubble" :class="{ 'bubble--wide': run || hasTools }">
+      <div v-if="meta.sender_agent" class="caption bubble__sender">
+        <span class="material-icons" aria-hidden="true">smart_toy</span> {{ meta.sender_agent.name }}
+        <RouterLink v-if="meta.sender_agent.chat_id" :to="`/chats/${meta.sender_agent.chat_id}`">Source chat</RouterLink>
+      </div>
       <RouterLink v-if="run" class="bubble__run" :to="`/runs/${run.workflow_id}`">
         <span class="material-icons">bolt</span>
         <span class="grow truncate">{{ run.workflow }}</span>
@@ -141,6 +145,9 @@ const time = computed(() => shortTime(props.createdAt))
 </script>
 
 <style scoped>
+.bubble__sender { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; color: var(--text-dim); }
+.bubble__sender .material-icons { font-size: 1rem; }
+.bubble__sender a { color: var(--accent); }
 .bubble__images { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
 .msg {
   display: flex;

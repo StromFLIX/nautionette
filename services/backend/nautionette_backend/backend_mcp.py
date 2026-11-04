@@ -32,6 +32,7 @@ _PREFIXES = (
     "/api/system",
     "/api/settings",
     "/api/agents",
+    "/api/subagents",
     "/api/miniapps",
     "/api/model-integrations",
     "/api/mcp-servers",
@@ -215,7 +216,7 @@ class BackendMCP:
             message = (
                 "Invalid private output request; check the tool schema and limits. "
                 "Manage storage at /settings/storage"
-                if operation["path"].startswith("/api/chat-outputs/")
+                if operation["path"].startswith(("/api/chat-outputs/", "/api/subagents/"))
                 else exc.message
             )
             return self.result({"error": message}, error=True)

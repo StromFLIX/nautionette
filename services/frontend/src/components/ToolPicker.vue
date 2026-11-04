@@ -28,7 +28,7 @@
               {{ isOpen(group.name) ? 'expand_more' : 'chevron_right' }}
             </span>
           </button>
-          <button class="tools__row grow" @click="setGroup(group, group.state !== 'all')">
+          <button class="tools__row grow" role="checkbox" :aria-checked="group.state === 'some' ? 'mixed' : group.state === 'all'" :aria-label="`${group.name} tool group`" @click="setGroup(group, group.state !== 'all')">
             <span class="material-icons tools__box" :class="`tools__box--${group.state}`">
               {{ boxIcon(group.state) }}
             </span>
@@ -85,7 +85,7 @@ const groups = computed(() => {
   const needle = query.value.trim().toLowerCase()
   const byServer = new Map()
   for (const tool of all.value) {
-    if (needle && !`${tool.name} ${tool.description || ''}`.toLowerCase().includes(needle)) continue
+    if (needle && !`${tool.server || 'other'} ${tool.name} ${tool.description || ''}`.toLowerCase().includes(needle)) continue
     const server = tool.server || 'other'
     if (!byServer.has(server)) byServer.set(server, [])
     byServer.get(server).push(tool)

@@ -42,6 +42,9 @@ def defaults() -> dict[str, Any]:
         "default_reasoning_effort": None,
         "default_tools": None,
         "default_project_ids": [],
+        "subagent_max_depth": 3,
+        "subagent_max_width": 5,
+        "subagent_max_parallel": 4,
         # 0 means "work it out from the model", which is what you want by default.
         "history_chars": 0,
         **GIT_AUTHORSHIP_DEFAULTS,

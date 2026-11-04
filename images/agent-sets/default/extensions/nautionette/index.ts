@@ -15,6 +15,7 @@ import { reasoningConfig, reasoningPayload } from "./reasoning.ts";
 import { allowedTools } from "./tool-selection.ts";
 import { isOutputTransportTool, loadOutputGrant, registerOutputTools } from "./outputs.ts";
 import { CRAFT_TOOL_NAMES, registerCraftTools } from "./artcraft.ts";
+import { SUBAGENT_TOOLS, registerSubagentTools } from "./subagents.ts";
 
 const GATEWAY = (process.env.AGENTGATEWAY_URL ?? "http://agentgateway:4000").replace(/\/$/, "");
 const MODEL = process.env.AGENT_MODEL ?? "openai/gpt-4o-mini";
@@ -111,7 +112,9 @@ export default async function (pi: ExtensionAPI) {
 
   // Local first-party tools hold a private, turn-scoped capability. The raw
   // transports must never be declared to the model or gated by MCP selection.
-  registerOutputTools(pi, rpc, loadOutputGrant());
+  const grant = loadOutputGrant();
+  registerOutputTools(pi, rpc, grant);
+  registerSubagentTools(pi, rpc, grant, ALLOWED);
   registerCraftTools(pi);
 
   // Tools are discovered, not hard-coded: federate a new MCP server behind the
@@ -125,7 +128,7 @@ export default async function (pi: ExtensionAPI) {
     await rpc("notifications/initialized");
     const listed = await rpc("tools/list");
     const all: any[] = listed.tools ?? [];
-    const tools = all.filter((tool) => !isOutputTransportTool(tool.name) && !CRAFT_TOOL_NAMES.has(tool.name) && (ALLOWED === null || ALLOWED.has(tool.name)));
+    const tools = all.filter((tool) => !isOutputTransportTool(tool.name) && !SUBAGENT_TOOLS.has(tool.name) && !CRAFT_TOOL_NAMES.has(tool.name) && (ALLOWED === null || ALLOWED.has(tool.name)));
 
     // Payload-free provenance for the supervisor's workflow accounting. Tool
     // names come from discovery, never namespace/name heuristics.

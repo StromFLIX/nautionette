@@ -378,7 +378,12 @@ def test_private_transports_and_reserved_local_names_are_not_selectable_mcp_tool
         "": [{"name": name} for name in [*chat_outputs.RESERVED_TOOL_NAMES, "backend_system_status"]]
     }
     available = client.get("/api/catalog").json()["tools"]
-    assert [tool["name"] for tool in available] == ["backend_system_status"]
+    assert [tool["name"] for tool in available if tool["server"] != "Agents"] == ["backend_system_status"]
+    assert {tool["name"] for tool in available if tool["server"] == "Agents"} == {
+        "list_subagents",
+        "call_subagent",
+        "wait_for_subagent",
+    }
 
 
 async def test_mcp_exposes_only_the_two_scoped_transports(backend, output_scope):

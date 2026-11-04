@@ -16,6 +16,17 @@
   <div class="general-baseline"><h3 class="section-label">Global defaults</h3><span class="caption dim">Agents inherit these unless overridden.</span></div>
   <AgentConfigFields v-model="config" :defaults="configDefaults" prefix="default" global :disabled="saving || !loaded" />
 
+  <section id="subagent-limits" class="setting">
+    <h3 class="setting__label">Agent delegation limits · instance-wide</h3>
+    <p class="caption dim">Allow subagents in each saved agent’s settings. Zero disables calls. Root depth is 0; width counts all child calls per turn, including continuations. Parallelism counts unfinished subagent calls across one tree, including waiting parents (not the root). At capacity, new calls fail instead of queueing. Lower limits apply immediately; increases apply to new trees.</p>
+    <label for="subagent-depth">Maximum depth</label>
+    <input id="subagent-depth" v-model.number="form.subagent_max_depth" class="field" type="number" min="0" max="10" :disabled="saving || !loaded" />
+    <label for="subagent-width">Maximum children per turn</label>
+    <input id="subagent-width" v-model.number="form.subagent_max_width" class="field" type="number" min="0" max="100" :disabled="saving || !loaded" />
+    <label for="subagent-parallel">Maximum parallel calls per tree</label>
+    <input id="subagent-parallel" v-model.number="form.subagent_max_parallel" class="field" type="number" min="0" max="100" :disabled="saving || !loaded" />
+  </section>
+
   <details id="history" class="settings-disclosure general-history">
     <summary><span class="material-icons" aria-hidden="true">history</span><span class="grow">Conversation memory</span><span class="caption dim">Native Pi session</span></summary>
     <div class="general-detail">
@@ -68,7 +79,7 @@ const serverUrl = ref(server.url)
 const saving = ref(false)
 const loaded = ref(false)
 const loadError = ref('')
-const form = reactive({ default_agent_id: null })
+const form = reactive({ default_agent_id: null, subagent_max_depth: 3, subagent_max_width: 5, subagent_max_parallel: 4 })
 const config = ref(globalChatConfig(store.catalog))
 const configDefaults = ref(globalChatConfig(store.catalog))
 function apply (data) {
@@ -98,7 +109,7 @@ function saveSettings () {
   return persist({ ...form, ...Object.fromEntries(CONFIG_KEYS.map(key => [`default_${key}`, config.value[key]])) })
 }
 function resetSettings () {
-  return persist({ default_agent_id: null, ...Object.fromEntries(CONFIG_KEYS.map(key => [`default_${key}`, null])) })
+  return persist({ ...Object.fromEntries(Object.keys(form).map(key => [key, null])), ...Object.fromEntries(CONFIG_KEYS.map(key => [`default_${key}`, null])) })
 }
 async function load () {
   loadError.value = ''

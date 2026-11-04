@@ -8,7 +8,7 @@ export const projectId = 'a'.repeat(32)
 export async function mockAgents (context) {
   const state = await mockDesign(context)
   const sse = await createSSEFixture(context)
-  Object.assign(state.settings, { default_agent_id: null, default_reasoning_effort: null, default_tools: null, default_project_ids: [] })
+  Object.assign(state.settings, { default_agent_id: null, default_reasoning_effort: null, default_tools: null, default_project_ids: [], subagent_max_depth: 3, subagent_max_width: 5, subagent_max_parallel: 4 })
   state.factoryDefaults = structuredClone(state.settings)
   state.agents = []
   state.agentWrites = []
@@ -36,7 +36,7 @@ export async function mockAgents (context) {
     chat_defaults: selection(state.settings.default_agent_id)
   })
   state.addAgent = (name, config = {}) => {
-    const agent = { id: `agent-${state.agents.length + 1}`, name, description: '', image: '', config: structuredClone(config) }
+    const agent = { id: `agent-${state.agents.length + 1}`, name, description: '', image: '', allowed_subagents: [], config: structuredClone(config) }
     state.agents.push(agent)
     return agent
   }
@@ -74,6 +74,7 @@ export async function mockAgents (context) {
         const agent = state.addAgent(body.name, body.config)
         agent.description = body.description
         agent.image = body.image || ''
+        agent.allowed_subagents = body.allowed_subagents || []
         return reply({ ...agent, resolved: resolved(agent.config) }, 201)
       }
       return reply(catalog())

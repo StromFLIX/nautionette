@@ -38,7 +38,7 @@
         <span class="material-icons" aria-hidden="true">expand_more</span>
         <ProjectPicker :model-value="effective.project_ids" @update:model-value="update('project_ids', $event)" />
       </button>
-      <p v-if="field.key === 'tools'" class="caption dim">MCP tools. Built-in file and shell tools remain available.</p>
+      <p v-if="field.key === 'tools'" class="caption dim">MCP tools and the separate Agents delegation group. Built-in file and shell tools remain available.</p>
       <p v-if="field.key === 'project_ids'" class="caption dim">Selected projects are writable.</p>
       <p v-if="field.key === 'reasoning_effort' && inheritable && !Object.hasOwn(modelValue, field.key) && effective.model !== defaults.model" class="caption dim">
         Provider default for this model.

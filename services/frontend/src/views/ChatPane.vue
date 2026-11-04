@@ -60,7 +60,7 @@
         />
         <MessageBubble
           v-if="streaming" role="assistant" live
-          :content="liveSteps.length || liveStatus ? '' : '…'" :meta="{ steps: liveSteps, timing: activeTurn?.timing, outputs: liveOutputs }"
+          :content="liveSteps.length || liveStatus ? '' : '…'" :meta="{ steps: liveSteps, timing: activeTurn?.timing, outputs: liveOutputs, sender_agent: activeTurn?.sender_agent || (chat?.agent_id ? { id: chat.agent_id, name: chat.agent_name } : null) }"
           :chat-id="chatId" :status="liveStatus" @open-output="openOutput"
         />
         <section v-if="queuedMessages.length" class="thread__queue" aria-label="Queued messages">

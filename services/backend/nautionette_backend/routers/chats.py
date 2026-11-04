@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
+from collections.abc import Callable
 from typing import Any
 from urllib.parse import quote
 
@@ -299,7 +300,15 @@ def _require_chat_admission() -> None:
         )
 
 
-async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool = False):
+async def submit_message(
+    chat_id: str,
+    payload: dict[str, Any],
+    *,
+    stream: bool = False,
+    sender: dict[str, Any] | None = None,
+    delegation: str | None = None,
+    before_accept: Callable[[], None] | None = None,
+):
     """Submit through the normal chat pipeline, including its durable follow-up queue."""
     _require_chat_admission()
     chat = _chat_or_404(chat_id)
@@ -339,6 +348,8 @@ async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool 
     # Model discovery above may have yielded while a shutdown signal arrived.
     # From this fence through job persistence/task registration there is no await.
     _require_chat_admission()
+    if before_accept:
+        before_accept()
     try:
         user_message, created = db.accept_chat_message(
             chat_id,
@@ -347,6 +358,7 @@ async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool 
             project_ids,
             queue=payload.get("queue") is True,
             attachment_ids=attachment_ids,
+            sender=sender,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -378,12 +390,17 @@ async def submit_message(chat_id: str, payload: dict[str, Any], *, stream: bool 
         run_id=f"chat-{chat_id}",
         timeout_seconds=settings.agent_run_timeout_seconds,
     )
+    if sender:
+        job["prompt"] = f"Message from agent {sender['name']} ({sender['id']}), not the human user:\n\n{text}"
     if chat.get("system_prompt"):
         # Persona instructions supplement, never replace, the app's operating rules.
         job["system_prompt"] += "\n\nAgent instructions:\n" + chat["system_prompt"]
     job.update(
         chat_id=chat_id,
         turn_id=message_id,
+        agent_id=chat.get("agent_id"),
+        agent_name=chat.get("agent_name"),
+        delegation=delegation,
         timeout_exempt=chat["timeout_exempt"],
         project_ids=project_ids,
         packages=chat.get("packages", []),

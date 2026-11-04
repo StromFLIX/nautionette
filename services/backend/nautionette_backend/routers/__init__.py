@@ -22,6 +22,7 @@ from . import (
     search,
     settings,
     storage,
+    subagents,
     system,
     workflows,
 )
@@ -31,6 +32,7 @@ ROUTERS = (
     settings.router,
     storage.router,
     agents.router,
+    subagents.router,
     pi_packages.router,
     artcraft.router,
     miniapps.router,

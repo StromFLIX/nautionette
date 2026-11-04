@@ -56,8 +56,20 @@ def test_an_always_latest_alias_is_marked_not_treated_as_a_vendor(client, stocke
 
 def test_tools_are_attributed_to_the_server_that_federated_them(client, stocked):
     payload = client.get("/api/catalog").json()
-    assert payload["tools"] == [{"name": "linear_search", "description": "Find an issue", "server": "linear"}]
-    assert payload["tool_servers"] == [{"name": "linear", "host": "https://mcp.linear.test/mcp", "count": 1}]
+    assert payload["tools"][0] == {
+        "name": "linear_search",
+        "description": "Find an issue",
+        "server": "linear",
+    }
+    assert {tool["name"] for tool in payload["tools"] if tool["server"] == "Agents"} == {
+        "list_subagents",
+        "call_subagent",
+        "wait_for_subagent",
+    }
+    assert payload["tool_servers"] == [
+        {"name": "linear", "host": "https://mcp.linear.test/mcp", "count": 1},
+        {"name": "Agents", "host": "", "count": 3},
+    ]
 
 
 def test_a_tool_no_server_claims_is_asked_for_by_name(client, stocked):
@@ -73,7 +85,7 @@ def test_a_tool_nobody_owns_lands_in_other(client, stocked):
     stocked.gateway.tools = {"": [{"name": "search", "description": ""}], "https://mcp.linear.test/mcp": []}
     payload = client.get("/api/catalog").json()
     assert payload["tools"][0]["server"] == "other"
-    assert {server["name"] for server in payload["tool_servers"]} == {"linear", "other"}
+    assert {server["name"] for server in payload["tool_servers"]} == {"linear", "other", "Agents"}
 
 
 def test_the_catalog_is_cached_and_refresh_bypasses_it(client, stocked):

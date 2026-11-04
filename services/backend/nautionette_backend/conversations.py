@@ -8,7 +8,7 @@ import logging
 from time import monotonic
 from typing import Any
 
-from . import chat_attachments, chat_sessions, git_authorship, projects
+from . import chat_attachments, chat_sessions, git_authorship, projects, subagents
 from .agent import Timeline, stream_agent
 from .background import is_draining, spawn
 from .chat_titles import refine_chat_title
@@ -95,6 +95,9 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
         if not turn:
             return
         try:
+            if subagents.ancestor_stopped(turn_id):
+                db.stop_chat_turn(chat_id, turn_id)
+                turn["stop_requested"] = 1
             if turn["stop_requested"]:
                 await broker.control_agent(chat_id, turn_id, {"id": f"stop-{turn_id}", "type": "stop"})
             elif not is_draining():
@@ -109,12 +112,15 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
                     candidate = json.loads(pending["job"])
                     # Attachment messages run as their own durable turn. Never send a text-only
                     # steering command that silently drops attachments (or exceed exec argv limits).
+                    if job.get("delegation") or candidate.get("delegation"):
+                        break  # Delegated inputs must retain their own ancestry and sender.
                     if candidate.get("attachments") or candidate.get("prompt", "").startswith("/compact"):
                         break
                     if any(
                         candidate.get(key) != job.get(key)
                         for key in (
                             "agent_set",
+                            "agent_id",
                             "model",
                             "reasoning_effort",
                             "model_reasoning",
@@ -165,7 +171,7 @@ async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     last_progress_notice = float("-inf")
     try:
         turn = db.one("SELECT stop_requested FROM chat_turns WHERE id = ?", (turn_id,))
-        if not turn or turn["stop_requested"]:
+        if not turn or turn["stop_requested"] or subagents.ancestor_stopped(turn_id):
             interrupted = True
             return
         try:

@@ -166,6 +166,33 @@ configuration; profiles do not automatically change deployed workflows.
 See [Agent configuration](docs/agent-configuration.md) for API semantics, migration
 and deployment requirements.
 
+### Agent-to-agent delegation
+
+The tool picker has a separate **Agents** group (`list_subagents`, `call_subagent`,
+`wait_for_subagent`), selectable independently from backend administration tools.
+**All tools** includes it; **No tools** and pinned selections without those names do
+not. Each saved agent also has an **Allowed subagents** list, empty by default.
+An enabled tool group alone grants no targets.
+
+**Settings > General > Agent delegation limits** controls maximum depth (default 3),
+total child calls per turn (5), and unfinished calls across a whole tree (4).
+Root depth is 0; parallelism excludes the root but includes waiting subagent parents.
+Admission fails at capacity instead of queueing into a possible nested deadlock;
+wait for an existing call before retrying. Zero disables calls. Trees retain their
+initial ceilings; lowering a global limit also applies to existing trees.
+
+Calls are asynchronous and return durable IDs. Agents can wait/poll for completion,
+create a new target-agent chat, or continue an unmodified delegated chat previously
+opened by the same initiating chat. They cannot inject tasks into arbitrary human
+chats or ancestors. Requests and answers carry saved agent attribution in the UI;
+the target is explicitly told the sender is an agent, not the human. Child runs use
+the target's own configuration and separate chat worktrees. Stop/failure propagates
+to descendants; ordinary parent completion leaves asynchronous children running.
+Interrupted/uncertain calls are never automatically replayed. Allowlist revocations
+apply immediately, unlike copied model/persona defaults. See
+[Agent configuration](docs/agent-configuration.md#agent-to-agent-delegation) for APIs
+and exact limit semantics.
+
 ## Signed Android releases
 
 The **Android** workflow (`.github/workflows/android.yml`) builds debug APKs for

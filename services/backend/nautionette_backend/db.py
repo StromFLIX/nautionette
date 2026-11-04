@@ -166,6 +166,22 @@ CREATE TABLE IF NOT EXISTS output_cleanup_plans (
     items TEXT NOT NULL,
     expires_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS agent_calls (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL,
+    parent_turn_id TEXT NOT NULL,
+    root_turn_id TEXT NOT NULL,
+    parent_chat_id TEXT NOT NULL,
+    child_chat_id TEXT,
+    child_turn_id TEXT NOT NULL UNIQUE,
+    target_agent_id TEXT NOT NULL,
+    depth INTEGER NOT NULL,
+    limits TEXT NOT NULL,
+    request_hash TEXT NOT NULL,
+    error TEXT,
+    UNIQUE(parent_turn_id, request_id)
+);
+CREATE INDEX IF NOT EXISTS agent_calls_root ON agent_calls(root_turn_id);
 CREATE TABLE IF NOT EXISTS chat_turns (
     id TEXT PRIMARY KEY,
     chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
@@ -313,6 +329,7 @@ _MIGRATIONS = (
     "ALTER TABLE chats ADD COLUMN model TEXT",
     "ALTER TABLE chats ADD COLUMN reasoning_effort TEXT",
     "ALTER TABLE chats ADD COLUMN agent_id TEXT",
+    "ALTER TABLE agent_profiles ADD COLUMN allowed_subagents TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE chats ADD COLUMN agent_name TEXT",
     "ALTER TABLE chats ADD COLUMN system_prompt TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE agent_profiles ADD COLUMN image TEXT NOT NULL DEFAULT ''",
@@ -765,6 +782,7 @@ class Database:
         *,
         queue: bool = False,
         attachment_ids: list[str] | None = None,
+        sender: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], bool]:
         with self._lock, self._conn:
             existing = self._conn.execute(
@@ -805,6 +823,8 @@ class Database:
             state = "queued" if waiting else "running"
             now = time.time()
             meta = {"project_ids": project_ids} if project_ids else {}
+            if sender:
+                meta["sender_agent"] = sender
             if attachments:
                 meta["attachments"] = attachments
             if waiting:
@@ -855,7 +875,12 @@ class Database:
     def chat_snapshot(self, chat_id: str) -> dict[str, Any]:
         turn = self.one("SELECT * FROM chat_turns WHERE chat_id = ? AND state = 'running'", (chat_id,))
         if turn:
-            turn.pop("job", None)
+            job = json.loads(turn.pop("job") or "{}")
+            turn["sender_agent"] = (
+                {"id": job["agent_id"], "name": job.get("agent_name") or "Agent"}
+                if job.get("agent_id")
+                else None
+            )
             turn["steps"] = json.loads(turn["steps"])
             turn["context"] = json.loads(turn["context"]) if turn["context"] else None
             turn["timing"] = json.loads(turn["timing"]) if turn["timing"] else None
@@ -983,6 +1008,14 @@ class Database:
     def _append_chat_answer(self, turn: Any, content: str, meta: dict[str, Any]) -> dict[str, Any]:
         """Append an answer segment inside the caller's locked transaction."""
         now = time.time()
+        # Accepted jobs retain identity even if the profile is renamed or deleted.
+        job = json.loads(turn["job"]) if turn["job"] else {}
+        if job.get("agent_id"):
+            meta = {
+                **meta,
+                "turn_id": turn["id"],
+                "sender_agent": {"id": job["agent_id"], "name": job.get("agent_name") or "Agent"},
+            }
         # Keep the latest provider measurement through reloads and interrupted-turn recovery.
         meta = {**meta, "context": json.loads(turn["context"]) if turn["context"] else None}
         # Bind immutable output revisions to the answer segment which published
@@ -1149,6 +1182,13 @@ class Database:
         """Keep existing chat snapshots; fall back to global defaults for new chats."""
         with self._lock, self._conn:
             self._conn.execute("DELETE FROM agent_profiles WHERE id = ?", (agent_id,))
+            for row in self._conn.execute("SELECT id, allowed_subagents FROM agent_profiles").fetchall():
+                allowed = json.loads(row["allowed_subagents"])
+                if agent_id in allowed:
+                    self._conn.execute(
+                        "UPDATE agent_profiles SET allowed_subagents=? WHERE id=?",
+                        (json.dumps([item for item in allowed if item != agent_id]), row["id"]),
+                    )
             self._conn.execute(
                 "DELETE FROM settings WHERE key = 'default_agent_id' AND value = ?", (json.dumps(agent_id),)
             )

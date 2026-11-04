@@ -15,6 +15,7 @@ export const SETTINGS_SECTIONS = [
       entry('default-reasoning', 'Default reasoning', 'Reasoning effort for the default model.', 'thinking high medium low provider'),
       entry('default-tools', 'Default tools', 'All, no, or selected MCP tools for new chats.', 'permissions capabilities access'),
       entry('default-projects', 'Default projects', 'Writable projects selected for new chats.', 'repositories git workspace'),
+      entry('subagent-limits', 'Agent delegation limits', 'Instance-wide call tree depth, width and parallel calls.', 'subagents concurrency nested children recursion'),
       entry('history', 'Conversation memory', 'Native Pi sessions, persistent tools and automatic compaction.', 'context tokens history compact memory'),
       { ...entry('server', 'Server', 'Connect this device to an instance.', 'URL address connection endpoint'), scope: 'This device' },
       { ...entry('access-token', 'Access token', 'Authentication for this device.', 'password security credentials login'), scope: 'This device' }
@@ -41,6 +42,7 @@ export const SETTINGS_SECTIONS = [
     load: () => import('./components/settings/AgentsPane.vue'),
     entries: [
       entry('agent-profiles', 'Saved agents', 'People with their own image, system prompt, model, tools and projects.', 'profile preset defaults inherit override duplicate avatar portrait persona instructions grouping'),
+      entry('agent-profiles', 'Allowed subagents', 'Per-agent allowlist, empty by default. Enable delegation separately in the Agents tool group.', 'call wait permissions delegation'),
       entry('agent-sets', 'Agent sets', 'Available container environments and image readiness.', 'container docker runtime'),
       entry('model-integrations', 'Model integrations', 'Add, configure or test a model provider.', 'API key credentials OpenAI Anthropic OpenRouter gateway'),
       entry('available-models', 'Available models', 'Models discovered through your integrations.', 'catalog vendor provider refresh')

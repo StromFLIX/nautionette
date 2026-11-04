@@ -148,6 +148,28 @@ async def tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], li
                 "count": sum(1 for tool in tools if tool["server"] == "other"),
             }
         )
+    # First-party delegation is selectable independently from the backend MCP
+    # administration tools. Raw capability transports are never selectable.
+    tools.extend(
+        [
+            {
+                "name": "list_subagents",
+                "description": "List this agent's allowed subagents and tree limits.",
+                "server": "Agents",
+            },
+            {
+                "name": "call_subagent",
+                "description": "Start an allowed agent in a new or delegated chat.",
+                "server": "Agents",
+            },
+            {
+                "name": "wait_for_subagent",
+                "description": "Wait for a child agent and inspect its result.",
+                "server": "Agents",
+            },
+        ]
+    )
+    servers.append({"name": "Agents", "host": "", "count": 3})
     return tools, servers
 
 

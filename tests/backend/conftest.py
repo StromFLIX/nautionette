@@ -22,6 +22,7 @@ from .fakes import FakeAuthoring, FakeBroker, FakeGateway, FakeModelCatalog, Fak
 from .output_fakes import MemoryS3
 
 _TABLES = (
+    "agent_calls",
     "mini_apps",
     "github_issue_chats",
     "github_mentions",

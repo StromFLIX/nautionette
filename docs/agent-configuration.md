@@ -136,6 +136,70 @@ Deleting an agent retains its historical chat association/name and configuration
 the composer labels it removed and lets the user choose a replacement. Profiles
 are not automatically applied to workflow agents or deployed workflow source.
 
+## Agent-to-agent delegation
+
+Delegation requires **both** the selectable **Agents** tool group and an agent's
+explicit allowlist. The catalog groups `list_subagents`, `call_subagent`, and
+`wait_for_subagent` under `server: "Agents"`, not the backend administration group.
+Group selection uses the existing tool list contract: `null` includes it, `[]`
+disables it, and pinned lists must name its tools. Transport authorization checks
+the accepted turn's selection as well as local tool registration.
+
+`POST/PATCH /api/agents` accepts top-level `allowed_subagents: ["<saved ID>", ...]`.
+It is not a config override, has no inherited default, and starts empty. Omitting it
+on PATCH preserves it. At most 100 target IDs; duplicates are removed. A target
+must exist. Deletion removes references from other allowlists. Cycles/self-calls
+are permitted only within the same depth/width/parallel bounds. Allowlist edits
+apply at the next call, even in existing chats; they do not stop already accepted
+children. Identity comes from the accepted job, never caller-supplied agent IDs.
+
+Three instance settings (`PUT /api/settings`, `null` resets):
+
+| Setting | Default | Range | Meaning |
+| --- | --- | --- | --- |
+| `subagent_max_depth` | 3 | 0–10 | Root is 0; its child is 1 |
+| `subagent_max_width` | 5 | 0–100 | Total accepted/reserved child calls per parent turn, including completed calls and continuations |
+| `subagent_max_parallel` | 4 | 0–100 | Unfinished subagent turns across the entire root tree, not per branch; excludes root, includes waiting parents |
+
+Limits are strict integers; zero disables admission. Trees snapshot their initial
+ceilings. Later calls use the minimum of those ceilings and current settings:
+lowering applies immediately; increasing requires a new root turn. Lowering does
+not kill active calls. At capacity, admission returns a clear error instead of
+queueing: nested parents still occupy slots while waiting, so queueing could
+otherwise deadlock. Wait for existing children before submitting more work.
+Each independent root has its own parallel budget, not an instance-wide semaphore.
+
+`call_subagent(agent_id, text, chat_id?)` starts work asynchronously, returning
+`id`, `chat_id`, `turn_id`, `depth`, and `state`. Without `chat_id` it creates a chat
+using the target's current resolved configuration, projects and packages. Scratch
+space and Git worktrees are separate from the caller's. To continue, supply a chat
+previously opened by the same initiating chat for the same target. Modified, busy,
+paused, unrelated and ancestor chats are rejected, never steered or silently queued.
+A continuation counts as another child call. Agent input includes a provenance
+header and `meta.sender_agent` for UI attribution; answer identity is snapshotted
+as well, so later renames/deletions cannot turn it into a human message.
+
+`wait_for_subagent(call_id, timeout_seconds=300)` waits for a direct child; 0 polls.
+The local wrapper long-polls in bounded 20-second HTTP requests (maximum total 300
+seconds per invocation). Timeout returns current state without cancelling work.
+Repeat if still running. Completion returns bounded answer text, `ok`, and `error`;
+a started call is not a successful result. Child failures and explicit stops are
+visible. A normal asynchronous parent finish does not kill its children. A stopped,
+failed, deleted or restart-interrupted ancestor stops descendants through their
+normal broker controller/cleanup path. A cancelled wait does not replay a call.
+
+The private `/api/subagents/list`, `/call`, and `/wait` transports require an active
+turn capability plus normal backend authentication. They are hidden from model
+schemas; local wrappers inject the existing private turn capability. Call request
+IDs are derived from tool-call IDs and durably scoped to the parent turn. Exact
+retries return the original call; argument mismatches fail. SQLite retains ancestry
+and results across reconnects/restarts; uncertain admissions and interrupted work
+are reported, not automatically resubmitted. Raw transports are not selectable
+MCP tools. This is orchestration policy, not isolation from trusted administrative
+tools or shell access; limit those separately if agents should not edit settings.
+The shipped tools are available to saved-agent chat turns with the default agent
+set. Workflow activities do not implicitly gain a profile or chat identity.
+
 ## Deployment and verification
 
 Rebuild/recreate **backend**, **frontend-web**, and **docker-broker** together; the

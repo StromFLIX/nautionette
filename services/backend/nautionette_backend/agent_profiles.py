@@ -92,7 +92,11 @@ def same_config(left: dict[str, Any], right: dict[str, Any]) -> bool:
 
 def list_agents() -> list[dict[str, Any]]:
     return [
-        {**row, "config": json.loads(row["config"])}
+        {
+            **row,
+            "config": json.loads(row["config"]),
+            "allowed_subagents": json.loads(row["allowed_subagents"]),
+        }
         for row in db.query("SELECT * FROM agent_profiles ORDER BY name COLLATE NOCASE, id")
     ]
 
@@ -103,7 +107,11 @@ def get_agent(agent_id: Any) -> dict[str, Any]:
     row = db.one("SELECT * FROM agent_profiles WHERE id = ?", (agent_id,))
     if not row:
         raise HTTPException(404, "Agent not found; choose another agent or global defaults")
-    return {**row, "config": json.loads(row["config"])}
+    return {
+        **row,
+        "config": json.loads(row["config"]),
+        "allowed_subagents": json.loads(row["allowed_subagents"]),
+    }
 
 
 def for_chat(agent_id: Any) -> dict[str, Any]:

@@ -79,6 +79,14 @@ async def put_settings(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
         except (ValueError, TypeError) as exc:
             raise HTTPException(422, "history_chars must be an integer") from exc
         values["history_chars"] = 0 if chars <= 0 else max(HISTORY_FLOOR, min(HISTORY_CEILING, chars))
+    for key, ceiling in (
+        ("subagent_max_depth", 10),
+        ("subagent_max_width", 100),
+        ("subagent_max_parallel", 100),
+    ):
+        if key in values and values[key] is not None:
+            if type(values[key]) is not int or not 0 <= values[key] <= ceiling:
+                raise HTTPException(422, f"{key} must be an integer between 0 and {ceiling}")
     if values.get("default_agent_id") is not None:
         agent_profiles.get_agent(values["default_agent_id"])
     # No setting is written until the entire edit is valid. Arrays stay arrays.

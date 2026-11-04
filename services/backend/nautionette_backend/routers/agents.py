@@ -30,8 +30,8 @@ def _result(agent: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _validated(payload: dict[str, Any], current: dict[str, Any] | None = None) -> dict[str, Any]:
-    if payload.keys() - {"name", "description", "config", "image"}:
-        raise HTTPException(422, "An agent accepts name, description, image and config")
+    if payload.keys() - {"name", "description", "config", "image", "allowed_subagents"}:
+        raise HTTPException(422, "An agent accepts name, description, image, config and allowed_subagents")
     values = {**(current or {"description": "", "config": {}, "image": ""}), **payload}
     name = values.get("name")
     if not isinstance(name, str) or not name.strip() or len(name.strip()) > 80:
@@ -51,7 +51,22 @@ async def _validated(payload: dict[str, Any], current: dict[str, Any] | None = N
             except ValueError as exc:
                 raise HTTPException(422, str(exc)) from exc
     image = agent_images.normalize_image(values["image"]) if "image" in payload else values["image"]
-    return {"name": name.strip(), "description": description.strip(), "config": config, "image": image}
+    allowed = values.get("allowed_subagents", [])
+    if (
+        not isinstance(allowed, list)
+        or len(allowed) > 100
+        or any(not isinstance(item, str) for item in allowed)
+    ):
+        raise HTTPException(422, "allowed_subagents must be a list of at most 100 saved agent IDs")
+    for agent_id in allowed:
+        agent_profiles.get_agent(agent_id)
+    return {
+        "name": name.strip(),
+        "description": description.strip(),
+        "config": config,
+        "image": image,
+        "allowed_subagents": sorted(set(allowed)),
+    }
 
 
 @router.get("/api/agents")
@@ -66,8 +81,9 @@ async def create_agent(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
     now = time.time()
     try:
         db.execute(
-            "INSERT INTO agent_profiles (id, name, description, config, image, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?)",
+            "INSERT INTO agent_profiles (id, name, description, config, image, created_at, updated_at, "
+            "allowed_subagents) "
+            "VALUES (?,?,?,?,?,?,?,?)",
             (
                 agent_id,
                 values["name"],
@@ -76,6 +92,7 @@ async def create_agent(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
                 values["image"],
                 now,
                 now,
+                json.dumps(values["allowed_subagents"]),
             ),
         )
     except sqlite3.IntegrityError as exc:
@@ -96,13 +113,14 @@ async def update_agent(agent_id: str, payload: dict[str, Any] = Body(...)) -> di
     try:
         changed = db.execute(
             "UPDATE agent_profiles SET name = ?, description = ?, config = ?, image = ?, "
-            "updated_at = ? WHERE id = ?",
+            "updated_at = ?, allowed_subagents = ? WHERE id = ?",
             (
                 values["name"],
                 values["description"],
                 json.dumps(values["config"]),
                 values["image"],
                 time.time(),
+                json.dumps(values["allowed_subagents"]),
                 agent_id,
             ),
         ).rowcount
