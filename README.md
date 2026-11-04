@@ -105,9 +105,17 @@ The interface defaults to **125%**, including on phones; choose 100%, 110%, 125%
 150% without browser zoom. These preferences save on this device; instance settings
 and per-workflow configuration stay separate.
 
-Agents, reasoning, tools and projects remain available behind **Chat configuration**.
-Its controls start closed in each chat and open only when you select them; opening
-one chat's controls never expands the next chat's composer.
+Model selection, agents, reasoning, tools and projects remain available behind
+**Chat configuration** beside the attachment **plus**. Its controls start closed
+in each chat; opening one chat's controls never expands the next chat's composer.
+Provider-reported context usage appears as a circle in the chat header.
+
+The joined **microphone / send** control supports live dictation through a private
+CPU-only Whisper service included in Compose. Partial text appears while speaking;
+Stop finalizes an editable transcript, never an automatically sent message. Optional
+cleanup then streams an edit using the selected chat model; the original transcript
+remains recoverable. See [Chat dictation](docs/dictation.md) for privacy, limits,
+CPU benchmarks and replacing the transcription service.
 Open Settings with **Ctrl/Command + ,** and focus its search with **/**.
 See [Frontend design system](docs/frontend-design.md) for the extension points,
 persistence model and testing guidance.

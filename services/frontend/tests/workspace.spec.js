@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { THEMES } from '../src/themes.js'
 import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 import { mockDesign } from './design-fixture.js'
-import { closeChatConfiguration } from './helpers.js'
+import { openChatConfiguration, closeChatConfiguration } from './helpers.js'
 
 for (const theme of THEMES) {
   test(`${theme.name} keeps mobile chat controls and source code usable`, async ({ page, context }) => {
@@ -13,7 +13,9 @@ for (const theme of THEMES) {
     await page.setViewportSize({ width: 320, height: 568 })
     await page.goto('/chats/alpha')
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.id)
-    await expect(page.getByRole('button', { name: 'Select model', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Select model', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Dictate message', exact: true })).toBeVisible()
+    await expect(page.locator('.pane-head .context-ring')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Reasoning effort', exact: true })).toBeHidden()
     await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Keep this draft')
     const toggle = page.getByRole('button', { name: 'Chat configuration', exact: true })
@@ -62,8 +64,10 @@ for (const { name, width, hasTouch } of [
           await expect(action).toBeVisible()
           const settingsBox = await settings.boundingBox()
           const actionBox = await action.boundingBox()
-          expect(actionBox.width).toBeCloseTo(settingsBox.width, 1)
-          expect(actionBox.height).toBeCloseTo(settingsBox.height, 1)
+          // Joined voice/send actions have their own rectangular shape, not the settings icon's size.
+          expect(actionBox.width).toBeGreaterThanOrEqual(32)
+          expect(actionBox.height).toBeGreaterThanOrEqual(32)
+          expect(actionBox.height).toBeLessThanOrEqual(settingsBox.height + 16)
           if (hasTouch) {
             expect(actionBox.width).toBeGreaterThanOrEqual(44)
             expect(actionBox.height).toBeGreaterThanOrEqual(44)
@@ -151,9 +155,9 @@ test('model picker restores keyboard focus and clears its tooltip when focus mov
   const input = page.getByRole('textbox', { name: 'Message', exact: true })
   const model = page.getByRole('button', { name: 'Select model', exact: true })
   const tooltip = page.getByRole('tooltip').filter({ hasText: /^Model for this chat$/ })
-  await input.focus()
-  await page.keyboard.press('Tab') // Attach files
-  await page.keyboard.press('Tab') // Select model, without hovering it
+  await openChatConfiguration(page)
+  await page.getByRole('button', { name: 'Select agent set', exact: true }).focus()
+  await page.keyboard.press('Shift+Tab') // Select model, without hovering it
   await expect(model).toBeFocused()
   await expect(tooltip).toBeVisible()
   await page.keyboard.press('Enter')
@@ -165,11 +169,11 @@ test('model picker restores keyboard focus and clears its tooltip when focus mov
   // Quasar suppresses tooltips during portal refocus: Escape must not reopen
   // the dismissed tooltip. A new keyboard focus should still show it normally.
   await expect(tooltip).toHaveCount(0)
-  await input.focus()
-  await page.keyboard.press('Tab') // Attach files
-  await page.keyboard.press('Tab') // Select model again
+  await page.getByRole('button', { name: 'Select agent set', exact: true }).focus()
+  await page.keyboard.press('Shift+Tab') // Select model again
   await expect(model).toBeFocused()
   await expect(tooltip).toBeVisible()
+  await closeChatConfiguration(page)
   await input.focus()
   await expect(page.getByRole('tooltip')).toHaveCount(0)
   await input.fill('Keep typing after closing the picker')

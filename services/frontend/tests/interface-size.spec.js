@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 import { mockDesign } from './design-fixture.js'
-import { closeChatConfiguration } from './helpers.js'
+import { openChatConfiguration, closeChatConfiguration } from './helpers.js'
 
 for (const width of [320, 390, 901, 1440]) {
   test(`125% defaults enlarge text and controls without zoom or overflow at ${width}px`, async ({ page, context }) => {
@@ -17,10 +17,12 @@ for (const width of [320, 390, 901, 1440]) {
     expect(box.height).toBeGreaterThanOrEqual(42)
     await expect(page.locator('.pane-head')).toBeInViewport({ ratio: 1 })
     await expect(page.locator('.thread__foot')).toBeInViewport({ ratio: 1 })
+    await openChatConfiguration(page)
     await page.getByRole('button', { name: 'Select model', exact: true }).click()
     await expect(page.locator('.q-menu')).toBeInViewport({ ratio: 1 })
     await expect(page.getByPlaceholder('Search models')).toHaveCSS('font-size', '16.25px')
     await page.keyboard.press('Escape')
+    await closeChatConfiguration(page)
     await options.click()
     await page.getByRole('button', { name: /Rename$/ }).click()
     await expect(page.locator('.q-dialog .q-card')).toBeInViewport({ ratio: 1 })

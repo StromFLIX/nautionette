@@ -43,6 +43,9 @@ services:
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-nautionette}
       AGENTGATEWAY_URL: http://agentgateway:4000
       LLM_BASE_URL: http://agentgateway:4000/v1
+      STT_BASE_URL: ${STT_BASE_URL-http://stt:8000/v1}
+      STT_MODEL: ${STT_MODEL:-small}
+      STT_API_KEY: ${STT_API_KEY:-}
       MCP_URL: http://agentgateway:4000/mcp
       BROKER_URL: http://docker-broker:9100
       WORKFLOW_MCP_URL: http://workflow-mcp:8000
@@ -241,6 +244,33 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 5
+    <<: *logging
+
+  # CPU-only, private dictation appliance. Swap STT_BASE_URL for any OpenAI-compatible
+  # transcription service without changing the frontend. Never gates backend startup.
+  stt:
+    build:
+      context: ./services/stt
+    image: ${STT_IMAGE:-${STACK_NAMESPACE:-nautionette}/stt:dev}
+    restart: unless-stopped
+    environment:
+      STT_MODEL: ${STT_MODEL:-small}
+      STT_THREADS: ${STT_THREADS:-4}
+    volumes:
+      - stt-models:/models
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    networks: [internal]
+    cpus: ${STT_CPUS:-4}
+    mem_limit: ${STT_MEMORY:-3g}
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 600s
+      retries: 3
     <<: *logging
 
   # An MCP target behind agentgateway, never called directly by an agent. Holds
@@ -533,5 +563,6 @@ volumes:
   artifacts:
   backend-data:
   maxio-data:
+  stt-models:
   agentgateway-data:
   postgres-data:

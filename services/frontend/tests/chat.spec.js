@@ -1095,22 +1095,22 @@ test('context meter uses live provider tokens, persists on reload and rejects a 
   data.active_turn = { id: 'user-1', steps: [], context: null }
   await mockChats(context, state)
   await page.goto('/chats/alpha')
-  const meter = page.locator('.composer__context')
-  await expect(meter).toHaveText('Context unknown')
+  const meter = page.locator('.pane-head .context-ring')
+  await expect(meter).toHaveAccessibleName(/^Context unknown\./)
   const usage = { model: 'test/model', tokens: 4600, source: 'provider' }
   data.active_turn.context = usage
-  await expect(meter).toHaveText('46% context')
+  await expect(meter).toHaveAccessibleName(/^46% context\./)
   await expect(meter).toHaveAttribute('title', /4,600 of 10,000 tokens/)
   data.active_turn.context = { ...usage, tokens: 1000 }
-  await expect(meter).toHaveText('10% context')
+  await expect(meter).toHaveAccessibleName(/^10% context\./)
   data.messages.push({ id: 'answer-1', role: 'assistant', content: 'done', meta: { context: data.active_turn.context } })
   data.active_turn = null
   await page.reload()
-  await expect(meter).toHaveText('10% context')
+  await expect(meter).toHaveAccessibleName(/^10% context\./)
   await page.locator('textarea').fill('This draft must not count as reported usage')
-  await expect(meter).toHaveText('10% context')
+  await expect(meter).toHaveAccessibleName(/^10% context\./)
   data.chat.model = 'another/model'
-  await expect(meter).toHaveText('Context unknown')
+  await expect(meter).toHaveAccessibleName(/^Context unknown\./)
 })
 
 test('offline messages show Sending, survive reload, and retry with the original ID', async ({ page, context }) => {
@@ -1428,10 +1428,12 @@ test('switching to an unsupported route preserves drafts but blocks sending imag
   await page.goto('/chats/alpha')
   await page.locator('input[type=file]').setInputFiles(imageFile)
   await page.locator('textarea').fill('Keep this draft')
-  await page.locator('.composer .pick').filter({ hasText: 'memory' }).click()
+  await openChatConfiguration(page)
+  await page.getByRole('button', { name: 'Select model', exact: true }).click()
   await page.getByPlaceholder('Search models').fill('Blocked route')
   await expect(page.locator('.picker__row').filter({ hasText: 'Blocked route' })).toContainText('No images')
   await page.getByPlaceholder('Search models').press('Enter')
+  await closeChatConfiguration(page)
   await page.locator('textarea').click()
   await expect(page.locator('.composer img')).toHaveCount(1)
   await expect(page.locator('textarea')).toHaveValue('Keep this draft')

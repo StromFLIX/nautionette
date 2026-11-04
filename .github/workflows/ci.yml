@@ -70,8 +70,8 @@ jobs:
           MAXIO_TEST_BUCKET: nautionette-test-outputs
         run: uv run pytest tests/backend/test_output_maxio.py
 
-      - name: Model integrations and Copilot sign-in
-        run: uv run pytest tests/backend/test_copilot_login.py tests/backend/test_integrations.py tests/backend/test_events_and_clients.py tests/backend/test_live_connections.py
+      - name: Model integrations, dictation and Copilot sign-in
+        run: uv run pytest tests/backend/test_copilot_login.py tests/backend/test_integrations.py tests/backend/test_events_and_clients.py tests/backend/test_live_connections.py tests/backend/test_speech.py
 
       - name: Agent defaults, profiles and durable chat configuration
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_subagents.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py
@@ -133,7 +133,7 @@ jobs:
       - name: Chat, settings, extensions and theme controls
         run: >-
           npx playwright test
-          tests/chat.spec.js tests/chat-row.spec.js tests/chat-ordering.spec.js tests/live-connection.spec.js tests/appearance.spec.js tests/workspace.spec.js
+          tests/speech.spec.js tests/chat.spec.js tests/chat-row.spec.js tests/chat-ordering.spec.js tests/live-connection.spec.js tests/appearance.spec.js tests/workspace.spec.js
           tests/projects.spec.js tests/settings-navigation.spec.js tests/command-palette.spec.js tests/hybrid-search.spec.js
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js tests/agent-views.spec.js tests/subagents.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
@@ -150,6 +150,20 @@ jobs:
           --grep 'mobile composer activation|send preserves mouse focus'
           --workers=1 --reporter=dot,github
 
+  speech:
+    name: CPU speech appliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - name: Install locked appliance dependencies
+        run: |
+          uv venv --python 3.13 /tmp/stt-venv
+          uv pip sync --python /tmp/stt-venv/bin/python services/stt/requirements.txt
+      - name: Decode real audio and enforce appliance contract without model downloads
+        working-directory: services/stt
+        run: /tmp/stt-venv/bin/python -m unittest test_server -v
+
   images:
     name: Image (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -164,6 +178,7 @@ jobs:
           - { name: frontend, context: services/frontend, file: services/frontend/Dockerfile }
           - { name: website, context: services/website, file: services/website/Dockerfile }
           - { name: agentgateway, context: services/agentgateway, file: services/agentgateway/Dockerfile }
+          - { name: stt, context: services/stt, file: services/stt/Dockerfile }
           - { name: temporal, context: infra/temporal, file: infra/temporal/Dockerfile }
           - { name: otel-collector, context: infra/otel-collector, file: infra/otel-collector/Dockerfile }
     steps:

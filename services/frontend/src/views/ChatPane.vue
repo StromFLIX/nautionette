@@ -27,6 +27,7 @@
         <span class="material-icons" style="font-size: 0.9375rem">account_tree</span>
         {{ chat.promoted_to }}
       </RouterLink>
+      <ContextRing :context="context" :model="chat?.model || store.catalog.default_model" />
       <button v-if="chatId" class="btn btn--icon" aria-label="Chat options">
         <span class="material-icons">more_vert</span>
         <q-menu anchor="bottom right" self="top right" class="pick-menu">
@@ -150,6 +151,7 @@ import ChatWelcome from '../components/ChatWelcome.vue'
 import ChatMenuItems from '../components/ChatMenuItems.vue'
 import AgentAvatar from '../components/AgentAvatar.vue'
 import Composer from '../components/Composer.vue'
+import ContextRing from '../components/ContextRing.vue'
 import ProjectChanges from '../components/ProjectChanges.vue'
 import MessageBubble from '../components/MessageBubble.vue'
 import ChatAttachment from '../components/ChatAttachment.vue'
