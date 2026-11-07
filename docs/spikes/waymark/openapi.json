@@ -1,0 +1,1717 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Waymark API",
+    "version": "v1"
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "paths": {
+    "/essential-metrics/nodes/latest": {
+      "get": {
+        "summary": "Every node's most recent sample.",
+        "description": "One sample per node, in no particular node order.",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NodeSample"
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The samples could not be read from the store."
+          }
+        }
+      }
+    },
+    "/essential-metrics/nodes/{node_id}/series": {
+      "get": {
+        "summary": "One node's samples over a time range, bucketed.",
+        "description": "One sample per non-empty bucket, ascending by time: `sampled_at` is the bucket's start, the gauges are the bucket's rounded averages, the totals and the last completion time are its maximums, and the histograms add up. Buckets are laid from `from`; the last one ends at `to` and can be shorter than `bucket_seconds`.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "description": "The node's id.",
+            "required": true,
+            "schema": {
+              "description": "The node's id.",
+              "$ref": "#/components/schemas/NodeId"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "bucket_seconds",
+            "description": "Bucket width in seconds; samples within one bucket are\naggregated.",
+            "required": true,
+            "schema": {
+              "description": "Bucket width in seconds; samples within one bucket are\naggregated.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 1
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "description": "Inclusive start of the time range.",
+            "required": true,
+            "schema": {
+              "description": "Inclusive start of the time range.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "description": "Exclusive end of the time range.",
+            "required": true,
+            "schema": {
+              "description": "Exclusive end of the time range.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NodeSample"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A parameter could not be read; the reason, as text.",
+            "content": {
+              "text/plain; charset=utf-8": {}
+            }
+          },
+          "500": {
+            "description": "The samples could not be read from the store."
+          }
+        }
+      }
+    },
+    "/observability-events": {
+      "get": {
+        "summary": "Events across every node in a time range, newest first, one page at a time.",
+        "description": "Ordered by time, then by node, then by position in the node's stream, so paging never skips or repeats an event. Keep `from` and `to` fixed while paging: a cursor only means something with the range it was read with. Pages are not a live follow: an event that arrives late, dated inside a page already read, is not returned by later pages; to follow a node's stream, tail it.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "after",
+            "description": "The `next` of the previous page, to resume past it; absent for\nthe first page.",
+            "schema": {
+              "description": "The `next` of the previous page, to resume past it; absent for\nthe first page.",
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "description": "Inclusive start of the time range.",
+            "required": true,
+            "schema": {
+              "description": "Inclusive start of the time range.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "description": "At most this many events.",
+            "required": true,
+            "schema": {
+              "description": "At most this many events.",
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "description": "Exclusive end of the time range.",
+            "required": true,
+            "schema": {
+              "description": "Exclusive end of the time range.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of a read: its items, in the read's order, and where to\nresume from for what follows them.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A parameter could not be read; the reason, as text.",
+            "content": {
+              "text/plain; charset=utf-8": {}
+            }
+          },
+          "500": {
+            "description": "The events could not be read from the store."
+          }
+        }
+      }
+    },
+    "/observability-events/nodes/{node_id}/tail": {
+      "get": {
+        "summary": "One node's stream in its own order, one page at a time.",
+        "description": "Ascending by position in the node's stream. A jump in position is a dropped or a late event. When nothing more has landed, the page is empty; ask again later with the last cursor.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "description": "The node's id.",
+            "required": true,
+            "schema": {
+              "description": "The node's id.",
+              "$ref": "#/components/schemas/NodeId"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "description": "The `next` of the previous page, to resume past it; absent to\nstart from the oldest event the store holds.",
+            "schema": {
+              "description": "The `next` of the previous page, to resume past it; absent to\nstart from the oldest event the store holds.",
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "description": "At most this many events.",
+            "required": true,
+            "schema": {
+              "description": "At most this many events.",
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of a read: its items, in the read's order, and where to\nresume from for what follows them.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A parameter could not be read; the reason, as text.",
+            "content": {
+              "text/plain; charset=utf-8": {}
+            }
+          },
+          "500": {
+            "description": "The events could not be read from the store."
+          }
+        }
+      }
+    },
+    "/observability-events/vms/{vm_id}/timeline": {
+      "get": {
+        "summary": "One VM's events across the nodes it ran on, oldest first, one page at a time.",
+        "description": "Ordered by time, then by node, then by position in the node's stream: the VM's runs may sit on different nodes, and their streams are merged by time. Paging never skips or repeats an event. Pages are not a live follow: an event that arrives late, dated inside a page already read, is not returned by later pages.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vm_id",
+            "description": "The VM's id.",
+            "required": true,
+            "schema": {
+              "description": "The VM's id.",
+              "$ref": "#/components/schemas/InstanceId"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "description": "The `next` of the previous page, to resume past it; absent to\nstart from the VM's oldest event the store holds.",
+            "schema": {
+              "description": "The `next` of the previous page, to resume past it; absent to\nstart from the VM's oldest event the store holds.",
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "description": "At most this many events.",
+            "required": true,
+            "schema": {
+              "description": "At most this many events.",
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of a read: its items, in the read's order, and where to\nresume from for what follows them.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A parameter could not be read; the reason, as text.",
+            "content": {
+              "text/plain; charset=utf-8": {}
+            }
+          },
+          "500": {
+            "description": "The events could not be read from the store."
+          }
+        }
+      }
+    },
+    "/observability-state/instances": {
+      "get": {
+        "summary": "Every VM last active in a time range, most recently active first, one page at a time.",
+        "description": "A VM is listed when its last event falls in the range, and that event places it; what is served is the state as of the last flush of the events, no fresher. Keep `from` and `to` fixed while paging: a cursor only means something with the range it was read with. A VM active between two page reads moves ahead of the cursor, so this walk does not see it again; a fresh walk does.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "after",
+            "description": "The `next` of the previous page, to resume past it; absent for\nthe first page.",
+            "schema": {
+              "description": "The `next` of the previous page, to resume past it; absent for\nthe first page.",
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "description": "Inclusive start of the time range a VM's last activity must fall\nin to be listed.",
+            "required": true,
+            "schema": {
+              "description": "Inclusive start of the time range a VM's last activity must fall\nin to be listed.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "description": "At most this many instances.",
+            "required": true,
+            "schema": {
+              "description": "At most this many instances.",
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "description": "Exclusive end of that time range.",
+            "required": true,
+            "schema": {
+              "description": "Exclusive end of that time range.",
+              "type": "string",
+              "format": "date-time"
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of a read: its items, in the read's order, and where to\nresume from for what follows them.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstancePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A parameter could not be read; the reason, as text.",
+            "content": {
+              "text/plain; charset=utf-8": {}
+            }
+          },
+          "500": {
+            "description": "The instances could not be read from the store."
+          }
+        }
+      }
+    },
+    "/observability-state/instances/{vm_id}": {
+      "get": {
+        "summary": "What the events show about one VM.",
+        "description": "The VM's state as of the last flush of the events, no fresher.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "vm_id",
+            "description": "The VM's id.",
+            "required": true,
+            "schema": {
+              "description": "The VM's id.",
+              "$ref": "#/components/schemas/InstanceId"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What the events show about one VM, as served on the wire.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Instance"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A parameter could not be read; the reason, as text.",
+            "content": {
+              "text/plain; charset=utf-8": {}
+            }
+          },
+          "404": {
+            "description": "The instance state knows no VM with this id."
+          },
+          "500": {
+            "description": "The instance could not be read from the store."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BridgeObservation": {
+        "description": "What the bridge observed, one variant per observation.",
+        "oneOf": [
+          {
+            "description": "An executable was registered: stored under its name and version,\nwhether for the first time or again.",
+            "type": "object",
+            "properties": {
+              "executable_id": {
+                "description": "The executable.",
+                "type": "string",
+                "format": "uuid"
+              },
+              "executable_name": {
+                "description": "The name the executable was registered under.",
+                "type": "string"
+              },
+              "executable_version": {
+                "description": "The version the executable was registered under.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "executable_registered"
+              }
+            },
+            "required": [
+              "kind",
+              "executable_id",
+              "executable_name",
+              "executable_version"
+            ]
+          }
+        ]
+      },
+      "BridgePayload": {
+        "description": "One bridge event.\n\nThe observation is tagged internally by `kind`, so a reader addresses\nits fields directly (`observation ->> 'kind'`,\n`observation ->> 'executable_id'`).",
+        "type": "object",
+        "properties": {
+          "observation": {
+            "description": "What was observed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgeObservation"
+              }
+            ]
+          }
+        },
+        "required": [
+          "observation"
+        ]
+      },
+      "Duration": {
+        "type": "object",
+        "properties": {
+          "nanos": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          },
+          "secs": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "secs",
+          "nanos"
+        ]
+      },
+      "EffectSummary": {
+        "description": "An emitted effect, reduced to what identifies it.",
+        "oneOf": [
+          {
+            "description": "The workflow completed with a value.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "complete"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "The workflow raised an exception nothing caught.",
+            "type": "object",
+            "properties": {
+              "exception_type": {
+                "description": "The exception's type, as the workflow's language spells it.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "unhandled_exception"
+              }
+            },
+            "required": [
+              "kind",
+              "exception_type"
+            ]
+          },
+          {
+            "description": "An action was called.",
+            "type": "object",
+            "properties": {
+              "action_name": {
+                "description": "The called action.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "action_call"
+              },
+              "module_name": {
+                "description": "The module the action lives in, when the reference carries one.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "promise_state_id": {
+                "description": "The promise the call settles.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "kind",
+              "promise_state_id",
+              "action_name"
+            ]
+          },
+          {
+            "description": "A sleep was requested.",
+            "type": "object",
+            "properties": {
+              "duration": {
+                "description": "How long.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Duration"
+                  }
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "const": "sleep"
+              },
+              "promise_state_id": {
+                "description": "The promise the sleep settles.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "skip_allowed": {
+                "description": "Whether the sleep may be skipped.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "promise_state_id",
+              "duration",
+              "skip_allowed"
+            ]
+          }
+        ]
+      },
+      "Event": {
+        "description": "One event, as served on the wire.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "When the emitter stamped the event.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "description": "The event's kind, as its stable tag.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EventKind"
+              }
+            ]
+          },
+          "node_id": {
+            "description": "The emitting node's id: one identity per node boot.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NodeId"
+              }
+            ]
+          },
+          "node_sequence": {
+            "description": "The event's position in its node's stream.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "payload": {
+            "description": "The event's payload, as the source emitted it.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Payload"
+              }
+            ]
+          }
+        },
+        "required": [
+          "node_id",
+          "node_sequence",
+          "at",
+          "kind",
+          "payload"
+        ]
+      },
+      "EventKind": {
+        "type": "string",
+        "enum": [
+          "vm_driver.vm_started",
+          "vm_driver.effect_emitted.complete",
+          "vm_driver.effect_emitted.unhandled_exception",
+          "vm_driver.effect_emitted.action_call",
+          "vm_driver.effect_emitted.sleep",
+          "vm_driver.promise_settled.resolved",
+          "vm_driver.promise_settled.rejected",
+          "vm_driver.snapshot_persisted",
+          "vm_driver.vm_stopped.step",
+          "vm_driver.vm_stopped.no_ready_frames_or_waiting_promises",
+          "vm_driver.vm_stopped.snapshot_serialization",
+          "vm_driver.vm_stopped.snapshot_persistence",
+          "vm_driver.vm_stopped.effect_handling",
+          "vm_driver.vm_stopped.getting_promise_settlements",
+          "vm_driver.vm_stopped.cancelled",
+          "bridge.executable_registered"
+        ]
+      },
+      "EventPage": {
+        "description": "One page of a read: its items, in the read's order, and where to\nresume from for what follows them.",
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "The items of this page, in the read's order; empty when the read\nhad nothing (more) to give.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "next": {
+            "description": "Where to resume from for what follows this page, as an opaque\ncursor for the read's `after`; null when the page is empty.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next"
+        ]
+      },
+      "Executable": {
+        "description": "The executable an instance runs, as served on the wire.",
+        "type": "object",
+        "properties": {
+          "data": {
+            "description": "What the executable was registered under. Null when the store no\nlonger holds the executable.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutableData"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "description": "The id of the workflow version the instance runs.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowVersionId"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "ExecutableData": {
+        "description": "What an executable was registered under, as served on the wire.",
+        "type": "object",
+        "properties": {
+          "name": {
+            "description": "The workflow name the executable was registered under.",
+            "type": "string"
+          },
+          "version": {
+            "description": "The workflow version the executable was registered under.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version"
+        ]
+      },
+      "GetInstancePath": {
+        "description": "Path parameters of a get read.",
+        "type": "object",
+        "properties": {
+          "vm_id": {
+            "description": "The VM's id.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InstanceId"
+              }
+            ]
+          }
+        },
+        "required": [
+          "vm_id"
+        ]
+      },
+      "Histogram": {
+        "description": "A distribution over bucket boundaries, as served on the wire.\n\nThe bounds travel with the counts so a reader needs nothing else to\nmake sense of them, and `p50` is interpolated here rather than by the\nreader \u2014 after any aggregation, which is the point of shipping counts\nrather than a median.",
+        "type": "object",
+        "properties": {
+          "bounds": {
+            "description": "Upper bound of each bucket, in seconds, ascending.",
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "counts": {
+            "description": "Observations at or below each corresponding bound, then the\ntotal \u2014 one more entry than there are bounds.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "p50": {
+            "description": "The interpolated median; null when nothing was observed, or when\nthe median falls above the last bound.",
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "sum": {
+            "description": "The observed values added together, for deriving a mean.",
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "bounds",
+          "counts",
+          "sum"
+        ]
+      },
+      "Instance": {
+        "description": "What the events show about one VM, as served on the wire.",
+        "type": "object",
+        "properties": {
+          "executable": {
+            "description": "The instance's executable, as its latest run's start carried it.\nNull when no run of the VM has been observed.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Executable"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_event": {
+            "description": "The VM's most recent event.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LastEvent"
+              }
+            ]
+          },
+          "latest_run": {
+            "description": "The VM's latest run: the last time a VM driver started it. Null\nwhen the instance state knows the VM without any run of it.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Run"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "outcome": {
+            "description": "The workflow's terminal outcome, once an effect carried one.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Outcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vm_id": {
+            "description": "The VM's id.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InstanceId"
+              }
+            ]
+          }
+        },
+        "required": [
+          "vm_id",
+          "last_event"
+        ]
+      },
+      "InstanceId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "InstancePage": {
+        "description": "One page of a read: its items, in the read's order, and where to\nresume from for what follows them.",
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "The items of this page, in the read's order; empty when the read\nhad nothing (more) to give.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Instance"
+            }
+          },
+          "next": {
+            "description": "Where to resume from for what follows this page, as an opaque\ncursor for the read's `after`; null when the page is empty.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next"
+        ]
+      },
+      "LastEvent": {
+        "description": "A VM's most recent event, as served on the wire.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "When it was emitted.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "description": "What it was: its kind.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/EventKind"
+              }
+            ]
+          },
+          "node_id": {
+            "description": "The node that emitted it: one identity per node boot.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NodeId"
+              }
+            ]
+          },
+          "node_sequence": {
+            "description": "Its position in that node's stream.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "run_sequence": {
+            "description": "Its position in its run.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "at",
+          "node_id",
+          "node_sequence",
+          "run_sequence",
+          "kind"
+        ]
+      },
+      "ListEventsQuery": {
+        "description": "Query parameters of a list read.",
+        "type": "object",
+        "properties": {
+          "after": {
+            "description": "The `next` of the previous page, to resume past it; absent for\nthe first page.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "description": "Inclusive start of the time range.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "limit": {
+            "description": "At most this many events.",
+            "type": "integer",
+            "maximum": 1000,
+            "minimum": 1
+          },
+          "to": {
+            "description": "Exclusive end of the time range.",
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "limit"
+        ]
+      },
+      "ListInstancesQuery": {
+        "description": "Query parameters of a list read.",
+        "type": "object",
+        "properties": {
+          "after": {
+            "description": "The `next` of the previous page, to resume past it; absent for\nthe first page.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from": {
+            "description": "Inclusive start of the time range a VM's last activity must fall\nin to be listed.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "limit": {
+            "description": "At most this many instances.",
+            "type": "integer",
+            "maximum": 100,
+            "minimum": 1
+          },
+          "to": {
+            "description": "Exclusive end of that time range.",
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "limit"
+        ]
+      },
+      "NodeId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "NodeSample": {
+        "description": "One node's essential numbers at one instant, as served on the wire.",
+        "type": "object",
+        "properties": {
+          "action_dequeue_seconds": {
+            "description": "How long actions waited to be dequeued, over the interval this\nsample covers.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Histogram"
+              }
+            ]
+          },
+          "action_handling_seconds": {
+            "description": "How long actions took to handle, over the interval this sample\ncovers.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Histogram"
+              }
+            ]
+          },
+          "actions_completed_total": {
+            "description": "Actions completed since node start.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "driven_vm_runtimes": {
+            "description": "Workflow VM runtimes the node currently drives.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "essential_metrics_dropped_total": {
+            "description": "Samples the essential-metrics pipeline itself dropped on its own\nlossy path since node start.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "in_flight_actions": {
+            "description": "Actions currently in flight.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "last_action_completed_at": {
+            "description": "When the node last completed an action; null before the first\ncompletion.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "max_in_flight_actions": {
+            "description": "The most actions the pool can have in flight at once.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "node_id": {
+            "description": "The sampling node's id: one identity per node boot.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NodeId"
+              }
+            ]
+          },
+          "observability_events_dropped_total": {
+            "description": "Observability events the node's observability-events pipeline\ndropped on its lossy path since node start.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "queued_action_dispatches": {
+            "description": "Action dispatches accepted into the worker pool's dispatch queue\nand not yet taken by its launch loop.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "sampled_at": {
+            "description": "When the sample was taken.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "worker_pool_size": {
+            "description": "Worker processes in the pool.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "node_id",
+          "sampled_at",
+          "worker_pool_size",
+          "max_in_flight_actions",
+          "in_flight_actions",
+          "queued_action_dispatches",
+          "driven_vm_runtimes",
+          "actions_completed_total",
+          "action_dequeue_seconds",
+          "action_handling_seconds",
+          "essential_metrics_dropped_total",
+          "observability_events_dropped_total"
+        ]
+      },
+      "Outcome": {
+        "description": "The workflow's terminal outcome, as served on the wire.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "When the effect was emitted.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "description": "Which terminal effect it was.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OutcomeKind"
+              }
+            ]
+          }
+        },
+        "required": [
+          "at",
+          "kind"
+        ]
+      },
+      "OutcomeKind": {
+        "description": "The two effects that end a workflow.",
+        "oneOf": [
+          {
+            "description": "The workflow completed with a value.",
+            "type": "string",
+            "const": "complete"
+          },
+          {
+            "description": "The workflow raised an exception nothing caught.",
+            "type": "string",
+            "const": "unhandled_exception"
+          }
+        ]
+      },
+      "Payload": {
+        "description": "Every source's typed event, one variant per source: what the\nproduction pipeline carries.\n\nThe store serializes it as the event's `payload` at flush and reads\nit back on query. Tagged internally: the source is the `source` field\nand the source's own fields sit beside it, so a reader addresses them\ndirectly (`payload ->> 'vm_id'`).\n\nA source whose events belong to a VM carries the VM's id as a\ntop-level `vm_id`, in uuid text form: readers address it there and\nread it as a uuid.",
+        "oneOf": [
+          {
+            "description": "An event of the VM driver.",
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "const": "vm_driver"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VmDriverPayload"
+              }
+            ],
+            "required": [
+              "source"
+            ]
+          },
+          {
+            "description": "An event of the bridge.",
+            "type": "object",
+            "properties": {
+              "source": {
+                "type": "string",
+                "const": "bridge"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BridgePayload"
+              }
+            ],
+            "required": [
+              "source"
+            ]
+          }
+        ]
+      },
+      "Run": {
+        "description": "One run of a VM, as served on the wire.",
+        "type": "object",
+        "properties": {
+          "node_id": {
+            "description": "The node the run is on: one identity per node boot.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NodeId"
+              }
+            ]
+          },
+          "started_at": {
+            "description": "When the VM driver started the run.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "stopped": {
+            "description": "The run's stop, once observed; null while no stop has been\nobserved for it.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Stopped"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "node_id",
+          "started_at"
+        ]
+      },
+      "SeriesPath": {
+        "description": "Path parameters of a series read.",
+        "type": "object",
+        "properties": {
+          "node_id": {
+            "description": "The node's id.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NodeId"
+              }
+            ]
+          }
+        },
+        "required": [
+          "node_id"
+        ]
+      },
+      "SeriesQuery": {
+        "description": "Query parameters of a series read.",
+        "type": "object",
+        "properties": {
+          "bucket_seconds": {
+            "description": "Bucket width in seconds; samples within one bucket are\naggregated.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 1
+          },
+          "from": {
+            "description": "Inclusive start of the time range.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "description": "Exclusive end of the time range.",
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "bucket_seconds"
+        ]
+      },
+      "Settlement": {
+        "description": "A promise settlement, reduced to its outcome.",
+        "oneOf": [
+          {
+            "description": "Resolved with a value.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "resolved"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "Rejected with an exception.",
+            "type": "object",
+            "properties": {
+              "exception_type": {
+                "description": "The exception's type, as the workflow's language spells it.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "rejected"
+              }
+            },
+            "required": [
+              "kind",
+              "exception_type"
+            ]
+          }
+        ]
+      },
+      "StopKind": {
+        "type": "string",
+        "enum": [
+          "vm_driver.vm_stopped.step",
+          "vm_driver.vm_stopped.no_ready_frames_or_waiting_promises",
+          "vm_driver.vm_stopped.snapshot_serialization",
+          "vm_driver.vm_stopped.snapshot_persistence",
+          "vm_driver.vm_stopped.effect_handling",
+          "vm_driver.vm_stopped.getting_promise_settlements",
+          "vm_driver.vm_stopped.cancelled"
+        ]
+      },
+      "StopReason": {
+        "description": "Why a VM driver run stopped: the VM driver's own error, one variant\neach, with the collaborator's error rendered where the VM driver carries\none.",
+        "oneOf": [
+          {
+            "description": "A VM step failed while executing an instruction.",
+            "type": "object",
+            "properties": {
+              "error": {
+                "description": "The step error, rendered.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "step"
+              }
+            },
+            "required": [
+              "kind",
+              "error"
+            ]
+          },
+          {
+            "description": "The runtime has no ready frames and no waiting promises.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "no_ready_frames_or_waiting_promises"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          {
+            "description": "The snapshot serialization has failed.",
+            "type": "object",
+            "properties": {
+              "error": {
+                "description": "The serialization error, rendered.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "snapshot_serialization"
+              }
+            },
+            "required": [
+              "kind",
+              "error"
+            ]
+          },
+          {
+            "description": "The snapshot persistence has failed.",
+            "type": "object",
+            "properties": {
+              "error": {
+                "description": "The persistence error, rendered.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "snapshot_persistence"
+              }
+            },
+            "required": [
+              "kind",
+              "error"
+            ]
+          },
+          {
+            "description": "The effect handling has failed.",
+            "type": "object",
+            "properties": {
+              "error": {
+                "description": "The handling error, rendered.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "effect_handling"
+              }
+            },
+            "required": [
+              "kind",
+              "error"
+            ]
+          },
+          {
+            "description": "Getting promise settlements has failed.",
+            "type": "object",
+            "properties": {
+              "error": {
+                "description": "The settlements error, rendered.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "getting_promise_settlements"
+              }
+            },
+            "required": [
+              "kind",
+              "error"
+            ]
+          },
+          {
+            "description": "The run was cancelled.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "cancelled"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          }
+        ]
+      },
+      "Stopped": {
+        "description": "A run's stop, as served on the wire.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "When the VM driver stopped.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "description": "Why: the stop event's kind.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StopKind"
+              }
+            ]
+          }
+        },
+        "required": [
+          "at",
+          "reason"
+        ]
+      },
+      "TailPath": {
+        "description": "Path parameters of a tail read.",
+        "type": "object",
+        "properties": {
+          "node_id": {
+            "description": "The node's id.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NodeId"
+              }
+            ]
+          }
+        },
+        "required": [
+          "node_id"
+        ]
+      },
+      "TailQuery": {
+        "description": "Query parameters of a tail read.",
+        "type": "object",
+        "properties": {
+          "after": {
+            "description": "The `next` of the previous page, to resume past it; absent to\nstart from the oldest event the store holds.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "description": "At most this many events.",
+            "type": "integer",
+            "maximum": 1000,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "limit"
+        ]
+      },
+      "VmDriverObservation": {
+        "description": "What was observed of a run, one variant per observation, summarized.",
+        "oneOf": [
+          {
+            "description": "The VM driver run has started.",
+            "type": "object",
+            "properties": {
+              "executable_id": {
+                "description": "The executable the run is of.",
+                "type": "string",
+                "format": "uuid"
+              },
+              "executable_name": {
+                "description": "The name the executable was registered under.",
+                "type": "string"
+              },
+              "executable_version": {
+                "description": "The version the executable was registered under.",
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "const": "vm_started"
+              }
+            },
+            "required": [
+              "kind",
+              "executable_id",
+              "executable_name",
+              "executable_version"
+            ]
+          },
+          {
+            "description": "The runtime has emitted an effect.",
+            "type": "object",
+            "properties": {
+              "effect": {
+                "description": "The effect, summarized.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/EffectSummary"
+                  }
+                ]
+              },
+              "effect_number": {
+                "description": "The number the runtime assigned to the effect.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "const": "effect_emitted"
+              }
+            },
+            "required": [
+              "kind",
+              "effect_number",
+              "effect"
+            ]
+          },
+          {
+            "description": "A promise settlement has reached the VM driver.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "promise_settled"
+              },
+              "promise_state_id": {
+                "description": "The settled promise.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
+              "settlement": {
+                "description": "The settlement, summarized.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Settlement"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "promise_state_id",
+              "settlement"
+            ]
+          },
+          {
+            "description": "A snapshot has been persisted.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "snapshot_persisted"
+              },
+              "size_in_bytes": {
+                "description": "The size of the serialized snapshot.",
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "kind",
+              "size_in_bytes"
+            ]
+          },
+          {
+            "description": "The VM driver run has stopped.",
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "vm_stopped"
+              },
+              "reason": {
+                "description": "Why, in the VM driver's own terms.",
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/StopReason"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "reason"
+            ]
+          }
+        ]
+      },
+      "VmDriverPayload": {
+        "description": "One VM driver event.\n\nThe fields every observation shares sit beside it, so a VM's events are\nreachable through one path however they were emitted. The observation\nand its summaries are tagged internally by `kind`, so a reader addresses\ntheir fields directly (`observation ->> 'kind'`,\n`observation -> 'effect' ->> 'action_name'`).",
+        "type": "object",
+        "properties": {
+          "observation": {
+            "description": "What was observed.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VmDriverObservation"
+              }
+            ]
+          },
+          "run_sequence": {
+            "description": "The event's position within its VM driver run: 0 at the start of\nthe run, one more per event of the same run. Runs restart the count,\nso a run's own completeness shows regardless of what its node\ndropped.",
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0
+          },
+          "vm_id": {
+            "description": "The VM whose run emitted the event.",
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "vm_id",
+          "run_sequence",
+          "observation"
+        ]
+      },
+      "VmTimelinePath": {
+        "description": "Path parameters of a timeline read.",
+        "type": "object",
+        "properties": {
+          "vm_id": {
+            "description": "The VM's id.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InstanceId"
+              }
+            ]
+          }
+        },
+        "required": [
+          "vm_id"
+        ]
+      },
+      "VmTimelineQuery": {
+        "description": "Query parameters of a timeline read.",
+        "type": "object",
+        "properties": {
+          "after": {
+            "description": "The `next` of the previous page, to resume past it; absent to\nstart from the VM's oldest event the store holds.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "description": "At most this many events.",
+            "type": "integer",
+            "maximum": 1000,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "limit"
+        ]
+      },
+      "WorkflowVersionId": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  }
+}
