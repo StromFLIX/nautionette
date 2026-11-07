@@ -57,6 +57,43 @@ def test_stdio_is_probed_in_isolation_then_persisted_without_returning_secrets(c
     assert client.delete("/api/mcp-servers/brave").json()["servers"] == []
 
 
+@pytest.mark.asyncio
+async def test_gateway_route_watch_retries_only_readonly_404_without_repeating_put(
+    backend, live, monkeypatch
+):
+    attempts = []
+
+    async def tools(*_args, **_kwargs):
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise http_error(404, "route not found")
+        return [{"name": "ready"}]
+
+    monkeypatch.setattr(live.gateway, "mcp_tools", tools)
+    result = await mcp_servers.probe_stdio(
+        mcp_servers.stdio_value("test", {"command": "npx", "args": []}, {})
+    )
+    assert result["ok"] and len(attempts) == 3
+    assert len(backend.gateway.writes) == 1
+    assert backend.gateway.resources["traffic.route"] == {}
+
+
+@pytest.mark.asyncio
+async def test_upstream_probe_failure_is_not_retried(backend, live, monkeypatch):
+    attempts = []
+
+    async def tools(*_args, **_kwargs):
+        attempts.append(1)
+        raise http_error(500, "upstream failure")
+
+    monkeypatch.setattr(live.gateway, "mcp_tools", tools)
+    result = await mcp_servers.probe_stdio(
+        mcp_servers.stdio_value("test", {"command": "npx", "args": []}, {})
+    )
+    assert not result["ok"] and len(attempts) == 1
+    assert len(backend.gateway.writes) == 1
+
+
 def test_stdio_env_keeps_replaces_and_removes_values(client, stdio_ready):
     client.put("/api/mcp-servers/brave", json=STDIO)
     changes = {**STDIO, "env": {"BRAVE_API_KEY": None, "EMPTY": "", "LITERAL": "$NOT_EXPANDED"}}

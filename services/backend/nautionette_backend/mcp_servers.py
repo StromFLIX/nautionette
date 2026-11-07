@@ -194,7 +194,20 @@ async def probe_target(target: dict[str, Any]) -> dict[str, Any]:
         await gateway.put_config_resources("traffic.route", [route])
         try:
             async with asyncio.timeout(90):
-                tools = await gateway.mcp_tools(f"{settings.gateway_url.rstrip('/')}{path}", timeout=90)
+                # The store acknowledges PUT before the data-plane watch has
+                # loaded this unique route. A gateway 404 cannot have contacted
+                # the upstream yet. Retry only that read-only handshake, never
+                # the route mutation, OAuth exchange or upstream failures.
+                for attempt in range(50):
+                    try:
+                        tools = await gateway.mcp_tools(
+                            f"{settings.gateway_url.rstrip('/')}{path}", timeout=90
+                        )
+                        break
+                    except httpx.HTTPStatusError as error:
+                        if error.response.status_code != 404 or attempt == 49:
+                            raise
+                        await asyncio.sleep(0.1)
             label = "Process" if "stdio" in target else "HTTPS server"
             return {"ok": True, "status": None, "message": f"{label} answered with {len(tools)} tools."}
         except (httpx.HTTPError, ValueError, TimeoutError):
