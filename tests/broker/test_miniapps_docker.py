@@ -32,8 +32,9 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
     namespace = "miniapp-test-" + uuid.uuid4().hex
     volume = client.volumes.create(name=namespace)
     broker = None
-    try:
-        broker = client.containers.run(
+
+    def start_broker():
+        return client.containers.run(
             "nautionette/docker-broker:dev",
             detach=True,
             # Includes deployment-time Dockerfile transformation plus a private
@@ -57,6 +58,19 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
             },
             ports={"9100/tcp": ("127.0.0.1", None)},
         )
+
+    def wait_broker(http):
+        for _ in range(60):
+            try:
+                if http.get("/miniapps/counter").status_code == 200:
+                    return
+            except httpx.HTTPError:
+                pass
+            time.sleep(0.5)
+        pytest.fail("Broker did not start: " + broker.logs(tail=40).decode())
+
+    try:
+        broker = start_broker()
         broker.reload()
         port = broker.attrs["NetworkSettings"]["Ports"]["9100/tcp"][0]["HostPort"]
         with httpx.Client(
@@ -64,15 +78,7 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
             headers={"X-Internal-Token": "integration-test-internal"},
             timeout=240,
         ) as http:
-            for _ in range(60):
-                try:
-                    if http.get("/miniapps/counter").status_code == 200:
-                        break
-                except httpx.HTTPError:
-                    pass
-                time.sleep(0.5)
-            else:
-                pytest.fail("Broker did not start: " + broker.logs(tail=40).decode())
+            wait_broker(http)
             source = (ROOT / "services/miniapp-sdk/src/app.rs").read_text()
             check = http.post("/miniapps/counter/check", json={"source": source})
             assert check.status_code == 200, check.text
@@ -120,6 +126,22 @@ def test_real_scratch_runtime_persistence_isolation_and_rollback():
 
             assert rpc("/state") == {"value": 0}
             assert rpc("/increment", "POST") == {"value": 1}
+            # Deployment replaces the broker, not the app or its isolated bridge.
+            # Rejoin it without rebuilding the app or losing SQLite data; cover
+            # both surviving live containers and sleeping container reuse.
+            surviving = client.containers.list(filters={"label": app_labels})[0]
+            broker.remove(force=True)
+            broker = None
+            broker = start_broker()
+            broker.reload()
+            port = broker.attrs["NetworkSettings"]["Ports"]["9100/tcp"][0]["HostPort"]
+            http.base_url = f"http://127.0.0.1:{port}"
+            wait_broker(http)
+            assert rpc("/state") == {"value": 1}
+            assert client.containers.list(filters={"label": app_labels})[0].id == surviving.id
+            networks[0].disconnect(broker)
+            surviving.stop(timeout=5)
+            assert rpc("/state") == {"value": 1}
             assert http.post("/miniapps/counter/control", json={"action": "restart"}).status_code == 200
             assert rpc("/state") == {"value": 1}
             # A generated health/migration function may corrupt its private copy;
@@ -224,6 +246,9 @@ pub fn handle(ctx: &mut Context,req:&Request)->Result<Value>{
             probe_net = client.networks.get(next(iter(probe.attrs["NetworkSettings"]["Networks"])))
             subnet = probe_net.attrs["IPAM"]["Config"][0]
             gateway = subnet.get("Gateway") or str(ipaddress.ip_network(subnet["Subnet"])[1])
+            # Reattachment must restore miniapp-host DNS for real SDK callbacks,
+            # not only broker -> app HTTP connectivity.
+            probe_net.disconnect(broker)
             with socket.create_server(("0.0.0.0", 0)) as host:  # noqa: S104 - ephemeral CI isolation probe
                 response = http.post(
                     "/miniapps/probe/request",

@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createRecorder, readSpeechEvents, wavAudio, joinTranscript } from './speech.js'
+import { Capacitor } from '@capacitor/core'
 
 function stream (...chunks) {
   return new ReadableStream({ start (controller) { for (const chunk of chunks) controller.enqueue(chunk); controller.close() } })
@@ -36,6 +37,39 @@ test('dictation stream preserves split UTF-8 and requires a final completion fra
 test('dictation rejects unbounded/malformed events', async () => {
   await assert.rejects(readSpeechEvents(stream(new TextEncoder().encode('x'.repeat(128 * 1024 + 1))), () => {}), /Invalid/)
   await assert.rejects(readSpeechEvents(stream(new TextEncoder().encode('data: not json\n\n')), () => {}), SyntaxError)
+})
+
+test('microphone denial gives platform-specific guidance and remains retryable', async () => {
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  const originalContext = globalThis.AudioContext
+  const secure = globalThis.isSecureContext
+  const isNativePlatform = Capacitor.isNativePlatform
+  globalThis.isSecureContext = true
+  globalThis.AudioContext = class {}
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: { async getUserMedia () { throw new DOMException('Denied', 'NotAllowedError') } } } })
+  try {
+    for (const native of [false, true]) {
+      Capacitor.isNativePlatform = () => native
+      const errors = []
+      const recorder = createRecorder({ onSnapshot: () => {}, onError: error => errors.push(error.message) })
+      await recorder.start()
+      assert.equal(recorder.state.value, 'idle')
+      assert.match(errors[0], native ? /phone’s app settings/ : /browser settings/)
+      if (native) {
+        assert.doesNotMatch(errors[0], /browser/)
+        assert.match(errors[0], /system microphone access/)
+      }
+      await recorder.start()
+      assert.equal(errors.length, 2, 'a denied request must not prevent another attempt')
+      recorder.dispose()
+    }
+  } finally {
+    if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor)
+    else delete globalThis.navigator
+    globalThis.AudioContext = originalContext
+    globalThis.isSecureContext = secure
+    Capacitor.isNativePlatform = isNativePlatform
+  }
 })
 
 test('disposing a pending microphone permission request releases late tracks', async () => {
