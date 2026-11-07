@@ -156,6 +156,12 @@ async def test_stdio_with_real_gateway_and_http_baseline(tmp_path, monkeypatch):
         await start()
         assert len(await gateway.mcp_tools()) == 2  # persisted launch survives a gateway restart
         await mcp_servers.remove("fixture")
+        # Config-store acknowledgement precedes asynchronous data-plane reload.
+        # Poll read-only discovery, never repeat the DELETE mutation.
+        for _ in range(50):
+            if len(await gateway.mcp_tools()) == 1:
+                break
+            await asyncio.sleep(0.1)
         assert len(await gateway.mcp_tools()) == 1  # HTTP baseline still works
         assert (await mcp_servers.payload())["servers"][0]["name"] == "baseline"
         # All short-lived discovery sessions should have released their children.

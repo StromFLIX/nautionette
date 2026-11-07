@@ -11,6 +11,7 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 import selectors
 import shutil
 import ssl
@@ -251,7 +252,11 @@ def test_real_https_oauth_backend_gateway_and_refresh_without_cli(client, stack,
             line, _, buffered = buffered.partition(b"\n")
             message = json.loads(line)
             if message["kind"] == "done":
-                assert message["ok"], message.get("error")
+                if not message["ok"]:
+                    # Only synthetic test endpoints/credentials exist here. Print
+                    # error reasons, never headers, tokens or MCP session IDs.
+                    reasons = re.findall(r'error="([^"]+)"', (tmp_path / "gateway.log").read_text())[-3:]
+                    pytest.fail(str(message.get("error")) + "; gateway reasons: " + "; ".join(reasons))
                 break
             operation, args = message["operation"], message["args"]
             if operation == "startMcpOAuth":
