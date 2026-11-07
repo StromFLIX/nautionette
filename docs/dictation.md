@@ -60,7 +60,14 @@ The backend reports a retryable dictation error while the service is unavailable
 Recording requires HTTPS (localhost is also a secure context), microphone
 permission and Web Audio. Unsupported devices retain normal typing. Android's
 Capacitor WebView uses the same capture pipeline; the generated manifest gets
-`RECORD_AUDIO` from `scripts/sync-android.mjs` and Capacitor requests permission.
+`RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS` from `scripts/sync-android.mjs`.
+Capacitor requests both and rejects capture if either is missing, even when
+microphone access was allowed. Only `RECORD_AUDIO` displays a runtime prompt;
+`MODIFY_AUDIO_SETTINGS` is granted at install time. This manifest fix requires
+installing a newly built APK; updating the web server alone cannot fix an old APK.
+If access is actually denied, allow Microphone in the phone's Nautionette app
+settings and ensure Android's system-wide microphone privacy toggle is on, then
+retry. Browser users should check the site's microphone permission instead.
 
 ## CPU benchmark and configuration
 

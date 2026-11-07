@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { Capacitor } from '@capacitor/core'
 
 export const MAX_RECORDING_BYTES = 12 * 1024 * 1024
 
@@ -146,7 +147,10 @@ export function createRecorder ({ onSnapshot, onFinish, onError, maxSeconds = 12
     } catch (error) {
       if (id !== generation) return
       cancel()
-      onError(new Error(error.name === 'NotAllowedError' ? 'Microphone permission denied. Allow microphone access in your browser settings.' : error.name === 'NotFoundError' ? 'No microphone found.' : error.message || 'Could not start recording.'))
+      const permissionMessage = Capacitor.isNativePlatform()
+        ? 'Microphone permission denied. Allow microphone access for Nautionette in your phone’s app settings and check that system microphone access is enabled, then try again.'
+        : 'Microphone permission denied. Allow microphone access in your browser settings.'
+      onError(new Error(error.name === 'NotAllowedError' ? permissionMessage : error.name === 'NotFoundError' ? 'No microphone found.' : error.message || 'Could not start recording.'))
     }
   }
   return { state, seconds, level, start, stop, cancel, dispose: cancel }

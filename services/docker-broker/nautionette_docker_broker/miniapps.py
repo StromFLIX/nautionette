@@ -290,6 +290,10 @@ def create_runtime(app_id: str, config: dict):
 
 
 def runtime_call(app_id: str, config: dict, path: str, payload: dict | None = None):
+    # Runtime containers/networks outlive broker deployments. Reattach this broker
+    # even when reusing a running or suspended container, before health or RPC.
+    # network() validates isolation/ownership and restores the SDK callback alias.
+    network(app_id)
     container = owned_container(app_id, config)
     if container is None:
         container = create_runtime(app_id, config)

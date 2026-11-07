@@ -8,9 +8,14 @@ if (config.appId !== 'dev.nautionette.app') throw new Error('Update the native J
 for (const name of ['MainActivity.java', 'NautionetteSystemBarsPlugin.java', 'NautionetteDownloadsPlugin.java']) {
   await copyFile(new URL(`native/android/${name}`, root), new URL(`android/app/src/main/java/dev/nautionette/app/${name}`, root))
 }
-// Capacitor's WebChromeClient requests runtime microphone permission for getUserMedia.
+// BridgeWebChromeClient requests BOTH permissions for AUDIO_CAPTURE and denies
+// getUserMedia if either is missing, even when the user allows RECORD_AUDIO.
+// MODIFY_AUDIO_SETTINGS is a normal (install-time) permission, not another prompt.
 const manifestPath = new URL('android/app/src/main/AndroidManifest.xml', root)
-const manifest = await readFile(manifestPath, 'utf8')
-if (!manifest.includes('android.permission.RECORD_AUDIO')) {
-  await writeFile(manifestPath, manifest.replace('</manifest>', '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n</manifest>'))
+let manifest = await readFile(manifestPath, 'utf8')
+for (const permission of ['RECORD_AUDIO', 'MODIFY_AUDIO_SETTINGS']) {
+  if (!manifest.includes(`android.permission.${permission}`)) {
+    manifest = manifest.replace('</manifest>', `    <uses-permission android:name="android.permission.${permission}" />\n</manifest>`)
+  }
 }
+await writeFile(manifestPath, manifest)
