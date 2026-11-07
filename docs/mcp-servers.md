@@ -130,10 +130,11 @@ consent, licensing, token protection and account policies still apply.
 
 An updated Windows, macOS or Linux desktop app can connect OAuth-authenticated
 stdio CLIs without a browser in the gateway container or a public OAuth callback.
-Under **Add server**, choose **stdio**, then **Authentication → CLI OAuth**.
+Under **Add server → Advanced settings**, choose **stdio**, then
+**Authentication → CLI OAuth**.
 
-For WorkIQ, click **Use WorkIQ preset**, review/accept its linked CLI EULA and the
-shared-account warning, then **Connect with CLI OAuth**. The preset pins
+For WorkIQ, choose its **CLI adapter**, review/accept its linked CLI EULA and the
+shared-account notice, then click **Connect**. The adapter pins
 `@microsoft/workiq@1.0.1`, enables its supported browser-auth setting
 (`disableBrokeredAuth=true`), selects English CLI status messages, accepts the
 EULA only after that explicit checkbox, and runs `auth login` in agentgateway.
