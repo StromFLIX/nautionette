@@ -28,6 +28,7 @@
     </main>
 
     <CommandPalette v-model="searchOpen" :initial-query="searchQuery" />
+    <McpLoginDialog />
 
     <q-dialog v-model="gate" persistent>
       <q-card class="token-card">
@@ -65,6 +66,7 @@ import AgentRail from './components/AgentRail.vue'
 import PinnedApps from './components/PinnedApps.vue'
 import SidePanel from './components/SidePanel.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import McpLoginDialog from './components/McpLoginDialog.vue'
 import { actions, store } from './store'
 import { auth, isNative, server } from './api'
 import { currentTokens, preferences } from './preferences'

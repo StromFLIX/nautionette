@@ -27,6 +27,12 @@ CREATE TABLE IF NOT EXISTS mcp_cli_oauth (
     name TEXT PRIMARY KEY,
     config TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS mcp_oauth_setups (
+    name TEXT PRIMARY KEY,
+    url TEXT NOT NULL,
+    profile TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS mcp_http_oauth (
     name TEXT PRIMARY KEY,
     profile TEXT NOT NULL,

@@ -13,6 +13,11 @@ async function mockMcp (context) {
   const state = { servers: [], writes: [], fail: false, tests: [] }
   await context.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname
+    if (path.startsWith('/api/mcp-oauth/connect/')) {
+      const payload = route.request().postDataJSON()
+      state.writes.push({ transport: 'http', url: payload.url, token: payload.token || '' })
+      return route.fulfill({ json: { status: 'complete' } })
+    }
     if (path.startsWith('/api/mcp-servers')) {
       const name = path.split('/')[3]
       if (path.endsWith('/test')) {
@@ -47,6 +52,7 @@ for (const width of [1440, 320]) {
     await page.setViewportSize({ width, height: 1000 })
     await page.goto('/settings/mcp')
     await page.getByRole('button', { name: 'Add server', exact: true }).click()
+    await page.getByText('Advanced settings', { exact: true }).click()
     await page.getByLabel('Transport', { exact: true }).selectOption('stdio')
     await page.getByPlaceholder('linear').fill('brave')
     await page.getByPlaceholder('npx', { exact: true }).fill('npx')
@@ -57,21 +63,21 @@ for (const width of [1440, 320]) {
     await page.getByLabel('Variable 1 value', { exact: true }).fill('test-secret')
     await expect(page.getByLabel('Variable 1 value', { exact: true })).toHaveAttribute('type', 'password')
     await expect(page.getByText(/Only run trusted packages/)).toBeVisible()
-    await page.locator('.integration-add').getByRole('button', { name: 'Add server', exact: true }).click()
+    await page.locator('.integration-add').getByRole('button', { name: 'Connect', exact: true }).click()
     await expect.poll(() => state.writes.length).toBe(1)
     expect(state.writes[0]).toEqual({ transport: 'stdio', command: 'npx', args, env: { BRAVE_API_KEY: 'test-secret' } })
     await page.reload()
-    await page.getByRole('button', { name: 'Configure', exact: true }).click()
+    await page.getByRole('button', { name: 'Connection settings', exact: true }).click()
     await expect(page.getByRole('textbox', { name: /Arguments/ })).toHaveValue(JSON.stringify(args, null, 2))
     await expect(page.getByLabel('Variable 1 value', { exact: true })).toHaveValue('')
-    await page.getByRole('button', { name: 'Save server', exact: true }).click()
+    await page.getByRole('button', { name: 'Save connection', exact: true }).click()
     await expect.poll(() => state.writes.length).toBe(2)
     expect(state.writes[1].env).toEqual({ BRAVE_API_KEY: null })
     await page.getByRole('button', { name: 'Test', exact: true }).click()
     await expect(page.getByText('Process answered with 1 tools.')).toBeVisible()
-    await page.getByRole('button', { name: 'Configure', exact: true }).click()
+    await page.getByRole('button', { name: 'Connection settings', exact: true }).click()
     await page.getByRole('button', { name: 'Remove variable 1', exact: true }).click()
-    await page.getByRole('button', { name: 'Save server', exact: true }).click()
+    await page.getByRole('button', { name: 'Save connection', exact: true }).click()
     await expect.poll(() => state.writes.length).toBe(3)
     expect(state.writes[2].env).toEqual({})
     await page.getByRole('button', { name: 'Remove', exact: true }).click()
@@ -85,11 +91,12 @@ test('invalid launch input cannot save; failed probes keep the draft; HTTP remai
   const state = await mockMcp(context)
   await page.goto('/settings/mcp')
   await page.getByRole('button', { name: 'Add server', exact: true }).click()
+  await page.getByText('Advanced settings', { exact: true }).click()
   await page.getByLabel('Transport', { exact: true }).selectOption('stdio')
   await page.getByPlaceholder('linear').fill('brave')
   await page.getByPlaceholder('npx', { exact: true }).fill('npx')
   const args = page.getByRole('textbox', { name: /Arguments/ })
-  const save = page.locator('.integration-add').getByRole('button', { name: 'Add server', exact: true })
+  const save = page.locator('.integration-add .integration-actions .btn--primary')
   await args.fill('not-json')
   await expect(save).toBeDisabled()
   await args.fill('[123]')

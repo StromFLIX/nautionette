@@ -11,6 +11,7 @@ import { createChatSettings } from './new-chat-settings'
 import { createAgentNavigation } from './agent-navigation'
 import { preferenceError } from './preferences'
 import router from './router'
+import { createMcpAuthState } from './mcp-auth-state.js'
 
 export const chatSettings = createChatSettings({ scope: chatCacheScope, onError: message => { preferenceError.value = message } })
 
@@ -35,8 +36,11 @@ const state = reactive({
   workflows: [],
   drafts: [],
   runs: [],
-  events: []
+  events: [],
+  mcpAuth: { connections: [], prompt: null, busyName: '', error: '' }
 })
+const mcpAuth = createMcpAuthState({ state: state.mcpAuth, scope: chatCacheScope,
+  fetchStatus: () => guard(() => api.mcpAuthStatus()) })
 
 const listeners = new Set()
 let source = null
@@ -149,6 +153,15 @@ export const actions = {
     } catch (error) { if (scope === chatCacheScope()) state.appsError = error.message }
   },
 
+  async loadMcpAuth () {
+    if (state.needsServer || state.needsToken) return
+    try { await mcpAuth.refresh(); state.mcpAuth.error = '' } catch (error) { state.mcpAuth.error = error.message }
+  },
+  openMcpLogin: item => mcpAuth.open(item),
+  dismissMcpLogin: () => mcpAuth.dismiss(),
+  beginMcpLogin: name => mcpAuth.begin(name),
+  finishMcpLogin: name => mcpAuth.finish(name),
+
   async loadEvents () {
     const data = await guard(() => api.events())
     if (data) state.events = data.events.slice().reverse()
@@ -163,6 +176,7 @@ export const actions = {
       actions.loadChats(),
       actions.loadProjects(),
       actions.loadMiniapps(),
+      actions.loadMcpAuth(),
       actions.loadWorkflows(),
       actions.loadRuns()
     ])
@@ -179,6 +193,7 @@ export const actions = {
     state.catalog = emptyCatalog()
     agentNavigation.clear()
     server.url = value
+    mcpAuth.clear()
     agentNavigation.clear()
     state.needsServer = isNative && !server.url
     actions.connect()
@@ -191,6 +206,7 @@ export const actions = {
     state.catalog = emptyCatalog()
     agentNavigation.clear()
     auth.token = value
+    mcpAuth.clear()
     state.needsToken = false
     actions.connect()
     return actions.refreshAll()
@@ -224,6 +240,7 @@ export const actions = {
       if (kind === 'miniapp.changed') actions.loadMiniapps().catch(() => {})
       if (kind === 'agent.profile.changed') actions.loadAgents()
       if (['model.integration.changed', 'mcp.server.changed', 'settings.changed', 'agent.profile.changed'].includes(kind)) actions.loadCatalog(true).catch(() => {})
+      if (kind.startsWith('mcp.oauth.') || kind === 'mcp.server.changed') actions.loadMcpAuth().catch(() => {})
       emit(event)
     }, error => {
       state.liveStatus = error.permanent ? 'failed' : 'reconnecting'

@@ -210,10 +210,19 @@ async def probe_target(target: dict[str, Any]) -> dict[str, Any]:
                         await asyncio.sleep(0.1)
             label = "Process" if "stdio" in target else "HTTPS server"
             return {"ok": True, "status": None, "message": f"{label} answered with {len(tools)} tools."}
-        except (httpx.HTTPError, ValueError, TimeoutError):
+        except (httpx.HTTPError, ValueError, TimeoutError) as error:
+            status = error.response.status_code if isinstance(error, httpx.HTTPStatusError) else None
+            # Never log exception text: transport/protocol errors can contain
+            # bearer headers, provider bodies or an OAuth callback URL.
+            logging.getLogger(__name__).warning(
+                "MCP probe failed: transport=%s status=%s error_type=%s",
+                "stdio" if "stdio" in target else "http",
+                status,
+                type(error).__name__,
+            )
             return {
                 "ok": False,
-                "status": None,
+                "status": status,
                 "message": (
                     "The stdio process did not answer MCP. Check the command, arguments "
                     "and environment in agentgateway. First-time package downloads may need another attempt."

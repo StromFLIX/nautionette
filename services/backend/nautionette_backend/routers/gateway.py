@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from .. import integrations, mcp_http_oauth, mcp_oauth, mcp_servers
+from .. import integrations, mcp_http_oauth, mcp_oauth, mcp_oauth_setup, mcp_servers
 from ..catalog import reset_default_model
 from ..events import bus
 from ..fields import normalise
@@ -81,6 +81,21 @@ async def mcp_oauth_capabilities() -> dict[str, Any]:
     return await mcp_oauth.capabilities()
 
 
+@router.get("/api/mcp-oauth/status")
+async def mcp_oauth_status() -> dict[str, Any]:
+    return mcp_oauth.auth_status()
+
+
+@router.post("/api/mcp-oauth/prepare/{name}")
+async def prepare_mcp_oauth(name: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    return await mcp_oauth.prepare(name, payload)
+
+
+@router.post("/api/mcp-oauth/connect/{name}")
+async def connect_mcp_server(name: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    return await mcp_oauth.connect_server(name, payload)
+
+
 @router.post("/api/mcp-oauth/discover")
 async def discover_mcp_oauth(payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     return await mcp_http_oauth.discover(payload)
@@ -136,6 +151,7 @@ async def delete_mcp_server(name: str) -> dict[str, Any]:
             # Expired OAuth targets are removed from federation but retain their
             # safe reconnect profile. Removing that saved profile is still valid.
         await mcp_oauth.forget(name)
+        mcp_oauth_setup.forget(name)
     forget_catalog()
     bus.publish("mcp.server.changed", {"server": name, "configured": False})
     return await mcp_servers.payload()

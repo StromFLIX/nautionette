@@ -1,52 +1,44 @@
 import { test, expect } from '@playwright/test'
 const url = 'https://workiq.svc.cloud.microsoft/mcp'
-const clientId = 'ba081686-5d24-4bc6-a0d6-d034ecffed87'
-const fields = [
-  { key: 'name', label: 'Name', pattern: '[a-z0-9][a-z0-9-]{0,23}', placeholder: 'linear' },
+const config = { transport: 'http', url, client_id: 'public-client', scope: 'read offline_access',
+  issuer: 'https://login.example.test', redirect_uri: 'http://localhost:12798', response_mode: 'query',
+  discovery_fingerprint: 'f'.repeat(64), share_account: true }
+const fields = [{ key: 'name', label: 'Name', pattern: '[a-z0-9][a-z0-9-]{0,23}', placeholder: 'linear' },
   { key: 'url', label: 'Endpoint URL', pattern: 'https?://.+', placeholder: 'https://mcp.example.com/mcp' },
-  { key: 'token', label: 'Access token', kind: 'secret', optional: true, pattern: '.+' }
-]
+  { key: 'token', label: 'Access token', kind: 'secret', optional: true, pattern: '.+' }]
 async function mock (context) {
-  const state = { starts: [], callbacks: [], saves: [], discovers: 0, servers: [], profiles: {} }
+  const state = { starts: [], prepares: [], connects: [], callbacks: [], servers: [], profiles: {}, failConnect: false, failLogin: false, clientRequired: false }
   await context.route('**/api/**', route => {
-    const path = new URL(route.request().url()).pathname
-    const method = route.request().method()
-    if (path === '/api/mcp-oauth/capabilities') return route.fulfill({ json: {
-      available: false, message: 'CLI helper unavailable', desktop_bridge_version: 1,
-      http: { available: true, workiq: { url, client_id: clientId, redirect_uri: 'http://localhost:12798' } }
-    } })
-    if (path === '/api/mcp-oauth/discover') {
-      state.discovers++
-      return route.fulfill({ json: { url, issuer: 'https://login.microsoftonline.com/organizations/v2.0',
-        client_id: clientId, scope: 'ask offline_access openid', redirect_uri: 'http://localhost:12798', response_mode: 'query',
-        discovery_fingerprint: 'f'.repeat(64), client_registration_verified: false } })
+    const path = new URL(route.request().url()).pathname, method = route.request().method()
+    if (path === '/api/mcp-oauth/status') return route.fulfill({ json: { connections: Object.entries(state.profiles).map(([name, item]) => ({ name, ...item })) } })
+    if (path === '/api/mcp-oauth/capabilities') return route.fulfill({ json: { available: false, http: { available: true } } })
+    if (path.startsWith('/api/mcp-oauth/connect/')) {
+      const payload = route.request().postDataJSON()
+      state.connects.push(payload)
+      if (state.clientRequired && !payload.client_id) return route.fulfill({ status: 400, json: { detail: { code: 'oauth_client_required', message: 'Enter your approved public client ID once in Advanced settings.' } } })
+      if (state.failConnect) return route.fulfill({ status: 502, json: { detail: 'Connection temporarily unavailable' } })
+      return route.fulfill({ json: { status: 'oauth_required', config: { ...config, url: payload.url } } })
     }
-    if (path.startsWith('/api/mcp-oauth/start/')) {
-      state.starts.push(route.request().postDataJSON())
-      return route.fulfill({ json: { id: 'http-login', status: 'authorizing' } })
+    if (path.startsWith('/api/mcp-oauth/prepare/')) {
+      state.prepares.push(route.request().postDataJSON())
+      return route.fulfill({ json: config })
     }
+    if (path.startsWith('/api/mcp-oauth/start/')) { state.starts.push(route.request().postDataJSON()); return route.fulfill({ json: { id: 'http-login' } }) }
     if (path === '/api/mcp-oauth/login/http-login') {
       if (method === 'DELETE') return route.fulfill({ status: 204 })
+      if (state.failLogin) return route.fulfill({ json: { status: 'failed', message: 'Provider unavailable; try again' } })
       if (state.callbacks.length) {
-        const profile = { mode: 'https', url, client_id: clientId, scope: 'ask offline_access openid',
-          redirect_uri: 'http://localhost:12798', response_mode: 'query', status: 'connected', refreshable: true }
-        state.profiles.workiq = profile
-        state.servers = [{ name: 'workiq', url, transport: 'http', managed: true, tool_count: 2, credential: { mode: 'stored' }, oauth: profile }]
-        return route.fulfill({ json: { status: 'complete', message: 'HTTPS OAuth connected and MCP handshake passed.' } })
+        state.profiles.workiq = { ...config, mode: 'https', status: 'connected', revision: 'new', refreshable: true }
+        state.servers = [{ name: 'workiq', url, transport: 'http', managed: true, tool_count: 1, oauth: state.profiles.workiq, credential: { mode: 'stored' } }]
+        return route.fulfill({ json: { status: 'complete' } })
       }
-      return route.fulfill({ json: { status: 'authorizing', authorization: { id: 'http-capture', port: 12798,
-        redirect_uri: 'http://localhost:12798', authorization_url: 'https://login.example.test/authorize',
-        state: 'state-for-test', response_mode: 'query' } } })
+      return route.fulfill({ json: { status: 'authorizing', authorization: { id: 'capture', port: 12798, redirect_uri: config.redirect_uri,
+        authorization_url: 'https://login.example.test/authorize', state: 'state', response_mode: 'query' } } })
     }
-    if (path === '/api/mcp-oauth/callback/http-login') {
-      expect(new URL(route.request().url()).search).toBe('')
-      state.callbacks.push(route.request().postDataJSON())
-      return route.fulfill({ json: { status: 'forwarded' } })
-    }
+    if (path === '/api/mcp-oauth/callback/http-login') { state.callbacks.push(route.request().postDataJSON()); return route.fulfill({ json: { status: 'forwarded' } }) }
     if (path.startsWith('/api/mcp-servers')) {
-      if (method === 'PUT') state.saves.push(route.request().postDataJSON())
       if (method === 'DELETE') { state.servers = []; state.profiles = {} }
-      return route.fulfill({ json: { servers: state.servers, oauth_connections: state.profiles, fields, stdio_fields: [], writable: true, storage_mode: 'hybrid' } })
+      return route.fulfill({ json: { servers: state.servers, oauth_connections: state.profiles, fields, stdio_fields: [], writable: true } })
     }
     if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: ': connected\n\n' })
     if (path === '/api/system') return route.fulfill({ json: { version: 'test', components: [] } })
@@ -56,70 +48,118 @@ async function mock (context) {
   })
   return state
 }
-
-async function desktop (page, width) {
-  await page.setViewportSize({ width, height: 1000 })
-  await page.goto('/settings/general')
-  await page.evaluate(() => {
-    globalThis.prepared = []
+async function native (context) {
+  await context.addInitScript(() => {
+    localStorage.setItem('nautionette.server', location.origin)
+    localStorage.setItem('nautionette.token', 'test-token')
+    globalThis.preparedPorts = []
     globalThis.nautionetteDesktop = { oauth: { version: 1,
-      prepare: async redirect => { globalThis.prepared.push(redirect); return { id: 'receiver', redirect_uri: redirect, port: 12798 } },
-      authorize: () => new Promise(resolve => { globalThis.finishHosted = () => resolve({ method: 'GET', fields: { state: 'state-for-test', code: 'private-test-code' } }) }),
+      prepare: async redirect => { globalThis.preparedPorts.push(redirect); return { id: 'receiver', port: 12798, redirect_uri: redirect } },
+      authorize: () => new Promise(resolve => { globalThis.finishLogin = () => resolve({ method: 'GET', fields: { state: 'state', code: 'synthetic-code' } }) }),
       cancel: async () => {}
     } }
   })
-  if (width > 900) await page.locator('.settings__tree').getByRole('link', { name: 'MCP servers', exact: true }).click()
-  else {
-    await page.getByRole('button', { name: 'Settings category', exact: true }).click()
-    await page.getByRole('button', { name: 'MCP servers', exact: true }).click()
-  }
 }
-async function form (page) {
+async function add (page) {
+  await page.goto('/settings/mcp')
   await page.getByRole('button', { name: 'Add server', exact: true }).click()
-  await page.getByLabel('Authentication', { exact: true }).selectOption('oauth')
-  await page.getByRole('button', { name: 'Use WorkIQ HTTPS', exact: true }).click()
+  await page.getByPlaceholder('linear').fill('workiq')
+  await page.getByPlaceholder('https://mcp.example.com/mcp').fill(url)
 }
-
 for (const width of [1440, 390]) {
-  test(`hosted WorkIQ OAuth connects without CLI at ${width}px`, async ({ page, context }) => {
-    const state = await mock(context)
-    await desktop(page, width)
-    await form(page)
-    await expect(page.getByPlaceholder('https://mcp.example.com/mcp')).toHaveValue(url)
-    await expect(page.getByLabel('Transport', { exact: true })).toHaveValue('http')
-    await expect(page.getByRole('button', { name: 'Connect with HTTPS OAuth' })).toBeDisabled()
-    await expect(page.getByText(/No WorkIQ CLI, npx process or container browser/)).toBeVisible()
-    await page.getByLabel('Share OAuth account with this instance').check()
-    await page.getByRole('button', { name: 'Connect with HTTPS OAuth' }).click()
-    await expect(page.locator('.integration-add [role="status"]')).toContainText('local port 12798')
-    expect(await page.evaluate(() => globalThis.prepared)).toEqual(['http://localhost:12798'])
-    expect(state.starts[0].client_id).toBe(clientId)
-    expect(state.starts[0].command).toBeUndefined()
-    expect(state.starts[0].args).toBeUndefined()
-    await page.evaluate(() => globalThis.finishHosted())
-    await expect(page.getByText('workiq: HTTPS OAuth connected and MCP checked')).toBeVisible()
-    expect(state.callbacks).toEqual([{ capture_id: 'http-capture', method: 'GET', fields: { state: 'state-for-test', code: 'private-test-code' } }])
-    expect(state.saves).toEqual([])
-    expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).not.toContain('private-test-code')
+  test(`one Connect action discovers and signs in at ${width}px`, async ({ page, context }) => {
+    const state = await mock(context); await native(context)
+    await page.setViewportSize({ width, height: 1000 }); await add(page)
+    await expect(page.getByRole('button', { name: 'Use WorkIQ HTTPS' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Discover OAuth' })).toHaveCount(0)
+    await expect(page.getByRole('checkbox')).toHaveCount(0)
+    await expect(page.getByLabel('Public OAuth client ID')).toBeHidden()
+    if (width === 1440) await page.screenshot({ path: test.info().outputPath('mcp-simple-connect.png') })
+    await page.locator('.integration-add').getByRole('button', { name: 'Connect', exact: true }).click()
+    await expect(page.locator('.integration-add [role=status]')).toContainText('local port 12798')
+    await page.evaluate(() => globalThis.finishLogin())
+    await expect(page.getByText('workiq connected', { exact: true })).toBeVisible()
+    expect(state.connects).toHaveLength(1); expect(state.starts).toHaveLength(1)
+    expect(state.starts[0].client_id).toBe('public-client')
+    expect(state.callbacks).toHaveLength(1)
   })
 }
 
-test('web cannot start hosted OAuth even when the backend supports it', async ({ page, context }) => {
-  const state = await mock(context)
+test('retry keeps the endpoint and last configuration without extra buttons', async ({ page, context }) => {
+  const state = await mock(context); await native(context); await add(page)
+  state.failConnect = true
+  await page.locator('.integration-add').getByRole('button', { name: 'Connect', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('temporarily unavailable')
+  await expect(page.getByPlaceholder('https://mcp.example.com/mcp')).toHaveValue(url)
+  state.failConnect = false
+  await page.getByRole('button', { name: 'Try again', exact: true }).click()
+  await expect(page.locator('.integration-add [role=status]')).toContainText('local port')
+  expect(state.connects[0]).toEqual(state.connects[1])
+  await page.evaluate(() => globalThis.finishLogin())
+  await expect(page.getByText('workiq connected', { exact: true })).toBeVisible()
+})
+
+test('expiration on a chat shows only a compact Login prompt and reuses saved settings', async ({ page, context }) => {
+  const state = await mock(context); await native(context)
+  state.profiles.workiq = { ...config, mode: 'https', status: 'reauth_required', revision: 'expired-1' }
+  await page.goto('/chats')
+  const dialog = page.locator('.mcp-login-dialog')
+  await expect(dialog.getByRole('heading')).toHaveText('Sign in to workiq')
+  await page.screenshot({ path: test.info().outputPath('mcp-relogin-dialog.png'), animations: 'disabled' })
+  await expect(page.locator('.integration-add')).toHaveCount(0)
+  await dialog.getByRole('button', { name: 'Login', exact: true }).click()
+  await expect(dialog.getByRole('status')).toContainText('local port')
+  expect(state.prepares).toEqual([{}])
+  await page.evaluate(() => globalThis.finishLogin())
+  await expect(dialog).toHaveCount(0)
+  await expect(page).toHaveURL('/chats')
+})
+
+test('manual sign-in stays in a popup; Later does not open a browser or setup form', async ({ page, context }) => {
+  const state = await mock(context); await native(context)
+  state.profiles.workiq = { ...config, mode: 'https', status: 'connected', revision: 'connected-1' }
+  state.servers = [{ name: 'workiq', url, transport: 'http', managed: true, tool_count: 1, oauth: state.profiles.workiq }]
   await page.goto('/settings/mcp')
-  await form(page)
-  await page.getByLabel('Share OAuth account with this instance').check()
-  await expect(page.getByRole('alert')).toContainText('Switch from the web/mobile client')
-  await expect(page.getByRole('button', { name: 'Connect with HTTPS OAuth' })).toBeDisabled()
+  await page.getByRole('button', { name: 'Sign in again' }).click()
+  await expect(page.locator('.mcp-login-dialog')).toBeVisible()
+  await page.locator('.mcp-login-dialog').getByRole('button', { name: 'Later' }).click()
+  expect(state.starts).toEqual([])
+  await expect(page.locator('.integration-add')).toHaveCount(0)
+})
+
+test('generic providers request a client ID only once and reveal the right advanced fields', async ({ page, context }) => {
+  const state = await mock(context); await native(context); await add(page)
+  state.clientRequired = true
+  await page.getByPlaceholder('https://mcp.example.com/mcp').fill('https://mcp.example.test/mcp')
+  await page.locator('.integration-add').getByRole('button', { name: 'Connect', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('approved public client ID')
+  await page.getByLabel('Public OAuth client ID').fill('approved-client')
+  await page.getByRole('button', { name: 'Try again', exact: true }).click()
+  await expect(page.locator('.integration-add [role=status]')).toContainText('local port')
+  expect(state.connects[1].client_id).toBe('approved-client')
+  expect(state.connects[1].url).toBe('https://mcp.example.test/mcp')
+  await page.evaluate(() => globalThis.finishLogin())
+})
+
+test('hosted OAuth in a web client explains desktop compatibility and never starts login', async ({ page, context }) => {
+  const state = await mock(context); await add(page)
+  await page.locator('.integration-add').getByRole('button', { name: 'Connect', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('desktop app')
   expect(state.starts).toEqual([])
 })
 
-test('expired OAuth connections retain a removable reconnect profile', async ({ page, context }) => {
-  const state = await mock(context)
-  state.profiles.workiq = { mode: 'https', url, client_id: clientId, redirect_uri: 'http://localhost:12798', scope: 'ask', response_mode: 'query', status: 'reauth_required' }
-  await page.goto('/settings/mcp')
-  await expect(page.getByText(/HTTPS OAuth · reauth_required/)).toBeVisible()
-  await page.getByRole('button', { name: 'Remove saved connection' }).click()
-  await page.getByRole('button', { name: 'OK', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Remove saved connection' })).toHaveCount(0)
+test('failed relogin retries saved setup in the same popup', async ({ page, context }) => {
+  const state = await mock(context); await native(context)
+  state.profiles.workiq = { ...config, mode: 'https', status: 'reauth_required', revision: 'expired' }
+  state.failLogin = true
+  await page.goto('/chats')
+  const dialog = page.locator('.mcp-login-dialog')
+  await dialog.getByRole('button', { name: 'Login', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText('Provider unavailable')
+  state.failLogin = false
+  await dialog.getByRole('button', { name: 'Try again', exact: true }).click()
+  await expect(dialog.getByRole('status')).toContainText('local port')
+  await page.evaluate(() => globalThis.finishLogin())
+  await expect(dialog).toHaveCount(0)
+  expect(state.prepares).toEqual([{}, {}])
 })

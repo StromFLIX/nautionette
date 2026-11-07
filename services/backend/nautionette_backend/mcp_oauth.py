@@ -19,7 +19,7 @@ from dataclasses import dataclass
 import httpx
 from fastapi import HTTPException
 
-from . import mcp_http_oauth, mcp_servers
+from . import mcp_http_oauth, mcp_oauth_setup, mcp_servers
 from .clients import gateway
 from .config import settings
 from .db import db
@@ -138,6 +138,59 @@ async def capabilities() -> dict:
             "eula_url": "https://unpkg.com/@microsoft/workiq@1.0.1/EULA/"
             "Microsoft%20Work%20IQ%20CLI%20-%20Pre-Release%20or%20Evaluation%20Use%20Terms.docx",
         },
+    }
+
+
+async def prepare(name: str, payload: dict) -> dict:
+    """Use the saved connection for one-click relogin; never return env values."""
+    if not settings.auth_enabled:
+        raise HTTPException(403, "Configure APP_TOKEN before using OAuth")
+    async with _lock:
+        mode, targets = await mcp_servers.fetch_resources()
+        require_writable(mode)
+        target = resource_map(targets).get(name, {}).get("value")
+        cli = db.one("SELECT config FROM mcp_cli_oauth WHERE name=?", (name,))
+        if cli and not payload.get("url") and target and "stdio" in target:
+            stdio = target["stdio"]
+            return {
+                "transport": "stdio",
+                "command": stdio["cmd"],
+                "args": stdio.get("args", []),
+                "env": {key: None for key in stdio.get("env", {})},
+                **json.loads(cli["config"]),
+            }
+        return await mcp_oauth_setup.prepare(name, payload)
+
+
+async def connect_server(name: str, payload: dict) -> dict:
+    """Single setup action: connect an open/token server or prepare OAuth automatically."""
+    config = mcp_servers.normalise_config(name, payload)
+    authentication = payload.get("authentication", "auto")
+    if authentication not in {"auto", "token", "oauth"}:
+        raise HTTPException(400, "Unsupported authentication method")
+    if config["transport"] == "http":
+        saved = mcp_oauth_setup.saved(name, config["url"])
+        known = config["url"].rstrip("/") == mcp_http_oauth.WORKIQ_URL
+        if authentication == "oauth" or authentication == "auto" and (saved or known):
+            return {"status": "oauth_required", "config": await prepare(name, payload)}
+        if authentication == "auto" and not config.get("token"):
+            mcp_servers.reachable_endpoint(config["url"])
+            verdict = await mcp_servers.probe(config["url"], "")
+            if verdict["status"] in {401, 403}:
+                return {"status": "oauth_required", "config": await prepare(name, payload)}
+            if not verdict["ok"]:
+                raise HTTPException(400, verdict["message"])
+    async with _lock:
+        await mcp_servers.save(name, config)
+        await forget(name)
+    forget_catalog()
+    bus.publish("mcp.server.changed", {"server": name, "configured": True})
+    return {"status": "complete"}
+
+
+def auth_status() -> dict:
+    return {
+        "connections": [{"name": name, **info} for name, info in mcp_http_oauth.public_connections().items()]
     }
 
 

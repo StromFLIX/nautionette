@@ -12,6 +12,30 @@ Real Microsoft tenant/account acceptance remains a separate sign-in test.
 
 The CLI bridge below remains an alternative, not a requirement for hosted MCP.
 
+## Staging session evidence, 2026-11-07
+
+Coolify's timestamped backend logs for the user's session around **20:40 UTC**
+show three discovery requests returning 200. Two callbacks returned 200 (the
+backend accepted the callback and completed token exchange), followed by login
+polls returning 400 at 20:40:24 and 20:40:37. The deployed `poll()` raises 400
+at this stage only when the authenticated MCP gateway probe fails. A third
+callback at 20:40:57 was followed by successful polling and catalog refresh.
+
+This is not evidence of discovery failure or a broken localhost receiver in
+that window. The probe used a generic sanitized error, so the old logs cannot
+identify the underlying upstream/gateway exception. New probe diagnostics record
+only transport, HTTP status when available, and exception class—never exception
+text, request headers, provider bodies, codes or tokens. No deployment overlapped
+the session (the last finished at 18:29 UTC); health checks continued returning
+200. Sentinel also showed the host disk about 97.6% used, a separate operational
+risk, not a demonstrated cause of this OAuth failure.
+
+The simplified UI removes separate discovery/provider actions, caches validated
+public setup for retry/relogin, and offers a small Login dialog on expiration.
+Browser login remains explicitly user initiated. Successful discovery/token
+exchange/handshake does not establish permission for every tenant-specific tool
+operation or prove long-term refresh behavior.
+
 ## Decision and scope
 
 **GO for CLI-owned loopback OAuth with WorkIQ 1.0.1's browser-auth setting.**

@@ -1385,10 +1385,12 @@ The stdio form accepts an executable, a JSON argument array and secret environme
 variables; no separate MCP container is required. See [MCP server setup](docs/mcp-servers.md)
 for the Brave Search example, deployment steps and the shared-container trust boundary.
 
-Updated desktop apps support **HTTP → HTTPS OAuth** for hosted endpoints such
-as `https://workiq.svc.cloud.microsoft/mcp`. The WorkIQ HTTPS preset discovers
-Microsoft authorization metadata; the backend owns PKCE, encrypted token storage
-and refresh, while the desktop only receives the loopback callback. No CLI or
+Updated desktop apps automatically detect OAuth for hosted endpoints such as
+`https://workiq.svc.cloud.microsoft/mcp`. Enter the endpoint and click **Connect**;
+client overrides are under Advanced settings. Validated setup is remembered for
+retry/relogin, and expired connections show a small workspace **Login** dialog
+rather than reopening configuration. The backend owns PKCE, encrypted token
+storage and refresh, while the desktop only receives the loopback callback. No CLI or
 container browser is needed. See [hosted OAuth setup](docs/mcp-servers.md#hosted-https-oauth-recommended-for-workiq).
 
 They also support **stdio → CLI OAuth** as an alternative. The CLI runs in

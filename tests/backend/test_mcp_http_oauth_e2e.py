@@ -214,21 +214,19 @@ def tls(tmp_path, monkeypatch):
 def test_real_https_oauth_backend_gateway_and_refresh_without_cli(client, stack, tls, mode):  # noqa: F811
     native, control, tmp_path = stack
     origin, tokens, requests = tls
-    discovered = client.post(
-        "/api/mcp-oauth/discover",
-        json={"url": origin + "/mcp", "client_id": "public-client", "response_mode": mode},
-    ).json()
-    config = {
-        "transport": "http",
-        "url": discovered["url"],
-        "client_id": discovered["client_id"],
-        "issuer": discovered["issuer"],
-        "scope": discovered["scope"],
-        "response_mode": mode,
-        "redirect_uri": "http://localhost:0/callback",
-        "discovery_fingerprint": discovered["discovery_fingerprint"],
-        "share_account": True,
-    }
+    connected = client.post(
+        "/api/mcp-oauth/connect/oauth-test",
+        json={
+            "transport": "http",
+            "authentication": "oauth",
+            "url": origin + "/mcp",
+            "client_id": "public-client",
+            "response_mode": mode,
+            "redirect_uri": "http://localhost:0/callback",
+        },
+    )
+    assert connected.status_code == 200
+    config = connected.json()["config"]
     node = subprocess.Popen(  # noqa: S603 - production receiver/controller test driver
         [shutil.which("node"), str(ROOT / "tests/agentgateway/oauth-desktop.mjs")],
         stdin=subprocess.PIPE,

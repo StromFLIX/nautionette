@@ -125,46 +125,62 @@ async def public_url(url):
 
 
 def network_client():
-    return httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=20)
+    return httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=httpx.Timeout(20, connect=4))
 
 
-async def fetch(url: str, data: dict | None = None) -> tuple[int, dict, dict]:
+async def fetch(
+    url: str, data: dict | None = None, *, json_body: dict | None = None
+) -> tuple[int, dict, dict]:
     """Bounded, pinned public HTTPS with original TLS/SNI and no ambient auth/proxy."""
     parsed = urlsplit(https_url(url))
     try:
         async with asyncio.timeout(25):
             addresses = await public_url(url)
-            address = f"[{addresses[0]}]" if ":" in addresses[0] else addresses[0]
-            path = (parsed.path or "/") + ("?" + parsed.query if parsed.query else "")
-            authority = address + (f":{parsed.port}" if parsed.port not in (None, 443) else "")
-            async with network_client() as client:
-                async with client.stream(
-                    "POST" if data is not None else "GET",
-                    f"https://{authority}{path}",
-                    data=data,
-                    headers={"Host": parsed.netloc, "Accept": "application/json"},
-                    extensions={"sni_hostname": parsed.hostname},
-                ) as response:
-                    body = bytearray()
-                    async for block in response.aiter_bytes():
-                        body.extend(block)
-                        if len(body) > LIMIT:
-                            raise HTTPException(502, "OAuth provider response exceeded 64 KiB")
+            mutation = data is not None or json_body is not None
+            for index, address in enumerate(addresses[:1] if mutation else addresses):
+                for attempt in range(1 if mutation else 2):
                     try:
-                        value = json.loads(body)
-                    except ValueError:
-                        value = {}
-                    return (
-                        response.status_code,
-                        dict(response.headers),
-                        value if isinstance(value, dict) else {},
-                    )
+                        result = await request_at(parsed, address, data, json_body)
+                    except (httpx.ConnectError, httpx.ConnectTimeout):
+                        if mutation or index == len(addresses) - 1 and attempt == 1:
+                            raise
+                        continue
+                    if not mutation and result[0] in {502, 503, 504} and attempt == 0:
+                        await asyncio.sleep(0.1)
+                        continue
+                    return result
+            raise HTTPException(502, "OAuth metadata could not be reached")
     except (httpx.HTTPError, TimeoutError, OSError) as exc:
         raise HTTPException(
             502,
             "OAuth request outcome is unavailable; an authorization code or refresh token "
             "will not be replayed",
         ) from exc
+
+
+async def request_at(parsed, address, data, json_body):
+    address = f"[{address}]" if ":" in address else address
+    authority = address + (f":{parsed.port}" if parsed.port not in (None, 443) else "")
+    path = (parsed.path or "/") + ("?" + parsed.query if parsed.query else "")
+    async with network_client() as client:
+        async with client.stream(
+            "POST" if data is not None or json_body is not None else "GET",
+            f"https://{authority}{path}",
+            data=data,
+            json=json_body,
+            headers={"Host": parsed.netloc, "Accept": "application/json"},
+            extensions={"sni_hostname": parsed.hostname},
+        ) as response:
+            body = bytearray()
+            async for block in response.aiter_bytes():
+                body.extend(block)
+                if len(body) > LIMIT:
+                    raise HTTPException(502, "OAuth provider response exceeded 64 KiB")
+            try:
+                value = json.loads(body)
+            except ValueError:
+                value = {}
+            return response.status_code, dict(response.headers), value if isinstance(value, dict) else {}
 
 
 async def discover(payload: dict) -> dict:
@@ -245,6 +261,9 @@ async def discover(payload: dict) -> dict:
         "code_challenge",
     }:
         raise HTTPException(400, "OAuth endpoint contains conflicting authorization parameters")
+    registration = auth.get("registration_endpoint")
+    if registration:
+        await public_url(registration)
     client_id = payload.get("client_id") or (WORKIQ_CLIENT if url == WORKIQ_URL else "")
     if not isinstance(client_id, str) or len(client_id) > 512 or any(ord(c) < 33 for c in client_id):
         raise HTTPException(400, "Invalid public client ID")
@@ -290,6 +309,10 @@ async def discover(payload: dict) -> dict:
         "use_resource": not microsoft,
         "discovery_fingerprint": fingerprint,
         "client_registration_verified": False,
+        "registration_endpoint": registration,
+        "response_modes_supported": string_list(
+            auth.get("response_modes_supported", ["query"]), "response modes"
+        ),
     }
 
 
@@ -325,13 +348,11 @@ async def start(name: str, payload: dict) -> dict:
         r"[a-f0-9]{64}", payload["discovery_fingerprint"]
     ):
         raise HTTPException(409, "Discover the hosted server before starting OAuth")
-    profile = await discover(payload)
-    if payload.get("discovery_fingerprint") != profile["discovery_fingerprint"]:
-        raise HTTPException(409, "OAuth discovery changed or is missing; discover the server again")
+    from . import mcp_oauth_setup
+
+    profile = await mcp_oauth_setup.ready(name, payload)
     if payload.get("share_account") is not True:
         raise HTTPException(400, "Confirm connecting this account to the shared instance")
-    if not profile["client_id"]:
-        raise HTTPException(400, "Enter a registered public OAuth client ID")
     profile["redirect_uri"] = redirect_uri(payload.get("redirect_uri"))
     template = redirect_uri(payload.get("redirect_uri_template", profile["redirect_uri"]), ephemeral=True)
     actual, wanted = urlsplit(profile["redirect_uri"]), urlsplit(template)
@@ -352,6 +373,8 @@ async def start(name: str, payload: dict) -> dict:
         if any(t["name"] == name for t in baseline.get("targets", [])):
             raise HTTPException(409, "That MCP name is defined in the gateway config")
     ready_key()
+    if not profile["client_id"]:
+        profile = await mcp_oauth_setup.register(name, profile)
     pkce = PKCEParameters.generate()
     state, identifier = secrets.token_urlsafe(32), "http-" + secrets.token_hex(32)
     params = {
@@ -664,10 +687,15 @@ def forget(name):
 
 def public_connections():
     result = {}
-    for row in db.query("SELECT name,profile,status,expires_at FROM mcp_http_oauth"):
+    for row in db.query("SELECT name,profile,status,expires_at,revision FROM mcp_http_oauth"):
         profile = json.loads(row["profile"])
         status = profile.pop("_problem", row["status"])
-        result[row["name"]] = {**profile, "status": status, "expires_at": row["expires_at"]}
+        result[row["name"]] = {
+            **profile,
+            "status": status,
+            "expires_at": row["expires_at"],
+            "revision": row["revision"],
+        }
     return result
 
 

@@ -68,12 +68,17 @@ a stored value with an empty string, remove and re-add the row.
 
 ## Hosted HTTPS OAuth (recommended for WorkIQ)
 
-For `https://workiq.svc.cloud.microsoft/mcp`, use **HTTP → Authentication →
-HTTPS OAuth → Use WorkIQ HTTPS**. The preset discovers the hosted server's
-Microsoft authorization metadata, public client ID, scope and loopback callback.
-Review the shared-account checkbox and click **Connect with HTTPS OAuth** in an
-updated Windows/macOS/Linux desktop build. No CLI package is installed or run;
-the CLI EULA/adapter below is not part of this flow.
+Enter the name and endpoint URL, then click **Connect**. Authentication and
+OAuth discovery are automatic. Known provider defaults (including WorkIQ) are
+selected behind the scenes; there are no provider/discovery buttons or repeated
+shared-account checkbox. The Connect action authorizes connecting the account
+to this shared instance; provider consent still happens in the browser.
+
+Transport, manual access tokens and optional public-client overrides are under
+**Advanced settings**. Providers advertising public-client dynamic registration
+can register the desktop client automatically. If a provider forbids automatic
+registration, enter its approved public client ID once in Advanced settings.
+No WorkIQ CLI is installed or run on the HTTPS path.
 
 The desktop binds its callback port before login begins. The backend generates
 PKCE/state, exchanges the returned code, verifies authenticated MCP through an
@@ -99,8 +104,18 @@ sealed before gateway updates, and uncertain refresh outcomes require a new
 login rather than replaying an old token.
 
 Expired/revoked connections are removed from federation to avoid breaking other
-MCP tools, while safe reconnect settings remain visible. **Reconnect** signs in
-again; **Remove saved connection** deletes the local OAuth credentials/profile.
+MCP tools. A compact, provider-neutral **Login** dialog appears in the workspace;
+it does not navigate to the configuration page or automatically open a browser.
+Click Login to reuse the saved settings and open the browser. **Later** dismisses
+that incident; a new expiration after a successful sign-in can prompt again.
+Cards also provide **Sign in again** without opening the setup form.
+
+Validated issuer/client/scope/callback settings are cached separately from tokens,
+so retries and relogin do not repeat discovery or reset the user's choices.
+Temporary metadata outages use a known valid setup; only read-only metadata
+requests can retry. Single-use codes, refresh tokens and uncertain dynamic
+registrations are never replayed. **Remove saved connection** deletes local
+OAuth credentials and the remembered setup.
 Removing a live server also stops refresh and removes its gateway credential.
 Revoke provider consent separately if needed. External gateway edits detach
 OAuth management and are not overwritten by a background refresh.
