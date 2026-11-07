@@ -13,7 +13,15 @@ try {
   const page = await application.firstWindow()
   const errors = []
   page.on('pageerror', error => errors.push(error.message))
-  await expect(page.getByPlaceholder('https://nautionette.example.com')).toBeVisible()
+  // Xvfb has no desktop window manager. Focus the actual app and keep its
+  // startup dialog/animation from being background-throttled by Chromium.
+  await application.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0]
+    window.webContents.setBackgroundThrottling(false)
+    window.show()
+    window.focus()
+  })
+  await expect(page.getByPlaceholder('https://nautionette.example.com')).toBeVisible({ timeout: 20000 })
   expect(await page.evaluate(() => ({
     desktop: globalThis.nautionetteDesktop?.oauth?.version,
     node: typeof globalThis.require,
@@ -66,7 +74,7 @@ try {
   expect(await formCallback).toEqual({ method: 'POST', fields: { state, code: 'synthetic-form-code', session_state: 'synthetic-session' } })
   console.log(`Desktop OAuth: form_post callback received on actual localhost port ${formReceiver.port}`)
   await page.reload()
-  await expect(page.getByPlaceholder('https://nautionette.example.com')).toBeVisible()
+  await expect(page.getByPlaceholder('https://nautionette.example.com')).toBeVisible({ timeout: 20000 })
   expect(errors).toEqual([])
   console.log('Packaged desktop: local assets, instance setup, isolated renderer and route reload OK')
 } finally {
