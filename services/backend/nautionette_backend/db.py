@@ -27,6 +27,15 @@ CREATE TABLE IF NOT EXISTS mcp_cli_oauth (
     name TEXT PRIMARY KEY,
     config TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS mcp_http_oauth (
+    name TEXT PRIMARY KEY,
+    profile TEXT NOT NULL,
+    secret TEXT NOT NULL,
+    status TEXT NOT NULL,
+    expires_at REAL NOT NULL,
+    retry_at REAL NOT NULL,
+    revision TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS mini_apps (
     id TEXT PRIMARY KEY,
     revision INTEGER NOT NULL DEFAULT 0,

@@ -23,6 +23,7 @@ from .output_fakes import MemoryS3
 
 _TABLES = (
     "mcp_cli_oauth",
+    "mcp_http_oauth",
     "agent_calls",
     "mini_apps",
     "github_issue_chats",

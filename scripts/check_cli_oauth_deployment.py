@@ -46,13 +46,34 @@ def check(base: str, token: str) -> dict:
         if len(body) > 65536:
             raise ValueError
         value = json.loads(body)
-        if value.get("available") is not True or value.get("desktop_bridge_version") != 1:
+        if (
+            value.get("available") is not True
+            or value.get("desktop_bridge_version") != 1
+            or value.get("http", {}).get("available") is not True
+        ):
+            raise ValueError
+        discovery = Request(  # noqa: S310 - same validated application origin, read-only metadata
+            base.rstrip("/") + "/api/mcp-oauth/discover",
+            method="POST",
+            data=json.dumps({"url": "https://workiq.svc.cloud.microsoft/mcp"}).encode(),
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
+        with build_opener(NoRedirect()).open(discovery, timeout=60) as response:  # noqa: S310
+            raw = response.read(65537)
+        if len(raw) > 65536:
+            raise ValueError
+        profile = json.loads(raw)
+        if (
+            profile.get("url") != "https://workiq.svc.cloud.microsoft/mcp"
+            or profile.get("client_id") != "ba081686-5d24-4bc6-a0d6-d034ecffed87"
+            or profile.get("redirect_uri") != "http://localhost:12798"
+        ):
             raise ValueError
     except (HTTPError, URLError, ValueError, TypeError, AttributeError) as exc:
         raise RuntimeError(
             "CLI OAuth staging check failed: deploy the matching authenticated gateway/backend images"
         ) from exc
-    return {"available": True, "desktop_bridge_version": 1}
+    return {"available": True, "desktop_bridge_version": 1, "https_oauth": True, "workiq_discovery": True}
 
 
 if __name__ == "__main__":
@@ -61,4 +82,4 @@ if __name__ == "__main__":
     except RuntimeError as exc:
         print(str(exc))
         raise SystemExit(1) from None
-    print("CLI OAuth staging compatibility: " + json.dumps(result))
+    print("MCP OAuth staging compatibility: " + json.dumps(result))

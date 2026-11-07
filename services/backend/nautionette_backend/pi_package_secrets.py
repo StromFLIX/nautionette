@@ -19,8 +19,10 @@ from fastapi import HTTPException
 from .config import settings
 
 
-def _cipher(*, create: bool = False) -> Fernet:
-    key_file = Path(settings.data_dir) / "pi-packages.key"
+def _cipher(*, create: bool = False, namespace: str = "pi-packages") -> Fernet:
+    if namespace not in {"pi-packages", "mcp-oauth"}:
+        raise ValueError("Unknown managed secret namespace")
+    key_file = Path(settings.data_dir) / f"{namespace}.key"
     if create and not key_file.exists():
         # Publish a fully-written mode-0600 file atomically. Concurrent writers
         # keep the winner's key; they must never overwrite it with another key.
@@ -37,17 +39,19 @@ def _cipher(*, create: bool = False) -> Fernet:
         return Fernet(key.read())
 
 
-def seal(value: dict[str, Any]) -> str:
+def seal(value: dict[str, Any], *, namespace: str = "pi-packages") -> str:
     try:
-        return _cipher(create=True).encrypt(json.dumps(value).encode()).decode()
+        return _cipher(create=True, namespace=namespace).encrypt(json.dumps(value).encode()).decode()
     except (OSError, ValueError) as exc:
-        raise HTTPException(503, "Package configuration encryption is unavailable") from exc
+        label = "OAuth credential" if namespace == "mcp-oauth" else "Package configuration"
+        raise HTTPException(503, f"{label} encryption is unavailable") from exc
 
 
-def unseal(value: str) -> dict[str, Any]:
+def unseal(value: str, *, namespace: str = "pi-packages") -> dict[str, Any]:
     try:
-        return json.loads(_cipher().decrypt(value.encode()))
+        return json.loads(_cipher(namespace=namespace).decrypt(value.encode()))
     except (OSError, ValueError, InvalidToken) as exc:
+        label = "OAuth credential" if namespace == "mcp-oauth" else "Package configuration"
         raise HTTPException(
-            503, "Package configuration key is missing or invalid; restore the backend data backup"
+            503, f"{label} key is missing or invalid; restore the backend data backup"
         ) from exc

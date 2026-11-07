@@ -72,20 +72,25 @@ def test_tools_are_attributed_to_the_server_that_federated_them(client, stocked)
     ]
 
 
-def test_a_tool_no_server_claims_is_asked_for_by_name(client, stocked):
-    stocked.gateway.tools = {
-        "": [{"name": "search", "description": ""}],
-        "https://mcp.linear.test/mcp": [{"name": "search", "description": ""}],
-    }
+def test_a_single_http_target_owns_unprefixed_tools_without_unauthenticated_probe(client, stocked):
+    stocked.gateway.tools = {"": [{"name": "search", "description": ""}]}
     payload = client.get("/api/catalog").json()
     assert payload["tools"][0]["server"] == "linear"
 
 
 def test_a_tool_nobody_owns_lands_in_other(client, stocked):
-    stocked.gateway.tools = {"": [{"name": "search", "description": ""}], "https://mcp.linear.test/mcp": []}
+    stocked.gateway.resources["mcp.target"]["second"] = {
+        "name": "second",
+        "mcp": {"host": "https://mcp.second.test/mcp"},
+    }
+    stocked.gateway.tools = {
+        "": [{"name": "search", "description": ""}],
+        "https://mcp.linear.test/mcp": [],
+        "https://mcp.second.test/mcp": [],
+    }
     payload = client.get("/api/catalog").json()
     assert payload["tools"][0]["server"] == "other"
-    assert {server["name"] for server in payload["tool_servers"]} == {"linear", "other", "Agents"}
+    assert {server["name"] for server in payload["tool_servers"]} == {"linear", "second", "other", "Agents"}
 
 
 def test_the_catalog_is_cached_and_refresh_bypasses_it(client, stocked):

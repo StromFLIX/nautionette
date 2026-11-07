@@ -1,5 +1,17 @@
 # WorkIQ CLI-owned OAuth bridge
 
+## Hosted HTTPS option (now preferred)
+
+The hosted endpoint `https://workiq.svc.cloud.microsoft/mcp` is now supported
+with direct backend-owned OAuth. Use the HTTPS preset documented in
+[MCP server setup](mcp-servers.md#hosted-https-oauth-recommended-for-workiq).
+The desktop still receives a loopback callback, but no WorkIQ CLI runs; the
+backend owns PKCE, encrypted token storage and refresh. Verified TLS E2E tests
+cover callback exchange, gateway MCP authentication and refresh-token rotation.
+Real Microsoft tenant/account acceptance remains a separate sign-in test.
+
+The CLI bridge below remains an alternative, not a requirement for hosted MCP.
+
 ## Decision and scope
 
 **GO for CLI-owned loopback OAuth with WorkIQ 1.0.1's browser-auth setting.**

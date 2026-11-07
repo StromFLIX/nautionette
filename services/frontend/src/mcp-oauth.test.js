@@ -14,7 +14,7 @@ function fixture () {
     cancelMcpOAuth: async id => { calls.push(['cancel', id]) }
   }
   const bridge = { version: 1,
-    prepare: async redirect => { prepared.push(redirect); return { id: 'receiver-id', port: 40001 } },
+    prepare: async redirect => { prepared.push(redirect); return { id: 'receiver-id', port: 40001, redirect_uri: redirect.replace(':0', ':40001') } },
     authorize: async payload => { assert.equal(payload.id, 'receiver-id'); return { method: 'POST', fields: { state: 'state', code: 'private-code' } } },
     cancel: async () => {}
   }
@@ -38,6 +38,18 @@ test('CLI-owned login uses detected port and preserves POST; receiver ID never o
     capture_id: 'capture-1', method: 'POST', fields: { state: 'state', code: 'private-code' }
   }])
   assert.equal(f.calls[0][2].desktop_bridge_version, 1)
+})
+
+test('hosted OAuth prepares once before the backend mints PKCE and uses the exact redirect', async () => {
+  const f = fixture()
+  f.backend.startMcpOAuth = async (_name, config) => {
+    assert.deepEqual(f.prepared, ['http://localhost:0'])
+    assert.equal(config.redirect_uri, 'http://localhost:40001')
+    assert.equal(config.redirect_uri_template, 'http://localhost:0')
+    return { id: 'backend-login' }
+  }
+  await oauthConnection({ ...f, interval: 1, context: () => 'instance' }).connect('example', { transport: 'http', redirect_uri: 'http://localhost:0' })
+  assert.equal(f.prepared.length, 1)
 })
 
 test('another CLI authorization opens its new port without replaying the old callback', async () => {

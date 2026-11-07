@@ -66,7 +66,52 @@ edit, leave a stored value blank to keep it, type a replacement to change it, or
 remove its row to delete it. A new blank row value is an empty string. To replace
 a stored value with an empty string, remove and re-add the row.
 
-## CLI-owned OAuth (desktop callback bridge)
+## Hosted HTTPS OAuth (recommended for WorkIQ)
+
+For `https://workiq.svc.cloud.microsoft/mcp`, use **HTTP → Authentication →
+HTTPS OAuth → Use WorkIQ HTTPS**. The preset discovers the hosted server's
+Microsoft authorization metadata, public client ID, scope and loopback callback.
+Review the shared-account checkbox and click **Connect with HTTPS OAuth** in an
+updated Windows/macOS/Linux desktop build. No CLI package is installed or run;
+the CLI EULA/adapter below is not part of this flow.
+
+The desktop binds its callback port before login begins. The backend generates
+PKCE/state, exchanges the returned code, verifies authenticated MCP through an
+isolated agentgateway route and only then publishes the HTTP target. Callback
+GET/query and form_post are supported. The server, not the desktop, refreshes
+the token, so keeping the desktop app open is not required after login.
+
+Generic public-client providers need a registered client ID and loopback URI in
+**OAuth client settings**. Discovery cannot prove a client's registered redirect
+permissions; the provider checks these during sign-in. Port 0 selects an ephemeral
+port only for registrations that permit it. WorkIQ's preset uses its documented
+`http://localhost:12798` callback, but all MCP traffic stays on the HTTPS endpoint.
+Entra public-client and templated-issuer metadata compatibility is handled
+explicitly; resource indicators are used for other providers.
+
+OAuth credentials are encrypted in the backend DB with an auto-created mode-0600
+`mcp-oauth.key` in the backend data volume. Back up that whole volume, not only
+SQLite. Access tokens are also held by agentgateway for authenticated MCP
+requests; neither token nor PKCE verifier is returned to browser/API/agent tools.
+Missing/invalid backup keys are reported, never silently replaced over existing
+credentials. Refresh tokens are fenced before use; rotated credentials are
+sealed before gateway updates, and uncertain refresh outcomes require a new
+login rather than replaying an old token.
+
+Expired/revoked connections are removed from federation to avoid breaking other
+MCP tools, while safe reconnect settings remain visible. **Reconnect** signs in
+again; **Remove saved connection** deletes the local OAuth credentials/profile.
+Removing a live server also stops refresh and removes its gateway credential.
+Revoke provider consent separately if needed. External gateway edits detach
+OAuth management and are not overwritten by a background refresh.
+
+Deploy the updated **backend, frontend and desktop build**; use the existing
+compatible agentgateway. Unlike CLI OAuth, HTTPS OAuth does not depend on the
+private CLI helper. The staging check verifies both runtime modes and live
+WorkIQ metadata discovery without signing into an account. Your actual tenant's
+consent, licensing, token protection and account policies still apply.
+
+## CLI-owned OAuth (alternative desktop callback bridge)
 
 An updated Windows, macOS or Linux desktop app can connect OAuth-authenticated
 stdio CLIs without a browser in the gateway container or a public OAuth callback.

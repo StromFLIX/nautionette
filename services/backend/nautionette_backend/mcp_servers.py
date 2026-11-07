@@ -168,7 +168,15 @@ def stdio_value(name: str, config: dict[str, Any], previous: dict[str, Any]) -> 
 
 
 async def probe_stdio(target: dict[str, Any]) -> dict[str, Any]:
-    """Launch only this target in the gateway; never execute commands in the backend.
+    return await probe_target(target)
+
+
+async def probe_http_gateway(name: str, url: str, credential: str) -> dict[str, Any]:
+    return await probe_target(target_value(name, url, credential))
+
+
+async def probe_target(target: dict[str, Any]) -> dict[str, Any]:
+    """Check only this target in the gateway; never expose it to /mcp before validation.
 
     A random temporary route cannot affect /mcp. Delete its MCP session and then
     the route even on handshake failure. Do not return process output or secrets.
@@ -187,13 +195,18 @@ async def probe_stdio(target: dict[str, Any]) -> dict[str, Any]:
         try:
             async with asyncio.timeout(90):
                 tools = await gateway.mcp_tools(f"{settings.gateway_url.rstrip('/')}{path}", timeout=90)
-            return {"ok": True, "status": None, "message": f"Process answered with {len(tools)} tools."}
+            label = "Process" if "stdio" in target else "HTTPS server"
+            return {"ok": True, "status": None, "message": f"{label} answered with {len(tools)} tools."}
         except (httpx.HTTPError, ValueError, TimeoutError):
             return {
                 "ok": False,
                 "status": None,
-                "message": "The stdio process did not answer MCP. Check the command, arguments "
-                "and environment in agentgateway. First-time package downloads may need another attempt.",
+                "message": (
+                    "The stdio process did not answer MCP. Check the command, arguments "
+                    "and environment in agentgateway. First-time package downloads may need another attempt."
+                )
+                if "stdio" in target
+                else "The HTTPS server did not answer authenticated MCP through agentgateway.",
             }
     except httpx.HTTPError as exc:
         raise gateway_problem(exc) from exc

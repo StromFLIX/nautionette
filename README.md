@@ -1385,7 +1385,13 @@ The stdio form accepts an executable, a JSON argument array and secret environme
 variables; no separate MCP container is required. See [MCP server setup](docs/mcp-servers.md)
 for the Brave Search example, deployment steps and the shared-container trust boundary.
 
-Updated desktop apps also support **stdio → CLI OAuth**. The CLI runs in
+Updated desktop apps support **HTTP → HTTPS OAuth** for hosted endpoints such
+as `https://workiq.svc.cloud.microsoft/mcp`. The WorkIQ HTTPS preset discovers
+Microsoft authorization metadata; the backend owns PKCE, encrypted token storage
+and refresh, while the desktop only receives the loopback callback. No CLI or
+container browser is needed. See [hosted OAuth setup](docs/mcp-servers.md#hosted-https-oauth-recommended-for-workiq).
+
+They also support **stdio → CLI OAuth** as an alternative. The CLI runs in
 agentgateway, its actual callback port is detected from its login URL, and the
 desktop forwards query or POST callbacks to that CLI through authenticated APIs.
 The CLI owns its tokens and refresh; no public OAuth callback or container browser
@@ -1429,7 +1435,7 @@ and removal. Full CLI OAuth E2E also exercises the real gateway, backend APIs,
 CLI credential cache and production desktop receiver/controller:
 
 ```sh
-NAUTIONETTE_TEST_GATEWAY_BINARY=/path/to/agentgateway uv run pytest tests/backend/test_mcp_oauth_e2e.py
+NAUTIONETTE_TEST_GATEWAY_BINARY=/path/to/agentgateway uv run pytest tests/backend/test_mcp_oauth_e2e.py tests/backend/test_mcp_http_oauth_e2e.py
 ```
 
 It covers query and form_post responses and CLI retries with a new callback port,

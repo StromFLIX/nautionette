@@ -3,7 +3,7 @@ export function desktopOAuth () {
   return bridge?.version === 1 && ['prepare', 'authorize', 'cancel'].every(key => typeof bridge[key] === 'function') ? bridge : null
 }
 
-export const oauthClientMessage = 'CLI OAuth requires an updated Nautionette Windows, macOS or Linux desktop app. Switch from the web/mobile client, or update an older desktop app.'
+export const oauthClientMessage = 'OAuth requires an updated Nautionette Windows, macOS or Linux desktop app. Switch from the web/mobile client, or update an older desktop app.'
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -23,8 +23,9 @@ export function oauthConnection ({ bridge = desktopOAuth(), backend, interval = 
     // Never send a callback (or even a cancellation) to a newly selected instance.
     if (loginId && context() === initialContext) await backend.cancelMcpOAuth(loginId).catch(() => {})
   }
-  async function receive (authorization) {
-    const receiver = await bridge.prepare(authorization.redirect_uri)
+  async function receive (authorization, prepared = null) {
+    const receiver = prepared || await bridge.prepare(authorization.redirect_uri)
+    if (prepared && prepared.redirect_uri !== authorization.redirect_uri) throw new Error('OAuth callback changed after preparation; start again')
     check()
     let finished = false
     const callback = bridge.authorize({ ...authorization, id: receiver.id })
@@ -43,10 +44,19 @@ export function oauthConnection ({ bridge = desktopOAuth(), backend, interval = 
   async function connect (name, config, onStage = () => {}) {
     if (!bridge) throw new Error(oauthClientMessage)
     const seen = new Set()
+    const hosted = config.transport === 'http'
+    let prepared = null
     try {
       check()
-      onStage('Starting CLI login inside agentgateway…')
-      const login = await backend.startMcpOAuth(name, { ...config, desktop_bridge_version: bridge.version })
+      let payload = { ...config, desktop_bridge_version: bridge.version }
+      if (hosted) {
+        onStage('Opening the local OAuth callback port…')
+        prepared = await bridge.prepare(config.redirect_uri)
+        check()
+        payload = { ...payload, redirect_uri: prepared.redirect_uri, redirect_uri_template: config.redirect_uri }
+      }
+      onStage(hosted ? 'Starting hosted HTTPS OAuth…' : 'Starting CLI login inside agentgateway…')
+      const login = await backend.startMcpOAuth(name, payload)
       loginId = login.id
       check()
       while (true) {
@@ -61,9 +71,10 @@ export function oauthConnection ({ bridge = desktopOAuth(), backend, interval = 
           seen.add(authorization.id)
           if (seen.size > 8) throw new Error('Too many CLI login attempts; start again')
           onStage(`Sign in in your browser · detected local port ${authorization.port} · ${authorization.response_mode}`)
-          const callback = await receive(authorization)
+          const callback = await receive(authorization, prepared)
+          prepared = null
           check()
-          onStage('Forwarding callback to the CLI; checking authentication and MCP…')
+          onStage(hosted ? 'Exchanging the code in the backend; checking HTTPS MCP…' : 'Forwarding callback to the CLI; checking authentication and MCP…')
           // No automatic mutation retry. The gateway fences the capture before
           // contacting its CLI. A lost response is not permission to replay code.
           const forwarded = await backend.forwardMcpOAuth(loginId, { capture_id: authorization.id, ...callback })

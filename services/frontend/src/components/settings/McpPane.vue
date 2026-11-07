@@ -26,18 +26,52 @@
           <option value="stdio">stdio — run inside agentgateway</option>
         </select>
       </label>
-      <label v-if="transport === 'stdio'" class="integration-field">
+      <label class="integration-field">
         <span class="caption">Authentication</span>
         <select v-model="authentication" class="field" aria-label="Authentication" :disabled="Boolean(busy)">
-          <option value="token">Environment credentials / none</option>
-          <option value="oauth">CLI OAuth — sign in with desktop app</option>
+          <option value="token">{{ transport === 'http' ? 'Access token / none' : 'Environment credentials / none' }}</option>
+          <option value="oauth">{{ transport === 'http' ? 'HTTPS OAuth — sign in with desktop app' : 'CLI OAuth — sign in with desktop app' }}</option>
         </select>
       </label>
       <DeclaredField
         v-for="field in activeFields" :key="field.key" v-model="draft[field.key]"
         :field="field" :credential="editingCredential"
-        :disabled="Boolean(editing) && field.key === 'name'"
+        :disabled="Boolean(busy) || (Boolean(editing) && field.key === 'name')"
       />
+      <template v-if="transport === 'http' && authentication === 'oauth'">
+        <p v-if="!oauthSupported" class="caption field-hint--bad" role="alert">{{ oauthClientMessage }}</p>
+        <p v-else-if="!oauthCapabilities.http?.available" class="caption field-hint--bad" role="alert">Deploy the matching backend with authentication to enable HTTPS OAuth.</p>
+        <div class="row integration-actions">
+          <button class="btn btn--sm btn--outline" :disabled="Boolean(busy)" @click="hostedWorkiqPreset">Use WorkIQ HTTPS</button>
+          <button class="btn btn--sm btn--outline" :disabled="Boolean(busy) || !draft.url" @click="discoverHosted">Discover OAuth</button>
+        </div>
+        <p class="caption dim">Connect directly to the hosted MCP endpoint. No WorkIQ CLI, npx process or container browser is used.</p>
+        <details class="integration-details">
+          <summary>OAuth client settings</summary>
+          <label class="integration-field"><span class="caption">Public OAuth client ID</span>
+            <input v-model="httpConfig.client_id" class="field mono" aria-label="Public OAuth client ID" :disabled="Boolean(busy)" />
+          </label>
+          <label class="integration-field"><span class="caption">Loopback redirect URI</span>
+            <input v-model="httpConfig.redirect_uri" class="field mono" aria-label="Loopback redirect URI" :disabled="Boolean(busy)" />
+            <span class="caption dim">Use a redirect registered for this public client. Port 0 selects a temporary port only if the provider permits it.</span>
+          </label>
+          <label class="integration-field"><span class="caption">OAuth scopes</span>
+            <input v-model="httpConfig.scope" class="field mono" aria-label="OAuth scopes" :disabled="Boolean(busy)" />
+          </label>
+          <label class="integration-field"><span class="caption">Callback response mode</span>
+            <select v-model="httpConfig.response_mode" class="field" aria-label="Callback response mode" :disabled="Boolean(busy)">
+              <option value="query">Query redirect (GET)</option><option value="form_post">Form POST</option>
+            </select>
+          </label>
+        </details>
+        <p v-if="httpProfile" class="caption dim">Issuer: {{ httpProfile.issuer }}. Registration/redirect permissions are checked by the provider during login, not discoverable from metadata.</p>
+        <label class="integration-field row">
+          <input v-model="shareAccount" type="checkbox" aria-label="Share OAuth account with this instance" :disabled="Boolean(busy)" />
+          <span class="caption">I authorize this shared instance to access my account. Connected tools are available to all chats and users of this instance.</span>
+        </label>
+        <p class="caption dim">The desktop only receives the local callback. PKCE and token exchange stay in the backend; credentials are encrypted at rest and refreshed server-side. No tokens or codes need copying.</p>
+        <p v-if="oauthStage" class="caption" role="status">{{ oauthStage }}</p>
+      </template>
       <template v-if="transport === 'stdio' && authentication === 'oauth'">
         <p v-if="!oauthSupported" class="caption field-hint--bad" role="alert">{{ oauthClientMessage }} <a href="https://github.com/StromFLIX/nautionette/releases/latest" target="_blank" rel="noopener">Get the desktop app</a>.</p>
         <p v-else-if="!oauthCapabilities.available" class="caption field-hint--bad" role="alert">{{ oauthCapabilities.message }}</p>
@@ -108,7 +142,7 @@
         <button
           class="btn btn--sm btn--primary" :disabled="Boolean(busy) || !draftValid" @click="save"
         >
-          {{ busy ? 'Checking…' : authentication === 'oauth' && transport === 'stdio' ? 'Connect with CLI OAuth' : editing ? 'Save server' : 'Add server' }}
+          {{ busy ? 'Checking…' : authentication === 'oauth' ? transport === 'http' ? 'Connect with HTTPS OAuth' : 'Connect with CLI OAuth' : editing ? 'Save server' : 'Add server' }}
         </button>
       </div>
     </div>
@@ -136,6 +170,7 @@
           <template v-else>
             <span class="mono truncate">{{ server.url }}</span>
             <span>{{ credentialLabel(server.credential) }}</span>
+            <span v-if="server.oauth?.mode === 'https'">HTTPS OAuth · {{ server.oauth.status }} · {{ server.oauth.refreshable ? 'backend refresh' : 'sign in again after expiry' }}</span>
           </template>
           <span v-if="!server.managed">from the gateway config file</span>
         </div>
@@ -158,6 +193,14 @@
         <button class="btn btn--sm btn--danger" :disabled="Boolean(busy)" @click="remove(server)">
           Remove
         </button>
+      </div>
+    </div>
+    <div v-for="item in orphanedOAuth" :key="item.name" class="integration-card">
+      <strong>{{ item.name }}</strong>
+      <p class="caption">HTTPS OAuth · {{ item.status }}. {{ item.status === 'storage_unavailable' ? 'Restore the backend credential-key backup.' : 'Sign in again to reconnect.' }}</p>
+      <div class="row integration-actions">
+        <button class="btn btn--sm" :disabled="Boolean(busy) || !state.writable" @click="openForm({ ...item, transport: 'http', oauth: item })">Reconnect</button>
+        <button class="btn btn--sm btn--danger" :disabled="Boolean(busy) || !state.writable" @click="remove(item)">Remove saved connection</button>
       </div>
     </div>
   </div>
@@ -204,7 +247,13 @@ const transport = ref('http')
 const authentication = ref('token')
 const oauthSupported = Boolean(desktopOAuth())
 const oauthProvider = ref('generic')
-const oauthCapabilities = reactive({ available: false, message: 'Checking gateway CLI OAuth support…' })
+const oauthCapabilities = reactive({ available: false, http: { available: false }, message: 'Checking OAuth support…' })
+const httpConfig = reactive({ client_id: '', redirect_uri: 'http://127.0.0.1:0/callback', scope: '', response_mode: 'query' })
+const httpProfile = ref(null)
+const shareAccount = ref(false)
+const orphanedOAuth = computed(() => Object.entries(state.oauth_connections || {})
+  .filter(([name, item]) => item.mode === 'https' && !state.servers.some(server => server.name === name))
+  .map(([name, item]) => ({ name, ...item })))
 const loginArgsText = ref('[]')
 const setupArgsText = ref('[]')
 const acceptEula = ref(false)
@@ -213,7 +262,7 @@ let oauthController = null
 const argsText = ref('[]')
 const environment = ref([])
 let nextVariableId = 0
-const activeFields = computed(() => transport.value === 'stdio' ? state.stdio_fields : state.fields)
+const activeFields = computed(() => transport.value === 'stdio' ? state.stdio_fields : state.fields.filter(field => authentication.value !== 'oauth' || field.key !== 'token'))
 const parsedArgs = computed(() => {
   try {
     const args = JSON.parse(argsText.value)
@@ -244,9 +293,11 @@ const parsedSetupArgs = computed(() => {
 })
 const draftValid = computed(() => draftIsValid(activeFields.value, draft) && (
   transport.value !== 'stdio' || (parsedArgs.value !== null && !environmentError.value)
-) && (transport.value !== 'stdio' || authentication.value !== 'oauth' || (
-  oauthSupported && oauthCapabilities.available && (oauthProvider.value === 'workiq' ? acceptEula.value : parsedLoginArgs.value !== null && parsedSetupArgs.value !== null)
-)))
+) && (authentication.value !== 'oauth' || (oauthSupported && (
+  transport.value === 'http'
+    ? oauthCapabilities.http?.available && shareAccount.value && httpConfig.client_id && httpConfig.redirect_uri && httpProfile.value?.url === draft.url
+    : oauthCapabilities.available && (oauthProvider.value === 'workiq' ? acceptEula.value : parsedLoginArgs.value !== null && parsedSetupArgs.value !== null)
+))))
 
 function addVariable () {
   environment.value.push({ id: nextVariableId++, key: '', value: '', stored: false })
@@ -291,6 +342,10 @@ function openForm (server) {
   loginArgsText.value = JSON.stringify(server?.oauth?.login_args || [], null, 2)
   setupArgsText.value = JSON.stringify(server?.oauth?.setup_args || [], null, 2)
   acceptEula.value = false
+  shareAccount.value = false
+  httpProfile.value = null
+  Object.assign(httpConfig, { client_id: server?.oauth?.client_id || '', redirect_uri: server?.oauth?.redirect_uri || 'http://127.0.0.1:0/callback',
+    scope: server?.oauth?.scope || '', response_mode: server?.oauth?.response_mode || 'query' })
   oauthStage.value = ''
   resetDraft(draft, [...state.fields, ...state.stdio_fields], server || {})
   argsText.value = JSON.stringify(server?.args || [], null, 2)
@@ -323,10 +378,41 @@ function workiqPreset () {
   acceptEula.value = false
 }
 
+async function hostedWorkiqPreset () {
+  transport.value = 'http'
+  authentication.value = 'oauth'
+  draft.url = oauthCapabilities.http?.workiq?.url || 'https://workiq.svc.cloud.microsoft/mcp'
+  if (!draft.name) draft.name = 'workiq'
+  Object.assign(httpConfig, { client_id: oauthCapabilities.http?.workiq?.client_id || 'ba081686-5d24-4bc6-a0d6-d034ecffed87',
+    redirect_uri: oauthCapabilities.http?.workiq?.redirect_uri || 'http://localhost:12798', scope: '', response_mode: 'query' })
+  await discoverHosted()
+}
+
+async function discoverHosted () {
+  busy.value = 'discovery'
+  httpProfile.value = null
+  try {
+    const profile = await api.discoverMcpOAuth({ url: draft.url, ...httpConfig })
+    httpProfile.value = profile
+    Object.assign(httpConfig, { client_id: profile.client_id, redirect_uri: profile.redirect_uri, scope: profile.scope, response_mode: profile.response_mode })
+  } catch (error) { $q.notify({ type: 'negative', message: error.message }) } finally { busy.value = '' }
+}
+
 async function save () {
   const name = draft.name
   busy.value = name
   try {
+    if (transport.value === 'http' && authentication.value === 'oauth') {
+      oauthController = oauthConnection({ backend: api, context: () => `${instanceServer.url}|${auth.token}` })
+      await oauthController.connect(name, { transport: 'http', url: draft.url, ...httpConfig,
+        issuer: httpProfile.value.issuer, discovery_fingerprint: httpProfile.value.discovery_fingerprint, share_account: shareAccount.value },
+      stage => { oauthStage.value = stage })
+      oauthController = null
+      await refresh()
+      cancelAdd()
+      $q.notify({ type: 'positive', message: `${name}: HTTPS OAuth connected and MCP checked` })
+      return
+    }
     const payload = transport.value === 'stdio'
       ? { transport: 'stdio', command: draft.command, args: parsedArgs.value,
           env: Object.fromEntries(environment.value.map(variable => [variable.key,
@@ -358,7 +444,7 @@ async function save () {
 function remove (server) {
   $q.dialog({
     title: `Remove ${server.name}`,
-    message: 'Its tools disappear from the pickers. Chats pinned to them keep the rest.' + (server.oauth ? ' Removing a connection does not revoke provider consent or delete the CLI account cache.' : ''),
+    message: 'Its tools disappear from the pickers. Chats pinned to them keep the rest.' + (server.oauth?.mode === 'https' || server.mode === 'https' ? ' Local OAuth credentials and refresh will be removed; revoke provider consent separately if needed.' : server.oauth ? ' Removing a connection does not revoke provider consent or delete the CLI account cache.' : ''),
     cancel: true
   }).onOk(async () => {
     busy.value = server.name

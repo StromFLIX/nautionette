@@ -1,8 +1,8 @@
-"""Orchestrate CLI-owned OAuth; never acquire, store or forward OAuth tokens.
+"""Coordinate CLI-owned and hosted HTTPS MCP OAuth behind one lifecycle lock.
 
-The gateway helper runs trusted CLI logins and retains their PKCE/cache lifecycle.
-The desktop forwards query or form_post callback fields through authenticated
-APIs. Login URLs/codes are intentionally not agent-facing MCP tools.
+CLIs own their credentials; hosted connections use backend PKCE, sealed storage
+and refresh. The desktop receives query/form_post callbacks through authenticated
+APIs. Tokens, login URLs and codes are intentionally not agent-facing MCP tools.
 """
 
 from __future__ import annotations
@@ -10,14 +10,16 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import secrets
+import sqlite3
 import time
 from dataclasses import dataclass
 
 import httpx
 from fastapi import HTTPException
 
-from . import mcp_servers
+from . import mcp_http_oauth, mcp_servers
 from .clients import gateway
 from .config import settings
 from .db import db
@@ -108,13 +110,23 @@ async def capabilities() -> dict:
     try:
         if not settings.auth_enabled:
             raise HTTPException(403, "Configure APP_TOKEN before using CLI OAuth")
-        result = await control("GET", "/health")
+        async with asyncio.timeout(3):
+            result = await control("GET", "/health")
         available = result.get("version") == 1 and result.get("available") is True
-    except HTTPException:
+    except (HTTPException, TimeoutError):
         available = False
     return {
         "available": available,
         "desktop_bridge_version": 1,
+        "http": {
+            "available": settings.auth_enabled,
+            "desktop_bridge_version": 1,
+            "workiq": {
+                "url": mcp_http_oauth.WORKIQ_URL,
+                "client_id": mcp_http_oauth.WORKIQ_CLIENT,
+                "redirect_uri": mcp_http_oauth.WORKIQ_REDIRECT,
+            },
+        },
         "message": "CLI-owned OAuth needs an updated Windows, macOS or Linux desktop app. "
         "Web/mobile clients cannot receive loopback callbacks."
         if available
@@ -138,8 +150,22 @@ async def start(name: str, payload: dict) -> dict:
             "Use an updated Nautionette desktop app; web, mobile and older desktop clients "
             "cannot receive CLI OAuth callbacks",
         )
+    if payload.get("transport", "http") == "http":
+        if any(
+            key in payload for key in ["command", "args", "env", "login_args", "setup_args", "client_secret"]
+        ):
+            raise HTTPException(400, "Use hosted OAuth fields, not CLI commands or client secrets")
+        async with _lock:
+            await expire()
+            if any(s.name == name and not s.complete for s in _sessions.values()) or any(
+                s.name == name and not s.complete for s in mcp_http_oauth._sessions.values()
+            ):
+                raise HTTPException(409, "An OAuth login is already pending for this server")
+            if len(_sessions) + len(mcp_http_oauth._sessions) >= 32:
+                raise HTTPException(429, "Too many pending OAuth logins; cancel one or wait")
+            return await mcp_http_oauth.start(name, payload)
     if payload.get("transport") != "stdio":
-        raise HTTPException(400, "CLI-owned OAuth is supported for stdio MCP servers, not HTTP targets")
+        raise HTTPException(400, "Unsupported OAuth transport")
     config = mcp_servers.normalise_config(name, payload)
     auth = profile(payload, config)
     async with _lock:
@@ -151,7 +177,9 @@ async def start(name: str, payload: dict) -> dict:
             baseline = await gateway.config()
             if any(t["name"] == name for t in baseline.get("targets", [])):
                 raise HTTPException(409, "That MCP name is owned by the gateway config")
-        if any(s.name == name and not s.complete for s in _sessions.values()):
+        if any(s.name == name and not s.complete for s in _sessions.values()) or any(
+            s.name == name and not s.complete for s in mcp_http_oauth._sessions.values()
+        ):
             raise HTTPException(409, "A CLI login is already pending for this server")
         if len(_sessions) >= 32:
             raise HTTPException(429, "Too many pending CLI logins; cancel one or wait")
@@ -179,6 +207,8 @@ def session(identifier: str) -> Login:
 
 async def poll(identifier: str) -> dict:
     async with _lock:
+        if identifier.startswith("http-"):
+            return await mcp_http_oauth.poll(identifier)
         login = session(identifier)
         if login.complete:
             return {"status": "complete", "message": "CLI login finished and the MCP handshake passed."}
@@ -199,6 +229,7 @@ async def poll(identifier: str) -> dict:
             "ON CONFLICT(name) DO UPDATE SET config=excluded.config",
             (login.name, json.dumps(login.auth)),
         )
+        mcp_http_oauth.forget(login.name)
         login.complete = True
         login.config.clear()
         login.previous = None
@@ -208,6 +239,9 @@ async def poll(identifier: str) -> dict:
 
 
 async def callback(identifier: str, payload: dict) -> dict:
+    if identifier.startswith("http-"):
+        async with _lock:
+            return await mcp_http_oauth.callback(identifier, payload)
     login = session(identifier)
     # The helper validates state, response mode, one-shot capture and process-
     # owned loopback port. Never forward browser-supplied destinations/headers.
@@ -218,6 +252,9 @@ async def callback(identifier: str, payload: dict) -> dict:
 
 async def cancel(identifier: str) -> None:
     async with _lock:
+        if identifier.startswith("http-"):
+            await mcp_http_oauth.cancel(identifier)
+            return
         login = _sessions.pop(identifier, None)
         if login and not login.complete:
             with contextlib.suppress(HTTPException):
@@ -225,6 +262,7 @@ async def cancel(identifier: str) -> None:
 
 
 async def expire() -> None:
+    await mcp_http_oauth.expire()
     for identifier in list(_sessions):
         login = _sessions[identifier]
         if login.expires <= time.monotonic():
@@ -235,6 +273,7 @@ async def expire() -> None:
 
 
 async def forget(name: str) -> None:
+    mcp_http_oauth.forget(name)
     for identifier in list(_sessions):
         login = _sessions[identifier]
         if login.name == name:
@@ -247,19 +286,31 @@ async def forget(name: str) -> None:
 
 def public_connections() -> dict:
     return {
-        row["name"]: {"mode": "cli", **json.loads(row["config"])}
-        for row in db.query("SELECT * FROM mcp_cli_oauth")
+        **{
+            row["name"]: {"mode": "cli", **json.loads(row["config"])}
+            for row in db.query("SELECT * FROM mcp_cli_oauth")
+        },
+        **mcp_http_oauth.public_connections(),
     }
 
 
 async def maintenance() -> None:
-    # Only pending jobs are cleaned up. Refresh is exclusively the CLI's job.
+    # Hosted tokens refresh here; CLI token refresh remains the CLI's job.
     try:
         while True:
-            async with _lock:
-                await expire()
+            try:
+                async with _lock:
+                    await expire()
+                    await mcp_http_oauth.refresh_once()
+            except (HTTPException, httpx.HTTPError, sqlite3.Error, OSError):
+                logging.getLogger(__name__).warning(
+                    "MCP OAuth maintenance unavailable; no credentials logged"
+                )
             await asyncio.sleep(30)
     finally:
+        for identifier in list(mcp_http_oauth._sessions):
+            with contextlib.suppress(HTTPException):
+                await mcp_http_oauth.cancel(identifier)
         for login in list(_sessions.values()):
             if not login.complete:
                 with contextlib.suppress(HTTPException):

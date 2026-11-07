@@ -118,7 +118,7 @@ async def tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], li
     owner_of: dict[str, str] = {}
     # Asking every server directly is the fallback for a gateway that does not
     # prefix, and a remote server is slow, so only pay for it when a name needs it.
-    if any(not prefixed(tool["name"]) for tool in federated):
+    if len(targets) > 1 and any(not prefixed(tool["name"]) for tool in federated):
         http_targets = [target for target in targets if target.get("host")]
         per_target = await asyncio.gather(
             *(attempt(gateway.mcp_tools(target["host"]), []) for target in http_targets)
@@ -128,8 +128,10 @@ async def tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], li
                 owner_of[tool["name"]] = target["name"]
 
     def server_for(name: str) -> str:
-        single_stdio = len(targets) == 1 and targets[0].get("transport") == "stdio"
-        return owner_of.get(name) or prefixed(name) or (targets[0]["name"] if single_stdio else "other")
+        # A lone HTTP target is just as unambiguous as a lone stdio target.
+        # Do not make an unauthenticated remote probe to attribute its tools.
+        single_target = len(targets) == 1
+        return owner_of.get(name) or prefixed(name) or (targets[0]["name"] if single_target else "other")
 
     tools = [{**tool, "server": server_for(tool["name"])} for tool in federated]
     servers = [

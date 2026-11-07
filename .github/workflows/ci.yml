@@ -71,14 +71,14 @@ jobs:
         run: uv run pytest tests/backend/test_output_maxio.py
 
       - name: Model integrations, dictation and OAuth sign-in
-        run: uv run pytest tests/backend/test_copilot_login.py tests/backend/test_mcp_oauth.py tests/backend/test_mcp_stdio.py tests/backend/test_mcp_servers.py tests/backend/test_integrations.py tests/backend/test_events_and_clients.py tests/backend/test_live_connections.py tests/backend/test_speech.py
+        run: uv run pytest tests/backend/test_copilot_login.py tests/backend/test_mcp_oauth.py tests/backend/test_mcp_http_oauth.py tests/backend/test_mcp_stdio.py tests/backend/test_mcp_servers.py tests/backend/test_integrations.py tests/backend/test_events_and_clients.py tests/backend/test_live_connections.py tests/backend/test_speech.py
 
       - name: CLI OAuth end-to-end with pinned real agentgateway (no provider account)
         run: |
           curl --fail --location --retry 2 -o "$RUNNER_TEMP/agentgateway" https://github.com/agentgateway/agentgateway/releases/download/v1.7.0/agentgateway-linux-amd64
           echo "1b2fc01a2de29ca113bbb6258b5cae7b1eb3c724071c09d687a449132f2f42f8  $RUNNER_TEMP/agentgateway" | sha256sum --check
           chmod +x "$RUNNER_TEMP/agentgateway"
-          NAUTIONETTE_TEST_GATEWAY_BINARY="$RUNNER_TEMP/agentgateway" uv run pytest tests/backend/test_mcp_oauth_e2e.py tests/agentgateway/test_stdio_runtime.py
+          NAUTIONETTE_TEST_GATEWAY_BINARY="$RUNNER_TEMP/agentgateway" uv run pytest tests/backend/test_mcp_oauth_e2e.py tests/backend/test_mcp_http_oauth_e2e.py tests/agentgateway/test_stdio_runtime.py
 
       - name: Agent defaults, profiles and durable chat configuration
         run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_agent_grouping.py tests/backend/test_subagents.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py
@@ -147,7 +147,7 @@ jobs:
           tests/projects.spec.js tests/settings-navigation.spec.js tests/command-palette.spec.js tests/hybrid-search.spec.js
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js tests/agent-views.spec.js tests/subagents.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
-          tests/copilot-login.spec.js tests/mcp-oauth.spec.js tests/mcp-stdio.spec.js tests/tool-calls.spec.js tests/activity-timing.spec.js
+          tests/copilot-login.spec.js tests/mcp-oauth.spec.js tests/mcp-http-oauth.spec.js tests/mcp-stdio.spec.js tests/tool-calls.spec.js tests/activity-timing.spec.js
           tests/workflow-inputs.spec.js tests/run-retention.spec.js tests/run-statistics.spec.js tests/outputs.spec.js tests/creative-apps.spec.js tests/storage.spec.js tests/navigation.spec.js tests/miniapps.spec.js
           --workers=1 --reporter=dot,github
 

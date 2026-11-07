@@ -63,7 +63,7 @@ jobs:
           APP_URL: ${{ vars.APP_URL }}
           APP_TOKEN: ${{ secrets.APP_TOKEN }}
         run: python3 scripts/check_miniapps.py
-      - name: Verify CLI OAuth runtime compatibility (staging only)
+      - name: Verify CLI and HTTPS MCP OAuth compatibility (staging only)
         if: github.event_name == 'workflow_run'
         env:
           APP_URL: ${{ vars.APP_URL }}
