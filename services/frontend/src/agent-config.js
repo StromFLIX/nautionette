@@ -51,7 +51,7 @@ export function sameConfig (left, right) {
 
 /** Membership is a saved selection, not a comparison with a mutable profile. */
 export function belongsToAgent (chat, agentId) {
-  return !agentId || (chat.agent_id === agentId && !chat.agent_customized)
+  return !agentId || chat.agent_id === agentId
 }
 
 export function toolLabel (tools, total) {

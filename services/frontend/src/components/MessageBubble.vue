@@ -1,9 +1,12 @@
 <template>
   <div class="msg" data-skin-part="message" :data-role="role" :class="`msg--${role}`">
     <div class="bubble" :class="{ 'bubble--wide': run || hasTools }">
-      <div v-if="meta.sender_agent" class="caption bubble__sender">
-        <span class="material-icons" aria-hidden="true">smart_toy</span> {{ meta.sender_agent.name }}
-        <RouterLink v-if="meta.sender_agent.chat_id" :to="`/chats/${meta.sender_agent.chat_id}`">Source chat</RouterLink>
+      <div v-if="meta.sender_agent" class="bubble__sender">
+        <AgentAvatar :agent="senderAgent" class="bubble__sender-avatar" />
+        <span class="bubble__sender-name truncate" :title="senderAgent.name">{{ senderAgent.name }}</span>
+        <RouterLink v-if="meta.sender_agent.chat_id" class="bubble__sender-source" :to="`/chats/${meta.sender_agent.chat_id}`">
+          Source chat<span class="material-icons" aria-hidden="true">arrow_outward</span>
+        </RouterLink>
       </div>
       <RouterLink v-if="run" class="bubble__run" :to="`/runs/${run.workflow_id}`">
         <span class="material-icons">bolt</span>
@@ -63,6 +66,8 @@ import ToolCall from './ToolCall.vue'
 import ToolCallGroup from './ToolCallGroup.vue'
 import ChatAttachment from './ChatAttachment.vue'
 import OutputCard from './OutputCard.vue'
+import AgentAvatar from './AgentAvatar.vue'
+import { store } from '../store'
 import { groupToolCalls } from '../timeline'
 import { renderMarkdown } from '../markdown'
 import { copyText } from '../clipboard'
@@ -81,6 +86,13 @@ const props = defineProps({
   deliveryError: { type: String, default: '' }
 })
 defineEmits(['retry', 'discard', 'open-output'])
+
+// Use the saved sender's identity, never the chat's current selected agent.
+const senderAgent = computed(() => {
+  const sender = props.meta.sender_agent
+  const profile = store.catalog.agents?.find(agent => agent.id === sender?.id)
+  return { ...profile, ...sender, name: sender?.name || profile?.name || 'Agent' }
+})
 
 const showSent = ref(false)
 let sentTimer
@@ -145,9 +157,12 @@ const time = computed(() => shortTime(props.createdAt))
 </script>
 
 <style scoped>
-.bubble__sender { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; color: var(--text-dim); }
-.bubble__sender .material-icons { font-size: 1rem; }
-.bubble__sender a { color: var(--accent); }
+.bubble__sender { display: flex; align-items: center; gap: 8px; min-width: 0; margin-bottom: 12px; color: var(--text-muted); font-size: 0.75rem; }
+.bubble__sender-avatar { --agent-avatar-size: 24px; }
+.bubble__sender-name { min-width: 0; font-weight: 600; }
+.bubble__sender-source { display: inline-flex; align-items: center; gap: 3px; flex: none; margin-left: 4px; color: var(--text-dim); font-size: 0.6875rem; text-decoration: none; }
+.bubble__sender-source:hover { color: var(--accent); }
+.bubble__sender-source .material-icons { font-size: 0.8125rem; }
 .bubble__images { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
 .msg {
   display: flex;

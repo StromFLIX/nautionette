@@ -24,12 +24,15 @@ def test_activity_counts_all_chats_and_only_current_agent_membership(client, db)
     assert response["activity"] == {
         "running": 5,
         "queued": 5,
-        "agents": {"ada": {"running": 2, "queued": 2}, "grace": {"running": 1, "queued": 1}},
+        "agents": {"ada": {"running": 3, "queued": 3}, "grace": {"running": 1, "queued": 1}},
     }
     db.update_chat(chats[0]["id"], {"agent_id": "grace"})
     db.update_chat(chats[1]["id"], {"agent_customized": True})
     activity = client.get("/api/chats").json()["activity"]
-    assert activity == {"running": 5, "queued": 5, "agents": {"grace": {"running": 2, "queued": 2}}}
+    assert activity == {
+        "running": 5, "queued": 5,
+        "agents": {"ada": {"running": 2, "queued": 2}, "grace": {"running": 2, "queued": 2}},
+    }
 
 
 def test_activity_tracks_steering_pause_resume_discard_and_completion(client, db, monkeypatch):
