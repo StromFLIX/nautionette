@@ -669,20 +669,20 @@ class Database:
     def chat_activity(self) -> dict[str, Any]:
         """Count live turns across all chats, not just the recent sidebar page.
 
-        Customized and unassigned chats belong to All only, just like the agent
-        views. Each running turn is one active agent; each queued turn is one
+        Agent membership follows the saved selection, including customized chats.
+        Unassigned chats belong to All only. Each running turn is one active agent; each queued turn is one
         waiting message, including paused queues. Steered/completed turns are not
         waiting, even when their user messages remain in history.
         """
         activity: dict[str, Any] = {"running": 0, "queued": 0, "agents": {}}
         for row in self.query(
-            "SELECT c.agent_id, c.agent_customized, t.state, COUNT(*) AS n "
+            "SELECT c.agent_id, t.state, COUNT(*) AS n "
             "FROM chat_turns t JOIN chats c ON c.id = t.chat_id "
             "WHERE t.state IN ('running', 'queued') "
-            "GROUP BY c.agent_id, c.agent_customized, t.state"
+            "GROUP BY c.agent_id, t.state"
         ):
             activity[row["state"]] += row["n"]
-            if row["agent_id"] and not row["agent_customized"]:
+            if row["agent_id"]:
                 counts = activity["agents"].setdefault(row["agent_id"], {"running": 0, "queued": 0})
                 counts[row["state"]] += row["n"]
         return activity

@@ -55,14 +55,14 @@ and mobile back navigation. **New chat** and the welcome composer use that agent
 ahead of remembered settings or the configured default. A deleted selection falls
 back to All after successful catalog discovery, not during an outage.
 
-Membership uses the latest explicit `agent_id` selection and a stored
-`agent_customized` flag. Changing an effective model, environment, reasoning,
-tool/project/package selection or system prompt marks the chat custom and leaves
-the agent view for All without closing the chat. Undoing overrides does not restore
-membership: choose/reapply an agent explicitly to do that. Renames, read state,
-operational timeout controls and no-op configuration writes do not detach it.
-Profile/default edits do not reclassify existing chats. The upgrade classifies
-legacy customized chats once; subsequent restarts preserve that result.
+Membership uses only the latest explicit `agent_id` selection. Changing a model,
+environment, reasoning, tool/project/package selection or system prompt keeps the
+chat in that agent's list, including search and activity counts. Only selecting a
+different agent or global defaults changes membership. The stored
+`agent_customized` flag still identifies per-chat overrides and allows reapplying
+current agent defaults; it does not affect grouping. Unsent welcome drafts also
+keep their agent scope when customized. Profile/default edits do not rewrite
+existing chat settings.
 
 **Settings > Agents & models > Agents** accepts an optional portrait file and a
 system prompt. Click the portrait preview or **Choose image** to upload; **Change

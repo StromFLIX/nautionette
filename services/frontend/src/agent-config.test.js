@@ -56,13 +56,13 @@ test('custom configuration comparison ignores order, never null versus empty sel
   assert.equal(sameConfig({ ...defaults, packages: ['a', 'b'] }, { ...defaults, packages: ['b', 'a'] }), false)
 })
 
-test('agent grouping follows only the latest non-custom selection, never profile contents', () => {
+test('agent grouping follows the latest selection including customized chats, never profile contents', () => {
   const chat = { agent_id: 'writer', agent_customized: false, tools: ['old-tool'] }
   assert.equal(belongsToAgent(chat, null), true)
   assert.equal(belongsToAgent(chat, 'writer'), true)
   assert.equal(belongsToAgent(chat, 'researcher'), false)
   assert.equal(belongsToAgent({ ...chat, agent_id: 'researcher' }, 'writer'), false)
-  assert.equal(belongsToAgent({ ...chat, agent_customized: true }, 'writer'), false)
+  assert.equal(belongsToAgent({ ...chat, agent_customized: true, model: 'other', reasoning_effort: 'high' }, 'writer'), true)
   assert.equal(belongsToAgent({ ...chat, agent_customized: true }, null), true)
   assert.equal(belongsToAgent({ agent_id: null }, 'writer'), false)
   assert.equal(sameConfig(defaults, { ...defaults, system_prompt: 'Be concise' }), false)

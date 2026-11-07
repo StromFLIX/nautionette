@@ -80,7 +80,6 @@ function override (key, value) {
   const changedModel = key === 'model' && value !== config.value.model
   overrides.value = { ...overrides.value, [key]: value, ...(changedModel ? { reasoning_effort: null } : {}) }
   customized.value = true
-  if (route.query.agent) router.replace(chatLocation('', null))
 }
 </script>
 
