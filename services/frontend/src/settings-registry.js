@@ -64,7 +64,7 @@ export const SETTINGS_SECTIONS = [
     key: 'mcp', label: 'MCP servers', icon: 'extension', group: 'Connections', scope: 'Instance',
     load: () => import('./components/settings/McpPane.vue'),
     entries: [
-      entry('mcp-servers', 'MCP servers', 'Connect HTTP servers or run trusted stdio tools in agentgateway.', 'URL endpoint credentials authentication tools stdio command arguments environment npx uvx brave'),
+      entry('mcp-servers', 'MCP servers', 'Connect HTTP servers or run trusted stdio tools with CLI OAuth in agentgateway.', 'URL endpoint credentials authentication tools stdio command arguments environment npx uvx brave oauth workiq loopback desktop callback login'),
       entry('tool-catalog', 'Tool catalog', 'Browse or search tools by server.', 'capabilities integration actions')
     ]
   },

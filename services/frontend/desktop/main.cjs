@@ -1,11 +1,25 @@
-const { app, BrowserWindow, protocol, net, session, shell } = require('electron')
+const { app, BrowserWindow, protocol, net, session, shell, ipcMain } = require('electron')
 const path = require('node:path')
 const { existsSync } = require('node:fs')
 const { pathToFileURL } = require('node:url')
 const { APP_ORIGIN, trustedRenderer, externalURL, assetPath } = require('./security.cjs')
 
-// Match the existing Capacitor origin allowed by the backend. No local server,
-// Node integration, arbitrary IPC or privileged renderer bridge is needed.
+const { createReceivers } = require('./oauth.cjs')
+const oauth = createReceivers({ openExternal: url => shell.openExternal(url) })
+
+// Only the bundled top-level renderer can use the narrow OAuth bridge.
+function oauthOwner (event) {
+  if (event.senderFrame !== event.sender.mainFrame || !trustedRenderer(event.senderFrame.url) ||
+      !trustedRenderer(event.sender.getURL())) throw new Error('Untrusted OAuth caller')
+  return event.sender.id
+}
+ipcMain.handle('oauth:prepare', (event, redirect) => oauth.prepare(oauthOwner(event), redirect))
+ipcMain.handle('oauth:authorize', (event, payload) => oauth.authorize(oauthOwner(event), payload))
+ipcMain.handle('oauth:cancel', event => oauth.cancel(oauthOwner(event)))
+app.on('before-quit', () => oauth.close())
+
+// Match the existing Capacitor origin allowed by the backend; no Node integration
+// or arbitrary IPC is exposed to the renderer.
 protocol.registerSchemesAsPrivileged([
   { scheme: 'capacitor', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
 ])
@@ -19,6 +33,11 @@ function createWindow () {
       nodeIntegration: false, contextIsolation: true, sandbox: true,
       webSecurity: true
     }
+  })
+  const owner = window.webContents.id
+  window.webContents.once('destroyed', () => oauth.cancel(owner))
+  window.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
+    if (isMainFrame) oauth.cancel(owner)
   })
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (externalURL(url)) shell.openExternal(url).catch(() => {})

@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends
 
-from .. import integrations, mcp_servers
+from .. import integrations, mcp_oauth, mcp_servers
 from ..catalog import reset_default_model
 from ..events import bus
 from ..fields import normalise
@@ -72,6 +72,35 @@ async def test_model_integration(instance: str) -> dict[str, Any]:
     return result
 
 
+# Interactive OAuth endpoints intentionally live outside /api/mcp-servers:
+# codes/login URLs must never become agent-facing MCP tools or chat evidence.
+
+
+@router.get("/api/mcp-oauth/capabilities")
+async def mcp_oauth_capabilities() -> dict[str, Any]:
+    return await mcp_oauth.capabilities()
+
+
+@router.post("/api/mcp-oauth/start/{name}")
+async def start_mcp_oauth(name: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    return await mcp_oauth.start(name, payload)
+
+
+@router.get("/api/mcp-oauth/login/{identifier}")
+async def poll_mcp_oauth(identifier: str) -> dict[str, Any]:
+    return await mcp_oauth.poll(identifier)
+
+
+@router.post("/api/mcp-oauth/callback/{identifier}")
+async def callback_mcp_oauth(identifier: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
+    return await mcp_oauth.callback(identifier, payload)
+
+
+@router.delete("/api/mcp-oauth/login/{identifier}", status_code=204)
+async def cancel_mcp_oauth(identifier: str) -> None:
+    await mcp_oauth.cancel(identifier)
+
+
 # ------------------------------------------------------------------ mcp servers
 
 
@@ -83,7 +112,9 @@ async def get_mcp_servers() -> dict[str, Any]:
 @router.put("/api/mcp-servers/{name}")
 async def put_mcp_server(name: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     config = mcp_servers.normalise_config(name, payload)
-    await mcp_servers.save(name, config)
+    async with mcp_oauth._lock:
+        await mcp_servers.save(name, config)
+        await mcp_oauth.forget(name)
     forget_catalog()
     bus.publish("mcp.server.changed", {"server": name, "configured": True})
     return await mcp_servers.payload()
@@ -91,7 +122,9 @@ async def put_mcp_server(name: str, payload: dict[str, Any] = Body(default={})) 
 
 @router.delete("/api/mcp-servers/{name}")
 async def delete_mcp_server(name: str) -> dict[str, Any]:
-    await mcp_servers.remove(name)
+    async with mcp_oauth._lock:
+        await mcp_servers.remove(name)
+        await mcp_oauth.forget(name)
     forget_catalog()
     bus.publish("mcp.server.changed", {"server": name, "configured": False})
     return await mcp_servers.payload()

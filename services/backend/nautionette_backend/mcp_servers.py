@@ -138,8 +138,8 @@ def normalise_config(name: str, payload: dict[str, Any]) -> dict[str, Any]:
 def stdio_value(name: str, config: dict[str, Any], previous: dict[str, Any]) -> dict[str, Any]:
     old_env = (previous.get("stdio") or {}).get("env") or {}
     env = dict(STDIO_ENV)
-    # agentgateway expands $VARIABLE across its serialized configuration. Escape
-    # new literal input once; retained values are already in gateway storage form.
+    # Hybrid API resources execute stdio argv/env literally (unlike file-owned
+    # config interpolation). Escaping $ here changes the child's real values.
     if "env" not in config:
         env.update(old_env)
     else:
@@ -151,7 +151,7 @@ def stdio_value(name: str, config: dict[str, Any], previous: dict[str, Any]) -> 
                     )
                 env[key] = old_env[key]
             else:
-                env[key] = value.replace("$", "$$")
+                env[key] = value
     if len(env) > 128:
         raise HTTPException(
             status_code=400, detail="at most 128 environment variables, including HOME and PATH"
@@ -160,7 +160,7 @@ def stdio_value(name: str, config: dict[str, Any], previous: dict[str, Any]) -> 
         "name": name,
         "stdio": {
             "cmd": config["command"],
-            "args": [arg.replace("$", "$$") for arg in config["args"]],
+            "args": config["args"],
             "env": env,
             "clear_env": True,
         },
@@ -264,6 +264,9 @@ async def probe(url: str, credential: str) -> dict[str, Any]:
 
 
 async def payload() -> dict[str, Any]:
+    from .mcp_oauth import public_connections
+
+    oauth = public_connections()
     mode, targets = await fetch_resources()
     config = await attempt(gateway.config(), {"targets": []})
     _, servers = await tool_catalog(config)
@@ -286,11 +289,13 @@ async def payload() -> dict[str, Any]:
                 ),
                 # A file-owned target is the checked-in baseline; the app cannot touch it.
                 "managed": target["name"] in managed,
+                **({"oauth": oauth[target["name"]]} if target["name"] in oauth else {}),
                 "credential": credential_state(stored_credential(target["name"], targets)),
                 "tool_count": counts.get(target["name"], 0),
             }
             for target in config.get("targets") or []
         ],
+        "oauth_connections": oauth,
         "fields": FIELDS,
         "stdio_fields": STDIO_FIELDS,
         "storage_mode": mode,

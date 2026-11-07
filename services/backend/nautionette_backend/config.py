@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from urllib.parse import urlsplit, urlunsplit
 
 
 def _flag(name: str, default: bool = False) -> bool:
@@ -22,6 +23,12 @@ class Settings:
             raise ValueError("TEMPORAL_HISTORY_RETENTION_DAYS must be between 1 and 36500")
 
         self.gateway_url = os.environ.get("AGENTGATEWAY_URL", "http://agentgateway:4000")
+        # Private helper alongside agentgateway; never derive this from a browser URL.
+        gateway = urlsplit(self.gateway_url)
+        host = f"[{gateway.hostname}]" if ":" in (gateway.hostname or "") else gateway.hostname
+        self.gateway_cli_oauth_url = os.environ.get(
+            "AGENTGATEWAY_CLI_OAUTH_URL", urlunsplit((gateway.scheme, f"{host}:4001", "", "", ""))
+        ).rstrip("/")
         self.llm_base_url = os.environ.get("LLM_BASE_URL", f"{self.gateway_url}/v1")
         self.mcp_url = os.environ.get("MCP_URL", f"{self.gateway_url}/mcp")
         # OpenAI-compatible STT endpoint, private to the backend. Empty disables dictation.

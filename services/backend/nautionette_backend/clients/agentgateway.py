@@ -39,7 +39,7 @@ def public_target(entry: dict[str, Any]) -> dict[str, Any]:
             "host": "",
             "transport": "stdio",
             "command": stdio.get("cmd", ""),
-            "args": [arg.replace("$$", "$") for arg in stdio.get("args", [])],
+            "args": stdio.get("args", []),
             "env": {key: None for key in stdio.get("env", {})},
         }
     return {
@@ -121,6 +121,26 @@ class GatewayClient:
             "model_routes": model_routes,
             "targets": targets,
         }
+
+    async def cli_oauth(self, method: str, path: str, payload: dict | None = None) -> dict:
+        """Private, fixed-origin CLI supervisor. Browser callback fields stay in POST bodies."""
+        token = settings.internal_token or settings.app_token
+        if not token:
+            raise ValueError("CLI OAuth requires configured authentication")
+        # This credential belongs only to a private control service. Never send
+        # it through an ambient proxy or follow a redirect to another origin.
+        async with httpx.AsyncClient(trust_env=False, timeout=20, follow_redirects=False) as client:
+            response = await client.request(
+                method,
+                f"{settings.gateway_cli_oauth_url}{path}",
+                headers={"Authorization": f"Bearer {token}"},
+                json=payload,
+            )
+        response.raise_for_status()
+        value = response.json()
+        if not isinstance(value, dict):
+            raise ValueError("Invalid CLI supervisor response")
+        return value
 
     async def runtime(self) -> dict[str, Any]:
         response = await shared().get(f"{self.base_url}/api/runtime", timeout=10)

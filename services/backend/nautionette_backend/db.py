@@ -23,6 +23,10 @@ from .search_index import install as install_search_index
 from .search_index import load_extension as load_search_extension
 
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS mcp_cli_oauth (
+    name TEXT PRIMARY KEY,
+    config TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS mini_apps (
     id TEXT PRIMARY KEY,
     revision INTEGER NOT NULL DEFAULT 0,

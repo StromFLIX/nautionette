@@ -1385,6 +1385,14 @@ The stdio form accepts an executable, a JSON argument array and secret environme
 variables; no separate MCP container is required. See [MCP server setup](docs/mcp-servers.md)
 for the Brave Search example, deployment steps and the shared-container trust boundary.
 
+Updated desktop apps also support **stdio → CLI OAuth**. The CLI runs in
+agentgateway, its actual callback port is detected from its login URL, and the
+desktop forwards query or POST callbacks to that CLI through authenticated APIs.
+The CLI owns its tokens and refresh; no public OAuth callback or container browser
+is needed for supported loopback flows. WorkIQ has a pinned preset with explicit
+EULA/account-sharing consent. Deploy the gateway/backend/frontend and use the
+matching desktop build; web/mobile clients cannot receive these callbacks.
+
 Working on the Python services:
 
 ```
@@ -1417,7 +1425,17 @@ NAUTIONETTE_TEST_GATEWAY_BINARY=/path/to/agentgateway uv run pytest tests/agentg
 
 It verifies mixed HTTP/stdio discovery, literal arguments and secrets, environment
 isolation, failed-save protection, session cleanup, persistence across gateway restarts,
-and removal. The buffer checks also exercise all three LLM API formats past the
+and removal. Full CLI OAuth E2E also exercises the real gateway, backend APIs,
+CLI credential cache and production desktop receiver/controller:
+
+```sh
+NAUTIONETTE_TEST_GATEWAY_BINARY=/path/to/agentgateway uv run pytest tests/backend/test_mcp_oauth_e2e.py
+```
+
+It covers query and form_post responses and CLI retries with a new callback port,
+without using a Microsoft account or workplace data. CI runs it against the
+checksum-pinned gateway release; a separate packaged Electron smoke test checks
+real preload/IPC and loopback sockets. The buffer checks also exercise all three LLM API formats past the
 old 2 MiB ceiling, the exact 256 MiB boundary (including chunked requests), and
 large requests/responses through a local fake provider. Without the variable,
 runtime checks are skipped; the checked-in buffer/capacity guards still run.

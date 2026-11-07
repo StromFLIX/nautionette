@@ -213,6 +213,9 @@ services:
     environment:
       <<: *telemetry
       OTEL_SERVICE_NAME: nautionette-agentgateway
+      # CLI login/callback supervisor on private port 4001. Never published to
+      # the host; commands receive a cleared environment without this token.
+      CLI_OAUTH_TOKEN: ${INTERNAL_TOKEN:-${APP_TOKEN:-}}
       # Optional: a key entered in Settings > Agents is stored by agentgateway itself.
       # These let an integration reference $VARIABLE instead of holding the key.
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}

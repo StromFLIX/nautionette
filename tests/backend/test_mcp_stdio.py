@@ -64,7 +64,7 @@ def test_stdio_env_keeps_replaces_and_removes_values(client, stdio_ready):
     env = stdio_ready.gateway.resources["mcp.target"]["brave"]["stdio"]["env"]
     assert env["BRAVE_API_KEY"] == "brave-test-secret"
     assert env["EMPTY"] == ""
-    assert env["LITERAL"] == "$$NOT_EXPANDED"  # escaped for gateway config expansion
+    assert env["LITERAL"] == "$NOT_EXPANDED"  # hybrid stdio resources execute values literally
     changes.pop("env")
     assert client.put("/api/mcp-servers/brave", json=changes).status_code == 200
     assert stdio_ready.gateway.resources["mcp.target"]["brave"]["stdio"]["env"] == env

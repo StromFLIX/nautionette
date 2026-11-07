@@ -26,11 +26,51 @@
           <option value="stdio">stdio — run inside agentgateway</option>
         </select>
       </label>
+      <label v-if="transport === 'stdio'" class="integration-field">
+        <span class="caption">Authentication</span>
+        <select v-model="authentication" class="field" aria-label="Authentication" :disabled="Boolean(busy)">
+          <option value="token">Environment credentials / none</option>
+          <option value="oauth">CLI OAuth — sign in with desktop app</option>
+        </select>
+      </label>
       <DeclaredField
         v-for="field in activeFields" :key="field.key" v-model="draft[field.key]"
         :field="field" :credential="editingCredential"
         :disabled="Boolean(editing) && field.key === 'name'"
       />
+      <template v-if="transport === 'stdio' && authentication === 'oauth'">
+        <p v-if="!oauthSupported" class="caption field-hint--bad" role="alert">{{ oauthClientMessage }} <a href="https://github.com/StromFLIX/nautionette/releases/latest" target="_blank" rel="noopener">Get the desktop app</a>.</p>
+        <p v-else-if="!oauthCapabilities.available" class="caption field-hint--bad" role="alert">{{ oauthCapabilities.message }}</p>
+        <p class="caption">This grants this instance access to your account. Tools and the CLI's stored account are shared across all chats and users of this instance. Only connect an account you intend to share here.</p>
+        <label class="integration-field">
+          <span class="caption">CLI adapter</span>
+          <select v-model="oauthProvider" class="field" aria-label="CLI adapter" :disabled="Boolean(busy)">
+            <option value="generic">Generic loopback OAuth CLI</option>
+            <option value="workiq">WorkIQ 1.0.1</option>
+          </select>
+        </label>
+        <button class="btn btn--sm btn--outline" :disabled="Boolean(busy)" @click="workiqPreset">Use WorkIQ preset</button>
+        <template v-if="oauthProvider === 'generic'">
+          <label class="integration-field">
+            <span class="caption">Login arguments (JSON array)</span>
+            <textarea v-model="loginArgsText" class="field mono" rows="2" aria-label="Login arguments" :disabled="Boolean(busy)" placeholder='["auth", "login"]' />
+          </label>
+          <label class="integration-field">
+            <span class="caption">Setup commands (JSON array of argument arrays)</span>
+            <textarea v-model="setupArgsText" class="field mono" rows="2" aria-label="Setup commands" :disabled="Boolean(busy)" placeholder="[]" />
+          </label>
+          <p class="caption dim">Login/setup use the executable below, without a shell. Arguments are visible configuration; use environment variables for secrets. The CLI must expose a code/PKCE login URL through BROWSER, xdg-open or its output. Native-broker/device-code-only flows are not supported.</p>
+        </template>
+        <template v-else>
+          <p class="caption dim">The preset pins WorkIQ, selects its supported browser authentication and English status messages, and runs its login command in agentgateway. Tenant consent, licensing and policy still apply.</p>
+          <label class="integration-field row">
+            <input v-model="acceptEula" type="checkbox" aria-label="Accept WorkIQ EULA" :disabled="Boolean(busy)" />
+            <span class="caption">I accept the <a :href="oauthCapabilities.workiq?.eula_url || 'https://www.npmjs.com/package/@microsoft/workiq/v/1.0.1?activeTab=code'" target="_blank" rel="noopener">WorkIQ EULA</a> and authorize connecting this account to this shared instance.</span>
+          </label>
+        </template>
+        <p class="caption dim">The callback port is detected from the CLI's actual login URL and opened temporarily on your desktop. No firewall changes are needed. The CLI, not Nautionette, owns token storage and refresh.</p>
+        <p v-if="oauthStage" class="caption" role="status">{{ oauthStage }}</p>
+      </template>
       <template v-if="transport === 'stdio'">
         <label class="integration-field">
           <span class="caption">Arguments (JSON array)</span>
@@ -68,7 +108,7 @@
         <button
           class="btn btn--sm btn--primary" :disabled="Boolean(busy) || !draftValid" @click="save"
         >
-          {{ busy ? 'Checking…' : editing ? 'Save server' : 'Add server' }}
+          {{ busy ? 'Checking…' : authentication === 'oauth' && transport === 'stdio' ? 'Connect with CLI OAuth' : editing ? 'Save server' : 'Add server' }}
         </button>
       </div>
     </div>
@@ -91,6 +131,7 @@
           <template v-if="server.transport === 'stdio'">
             <span class="mono mcp-command">{{ server.command }} {{ JSON.stringify(server.args || []) }}</span>
             <span>Stored environment: {{ Object.keys(server.env || {}).join(', ') || 'none' }}</span>
+            <span v-if="server.oauth">CLI OAuth · {{ server.oauth.provider }} · credentials and refresh managed by the CLI</span>
           </template>
           <template v-else>
             <span class="mono truncate">{{ server.url }}</span>
@@ -140,12 +181,13 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import DeclaredField from './DeclaredField.vue'
 import { credentialLabel, draftIsValid, resetDraft } from './fields'
 import { actions, store } from '../../store'
 import { api } from '../../api'
+import { desktopOAuth, oauthClientMessage, oauthConnection } from '../../mcp-oauth.js'
 
 const $q = useQuasar()
 
@@ -159,6 +201,15 @@ const busy = ref('')
 const toolQuery = ref('')
 
 const transport = ref('http')
+const authentication = ref('token')
+const oauthSupported = Boolean(desktopOAuth())
+const oauthProvider = ref('generic')
+const oauthCapabilities = reactive({ available: false, message: 'Checking gateway CLI OAuth support…' })
+const loginArgsText = ref('[]')
+const setupArgsText = ref('[]')
+const acceptEula = ref(false)
+const oauthStage = ref('')
+let oauthController = null
 const argsText = ref('[]')
 const environment = ref([])
 let nextVariableId = 0
@@ -178,9 +229,24 @@ const environmentError = computed(() => {
   if (environment.value.some(variable => variable.value.includes('\u0000') || variable.value.length > 32768)) return 'Variable values must be at most 32768 characters and contain no NUL characters.'
   return ''
 })
+function parseArguments (text) {
+  try {
+    const value = JSON.parse(text)
+    return Array.isArray(value) && value.length <= 256 && value.every(v => typeof v === 'string' && v.length <= 8192 && !v.includes('\u0000')) ? value : null
+  } catch { return null }
+}
+const parsedLoginArgs = computed(() => parseArguments(loginArgsText.value))
+const parsedSetupArgs = computed(() => {
+  try {
+    const value = JSON.parse(setupArgsText.value)
+    return Array.isArray(value) && value.length <= 4 && value.every(v => parseArguments(JSON.stringify(v)) !== null) ? value : null
+  } catch { return null }
+})
 const draftValid = computed(() => draftIsValid(activeFields.value, draft) && (
   transport.value !== 'stdio' || (parsedArgs.value !== null && !environmentError.value)
-))
+) && (transport.value !== 'stdio' || authentication.value !== 'oauth' || (
+  oauthSupported && oauthCapabilities.available && (oauthProvider.value === 'workiq' ? acceptEula.value : parsedLoginArgs.value !== null && parsedSetupArgs.value !== null)
+)))
 
 function addVariable () {
   environment.value.push({ id: nextVariableId++, key: '', value: '', stored: false })
@@ -202,6 +268,7 @@ async function load () {
   loading.value = true
   try {
     Object.assign(state, await api.mcpServers())
+    Object.assign(oauthCapabilities, await api.mcpOAuthCapabilities().catch(() => ({ available: false, message: 'Deploy the matching gateway image to enable CLI OAuth.' })))
   } catch (error) {
     $q.notify({ type: 'negative', message: error.message })
   } finally {
@@ -219,6 +286,12 @@ function openForm (server) {
   adding.value = true
   editing.value = server?.name || ''
   transport.value = server?.transport || 'http'
+  authentication.value = server?.oauth ? 'oauth' : 'token'
+  oauthProvider.value = server?.oauth?.provider || 'generic'
+  loginArgsText.value = JSON.stringify(server?.oauth?.login_args || [], null, 2)
+  setupArgsText.value = JSON.stringify(server?.oauth?.setup_args || [], null, 2)
+  acceptEula.value = false
+  oauthStage.value = ''
   resetDraft(draft, [...state.fields, ...state.stdio_fields], server || {})
   argsText.value = JSON.stringify(server?.args || [], null, 2)
   environment.value = Object.keys(server?.env || {}).map(key => ({
@@ -230,11 +303,24 @@ const startAdd = () => openForm(null)
 const edit = (server) => openForm(server)
 
 function cancelAdd () {
+  oauthController?.cancel()
+  oauthController = null
+  oauthStage.value = ''
   adding.value = false
   editing.value = ''
   for (const key of Object.keys(draft)) delete draft[key]
   environment.value = []
   argsText.value = '[]'
+}
+
+function workiqPreset () {
+  transport.value = 'stdio'
+  authentication.value = 'oauth'
+  oauthProvider.value = 'workiq'
+  draft.command = 'npx'
+  if (!draft.name) draft.name = 'workiq'
+  argsText.value = JSON.stringify(oauthCapabilities.workiq?.args || ['-y', '@microsoft/workiq@1.0.1', 'mcp'])
+  acceptEula.value = false
 }
 
 async function save () {
@@ -246,6 +332,17 @@ async function save () {
           env: Object.fromEntries(environment.value.map(variable => [variable.key,
             variable.stored && variable.value === '' ? null : variable.value])) }
       : { transport: 'http', url: draft.url, token: draft.token }
+    if (transport.value === 'stdio' && authentication.value === 'oauth') {
+      oauthController = oauthConnection()
+      await oauthController.connect(name, { ...payload, provider: oauthProvider.value,
+        login_args: parsedLoginArgs.value, setup_args: parsedSetupArgs.value, accept_eula: acceptEula.value },
+      stage => { oauthStage.value = stage })
+      oauthController = null
+      await refresh()
+      cancelAdd()
+      $q.notify({ type: 'positive', message: `${name}: CLI login finished and MCP connection checked` })
+      return
+    }
     Object.assign(state, await api.saveMcpServer(name, payload))
     const verb = editing.value ? 'updated' : 'added'
     cancelAdd()
@@ -261,7 +358,7 @@ async function save () {
 function remove (server) {
   $q.dialog({
     title: `Remove ${server.name}`,
-    message: 'Its tools disappear from the pickers. Chats pinned to them keep the rest.',
+    message: 'Its tools disappear from the pickers. Chats pinned to them keep the rest.' + (server.oauth ? ' Removing a connection does not revoke provider consent or delete the CLI account cache.' : ''),
     cancel: true
   }).onOk(async () => {
     busy.value = server.name
@@ -291,6 +388,7 @@ async function test (server) {
 }
 
 onMounted(load)
+onBeforeUnmount(() => { oauthController?.cancel() })
 </script>
 
 <style scoped>

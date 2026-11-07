@@ -7,7 +7,10 @@ from __future__ import annotations
 
 import json
 import os
+import signal
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -48,7 +51,45 @@ def main() -> None:
         with os.fdopen(descriptor, "w") as handle:
             handle.write(source)
         args[index] = str(path)
-    os.execv("/app/agentgateway", ["/app/agentgateway", *args])  # noqa: S606 - fixed upstream binary
+    # A private helper owns short-lived CLI auth processes. Supervise both so
+    # a helper crash is visible/restarted, and container shutdown kills logins.
+    os.umask(0o077)
+    commands = [["/app/agentgateway", *args]]
+    if os.environ.get("CLI_OAUTH_TOKEN", "").strip():
+        commands.append([sys.executable, "/app/cli_oauth.py"])
+    children = [subprocess.Popen(command, start_new_session=True) for command in commands]  # noqa: S603
+    stopping = False
+
+    def stop(*_args):
+        nonlocal stopping
+        stopping = True
+        for child in children:
+            if child.poll() is None:
+                try:
+                    os.killpg(child.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+
+    for sig in [signal.SIGTERM, signal.SIGINT]:
+        signal.signal(sig, stop)
+    try:
+        while not stopping and all(child.poll() is None for child in children):
+            time.sleep(0.2)
+        status = (
+            0
+            if stopping
+            else next((child.returncode or 1 for child in children if child.poll() is not None), 1)
+        )
+    finally:
+        stop()
+        deadline = time.monotonic() + 15
+        for child in children:
+            try:
+                child.wait(timeout=max(0.1, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
+                os.killpg(child.pid, signal.SIGKILL)
+                child.wait()
+    raise SystemExit(status if status >= 0 else 1)
 
 
 if __name__ == "__main__":

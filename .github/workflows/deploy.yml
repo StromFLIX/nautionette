@@ -63,6 +63,12 @@ jobs:
           APP_URL: ${{ vars.APP_URL }}
           APP_TOKEN: ${{ secrets.APP_TOKEN }}
         run: python3 scripts/check_miniapps.py
+      - name: Verify CLI OAuth runtime compatibility (staging only)
+        if: github.event_name == 'workflow_run'
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          APP_TOKEN: ${{ secrets.APP_TOKEN }}
+        run: python3 scripts/check_cli_oauth_deployment.py
       - name: Creative-app artifact readiness diagnostics (staging only)
         if: always() && github.event_name == 'workflow_run'
         env:

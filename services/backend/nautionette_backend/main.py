@@ -16,7 +16,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from nautionette.telemetry import instrument_app
 
-from . import artcraft, github_mentions, mcp_servers, miniapps, output_maintenance, pi_packages, runs
+from . import (
+    artcraft,
+    github_mentions,
+    mcp_oauth,
+    mcp_servers,
+    miniapps,
+    output_maintenance,
+    pi_packages,
+    runs,
+)
 from .backend_mcp import BackendMCP
 from .background import drain, spawn
 from .chat_search import search
@@ -52,6 +61,7 @@ async def lifespan(_: FastAPI):
     spawn(recover_chat_agents(), name="chat-agent-recovery")
     spawn(github_mentions.consume(), name="github-mention-inbox")
     spawn(output_maintenance.run(), name="output-storage-maintenance")
+    spawn(mcp_oauth.maintenance(), name="mcp-oauth-maintenance")
     spawn(miniapps.maintenance(), name="miniapp-maintenance")
     spawn(search.run(), name="conversation-search-indexer")
     # agentgateway may still be starting, so this retries in the background

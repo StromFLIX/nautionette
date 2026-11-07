@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=gateway /app/agentgateway /app/agentgateway
 COPY --from=busybox:1.37.0-musl /bin/busybox /usr/local/bin/busybox
 COPY config/config.yaml /config/config.yaml
-COPY entrypoint.py /app/entrypoint.py
+COPY entrypoint.py cli_oauth.py cli_oauth_browser.py /app/
+RUN chmod 755 /app/cli_oauth_browser.py
 COPY --chown=65532:65532 data/ /data/
 
 ENV AGENTGATEWAY_ENV=container HOME=/data/mcp

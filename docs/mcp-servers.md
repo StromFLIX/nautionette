@@ -55,8 +55,9 @@ examples. The command must speak MCP on stdout; diagnostics belong on stderr.
 
 The executable and arguments are separate, not a shell command line. An argument
 containing spaces stays one argument. Stdio arguments and environment values are
-literal: `$VARIABLE` is **not** expanded. Nautionette escapes dollar signs for the
-gateway's config parser so passwords containing `$` are preserved. To give Brave
+literal: `$VARIABLE` is **not** expanded. Hybrid API resources receive the exact
+strings you enter; doubling dollar signs would change the process's real values.
+To give Brave
 its API key, enter the actual key in its environment row, not in the HTTP token
 field or the argument array.
 
@@ -64,6 +65,64 @@ Environment values are never returned to the browser or MCP/API callers. On
 edit, leave a stored value blank to keep it, type a replacement to change it, or
 remove its row to delete it. A new blank row value is an empty string. To replace
 a stored value with an empty string, remove and re-add the row.
+
+## CLI-owned OAuth (desktop callback bridge)
+
+An updated Windows, macOS or Linux desktop app can connect OAuth-authenticated
+stdio CLIs without a browser in the gateway container or a public OAuth callback.
+Under **Add server**, choose **stdio**, then **Authentication → CLI OAuth**.
+
+For WorkIQ, click **Use WorkIQ preset**, review/accept its linked CLI EULA and the
+shared-account warning, then **Connect with CLI OAuth**. The preset pins
+`@microsoft/workiq@1.0.1`, enables its supported browser-auth setting
+(`disableBrokeredAuth=true`), selects English CLI status messages, accepts the
+EULA only after that explicit checkbox, and runs `auth login` in agentgateway.
+Broker-required/device-bound tenant policies are still enforced by Microsoft;
+this is not a policy bypass. The CLI owns PKCE, token exchange, storage and refresh.
+
+The gateway captures the CLI's actual browser-launch URL (`BROWSER`, `xdg-open`,
+or supported console output), validates its code/PKCE loopback flow and checks
+that the login process owns the indicated port. The desktop binds that same port
+on the user's machine **before** opening the system browser. Query GET and
+`form_post` POST responses are forwarded through authenticated backend APIs to
+that specific CLI listener. WorkIQ uses dynamic ports and `form_post`; the hosted
+plugin's port 12798 is not assumed. No firewall port needs opening.
+
+Generic CLIs use the same executable as their MCP server, with separately entered
+**Login arguments** and optional **Setup commands** (a JSON array of argument
+arrays). Only trusted commands are supported. The bridge cannot support every
+OAuth app: native-broker-only, device-code-only, missing-state/PKCE, non-loopback,
+or non-interceptable browser flows are rejected or time out with an actionable
+failure. Web/mobile/older desktop clients are told to switch or update before
+starting a login. A conflicting local callback port also fails before opening login.
+
+New OAuth targets get `HOME=/data/mcp/oauth/<server-name>` unless explicitly
+overridden; existing targets preserve their stored HOME/environment on reconnect.
+The CLI account/cache is shared by all chats/users of that instance. Treat the
+whole `agentgateway-data` volume and its backups as credential-bearing. Removing
+the MCP target does **not** revoke provider consent or erase the CLI's account
+cache; use the provider's logout/revocation mechanism when required.
+
+Deploy **agentgateway, backend, frontend-web and the desktop client** together.
+The gateway runs a private authenticated control helper on port 4001, with
+`CLI_OAUTH_TOKEN` derived from `INTERNAL_TOKEN` (or `APP_TOKEN`). This port is not
+published on the host. Optional custom deployments can set
+`AGENTGATEWAY_CLI_OAUTH_URL` on the backend. Empty credentials do not enable an
+open control helper. User-facing CLI login also requires `APP_TOKEN` to be
+configured. Settings reports runtime compatibility before login; staging
+promotion runs a read-only authenticated compatibility check.
+
+The ten-minute login is temporary: cancellation, expiry and shutdown kill its
+process group. Lost callback deliveries are fenced and never automatically
+replayed. Successful CLI completion is followed by the normal isolated MCP probe
+before saving. A WorkIQ exit code of 0 alone is **not** success: its explicit
+success/failure messages are checked. Raw CLI output, callback HTML and OAuth
+tokens never enter chat/agent tools or the helper's logs. Callback APIs live under
+`/api/mcp-oauth`, outside the agent-facing MCP tool registry. Backend storage
+contains only reconnect configuration, not tokens or PKCE verifiers.
+
+See [the WorkIQ investigation](workiq-oauth-investigation.md) for actual runtime
+evidence, security boundaries and remaining real-account acceptance tests.
 
 ## Checks, lifecycle and troubleshooting
 
