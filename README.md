@@ -201,6 +201,74 @@ apply immediately, unlike copied model/persona defaults. See
 [Agent configuration](docs/agent-configuration.md#agent-to-agent-delegation) for APIs
 and exact limit semantics.
 
+## Desktop and iOS builds
+
+All clients reuse the frontend and connect to an existing instance with its URL
+and access token; they do **not** bundle the Python/Docker server.
+
+The **Desktop** workflow (`.github/workflows/desktop.yml`) builds on pushes to
+`main`, pull requests and manual runs:
+
+| Platform | Artifact | Architecture |
+| --- | --- | --- |
+| macOS | DMG | Apple silicon (arm64) and Intel (x64) |
+| Linux | AppImage | x64 |
+| Windows | NSIS installer (EXE) | x64 |
+
+A `v<semver>` tag (for example `v1.2.3`) sets the desktop version and attaches
+`nautionette-v1.2.3-<mac|linux|win>-<arch>.<dmg|AppImage|exe>` to the same GitHub
+Release as Android. Branch/PR builds are available as Actions artifacts only.
+These desktop installers are **unsigned**, not notarized: macOS Gatekeeper and
+Windows SmartScreen can block or warn about them. Production signing/notarization
+requires the respective certificates and a separate signing setup. Only install
+trusted artifacts. On Linux, make the AppImage executable; some distributions
+need FUSE support. ARM Linux and Windows ARM are not currently built.
+
+For a local desktop build, run `npm ci` then `npm run desktop:build` from
+`services/frontend`; `npm run desktop:dev` opens the packaged web UI. The
+Electron renderer is sandboxed with context isolation, no Node integration and
+no privileged IPC. External web links open in your browser. Authenticated file
+downloads use the browser save dialog; audio recording requires OS permission.
+
+The **iOS** workflow (`.github/workflows/ios.yml`) builds a simulator app and an
+**unsigned device archive** on macOS/Xcode. Both are Actions artifacts, including
+on tags; neither is advertised as a public installable IPA. It uses Capacitor
+8's Swift Package Manager project. Native permissions and the Filesystem privacy
+manifest are applied on every sync from `services/frontend/native/ios`.
+
+To develop on a Mac:
+
+```bash
+cd services/frontend
+npm ci
+npm run build
+npm run ios:add       # once; generated ios/ is intentionally ignored
+# After frontend/native changes: npm run build && npm run ios:sync
+npx cap open ios
+```
+
+Choose your Apple Developer team in Xcode's **Signing & Capabilities**, set the
+version/build number, use **Product → Archive**, and distribute through Organizer
+to App Store Connect/TestFlight (or a provisioned ad-hoc device). Public iOS
+installation requires Apple Developer membership, signing/provisioning and
+Apple's distribution/review steps; a GitHub download cannot replace that.
+Downloads use the iOS share sheet's **Save to Files**, with bounded private-cache
+staging and cleanup. Microphone usage is declared for dictation.
+
+### Website release downloads
+
+The landing page's **Downloads** section fetches GitHub's latest stable release,
+shows its exact tag and links directly to each **uploaded asset**. Missing,
+failed or still-building platforms get no dead download buttons. Prereleases and
+unsigned iOS archives are not advertised. If GitHub is unreachable/rate-limited,
+visitors still have the permanent **All releases & release notes** link.
+
+Once Apple distribution exists, set the website's `IOS_DOWNLOAD_URL` environment
+variable to its public `https://testflight.apple.com/join/...` or
+`https://apps.apple.com/.../id...` link. The page then adds an iOS install button;
+it never links an unsigned archive as an iPhone download. This setting is a
+public URL, not a signing credential.
+
 ## Signed Android releases
 
 The **Android** workflow (`.github/workflows/android.yml`) builds debug APKs for

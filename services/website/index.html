@@ -23,6 +23,7 @@
     <a href="#how">How it works</a>
     <a href="#architecture">Architecture</a>
     <a href="#workflows">Workflows</a>
+    <a href="#downloads">Downloads</a>
     <a href="#run">Self-host</a>
     <a href="#faq">FAQ</a>
   </nav>
@@ -45,7 +46,7 @@
     </p>
     <div class="hero-actions">
       <a class="btn btn-primary btn-lg" href="#run">Run it yourself</a>
-      <a class="btn btn-ghost btn-lg" href="#how">See how it works</a>
+      <a class="btn btn-ghost btn-lg" href="#downloads">Download the app</a>
     </div>
     <ul class="hero-facts">
       <li><strong>Durable</strong> runs, retries and history</li>
@@ -76,6 +77,18 @@
       </div>
     </div>
   </div>
+</section>
+
+<section class="section" id="downloads">
+  <p class="eyebrow">Your instance, on every screen</p>
+  <h2>Download Nautionette</h2>
+  <p>Desktop and mobile clients connect to your self-hosted instance with its URL and access token. The server still runs separately.</p>
+  <p id="release-status" role="status" aria-live="polite">Find the latest stable version on GitHub Releases.</p>
+  <div class="hero-actions" id="release-downloads"></div>
+  <p><a class="btn btn-ghost" href="https://github.com/StromFLIX/nautionette/releases">All releases &amp; release notes</a></p>
+  <p class="caption">macOS (Apple silicon and Intel), Linux x64, Windows x64 and Android downloads appear when their release builds finish. Desktop installers are currently unsigned; macOS and Windows may show security warnings. Only install releases you trust.</p>
+  <p class="caption" id="ios-status">iOS builds are available for developers in GitHub Actions. Public iPhone and iPad installation requires Apple signing and TestFlight or the App Store; an unsigned archive is not an installable app.</p>
+  <noscript><p>JavaScript is not required: open GitHub Releases above and choose the asset for your operating system.</p></noscript>
 </section>
 
 <section class="strip">
@@ -324,6 +337,6 @@ docker compose up -d">Copy</button>
   </div>
 </footer>
 
-<script src="/script.js"></script>
+<script type="module" src="/script.js?v=downloads-1"></script>
 </body>
 </html>

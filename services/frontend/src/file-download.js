@@ -6,7 +6,13 @@ const Downloads = registerPlugin('NautionetteDownloads')
  * the user chooses a destination and Android has written and closed the file. */
 export async function saveDownload (blob, name, mimeType, signal) {
   signal?.throwIfAborted()
-  if (Capacitor.isNativePlatform()) {
+  if (Capacitor.getPlatform() === 'ios') {
+    const [{ Filesystem, Directory }, { Share }, { saveIOSDownload }] = await Promise.all([
+      import('@capacitor/filesystem'), import('@capacitor/share'), import('./ios-download.js')
+    ])
+    return saveIOSDownload(blob, name, signal, { Filesystem, Directory, Share })
+  }
+  if (Capacitor.getPlatform() === 'android') {
     if (!Capacitor.isPluginAvailable('NautionetteDownloads')) {
       throw new Error('Update the Android app to enable saving files')
     }

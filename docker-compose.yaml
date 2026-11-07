@@ -116,6 +116,7 @@ services:
     environment:
       APP_URL: ${APP_URL:-}
       APP_ENVIRONMENT: ${APP_ENVIRONMENT:-production}
+      IOS_DOWNLOAD_URL: ${IOS_DOWNLOAD_URL:-}
     networks: [edge]
     healthcheck:
       test: ["CMD", "wget", "-q", "-T", "4", "-O", "/dev/null", "http://127.0.0.1/"]

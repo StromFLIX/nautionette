@@ -2,6 +2,25 @@
   "name": "nautionette-frontend",
   "version": "0.1.0",
   "private": true,
+  "description": "Nautionette desktop and mobile client for your self-hosted instance",
+  "author": "Nautionette contributors",
+  "main": "desktop/main.cjs",
+  "build": {
+    "appId": "dev.nautionette.app",
+    "productName": "Nautionette",
+    "directories": { "output": "out/desktop" },
+    "files": ["dist/**/*", "desktop/**/*", "package.json"],
+    "asar": true,
+    "artifactName": "nautionette-v${version}-${os}-${arch}.${ext}",
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.productivity",
+      "extendInfo": { "NSMicrophoneUsageDescription": "Record dictation for your Nautionette instance." }
+    },
+    "win": { "target": ["nsis"] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
+    "linux": { "target": ["AppImage"], "category": "Office" }
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,12 +29,20 @@
     "build": "vite build",
     "preview": "vite preview",
     "android:add": "cap add android && npm run android:sync",
-    "android:sync": "cap sync android && node scripts/sync-android.mjs"
+    "android:sync": "cap sync android && node scripts/sync-android.mjs",
+    "ios:add": "cap add ios --packagemanager SPM && npm run ios:sync",
+    "ios:sync": "cap sync ios && node scripts/sync-ios.mjs",
+    "desktop:dev": "npm run build && electron .",
+    "desktop:build": "npm run build && electron-builder --publish never",
+    "test:website": "node --test ../website/*.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
     "@capacitor/core": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/ios": "^8.6.0",
     "@capacitor/keyboard": "^8.0.6",
+    "@capacitor/share": "^8.0.3",
     "@dagrejs/dagre": "^3.1.3",
     "@quasar/extras": "^2.1.0",
     "@vue-flow/background": "^1.3.2",
@@ -34,6 +61,8 @@
     "@playwright/test": "^1.64.1",
     "@quasar/vite-plugin": "^2.0.2",
     "@vitejs/plugin-vue": "^6.0.10",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
     "fake-indexeddb": "^6.2.6",
     "sass-embedded": "^1.107.0",
     "vite": "^8.3.5"

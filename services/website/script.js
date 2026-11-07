@@ -1,6 +1,9 @@
 // Reveal on scroll, copy buttons, and an "Open the app" link that points at the
 // running instance when the deployment tells us where it is.
+import { loadDownloads } from './releases.mjs'
+
 document.addEventListener('DOMContentLoaded', () => {
+  loadDownloads(document)
   const revealables = document.querySelectorAll('.section, .strip, .cta, .hero-demo')
   revealables.forEach((element) => element.classList.add('reveal'))
 

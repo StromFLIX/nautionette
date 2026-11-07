@@ -1,7 +1,7 @@
 // Android 15 draws the keyboard over the web view instead of shrinking it, and a
 // plain browser only shrinks the visual viewport. Both cases reduce to one CSS
 // length the layout can subtract: --keyboard-inset.
-import { isNative } from './api'
+import { Capacitor } from '@capacitor/core'
 
 const root = document.documentElement
 
@@ -42,7 +42,7 @@ export function watchKeyboard () {
   window.visualViewport?.addEventListener('resize', apply)
   window.visualViewport?.addEventListener('scroll', apply)
 
-  if (!isNative) return
+  if (!Capacitor.isNativePlatform()) return
   import('@capacitor/keyboard').then(({ Keyboard }) => {
     const show = (info) => { reported = info.keyboardHeight; apply() }
     const hide = () => { reported = 0; apply() }

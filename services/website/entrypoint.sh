@@ -4,3 +4,5 @@
 set -e
 printf '%s' "${APP_URL:-}" > /usr/share/nginx/html/app-url.txt
 printf '%s' "${APP_ENVIRONMENT:-production}" > /usr/share/nginx/html/environment.txt
+# Optional public Apple distribution URL (never a signing secret).
+printf '%s' "${IOS_DOWNLOAD_URL:-}" > /usr/share/nginx/html/ios-url.txt

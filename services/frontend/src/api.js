@@ -5,7 +5,7 @@ const TOKEN_KEY = 'nautionette.token'
 const SERVER_KEY = 'nautionette.server'
 
 /** The packaged app is served from its own webview origin and has no backend. */
-export const isNative = Boolean(globalThis.Capacitor?.isNativePlatform?.())
+export const isNative = Boolean(globalThis.nautionetteDesktop || globalThis.Capacitor?.isNativePlatform?.())
 
 export const server = {
   get url () {
