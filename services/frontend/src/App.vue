@@ -94,9 +94,11 @@ const mobile = ref(mobileMedia.matches)
 const updateMobile = event => { mobile.value = event.matches }
 // Keep the desktop preference without hiding the list on narrow screens.
 const sideCollapsed = computed(() => !mobile.value && preferences.sideCollapsed)
-// Keep one shortcut bar: beside search when the list is visible, otherwise in
-// the detail pane so collapsed sidebars and mobile chats/apps retain access.
+// Keep shortcuts beside search or in app details when the list is hidden.
+// Open chats own their header (and its mobile safe-area inset); never prepend
+// an app strip there, including new chats and collapsed desktop sidebars.
 const detailPins = computed(() => ['chats', 'apps'].includes(route.name) &&
+  !(route.name === 'chats' && hasSelection.value) &&
   (sideCollapsed.value || (mobile.value && hasSelection.value)))
 
 function openSidebar () {

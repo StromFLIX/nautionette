@@ -1,0 +1,6 @@
+{
+  "list50_http_p50_ms": 1.27,
+  "list50_http_p95_ms": 1.61,
+  "requests": 50,
+  "scope": "local read-only observability list; no Temporal API baseline"
+}

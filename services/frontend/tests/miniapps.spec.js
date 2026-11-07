@@ -142,9 +142,11 @@ for (const width of [1440, 390, 320]) {
     const pins = page.getByRole('navigation', { name: 'Pinned apps' })
     await expect(page.locator('.side__head').getByRole('navigation', { name: 'Pinned apps' })).toBeVisible()
     if (width <= 900) {
-      // Details use the same shortcuts when the full-screen list is hidden.
+      // Chats stay focused; shortcuts remain in the list, not above the header.
       await page.goto(`/chats/new?agent=${item.agent_id}`)
-      await expect(page.locator('.shell__main').getByRole('navigation', { name: 'Pinned apps' })).toBeVisible()
+      await expect(page.locator('.shell__main').getByRole('navigation', { name: 'Pinned apps' })).toHaveCount(0)
+      await page.getByRole('button', { name: 'Back to chats', exact: true }).click()
+      await expect(page.locator('.side__head').getByRole('navigation', { name: 'Pinned apps' })).toBeVisible()
     }
     await expect(pins.getByRole('link', { name: 'Open Counter, pinned release 1' })).toBeVisible()
     await expect(pins.getByRole('link', { name: /Other app/ })).toHaveCount(0)
@@ -167,6 +169,39 @@ for (const width of [1440, 390, 320]) {
     await page.screenshot({ path: test.info().outputPath('app-runtimes.png') })
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     expect(errors).toEqual([])
+  })
+}
+
+for (const width of [1440, 390, 320]) {
+  test(`open chats have no app strip or gap above their header at ${width}px`, async ({ page, context }) => {
+    await mockApps(context)
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats/alpha')
+    const main = page.locator('.shell__main')
+    const header = main.locator('.pane-head')
+    const assertHeader = async () => {
+      await expect(header).toBeVisible()
+      await expect(main.getByRole('navigation', { name: 'Pinned apps' })).toHaveCount(0)
+      const mainBox = await main.boundingBox()
+      const headerBox = await header.boundingBox()
+      expect(headerBox.y).toBe(mainBox.y)
+      // Without a device safe-area inset, the header is exactly its configured height.
+      expect(headerBox.height).toBe(await header.evaluate(el => parseFloat(getComputedStyle(el).getPropertyValue('--header-height')) * parseFloat(getComputedStyle(document.documentElement).fontSize)))
+    }
+    await assertHeader()
+    if (width > 900) {
+      await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
+      await assertHeader()
+      await page.reload()
+      await assertHeader()
+    } else {
+      await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeHidden()
+      await page.getByRole('button', { name: 'Back to chats', exact: true }).click()
+      await expect(page.locator('.side__head').getByRole('navigation', { name: 'Pinned apps' })).toBeVisible()
+    }
+    await page.goto('/chats/new')
+    await assertHeader()
+    await page.screenshot({ path: test.info().outputPath('chat-header.png') })
   })
 }
 

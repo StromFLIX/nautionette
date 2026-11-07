@@ -1,0 +1,216 @@
+{
+  "run_token": "6a887b66da",
+  "waymark_version": "0.30.1",
+  "configuration": {
+    "WAYMARK_WORKER_COUNT": "2",
+    "WAYMARK_CONCURRENT_PER_WORKER": "10"
+  },
+  "tests": {
+    "RawPort": {
+      "expected_rejection": "UnsupportedPatternError",
+      "detail": "Short-circuit and/or expressions are unsupported; use nested if statements (/projects/.sessions/75877a2836524b4ab436b7e594a360b5/3bc27e229e60/scripts/spikes/waymark/workflows.py, line 196, col 15)\n\nRecommendation: Move this operation into an action, or rewrite it using supported explicit statements."
+    },
+    "FormattingProbe": {
+      "expected_rejection": "UnsupportedPatternError",
+      "detail": "F-strings are not supported (/projects/.sessions/75877a2836524b4ab436b7e594a360b5/3bc27e229e60/scripts/spikes/waymark/workflows.py, line 203, col 16)\n\nRecommendation: F-strings are not supported in workflow code because they require runtime string interpolation.\nUse an @action to perform string formatting:\n\n    @action\n    async def format_message(value: int) -> str:\n        return f'Result: {value}'"
+    },
+    "FinallyProbe": {
+      "expected_rejection": "UnsupportedPatternError",
+      "detail": "try/finally and try/else are unsupported (/projects/.sessions/75877a2836524b4ab436b7e594a360b5/3bc27e229e60/scripts/spikes/waymark/workflows.py, line 209, col 9)\n\nRecommendation: Move this operation into an action, or rewrite it using supported explicit statements."
+    },
+    "retry": {
+      "pass": true,
+      "attempts": 3
+    },
+    "Failing": {
+      "expected_failure": "RuntimeError",
+      "detail": "ValueError: {'message': 'intentional spike failure', 'module': 'builtins', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/spike-venv/lib/python3.12/site-packages/waymark/workflow_runtime.py\", line 94, in execute_action\\n    value = await value\\n            ^^^^^^^^^^^\\n  File \"/projects/.sessions/75877a2836524b4ab436b7e594a360b5/3bc27e229e60/scripts/spikes/waymark/workflows.py\", line 108, in step\\n    raise ValueError(\"intentional spike failure\")\\nValueError: intentional spike failure\\n', 'values': {'args': ['intentional spike failure']}}"
+    },
+    "Timeout": {
+      "expected_failure": "RuntimeError",
+      "detail": "ActionTimeout: None"
+    },
+    "timeout_side_effect": {
+      "started": 1,
+      "finished_after_timeout": 1
+    },
+    "Recovery": {
+      "pass": true,
+      "restart_to_result_seconds": 15.052,
+      "started": 2,
+      "finished": 2
+    },
+    "Inflight": {
+      "pass": true,
+      "restart_to_result_seconds": 18.994,
+      "started": 2,
+      "finished": 1
+    },
+    "worker_kill": {
+      "pass": false,
+      "error": "ActionExecutionNotStarted: None",
+      "started": 1,
+      "finished": 0
+    },
+    "schedule": {
+      "pass": true,
+      "info": "ScheduleInfo(workflow_name='chain', schedule_name='spike-6a887b66da', schedule_type='interval', cron_expression=None, interval_seconds=2, jitter_seconds=0, allow_duplicate=False, status='paused', next_run_at=datetime.datetime(2026, 11, 7, 10, 20, 46, 362258, tzinfo=datetime.timezone.utc), last_instance_id='795588df-7773-44b1-8525-0b83b6810ad9')"
+    },
+    "existing_url_digest": {
+      "pass": true,
+      "original_workflow_unmodified": true,
+      "http": "real public GitHub README fetch",
+      "agent": "deterministic fixture; no real model",
+      "output": {
+        "summary": "Deterministic spike summary",
+        "key_points": [
+          "fixture"
+        ]
+      },
+      "artifact_equal": true
+    },
+    "url_digest_404": {
+      "pass": true,
+      "output": {
+        "summary": "http://127.0.0.1:38655/missing returned HTTP 404",
+        "key_points": []
+      }
+    },
+    "openapi": {
+      "status": 200,
+      "bytes": 32185
+    },
+    "api_docs": {
+      "status": 200,
+      "bytes": 1578726
+    },
+    "dashboard": {
+      "status": 200,
+      "bytes": 527
+    },
+    "healthz": {
+      "status": 200,
+      "bytes": 15
+    }
+  },
+  "benchmarks": {
+    "waymark_chain_concurrency_1": {
+      "completion": {
+        "count": 50,
+        "p50_ms": 206.32,
+        "p95_ms": 211.26,
+        "min_ms": 205.04,
+        "max_ms": 233.09
+      },
+      "enqueue": {
+        "count": 50,
+        "p50_ms": 1.85,
+        "p95_ms": 3.26,
+        "min_ms": 1.42,
+        "max_ms": 5.64
+      },
+      "workflows_per_second": 4.83
+    },
+    "waymark_chain_concurrency_10": {
+      "completion": {
+        "count": 50,
+        "p50_ms": 207.86,
+        "p95_ms": 247.26,
+        "min_ms": 204.08,
+        "max_ms": 248.48
+      },
+      "enqueue": {
+        "count": 50,
+        "p50_ms": 2.58,
+        "p95_ms": 11.94,
+        "min_ms": 1.25,
+        "max_ms": 13.01
+      },
+      "workflows_per_second": 46.15
+    },
+    "waymark_chain_concurrency_50": {
+      "completion": {
+        "count": 50,
+        "p50_ms": 338.34,
+        "p95_ms": 347.24,
+        "min_ms": 233.64,
+        "max_ms": 441.05
+      },
+      "enqueue": {
+        "count": 50,
+        "p50_ms": 17.17,
+        "p95_ms": 28.69,
+        "min_ms": 8.81,
+        "max_ms": 28.83
+      },
+      "workflows_per_second": 112.5
+    },
+    "waymark_default_blocking_ms": 1006.74,
+    "waymark_fanout20_ms": 453.83,
+    "temporal_dev_chain_concurrency_1": {
+      "completion": {
+        "count": 50,
+        "p50_ms": 199.06,
+        "p95_ms": 210.27,
+        "min_ms": 117.73,
+        "max_ms": 273.65
+      },
+      "enqueue": {
+        "count": 50,
+        "p50_ms": 4.87,
+        "p95_ms": 7.89,
+        "min_ms": 3.38,
+        "max_ms": 18.0
+      },
+      "workflows_per_second": 5.25
+    },
+    "temporal_dev_chain_concurrency_10": {
+      "completion": {
+        "count": 50,
+        "p50_ms": 356.33,
+        "p95_ms": 448.04,
+        "min_ms": 273.16,
+        "max_ms": 455.3
+      },
+      "enqueue": {
+        "count": 50,
+        "p50_ms": 7.63,
+        "p95_ms": 37.41,
+        "min_ms": 2.82,
+        "max_ms": 42.2
+      },
+      "workflows_per_second": 26.91
+    },
+    "temporal_dev_chain_concurrency_50": {
+      "completion": {
+        "count": 50,
+        "p50_ms": 1253.91,
+        "p95_ms": 1648.13,
+        "min_ms": 630.1,
+        "max_ms": 1653.31
+      },
+      "enqueue": {
+        "count": 50,
+        "p50_ms": 116.29,
+        "p95_ms": 182.0,
+        "min_ms": 13.0,
+        "max_ms": 213.07
+      },
+      "workflows_per_second": 30.05
+    },
+    "temporal_dev_fanout20_ms": 252.07
+  },
+  "resources": {
+    "waymark_node_and_workers": {
+      "rss_mib": 147.8,
+      "processes": 3,
+      "cpu_seconds": 1.9
+    },
+    "idle_cpu_seconds_over_5s": 0.7,
+    "bridge": {
+      "rss_mib": 9.5,
+      "processes": 1,
+      "cpu_seconds": 0.11
+    }
+  }
+}

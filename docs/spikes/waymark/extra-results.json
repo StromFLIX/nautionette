@@ -1,0 +1,20 @@
+{
+  "bare_failure": {
+    "error": "ValueError: {'message': 'intentional spike failure', 'module': 'builtins', 'traceback': 'Traceback (most recent call last):\\n  File \"/workspace/spike-venv/lib/python3.12/site-packages/waymark/workflow_runtime.py\", line 94, in execute_action\\n    value = await value\\n            ^^^^^^^^^^^\\n  File \"/projects/.sessions/75877a2836524b4ab436b7e594a360b5/3bc27e229e60/scripts/spikes/waymark/workflows.py\", line 108, in step\\n    raise ValueError(\"intentional spike failure\")\\nValueError: intentional spike failure\\n', 'values': {'args': ['intentional spike failure']}}",
+    "attempts": 1
+  },
+  "single_node": {
+    "short_workflow_seconds": 6.201
+  },
+  "add_second_node": {
+    "short_workflow_seconds": 0.614
+  },
+  "dead_pool": {
+    "health_status": 200,
+    "health_body": {
+      "status": "ok"
+    },
+    "workflow_error": "ActionExecutionNotStarted: None",
+    "live_python_workers": 0
+  }
+}
