@@ -30,7 +30,8 @@ def test_activity_counts_all_chats_and_only_current_agent_membership(client, db)
     db.update_chat(chats[1]["id"], {"agent_customized": True})
     activity = client.get("/api/chats").json()["activity"]
     assert activity == {
-        "running": 5, "queued": 5,
+        "running": 5,
+        "queued": 5,
         "agents": {"ada": {"running": 2, "queued": 2}, "grace": {"running": 2, "queued": 2}},
     }
 
