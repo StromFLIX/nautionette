@@ -158,7 +158,7 @@ def test_full_desktop_to_backend_to_cli_to_real_gateway_mcp(client, stack, respo
             while b"\n" not in buffered:
                 assert selector.select(timeout=15), "Desktop driver stopped responding"
                 chunk = os.read(node.stdout.fileno(), 65536)
-                assert chunk, "Desktop driver exited unexpectedly"
+                assert chunk, "Desktop driver exited unexpectedly: " + node.stderr.read()[-4000:]
                 buffered.extend(chunk)
             line, _, buffered = buffered.partition(b"\n")
             message = json.loads(line)

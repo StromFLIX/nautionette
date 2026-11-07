@@ -1,5 +1,3 @@
-import { api, auth, server } from './api.js'
-
 export function desktopOAuth () {
   const bridge = globalThis.nautionetteDesktop?.oauth
   return bridge?.version === 1 && ['prepare', 'authorize', 'cancel'].every(key => typeof bridge[key] === 'function') ? bridge : null
@@ -11,8 +9,8 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 // No credentials/callbacks in reactive state, localStorage, chat or URL params.
 // Each new CLI authorization URL gets its own exact port and one-shot receiver.
-export function oauthConnection ({ bridge = desktopOAuth(), backend = api, interval = 1000,
-  context = () => `${server.url}|${auth.token}` } = {}) {
+export function oauthConnection ({ bridge = desktopOAuth(), backend, interval = 1000, context } = {}) {
+  if (!backend || typeof context !== 'function') throw new Error('OAuth needs a backend adapter and instance context')
   const initialContext = context()
   let cancelled = false, loginId = ''
   function check () {

@@ -186,7 +186,7 @@ import { useQuasar } from 'quasar'
 import DeclaredField from './DeclaredField.vue'
 import { credentialLabel, draftIsValid, resetDraft } from './fields'
 import { actions, store } from '../../store'
-import { api } from '../../api'
+import { api, auth, server as instanceServer } from '../../api'
 import { desktopOAuth, oauthClientMessage, oauthConnection } from '../../mcp-oauth.js'
 
 const $q = useQuasar()
@@ -333,7 +333,7 @@ async function save () {
             variable.stored && variable.value === '' ? null : variable.value])) }
       : { transport: 'http', url: draft.url, token: draft.token }
     if (transport.value === 'stdio' && authentication.value === 'oauth') {
-      oauthController = oauthConnection()
+      oauthController = oauthConnection({ backend: api, context: () => `${instanceServer.url}|${auth.token}` })
       await oauthController.connect(name, { ...payload, provider: oauthProvider.value,
         login_args: parsedLoginArgs.value, setup_args: parsedSetupArgs.value, accept_eula: acceptEula.value },
       stage => { oauthStage.value = stage })
