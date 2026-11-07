@@ -101,6 +101,56 @@ def test_plain_internal_network_and_old_engines_fail_closed(runtime):
     )
 
 
+@pytest.mark.parametrize("status", ["running", "exited"])
+def test_existing_runtime_reattaches_broker_before_health_and_rpc(runtime, monkeypatch, status):
+    container = Mock(status=status)
+    container.attrs = {"NetworkSettings": {"Networks": {apps.name("one", "net"): {"IPAddress": "10.0.0.2"}}}}
+    me = Mock()
+    me.attrs = {"NetworkSettings": {"Networks": {}}}
+    runtime.version.return_value = {"Version": "28.5.2"}
+    net = runtime.networks.get.return_value
+    net.attrs = {
+        "Internal": True,
+        "EnableIPv6": False,
+        "Labels": apps.labels("one"),
+        "Options": {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"},
+    }
+    monkeypatch.setattr(apps, "owned_container", lambda *args: container)
+
+    def attach(broker, aliases):
+        assert broker is me and aliases == ["miniapp-host"]
+        me.attrs["NetworkSettings"]["Networks"][apps.name("one", "net")] = {}
+
+    runtime.containers.get.return_value = me
+    net.connect.side_effect = attach
+
+    def http(method, url, headers, payload, *, timeout):
+        assert apps.name("one", "net") in me.attrs["NetworkSettings"]["Networks"]
+        return 200, {"status": "ok"} if url.endswith("/healthz") else {"value": 1}
+
+    invoke = Mock(side_effect=http)
+    monkeypatch.setattr(apps, "bounded_http", invoke)
+    apps.ready("one", config())
+    assert apps.runtime_call("one", config(), "/rpc", {"method": "POST"}) == {"value": 1}
+    net.connect.assert_called_once()
+    runtime.containers.create.assert_not_called()
+    assert invoke.call_count == 2  # Health plus exactly one RPC, never a mutation replay.
+    if status == "running":
+        container.start.assert_not_called()
+    else:
+        container.start.assert_called()
+
+
+def test_existing_runtime_network_policy_failure_never_dispatches(runtime, monkeypatch):
+    monkeypatch.setattr(apps, "network", Mock(side_effect=RuntimeError("ownership mismatch")))
+    invoke = Mock()
+    monkeypatch.setattr(apps, "bounded_http", invoke)
+    with pytest.raises(RuntimeError, match="ownership"):
+        apps.runtime_call("one", config(), "/rpc", {"method": "POST"})
+    invoke.assert_not_called()
+    runtime.containers.get.assert_not_called()
+
+
 def test_fresh_database_is_wal_ready_with_readonly_parent(runtime):
     apps.data_files("one", 1, None)
     folder = apps.root("one") / "1"
