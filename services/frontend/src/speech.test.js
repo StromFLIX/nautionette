@@ -1,43 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createRecorder, readSpeechEvents, wavAudio, joinTranscript } from './speech.js'
+import { createRecorder } from './speech.js'
 import { Capacitor } from '@capacitor/core'
-
-function stream (...chunks) {
-  return new ReadableStream({ start (controller) { for (const chunk of chunks) controller.enqueue(chunk); controller.close() } })
-}
-
-test('live PCM is encoded as independently decodable, bounded mono WAV', async () => {
-  const blob = wavAudio(new Float32Array([0, 0.5, -0.5]), 16000)
-  const bytes = await blob.arrayBuffer()
-  assert.equal(blob.type, 'audio/wav')
-  assert.equal(blob.size, 50)
-  const view = new DataView(bytes)
-  assert.equal(view.getUint32(24, true), 16000)
-  assert.equal(view.getUint32(40, true), 6)
-  assert.equal(view.getInt16(46, true), 16384)
-})
-
-test('forced window overlap joins shared words without duplicating them', () => {
-  assert.equal(joinTranscript('Fix the API endpoint.', 'API endpoint and tests.', true), 'Fix the API endpoint. and tests.')
-  assert.equal(joinTranscript('Do it.', 'Do it.', false), 'Do it. Do it.')
-  assert.equal(joinTranscript('Keep this.', '', true), 'Keep this.')
-  assert.equal(joinTranscript('', ' First words. '), 'First words.')
-})
-
-test('dictation stream preserves split UTF-8 and requires a final completion frame', async () => {
-  const data = new TextEncoder().encode('data: {"type":"delta","text":"Grüße"}\n\ndata: {"type":"done","text":"Grüße"}\n\n')
-  const events = []
-  await readSpeechEvents(stream(data.slice(0, 35), data.slice(35, 36), data.slice(36)), event => events.push(event))
-  assert.equal(events[0].text, 'Grüße')
-  assert.equal(events[1].type, 'done')
-  await assert.rejects(readSpeechEvents(stream(new TextEncoder().encode('data: {"type":"delta","text":"partial"}\n\n')), () => {}), /interrupted/)
-})
-
-test('dictation rejects unbounded/malformed events', async () => {
-  await assert.rejects(readSpeechEvents(stream(new TextEncoder().encode('x'.repeat(128 * 1024 + 1))), () => {}), /Invalid/)
-  await assert.rejects(readSpeechEvents(stream(new TextEncoder().encode('data: not json\n\n')), () => {}), SyntaxError)
-})
 
 test('microphone denial gives platform-specific guidance and remains retryable', async () => {
   const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
@@ -51,7 +15,7 @@ test('microphone denial gives platform-specific guidance and remains retryable',
     for (const native of [false, true]) {
       Capacitor.isNativePlatform = () => native
       const errors = []
-      const recorder = createRecorder({ onSnapshot: () => {}, onError: error => errors.push(error.message) })
+      const recorder = createRecorder({ onError: error => errors.push(error.message) })
       await recorder.start()
       assert.equal(recorder.state.value, 'idle')
       assert.match(errors[0], native ? /phone’s app settings/ : /browser settings/)
@@ -83,8 +47,8 @@ test('disposing a pending microphone permission request releases late tracks', a
   const originalCancel = globalThis.cancelAnimationFrame
   globalThis.cancelAnimationFrame = () => {}
   try {
-    const recorder = createRecorder({ onSnapshot: () => uploaded++, onError: error => { throw error } })
-    const pending = recorder.start()
+    const recorder = createRecorder({ onError: error => { throw error } })
+    const pending = recorder.start({ onAudio: () => uploaded++ })
     assert.equal(recorder.state.value, 'requesting')
     recorder.dispose()
     resolvePermission({ getTracks: () => [{ stop () { stopped++ } }] })

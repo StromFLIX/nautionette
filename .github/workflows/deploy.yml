@@ -69,6 +69,14 @@ jobs:
           APP_URL: ${{ vars.APP_URL }}
           APP_TOKEN: ${{ secrets.APP_TOKEN }}
         run: python3 scripts/check_cli_oauth_deployment.py
+      - uses: astral-sh/setup-uv@v10.3.3
+        if: github.event_name == 'workflow_run'
+      - name: Verify self-hosted streaming dictation over HTTPS and WebSocket (staging only)
+        if: github.event_name == 'workflow_run'
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          APP_TOKEN: ${{ secrets.APP_TOKEN }}
+        run: uv run --locked --package nautionette-backend python scripts/check_dictation_deployment.py
       - name: Creative-app artifact readiness diagnostics (staging only)
         if: always() && github.event_name == 'workflow_run'
         env:

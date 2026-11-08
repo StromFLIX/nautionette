@@ -111,11 +111,11 @@ in each chat; opening one chat's controls never expands the next chat's composer
 Provider-reported context usage appears as a circle in the chat header.
 
 The joined **microphone / send** control supports live dictation through a private
-CPU-only Whisper service included in Compose. Partial text appears while speaking;
-Stop finalizes an editable transcript, never an automatically sent message. Optional
-cleanup then streams an edit using the selected chat model; the original transcript
-remains recoverable. See [Chat dictation](docs/dictation.md) for privacy, limits,
-CPU benchmarks and replacing the transcription service.
+CPU-only Moonshine streaming service included in Compose. English/German models
+recognize audio as it arrives; Stop flushes only the remaining audio and finalizes
+an editable draft, never an automatically sent message. No cloud STT, model cleanup
+calls, provider keys or dictation feature flags. See [Chat dictation](docs/dictation.md)
+for privacy, language selection, limits and verification.
 Open Settings with **Ctrl/Command + ,** and focus its search with **/**.
 See [Frontend design system](docs/frontend-design.md) for the extension points,
 persistence model and testing guidance.

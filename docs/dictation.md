@@ -1,160 +1,132 @@
-# Live chat dictation
+# Self-hosted streaming chat dictation
 
-Type as before, or use the microphone in the joined mic/send control. The mic
-becomes a stop button with a live input-level display, timer and cancel control
-to its left. **Text appears while you speak**, not just after stopping. Stop
-finalizes the last audio window and optionally streams an LLM edit into the
-**editable draft**. Nothing sends a chat message automatically.
+Press the microphone, speak, then press Stop. Text appears while you speak; Stop
+flushes the final audio block and waits only for the recognizer's final acknowledgement.
+The result is an editable draft. **Nothing is sent as a chat message automatically.**
+Cancel restores the draft that existed before recording. A connection failure keeps
+already recognized words and releases the microphone; it never reconnects or replays
+audio automatically. Navigation also closes the microphone and private session.
 
-The attachment **plus** and chat preferences sit together at the left. The model
-picker lives only inside chat preferences alongside the agent configuration.
-Reported context usage is now a circular indicator in the top-right chat header;
-unknown usage remains unknown, not a fabricated zero.
+## One local path
 
-## Live transcription protocol
+```text
+Browser/WebView AudioWorklet → authenticated backend WebSocket → private stt service
+                            ← live transcript revisions / final acknowledgement
+```
 
-The browser captures mono PCM through AudioWorklet (ScriptProcessor compatibility
-fallback for older webviews). It sends independently decodable WAV snapshots
-approximately every two seconds, while recording continues. Unlike chopping a
-MediaRecorder WebM stream, every snapshot contains its own complete audio header.
+The appliance uses **Moonshine Small Streaming**, with local English and German
+models loaded at startup. It performs incremental inference as audio arrives and
+finalizes phrases during pauses. Audio is not repeatedly uploaded as growing WAV
+files. Stop sends only the final worklet block and an end marker, never the entire
+recording again. When a phrase has already finalized during a pause, Stop can feel
+immediate. If the final word is still being recognized, finalization can take longer.
 
-- Pauses (700 ms quiet after a two-second window) finalize phrases.
-- Windows are capped at twelve seconds, with a one-second overlap at forced
-  boundaries. Overlapping recognized words are deduplicated.
-- One request is in flight per recorder. Pending interim snapshots are coalesced
-  to the newest one; finalized windows are never dropped.
-- Partial text may be revised as more of its window is heard. Finalized phrases
-  are retained while the next phrase is transcribed.
-- The editor is gated during dictation/finalization to prevent incoming partials
-  overwriting edits. Stop to edit, or cancel to restore the original typed draft.
-- Navigation stops the microphone and aborts client requests. A late permission
-  grant releases its tracks immediately instead of opening an orphan recording.
+**There are no cloud transcription providers, provider API keys, cleanup LLM calls,
+feature flags, or alternative dictation modes.** The old WAV transcription endpoint,
+SSE wrapper, overlap/deduplication queue, cloud cleanup UI and gateway edit method
+have been removed. `STT_BASE_URL`, `STT_API_KEY`, `STT_MODEL`, `STT_THREADS` and
+`STT_IMAGE` are obsolete and ignored; remove them from existing deployment env lists.
+The backend's speech address is fixed to the private Compose service, not an
+operator-configurable public API.
 
-This is **rolling-window live transcription over a standard STT API**, not a
-native token-by-token streaming model. First text takes the window interval
-**plus inference and network time**. Slow hardware can produce less frequent
-updates; coalescing prevents an unbounded queue of obsolete partial results.
-At Stop, only the remaining window needs finalization, not the whole recording.
-The current implementation can still submit a byte-identical final snapshot or a
-quiet-only tail, and Stop waits behind any in-flight request. See the
-[streaming dictation spike](spikes/streaming-dictation.md) for reproduced cases,
-real native-streaming latency measurements, and the proposed improvement path.
+### Language
 
-## Default appliance
+**Settings → Workspace → Dictation language** selects **English** or **German**.
+The initial default follows the browser's language (German for `de`, English
+otherwise). A saved English/German choice is retained. The old automatic language
+choice migrates to that default; old cleanup preferences cannot trigger any network
+call. Streaming uses the selected language model, not automatic language detection.
+Choose the language you will speak. Mixed-language and technical identifiers still
+need review; recognition is not guaranteed to preserve every word.
 
-`docker-compose.yaml` includes `stt`, a private CPU-only faster-whisper service:
+## Privacy and authentication
 
-- Whisper **small**, INT8; four CPU threads, 4 CPU quota, 3 GiB memory ceiling.
-- One inference at a time; overload returns 429 rather than building a queue.
-- Browser recordings stop at 120 seconds. Each request is limited to 12 MiB and
-  the appliance independently checks the decoded audio duration (120 seconds).
-- OpenAI-compatible `POST /v1/audio/transcriptions` multipart API, JSON response.
-- No host port, no public domain, no Docker socket or provider credentials.
-- Non-root user; model downloads persist in the stack's `stt-models` volume.
-- Temporary multipart spooling is on `/tmp` tmpfs, not persistent disk. Audio
-  and transcripts are not saved to chat history, events, or application logs.
-- Dependency versions and hashes are locked in `services/stt/requirements.txt`.
+Audio and interim transcripts remain in memory on your infrastructure. They are not
+written to chat history, the event bus or application logs. Only a draft that you
+explicitly send becomes a normal chat message. Cancelling frees recognizer state.
 
-First startup downloads the model (approximately 0.5 GB) from Hugging Face and
-can take several minutes. Readiness is available only after loading; the
-healthcheck has a ten-minute startup grace period. A model download failure
-restarts only this service: it never prevents the main application starting.
-The backend reports a retryable dictation error while the service is unavailable.
+The browser first requests a **30-second, single-use ticket** using the existing
+app authentication. It sends that ticket in the first WebSocket frame, not in a URL.
+The backend binds it to the HTTP request's Origin and validates it before connecting
+to the speech service. No app or provider credential appears in the socket URL.
 
-Recording requires HTTPS (localhost is also a secure context), microphone
-permission and Web Audio. Unsupported devices retain normal typing. Android's
-Capacitor WebView uses the same capture pipeline; the generated manifest gets
-`RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS` from `scripts/sync-android.mjs`.
-Capacitor requests both and rejects capture if either is missing, even when
-microphone access was allowed. Only `RECORD_AUDIO` displays a runtime prompt;
-`MODIFY_AUDIO_SETTINGS` is granted at install time. This manifest fix requires
-installing a newly built APK; updating the web server alone cannot fix an old APK.
-If access is actually denied, allow Microphone in the phone's Nautionette app
-settings and ensure Android's system-wide microphone privacy toggle is on, then
-retry. Browser users should check the site's microphone permission instead.
+The speech container has **no public port/domain, Docker socket, or provider
+credentials**. Initial model files are downloaded from Moonshine's public model host
+and cached in the existing `stt-models` volume. This downloads model files only;
+recordings are never sent there. Subsequent cached startup and inference run locally.
+The English/German streaming models are MIT-licensed; the appliance includes their
+license notice. The upstream Python downloader currently prints an outdated blanket
+non-commercial warning for German, but that warning does not describe the selected
+streaming model's [license](https://github.com/moonshine-ai/moonshine/blob/main/LICENSE).
 
-## CPU benchmark and configuration
+## Limits and operations
 
-Warm Whisper small INT8, public whisper.cpp `jfk.wav` sample (about 11 seconds),
-three measured runs after warmup, eight available sandbox CPUs:
+- Mono PCM16 frames with increasing sequence numbers; actual sample rate 8–48 kHz.
+  Moonshine handles resampling within its stream. Worklet blocks are 2,048 samples
+  (128 ms at 16 kHz); older webviews use the same protocol via ScriptProcessor.
+- Maximum 120 seconds / 12 MiB of audio, 65,540-byte frames, 4,096 frames, 16,000
+  transcript characters and 256 recognized segments. Both backend and appliance
+  enforce recording/frame limits. Socket input queues and client send buffering
+  are bounded; slow connections fail clearly rather than silently losing audio.
+- One session at a time. Busy requests fail rather than accumulating recordings or
+  inference jobs. Unauthenticated handshakes have a separate bounded budget and
+  cannot take the inference slot. Handshake and idle/finalization waits have timeouts.
+- Stop waits for the actual worklet flush. A missing flush acknowledgement reports
+  interruption rather than claiming an incomplete recording is complete.
+- Cancellation waits for already-running native inference before freeing state or
+  admitting another session. No background native worker can use freed model memory.
+- Compose keeps the service non-root with `no-new-privileges`, a model volume and
+  RAM-backed temporary space. It does not gate backend startup. The healthcheck
+  becomes ready after both models load and has a ten-minute first-download grace.
+- `STT_CPUS` (default `4`) and `STT_MEMORY` (default `3g`) only control container
+  resource limits. The appliance fixes ORT inference to one worker per session,
+  avoiding dozens of competing worker threads across two resident models.
+  Python/native dependencies are version- and hash-locked.
 
-| Threads | Median seconds | Relative to two threads |
-| --- | ---: | ---: |
-| 1 | 7.743 | 72% slower |
-| 2 | 4.508 | baseline |
-| 4 | 2.618 | 42% less time |
-| 8 | 3.487 | 23% less time |
+In the implementation smoke test, both models loaded in approximately 14 seconds
+with a populated package cache and initial model downloads; their files totalled
+approximately 266 MB. An English public sample streamed through the real backend
+and appliance produced 15 live updates before Stop and finalized in 406 ms.
+With the final fixed CPU policy, appliance-only English finalization measured
+253 ms without added quiet and 30 ms after one second of quiet; synthetic German
+measured 622 ms and 11 ms respectively. These are sandbox measurements, not
+production p95 promises. The synthetic German sample produced live text but had
+recognition errors; it is not an accuracy benchmark. Review dictated identifiers
+and words before sending.
 
-All runs produced the same sample transcript. This is a latency comparison,
-**not an accuracy evaluation or a production-host benchmark**. Four threads were
-faster than eight here; blindly allocating more CPUs did not help. Benchmark
-representative English/German coding prompts on the actual host before increasing
-further. Set both thread count **and** container quota, not just one.
-`services/stt/benchmark.py /path/to/sample.wav --threads 1,2,4,8 --cache /models`
-repeats the warm comparison in the appliance environment. Mount the sample read-only
-and temporarily allow at least eight CPUs when comparing eight threads. This manual
-command prints its sample transcript; use non-sensitive benchmark audio.
+## Browser and mobile requirements
 
-| Environment variable | Default | Meaning |
-| --- | --- | --- |
-| `STT_BASE_URL` | `http://stt:8000/v1` | Backend-only OpenAI-compatible API base URL; explicitly empty disables dictation |
-| `STT_MODEL` | `small` | Transcription model sent to the endpoint; also the bundled appliance's loaded model |
-| `STT_API_KEY` | empty | Optional backend-only bearer credential for a replacement endpoint |
-| `STT_THREADS` | `4` | Bundled appliance's inference thread count |
-| `STT_CPUS` | `4` | Container CPU quota |
-| `STT_MEMORY` | `3g` | Container memory ceiling |
-| `STT_IMAGE` | stack-specific local image | Image override; Compose builds the bundled appliance by default |
+Recording requires HTTPS (localhost is also secure), microphone permission, Web
+Audio and WebSockets. The routing proxy must preserve WebSocket upgrades on
+`/api/speech/stream`. Normal typing remains usable on unsupported devices.
 
-## Replacing the service
+Android's Capacitor WebView needs both `RECORD_AUDIO` and `MODIFY_AUDIO_SETTINGS`,
+which the Android sync script supplies. Only the former shows a permission prompt;
+the latter is granted at install time. If permissions were missing in an older APK,
+install a newly built APK; updating the web server cannot repair its manifest. If
+permission is denied, check the app/site microphone permission and Android's
+system microphone privacy toggle. iOS declares microphone usage during sync.
 
-For another faster-whisper/whisper.cpp/GPU service, point `STT_BASE_URL` at its
-OpenAI-compatible `/v1` API and set its model name. The browser and backend API
-need no changes. The replacement must accept multipart `file`, `model`, optional
-`language`, and `response_format=json`, and return `{"text":"..."}`. Audio upload
-and request limits still apply in Nautionette. Replacements must enforce their
-own decoded-duration and inference limits.
+## Verification
 
-To stop building/running the bundled service, use a Compose override with
-`services.stt.profiles: [local-stt]` and configure the replacement URL. No backend
-`depends_on` references the appliance. To run it later, enable that profile.
-Merely changing `STT_BASE_URL` does not stop the original container.
+```sh
+uv run pytest tests/backend/test_speech.py
+cd services/frontend && npm test
+npx playwright test tests/speech.spec.js --workers=1
+# Back at repository root:
+uv venv --python 3.13 /tmp/stt-venv
+uv pip sync --python /tmp/stt-venv/bin/python services/stt/requirements.txt
+cd services/stt && /tmp/stt-venv/bin/python -m unittest test_server -v
+```
 
-For a custom prebuilt image, an override can set `services.stt.build: !reset null`
-and `services.stt.image: your-pinned-image`; adjust its command, model volume and
-healthcheck to that implementation. The backend API boundary stays unchanged.
-A native streaming model would require an additional adapter; merely swapping
-the HTTP URL does not change this client's rolling-window protocol.
+The browser tests include actual AudioWorklet capture, single-pass audio transport,
+cancellation/navigation, permission failures, disconnects, late-result fencing and
+retired cleanup preferences. Appliance tests exercise PCM decoding, budgets,
+segment finality, native cancellation and session disposal without model downloads.
 
-## Optional LLM cleanup
-
-**Settings → Workspace** offers **Clean up dictation**, off by default, plus
-automatic/English/German language selection. These per-device preferences live
-only in Settings, not in the chat preferences panel. The selected chat model is
-used when recording ends.
-
-With cleanup off, live recognized text is simply finalized. With cleanup on, the
-completed raw transcript is retained in memory and the LLM's edited text streams
-into the draft through the existing authenticated model gateway. Cleanup runs
-**once at Stop**, not on each partial. No coding-agent container, tools or chat
-turn is started. Copilot Responses and Chat Completions routes are supported.
-Editing instructions preserve meaning, language, names, paths and technical
-identifiers rather than answering the text. Review the draft: model editing is
-never guaranteed to preserve every detail.
-
-A successful edit offers **Use original transcript**, available while that draft
-remains unchanged. If cleanup fails, the original transcript replaces partial
-cleanup automatically. STT failure retains the existing typed draft and text
-already recognized. Cancel explicitly discards all dictated additions.
-
-Self-hosted STT keeps audio on your infrastructure. **Cloud LLM cleanup sends the
-transcript to the selected provider**, even though audio stays local. A replacement
-cloud STT endpoint receives the audio. Neither step auto-sends a chat message.
-
-## Tests
-
-- Backend: `uv run pytest tests/backend/test_speech.py`
-- UI: `cd services/frontend && npx playwright test tests/speech.spec.js --workers=1`
-  includes actual browser AudioWorklet capture with a synthetic microphone device.
-- Appliance (real audio decode, no model download): install its locked requirements
-  in an isolated Python 3.13 environment, then `python -m unittest discover -s services/stt`.
-- Update dependency lock: `uv pip compile services/stt/requirements.in --python-version 3.13 --generate-hashes -o services/stt/requirements.txt`.
+Staging deployment automatically runs `scripts/check_dictation_deployment.py`
+through the deployed HTTPS/WebSocket route with the public, hash-checked JFK sample.
+It reports counts/timings only, never tokens or transcripts. Readiness may retry
+before capture; a started recording is never replayed. The historical
+[spike](spikes/streaming-dictation.md) records the investigation that led here; its
+cloud alternatives and feature-flag/fallback proposals were not implemented.

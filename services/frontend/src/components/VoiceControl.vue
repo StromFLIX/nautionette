@@ -5,14 +5,14 @@
       <div v-if="recording" class="voice-control__wave" aria-hidden="true" :style="{ '--voice-level': level }">
         <i v-for="n in 9" :key="n" :style="{ height: `${5 + level * (n % 3 + 1) * 8}px` }" />
       </div>
-      <span class="voice-control__status" role="status"><span v-if="recording" class="sr-only">Recording · </span>{{ recording ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : processing ? (editing ? 'Editing…' : 'Finalizing…') : 'Microphone…' }}</span>
+      <span class="voice-control__status" role="status"><span v-if="recording" class="sr-only">Recording · </span>{{ recording ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : processing ? 'Finalizing…' : 'Microphone…' }}</span>
     </template>
     <button class="voice-control__mic" :class="{ 'voice-control__mic--recording': recording }" type="button"
-      :disabled="processing || state === 'requesting' || state === 'stopping' || (!recording && (disabled || !available))"
+      :disabled="processing || connecting || state === 'requesting' || state === 'stopping' || (!recording && (disabled || !available))"
       :aria-label="recording ? 'Finish recording' : 'Dictate message'" :aria-pressed="recording"
       :aria-description="unavailable || undefined" @click="recording ? stop() : begin()">
       <span class="material-icons" aria-hidden="true">{{ recording ? 'stop' : processing ? 'hourglass_top' : 'mic' }}</span>
-      <q-tooltip>{{ recording ? 'Finish recording · 2 minute limit' : unavailable || 'Dictate a message' }}</q-tooltip>
+      <q-tooltip>{{ recording ? 'Finish recording · 2 minute limit' : unavailable || 'Dictate a message · processed locally' }}</q-tooltip>
     </button>
   </div>
 </template>
@@ -20,117 +20,83 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { api } from '../api'
-import { createRecorder, joinTranscript } from '../speech'
+import { createRecorder } from '../speech'
 
-const props = defineProps({ modelValue: { type: String, default: '' }, model: { type: String, default: '' }, disabled: Boolean, cleanup: Boolean, language: { type: String, default: '' } })
-const emit = defineEmits(['update:modelValue', 'active', 'processing', 'notice', 'completed'])
+const props = defineProps({ modelValue: { type: String, default: '' }, disabled: Boolean, language: { type: String, default: 'en' } })
+const emit = defineEmits(['update:modelValue', 'active', 'notice'])
 const available = ref(false), unavailable = ref('Checking dictation availability…')
-const processing = ref(false), editing = ref(false)
-let disposed = false, controller, deadline, base = '', inserted = '', committed = '', queue = [], working = false, ended = false
-const { state, seconds, level, start, stop, cancel: cancelRecording, dispose } = createRecorder({ onSnapshot: enqueue, onFinish: endRecording, onError: fail })
+const processing = ref(false), connecting = ref(false)
+let disposed = false, controller, session, deadline, base = '', inserted = ''
+const { state, seconds, level, start, stop, cancel: cancelRecording, dispose } = createRecorder({ onFinish: endRecording, onError: fail })
 const recording = computed(() => state.value === 'recording')
-const active = computed(() => processing.value || state.value !== 'idle')
+const active = computed(() => connecting.value || processing.value || state.value !== 'idle')
 watch(active, value => emit('active', value), { flush: 'sync' })
-watch(processing, value => emit('processing', value), { flush: 'sync' })
 
 onMounted(async () => {
   try {
-    const result = await api.speech()
+    await api.speech()
     if (disposed) return
-    available.value = Boolean(result.enabled && globalThis.isSecureContext && navigator.mediaDevices?.getUserMedia && (globalThis.AudioContext || globalThis.webkitAudioContext))
-    unavailable.value = available.value ? '' : result.enabled ? 'Live dictation requires HTTPS and Web Audio support.' : 'Dictation is not configured on this server.'
+    available.value = Boolean(globalThis.isSecureContext && navigator.mediaDevices?.getUserMedia && (globalThis.AudioContext || globalThis.webkitAudioContext) && globalThis.WebSocket)
+    unavailable.value = available.value ? '' : 'Live dictation requires HTTPS and Web Audio support.'
   } catch { unavailable.value = 'Dictation is currently unavailable.' }
 })
 function append (text) { return base + (base && text && !/\s$/.test(base) ? '\n' : '') + text }
 function publish (text) { inserted = text; emit('update:modelValue', append(text)) }
-function begin () {
-  base = props.modelValue; inserted = ''; committed = ''; queue = []; working = false; ended = false
-  controller = new AbortController()
+async function begin () {
+  if (active.value || disposed) return
+  base = props.modelValue; inserted = ''
+  const request = controller = new AbortController()
+  connecting.value = true
   emit('notice', '')
   clearTimeout(deadline)
-  deadline = setTimeout(() => fail(new Error('Dictation timed out. Please try a shorter recording.')), 300000)
-  start()
+  deadline = setTimeout(() => fail(new Error('Dictation timed out. Please try a shorter recording.')), 180000)
+  try {
+    const opened = await api.streamDictation(props.language, { signal: request.signal,
+      onEvent (event) {
+        if (disposed || controller !== request || request.signal.aborted) return
+        if (event.type === 'transcript') publish(event.text)
+        if (event.type === 'error') fail(new Error(event.message))
+      }
+    })
+    if (disposed || controller !== request || request.signal.aborted) { opened.cancel(); return }
+    session = opened
+    // Request microphone access only once the private recognizer is ready.
+    await start({ onAudio: (samples, rate) => opened.send(samples, rate) })
+  } catch (error) {
+    if (controller === request && !request.signal.aborted) fail(error)
+  } finally {
+    if (controller === request) connecting.value = false
+  }
 }
 function cancel () {
-  controller?.abort(); clearTimeout(deadline); queue = []
+  controller?.abort(); clearTimeout(deadline); session?.cancel(); session = null
   cancelRecording()
   if (props.modelValue === append(inserted)) emit('update:modelValue', base)
-  processing.value = false; editing.value = false
+  processing.value = false; connecting.value = false
   emit('notice', '')
 }
 function fail (error) {
   if (disposed) return
-  controller?.abort(); clearTimeout(deadline); queue = []
-  cancelRecording(); processing.value = false; editing.value = false
-  // Keep the text already recognized; never discard the pre-existing typed draft.
+  controller?.abort(); clearTimeout(deadline); session?.cancel(); session = null
+  cancelRecording(); processing.value = false; connecting.value = false
+  // Keep recognized text and the original typed draft. Never replay audio after failure.
   emit('notice', error.message)
 }
-function enqueue (snapshot) {
-  if (disposed || controller?.signal.aborted) return
-  // Only the newest pending snapshot of a window matters. Final windows are never dropped.
-  const last = queue.at(-1)
-  if (last && last.id === snapshot.id && !last.final) queue[queue.length - 1] = snapshot
-  else queue.push(snapshot)
-  drain()
-}
-async function drain () {
-  if (working) return
-  const request = controller
-  working = true
+async function endRecording () {
+  const request = controller, opened = session
+  processing.value = true
   try {
-    while (queue.length && !request.signal.aborted) {
-      const snapshot = queue.shift()
-      let text = ''
-      await api.transcribe(snapshot.audio, { language: props.language, signal: request.signal,
-        onEvent (event) { if (event.type === 'done') text = event.text }
-      })
-      if (disposed || controller !== request || request.signal.aborted) return
-      const combined = joinTranscript(committed, text, snapshot.overlap)
-      if (snapshot.final) committed = combined
-      publish(combined)
-    }
+    const text = await opened.finish()
+    if (disposed || controller !== request || request.signal.aborted) return
+    publish(text)
+    if (!text) emit('notice', 'No speech detected. Please try again.')
   } catch (error) {
     if (!disposed && controller === request && !request.signal.aborted) fail(error)
   } finally {
-    if (controller === request) {
-      working = false
-      if (ended && !request.signal.aborted) finishSession(request)
-    }
+    if (controller === request) { clearTimeout(deadline); processing.value = false; session = null }
   }
 }
-function endRecording () {
-  ended = true; processing.value = true
-  if (!working) finishSession(controller)
-}
-async function finishSession (request) {
-  if (editing.value || request.signal.aborted) return
-  const original = committed || inserted
-  try {
-    if (!original) { emit('notice', 'No speech detected. Please try again.'); return }
-    if (!props.cleanup) return
-    editing.value = true
-    let edited = ''
-    await api.cleanupDictation(original, { model: props.model, signal: request.signal,
-      onEvent (event) {
-        if (disposed || request.signal.aborted) return
-        if (event.type === 'delta') { edited += event.text; publish(edited) }
-        if (event.type === 'done') {
-          publish(event.text)
-          emit('notice', event.warning || '')
-          if (event.text !== original) emit('completed', { original: append(original), cleaned: append(event.text) })
-        }
-      }
-    })
-  } catch {
-    if (!disposed && controller === request && !request.signal.aborted) {
-      publish(original)
-      emit('notice', 'Cleanup interrupted; the original transcript was kept.')
-    }
-  } finally {
-    if (controller === request) { clearTimeout(deadline); processing.value = false; editing.value = false }
-  }
-}
-onUnmounted(() => { disposed = true; clearTimeout(deadline); controller?.abort(); dispose() })
+onUnmounted(() => { disposed = true; clearTimeout(deadline); controller?.abort(); session?.cancel(); dispose() })
 </script>
 
 <style scoped>
@@ -140,8 +106,7 @@ onUnmounted(() => { disposed = true; clearTimeout(deadline); controller?.abort()
 .voice-control__mic:disabled { opacity: .45; cursor: default; }
 .voice-control__mic--recording { color: var(--danger); background: var(--danger-soft); }
 .voice-control__mic .material-icons { font-size: 20px; }
-.voice-control__cancel { width: 28px; }
-.voice-control__cancel .material-icons { font-size: 16px; }
+.voice-control__cancel { width: 28px; min-height: 38px; font-size: 16px; }
 .voice-control__status { font-size: .6875rem; color: var(--text-muted); white-space: nowrap; padding: 0 6px; font-variant-numeric: tabular-nums; }
 .voice-control__wave { display: flex; align-items: center; justify-content: center; gap: 2px; width: 36px; height: 32px; }
 .voice-control__wave i { display: block; width: 2px; border-radius: 2px; background: var(--accent); transition: height 80ms linear; max-height: 30px; }

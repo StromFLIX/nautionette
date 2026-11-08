@@ -917,6 +917,7 @@ dependencies = [
     { name = "sqlite-vec" },
     { name = "temporalio" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "websockets" },
 ]
 
 [package.metadata]
@@ -935,6 +936,7 @@ requires-dist = [
     { name = "sqlite-vec", specifier = ">=0.1.6,<0.2" },
     { name = "temporalio", specifier = ">=1.9" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
+    { name = "websockets", specifier = ">=17.3,<18" },
 ]
 
 [[package]]
