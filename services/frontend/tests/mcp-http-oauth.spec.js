@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 const url = 'https://workiq.svc.cloud.microsoft/mcp'
 const config = { transport: 'http', url, client_id: 'public-client', scope: 'read offline_access',
   issuer: 'https://login.example.test', redirect_uri: 'http://localhost:12798', response_mode: 'query',
@@ -108,11 +109,87 @@ test('expiration on a chat shows only a compact Login prompt and reuses saved se
   await page.screenshot({ path: test.info().outputPath('mcp-relogin-dialog.png'), animations: 'disabled' })
   await expect(page.locator('.integration-add')).toHaveCount(0)
   await dialog.getByRole('button', { name: 'Login', exact: true }).click()
-  await expect(dialog.getByRole('status')).toContainText('local port')
+  await expect(dialog.getByRole('status')).toContainText('sign-in in your browser')
+  await expect(dialog.getByRole('status')).not.toContainText('12798')
+  await expect(dialog.getByRole('region', { name: 'Login reminder options' })).toHaveCount(0)
+  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeVisible()
+  await dialog.screenshot({ path: test.info().outputPath('mcp-relogin-busy.png'), animations: 'disabled' })
   expect(state.prepares).toEqual([{}])
   await page.evaluate(() => globalThis.finishLogin())
   await expect(dialog).toHaveCount(0)
   await expect(page).toHaveURL('/chats')
+})
+
+for (const [width, theme, interfaceSize] of [[1440, 'orbit', 125], [390, 'orbit', 125], [320, 'orbit', 150], [1440, 'daylight', 125], [390, 'daylight', 150]]) {
+  test(`login reminder layout stays separated at ${width}px, ${theme}, ${interfaceSize}%`, async ({ page, context }) => {
+    const state = await mock(context); await native(context)
+    await context.addInitScript(({ key, theme, interfaceSize }) => {
+      localStorage.setItem(key, JSON.stringify({ theme, interfaceSize, motion: 'reduced' }))
+    }, { key: PREFERENCES_KEY, theme, interfaceSize })
+    state.profiles.workiq = { ...config, mode: 'https', status: 'reauth_required', revision: 'expired' }
+    const errors = []
+    page.on('pageerror', error => errors.push(error.message))
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/chats')
+    const dialog = page.locator('.mcp-login-dialog')
+    const duration = dialog.getByRole('combobox', { name: 'Snooze login reminders on this device' })
+    await expect(page.getByRole('dialog', { name: 'Sign in to workiq' })).toBeVisible()
+    await expect(duration).toBeVisible()
+    await expect(duration).toHaveCSS('appearance', 'none')
+    await expect(dialog.getByRole('button', { name: 'Login', exact: true })).toBeEnabled()
+    await expect(dialog.getByRole('button', { name: 'Snooze', exact: true })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Snooze', exact: true })).toHaveCSS('white-space', 'nowrap')
+    await page.evaluate(() => document.fonts.ready)
+    await dialog.screenshot({ path: test.info().outputPath(`login-reminder-${width}-${theme}-${interfaceSize}.png`), animations: 'disabled' })
+    const layout = await dialog.evaluate(card => {
+      const rect = selector => {
+        const { top, right, bottom, left, height } = card.querySelector(selector).getBoundingClientRect()
+        return { top, right, bottom, left, height }
+      }
+      return { heading: rect('h2'), nameLines: card.querySelector('.mcp-login-name').getClientRects().length,
+        description: rect('.mcp-login-description'), label: rect('label'), select: rect('select'), hint: rect('#mcp-login-snooze-hint'),
+        actions: rect('footer'), buttons: [...card.querySelectorAll('footer button')].map(button => button.getBoundingClientRect().height),
+        width: card.clientWidth, scrollWidth: card.scrollWidth, card: card.getBoundingClientRect().toJSON(), viewport: innerWidth }
+    })
+    expect(layout.description.top).toBeGreaterThanOrEqual(layout.heading.bottom)
+    expect(layout.nameLines).toBe(1)
+    expect(layout.label.bottom <= layout.select.top || layout.label.right <= layout.select.left).toBe(true)
+    expect(layout.hint.top).toBeGreaterThanOrEqual(Math.max(layout.label.bottom, layout.select.bottom))
+    expect(layout.actions.top).toBeGreaterThanOrEqual(layout.hint.bottom)
+    expect(layout.select.height).toBeGreaterThanOrEqual(44)
+    expect(layout.buttons.every(height => height >= 44)).toBe(true)
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width)
+    expect(layout.card.left).toBeGreaterThanOrEqual(0)
+    expect(layout.card.right).toBeLessThanOrEqual(layout.viewport)
+    expect(errors).toEqual([])
+  })
+}
+
+test('long connection names wrap within the reminder without covering controls', async ({ page, context }) => {
+  const state = await mock(context); await native(context)
+  const name = 'team-directory-connector'
+  state.profiles[name] = { ...config, mode: 'https', status: 'reauth_required', revision: 'expired' }
+  await page.setViewportSize({ width: 320, height: 900 })
+  await page.goto('/chats')
+  const dialog = page.locator('.mcp-login-dialog')
+  await expect(dialog.getByRole('heading')).toHaveText(`Sign in to ${name}`)
+  await expect(dialog.getByRole('button', { name: 'Dismiss login reminder' })).toBeVisible()
+  await dialog.screenshot({ path: test.info().outputPath('login-reminder-long-name.png'), animations: 'disabled' })
+  const layout = await dialog.evaluate(card => ({ width: card.clientWidth, scrollWidth: card.scrollWidth,
+    headingBottom: card.querySelector('h2').getBoundingClientRect().bottom,
+    descriptionTop: card.querySelector('.mcp-login-description').getBoundingClientRect().top }))
+  expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width)
+  expect(layout.descriptionTop).toBeGreaterThanOrEqual(layout.headingBottom)
+})
+
+test('dismiss login reminder closes it without snoozing or starting sign-in', async ({ page, context }) => {
+  const state = await mock(context); await native(context)
+  state.profiles.workiq = { ...config, mode: 'https', status: 'reauth_required', revision: 'expired' }
+  await page.goto('/chats')
+  await page.getByRole('button', { name: 'Dismiss login reminder' }).click()
+  await expect(page.locator('.mcp-login-dialog')).toHaveCount(0)
+  expect(state.starts).toEqual([])
+  expect(await page.evaluate(() => localStorage.getItem('nautionette.mcp-login-snooze'))).toBeNull()
 })
 
 test('manual sign-in stays in a popup; Snooze does not open a browser or setup form', async ({ page, context }) => {
@@ -151,9 +228,12 @@ test('hosted OAuth in a web client explains desktop compatibility and never star
 test('unsupported devices persist a timed snooze and can resume it from settings', async ({ page, context }) => {
   const state = await mock(context)
   state.profiles.workiq = { ...config, mode: 'https', status: 'reauth_required', revision: 'expired' }
+  await page.setViewportSize({ width: 390, height: 900 })
   await page.goto('/chats')
   const dialog = page.locator('.mcp-login-dialog')
   await expect(dialog.getByRole('button', { name: 'Login', exact: true })).toBeDisabled()
+  await expect(page.getByLabel('Snooze login reminders on this device')).toHaveValue('86400000')
+  await dialog.screenshot({ path: test.info().outputPath('login-reminder-unsupported.png'), animations: 'disabled' })
   await page.getByLabel('Snooze login reminders on this device').selectOption('604800000')
   await dialog.getByRole('button', { name: 'Snooze', exact: true }).click()
   await expect(dialog).toHaveCount(0)
@@ -192,9 +272,10 @@ test('failed relogin retries saved setup in the same popup', async ({ page, cont
   const dialog = page.locator('.mcp-login-dialog')
   await dialog.getByRole('button', { name: 'Login', exact: true }).click()
   await expect(dialog.getByRole('alert')).toContainText('Provider unavailable')
+  await dialog.screenshot({ path: test.info().outputPath('login-reminder-error.png'), animations: 'disabled' })
   state.failLogin = false
   await dialog.getByRole('button', { name: 'Try again', exact: true }).click()
-  await expect(dialog.getByRole('status')).toContainText('local port')
+  await expect(dialog.getByRole('status')).toContainText('sign-in in your browser')
   await page.evaluate(() => globalThis.finishLogin())
   await expect(dialog).toHaveCount(0)
   expect(state.prepares).toEqual([{}, {}])
