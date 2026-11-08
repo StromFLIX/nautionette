@@ -4,7 +4,7 @@ import json
 
 import httpx
 import pytest
-from nautionette_backend.clients.agentgateway import GatewayClient, _rpc_result
+from nautionette_backend.clients.agentgateway import GatewayClient, MCPHTTPError, _rpc_result
 
 
 async def test_config_reports_stdio_metadata_but_never_env_values(http):
@@ -107,6 +107,29 @@ async def test_mcp_tool_listing_follows_pagination(http):
     tools = await GatewayClient().mcp_tools("http://gateway.test/mcp")
     assert [tool["name"] for tool in tools] == ["first", "second"]
     assert cursors == [None, "page-2"]
+
+
+@pytest.mark.parametrize(
+    "message,reason",
+    [
+        ("unknown resource", "authorization_denied"),
+        ("session header is required for non-initialize requests", "missing_session_header"),
+        ("unsupported MCP protocol version: secret", "unsupported_protocol"),
+        ("private provider body with secret", "unclassified"),
+    ],
+)
+def test_mcp_http_error_has_safe_stage_reason_and_numeric_code_only(message, reason):
+    response = httpx.Response(
+        400,
+        json={"error": {"code": -32602, "message": message}},
+        request=httpx.Request(
+            "POST", "https://gateway.test/probe?secret=hidden", headers={"Authorization": "Bearer secret"}
+        ),
+    )
+    error = MCPHTTPError(response, "initialize")
+    assert error.stage == "initialize" and error.reason == reason and error.rpc_code == -32602
+    assert "secret" not in str(error) and "hidden" not in str(error)
+    assert "private provider body" not in str(error)
 
 
 def test_sse_listing_skips_notifications_and_rejects_rpc_errors():

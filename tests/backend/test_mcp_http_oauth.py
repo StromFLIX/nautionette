@@ -12,6 +12,7 @@ import pytest
 from fastapi import HTTPException
 from nautionette_backend import mcp_http_oauth as oauth
 from nautionette_backend import mcp_oauth
+from nautionette_backend.clients.agentgateway import MCPHTTPError
 from nautionette_backend.config import settings
 from nautionette_backend.pi_package_secrets import unseal
 
@@ -285,6 +286,62 @@ async def test_existing_token_expires_without_refresh_and_external_edits_detach(
     await oauth.refresh_once()
     assert not backend.db.query("SELECT * FROM mcp_http_oauth")
     assert backend.gateway.resources["mcp.target"]["example"]["mcp"]["host"] == "https://external-edit.test"
+
+
+def test_transient_gateway_initialize_reuses_route_and_exchanged_token(
+    client, backend, live, hosted, monkeypatch
+):
+    identifier, auth, _ = begin(client)
+    assert forward(client, identifier, auth).status_code == 200
+    original = live.gateway.mcp_tools
+    attempts = []
+
+    async def transient(url, *args, **kwargs):
+        route = next(iter(backend.gateway.resources["traffic.route"].values()))
+        target = route["backends"][0]["mcp"]["targets"][0]
+        attempts.append((url, target["policies"]["backendAuth"]["key"]["value"]))
+        if len(attempts) < 3:
+            raise MCPHTTPError(
+                httpx.Response(
+                    400,
+                    json={"error": {"code": -32603, "message": "initialization busy"}},
+                    request=httpx.Request("POST", url),
+                ),
+                "initialize",
+            )
+        return await original(url, *args, **kwargs)
+
+    monkeypatch.setattr(live.gateway, "mcp_tools", transient)
+    assert client.get(BASE + "/login/" + identifier).json()["status"] == "complete"
+    assert len(attempts) == 3 and len(set(attempts)) == 1
+    assert len(hosted.calls) == 1  # Single-use code exchange is never replayed.
+    assert not backend.gateway.resources["traffic.route"]
+
+
+@pytest.mark.parametrize(
+    "stage,message",
+    [
+        ("initialize", "unknown resource"),
+        ("initialize", "unsupported MCP protocol version: private"),
+        ("initialized", "unclassified"),
+        ("tools/list", "unclassified"),
+    ],
+)
+def test_permanent_or_post_initialize_errors_do_not_retry(client, live, hosted, monkeypatch, stage, message):
+    identifier, auth, _ = begin(client)
+    forward(client, identifier, auth)
+    attempts = []
+
+    async def refused(url, *_args, **_kwargs):
+        attempts.append(url)
+        raise MCPHTTPError(
+            httpx.Response(400, json={"error": {"message": message}}, request=httpx.Request("POST", url)),
+            stage,
+        )
+
+    monkeypatch.setattr(live.gateway, "mcp_tools", refused)
+    assert client.get(BASE + "/login/" + identifier).status_code == 400
+    assert len(attempts) == 1 and len(hosted.calls) == 1
 
 
 def test_reconnect_failure_retains_working_profile_and_manual_save_stops_refresh(

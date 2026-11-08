@@ -77,6 +77,54 @@ def _rpc_result(response: httpx.Response) -> dict[str, Any]:
     return result(json.loads(text))
 
 
+class MCPHTTPError(httpx.HTTPStatusError):
+    """Safe handshake stage/reason, never provider text or credentials."""
+
+    def __init__(self, response: httpx.Response, stage: str):
+        self.stage = stage
+        self.reason = "unclassified"
+        self.rpc_code = None
+        if len(response.content) <= 65536:
+            try:
+                payload = response.json()
+                error = payload.get("error", {}) if isinstance(payload, dict) else {}
+                message = error.get("message", "") if isinstance(error, dict) else ""
+                code = error.get("code") if isinstance(error, dict) else None
+                if type(code) is int and -(2**31) <= code < 2**31:
+                    self.rpc_code = code
+            except ValueError:
+                message = response.text
+            if isinstance(message, str):
+                for needle, reason in (
+                    ("session header is required", "missing_session_header"),
+                    ("session ID is required", "missing_session_id"),
+                    ("invalid session ID", "invalid_session_id"),
+                    ("protocol version header/body mismatch", "protocol_mismatch"),
+                    ("unsupported MCP protocol version", "unsupported_protocol"),
+                    ("invalid MCP protocol version", "invalid_protocol"),
+                    ("header/body mismatch", "header_mismatch"),
+                    ("fail to deserialize request body", "invalid_request"),
+                    ("invalid request parameters", "invalid_request"),
+                    ("unknown resource", "authorization_denied"),
+                    ("authorization denied", "authorization_denied"),
+                ):
+                    if needle in message:
+                        self.reason = reason
+                        break
+        super().__init__(
+            f"MCP {stage} failed (HTTP {response.status_code}, {self.reason})",
+            request=response.request,
+            response=response,
+        )
+
+
+def _mcp_status(response: httpx.Response, stage: str):
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError:
+        raise MCPHTTPError(response, stage) from None
+
+
 class GatewayClient:
     def __init__(self, base_url: str | None = None) -> None:
         self.base_url = (base_url or settings.gateway_url).rstrip("/")
@@ -338,7 +386,7 @@ class GatewayClient:
                 },
             ),
         )
-        handshake.raise_for_status()
+        _mcp_status(handshake, "initialize")
         session = handshake.headers.get("mcp-session-id")
         if session:
             headers["Mcp-Session-Id"] = session
@@ -350,7 +398,7 @@ class GatewayClient:
             initialized = await client.post(
                 url, headers=headers, timeout=15, json=_rpc(None, "notifications/initialized")
             )
-            initialized.raise_for_status()
+            _mcp_status(initialized, "initialized")
             tools = []
             cursor = None
             seen = set()
@@ -361,7 +409,7 @@ class GatewayClient:
                     timeout=timeout,
                     json=_rpc(request_id, "tools/list", {"cursor": cursor} if cursor else {}),
                 )
-                listing.raise_for_status()
+                _mcp_status(listing, "tools/list")
                 body = _rpc_result(listing)
                 if not isinstance(body.get("tools"), list) or any(
                     not isinstance(tool, dict)

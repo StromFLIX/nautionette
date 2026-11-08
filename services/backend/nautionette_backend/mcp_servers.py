@@ -17,9 +17,11 @@ from uuid import uuid4
 
 import httpx
 from fastapi import HTTPException
+from opentelemetry import trace
 
 from .catalog import tool_catalog
 from .clients import gateway
+from .clients.agentgateway import MCPHTTPError
 from .config import settings
 from .events import bus
 from .fields import SECRET, SLUG, normalise
@@ -194,35 +196,65 @@ async def probe_target(target: dict[str, Any]) -> dict[str, Any]:
         await gateway.put_config_resources("traffic.route", [route])
         try:
             async with asyncio.timeout(90):
-                # The store acknowledges PUT before the data-plane watch has
-                # loaded this unique route. A gateway 404 cannot have contacted
-                # the upstream yet. Retry only that read-only handshake, never
-                # the route mutation, OAuth exchange or upstream failures.
+                # PUT acknowledgement precedes the data-plane watch and MCP
+                # initialization. Retry only bounded read-only initialization,
+                # on this same route/token; never repeat PUT or OAuth exchange.
+                initialization_retries = 0
                 for attempt in range(50):
                     try:
-                        tools = await gateway.mcp_tools(
-                            f"{settings.gateway_url.rstrip('/')}{path}", timeout=90
-                        )
+                        with trace.get_tracer(__name__).start_as_current_span("mcp.probe") as span:
+                            span.set_attribute("rpc.system", "mcp")
+                            try:
+                                tools = await gateway.mcp_tools(
+                                    f"{settings.gateway_url.rstrip('/')}{path}", timeout=90
+                                )
+                            except MCPHTTPError as error:
+                                span.set_attribute("rpc.method", error.stage)
+                                span.set_attribute("http.status_code", error.response.status_code)
+                                span.set_attribute("error.type", f"mcp.{error.reason}")
+                                raise
                         break
                     except httpx.HTTPStatusError as error:
-                        if error.response.status_code != 404 or attempt == 49:
-                            raise
-                        await asyncio.sleep(0.1)
+                        status = error.response.status_code
+                        stage = getattr(error, "stage", "initialize")
+                        if status == 404 and stage == "initialize" and attempt < 49:
+                            await asyncio.sleep(0.1)
+                            continue
+                        if (
+                            isinstance(error, MCPHTTPError)
+                            and "stdio" not in target
+                            and stage == "initialize"
+                            and error.reason == "unclassified"
+                            and status in {400, 408, 429, 500, 502, 503, 504}
+                            and initialization_retries < 2
+                            and attempt < 49
+                        ):
+                            await asyncio.sleep(0.5 * 2**initialization_retries)
+                            initialization_retries += 1
+                            continue
+                        raise
             label = "Process" if "stdio" in target else "HTTPS server"
             return {"ok": True, "status": None, "message": f"{label} answered with {len(tools)} tools."}
         except (httpx.HTTPError, ValueError, TimeoutError) as error:
             status = error.response.status_code if isinstance(error, httpx.HTTPStatusError) else None
             # Never log exception text: transport/protocol errors can contain
             # bearer headers, provider bodies or an OAuth callback URL.
-            logging.getLogger(__name__).warning(
-                "MCP probe failed: transport=%s status=%s error_type=%s",
+            # Uvicorn's console handler remains present when the payload-free
+            # OTLP handler suppresses ordinary application log text.
+            logging.getLogger("uvicorn.error").warning(
+                "MCP probe failed: transport=%s status=%s error_type=%s stage=%s reason=%s rpc_code=%s",
                 "stdio" if "stdio" in target else "http",
                 status,
                 type(error).__name__,
+                getattr(error, "stage", "unknown"),
+                getattr(error, "reason", "unclassified"),
+                getattr(error, "rpc_code", None),
             )
             return {
                 "ok": False,
                 "status": status,
+                "stage": getattr(error, "stage", "unknown"),
+                "reason": getattr(error, "reason", "unclassified"),
                 "message": (
                     "The stdio process did not answer MCP. Check the command, arguments "
                     "and environment in agentgateway. First-time package downloads may need another attempt."
