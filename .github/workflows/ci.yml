@@ -75,7 +75,11 @@ jobs:
 
       - name: CLI OAuth end-to-end with pinned real agentgateway (no provider account)
         run: |
-          curl --fail --location --retry 2 -o "$RUNNER_TEMP/agentgateway" https://github.com/agentgateway/agentgateway/releases/download/v1.7.0/agentgateway-linux-amd64
+          if ! curl --fail --location --retry 2 -o "$RUNNER_TEMP/agentgateway" https://github.com/agentgateway/agentgateway/releases/download/v1.7.0/agentgateway-linux-amd64; then
+            # GitHub's release page can return 504 while the public asset API
+            # remains available. The same pinned SHA-256 guards either path.
+            curl --fail --location --retry 2 -H 'Accept: application/octet-stream' -o "$RUNNER_TEMP/agentgateway" https://api.github.com/repos/agentgateway/agentgateway/releases/assets/682303232
+          fi
           echo "1b2fc01a2de29ca113bbb6258b5cae7b1eb3c724071c09d687a449132f2f42f8  $RUNNER_TEMP/agentgateway" | sha256sum --check
           chmod +x "$RUNNER_TEMP/agentgateway"
           NAUTIONETTE_TEST_GATEWAY_BINARY="$RUNNER_TEMP/agentgateway" uv run pytest tests/backend/test_mcp_oauth_e2e.py tests/backend/test_mcp_http_oauth_e2e.py tests/agentgateway/test_stdio_runtime.py
