@@ -1,11 +1,13 @@
 import { test, expect } from '@playwright/test'
+import { createSSEFixture, snapshotFrame } from './sse-fixture'
 
 async function mockChat (context, data) {
+  const sse = await createSSEFixture(context)
   const chat = { id: 'copy', title: 'Copy test', model: 'test/model', read_revision: 0 }
   await context.route('**/api/**', async (route) => {
     const path = new URL(route.request().url()).pathname
-    if (path === '/api/events') return route.fulfill({ contentType: 'text/event-stream', body: ': connected\n\n' })
-    if (path === '/api/chats/copy/stream') return route.fulfill({ contentType: 'text/event-stream', body: `retry: 100\ndata: ${JSON.stringify({ type: 'snapshot', chat, ...data })}\n\n` })
+    if (path === '/api/events') return sse(route, () => ': connected\n\n')
+    if (path === '/api/chats/copy/stream') return sse(route, () => snapshotFrame({ chat, ...data }))
     if (path === '/api/chats/copy/read-state') return route.fulfill({ json: chat })
     if (path === '/api/chats/copy') return route.fulfill({ json: { chat, ...data } })
     if (path === '/api/chats') return route.fulfill({ json: { chats: [chat] } })
@@ -77,6 +79,74 @@ test('copy controls track streaming text and remain available on saved plain res
   await expect(message).toContainText('Plain final response')
   await message.getByRole('button', { name: 'Copy response', exact: true }).click()
   expect(await clipboard(page)).toBe('Plain **final** response')
+})
+
+test('selection survives streaming, auto-scroll and live-to-saved replacement', async ({ page, context, browserName }) => {
+  if (browserName === 'chromium') await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+  const text = 'Select this **answer** while the agent continues writing.'
+  const data = { messages: [], active_turn: { id: 'active', status: 'Writing', steps: [{ kind: 'text', text }] } }
+  await mockChat(context, data)
+  await page.goto('/chats/copy')
+  const body = page.locator('.bubble__body')
+  await expect(body).toContainText('Select this answer')
+  const selected = await body.evaluate(element => {
+    window.selectedBody = element
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    const selection = window.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return selection.toString()
+  })
+  // Wait for the browser's selectionchange rather than the fixture's next frame.
+  await page.waitForTimeout(50)
+  const scrollTop = await page.locator('#chat-conversation-panel').evaluate(el => el.scrollTop)
+  data.active_turn.steps[0].text += '\n\n' + 'New streamed paragraph.\n\n'.repeat(40)
+  data.active_turn.stop_requested = true
+  // Operational state still updates even though the visible answer is held.
+  await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toBeDisabled()
+  await expect(body).not.toContainText('New streamed paragraph')
+  expect(await page.evaluate(() => window.getSelection().toString())).toBe(selected)
+  expect(await page.locator('#chat-conversation-panel').evaluate(el => el.scrollTop)).toBe(scrollTop)
+  data.messages = [{ id: 'done', role: 'assistant', content: data.active_turn.steps[0].text, meta: {} }]
+  data.active_turn = null
+  await expect(page.getByRole('button', { name: 'Stop response', exact: true })).toHaveCount(0)
+  expect(await body.evaluate(el => el === window.selectedBody)).toBe(true)
+  expect(await page.evaluate(() => window.getSelection().toString())).toBe(selected)
+  await page.keyboard.press('Control+c')
+  if (browserName === 'chromium') expect(await clipboard(page)).toBe(selected)
+  expect(await page.evaluate(() => window.getSelection().toString())).toBe(selected)
+  await page.evaluate(() => window.getSelection().removeAllRanges())
+  await expect(body).toContainText('New streamed paragraph')
+  await expect(page.locator('#message-done')).toBeVisible()
+})
+
+test('a drag is protected before selection exists and an empty click resumes updates', async ({ page, context }) => {
+  const data = { messages: [], active_turn: { id: 'active', steps: [{ kind: 'text', text: 'Drag across this response' }] } }
+  await mockChat(context, data)
+  await page.goto('/chats/copy')
+  const body = page.locator('.bubble__body')
+  await expect(body).toHaveText('Drag across this response')
+  const box = await body.boundingBox()
+  await page.mouse.move(box.x + 2, box.y + box.height / 2)
+  await page.mouse.down()
+  data.active_turn.steps[0].text += ' with new text'
+  await page.waitForTimeout(350)
+  await expect(body).not.toContainText('with new text')
+  await page.mouse.up()
+  await expect(body).toContainText('with new text')
+  await page.mouse.move(box.x + 2, box.y + box.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + 140, box.y + box.height / 2, { steps: 5 })
+  await page.mouse.up()
+  const selected = await page.evaluate(() => window.getSelection().toString())
+  expect(selected.length).toBeGreaterThan(0)
+  data.active_turn.steps[0].text += ' and more'
+  await page.waitForTimeout(350)
+  expect(await page.evaluate(() => window.getSelection().toString())).toBe(selected)
+  await expect(body).not.toContainText('and more')
+  await page.evaluate(() => window.getSelection().removeAllRanges())
+  await expect(body).toContainText('and more')
 })
 
 test('copy falls back without the Clipboard API and reports denied clipboard access honestly', async ({ page, context }) => {

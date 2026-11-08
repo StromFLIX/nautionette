@@ -48,11 +48,11 @@
 
     <div v-show="activeTab === 'chat'" id="chat-conversation-panel" ref="scroller" :role="chatId ? 'tabpanel' : undefined" :aria-labelledby="chatId ? 'chat-conversation-tab' : undefined" data-skin-part="conversation" class="thread__body scroll-y grow" @scroll.passive="acknowledgeRead">
       <div class="thread__inner">
-        <p v-if="!isNewChat && !messages.length && !activeTurn" class="caption dim" role="status">
+        <p v-if="!isNewChat && !conversation.messages.length && !conversation.activeTurn" class="caption dim" role="status">
           {{ connectionError ? 'Live updates unavailable.' : reconnecting ? 'Waiting for connection. No saved messages on this device.' : 'No messages yet.' }}
         </p>
         <MessageBubble
-          v-for="message in messages" :key="message.id" :id="`message-${message.id}`" tabindex="-1"
+          v-for="message in conversation.messages" :key="message.id" :id="`message-${message.id}`" tabindex="-1"
           :class="{ 'msg--search-match': route.hash === `#message-${message.id}` }"
           :role="message.role" :content="message.content"
           :meta="message.meta" :created-at="message.created_at" :chat-id="chatId"
@@ -60,19 +60,19 @@
           @retry="delivery.retry(message.id)" @discard="delivery.discard(message.id)" @open-output="openOutput"
         />
         <MessageBubble
-          v-if="streaming" role="assistant" live
-          :content="liveSteps.length || liveStatus ? '' : '…'" :meta="{ steps: liveSteps, timing: activeTurn?.timing, outputs: liveOutputs, sender_agent: activeTurn?.sender_agent || (chat?.agent_id ? { id: chat.agent_id, name: chat.agent_name } : null) }"
-          :chat-id="chatId" :status="liveStatus" @open-output="openOutput"
+          v-if="conversation.activeTurn" role="assistant" live
+          :content="conversation.liveSteps.length || conversation.liveStatus ? '' : '…'" :meta="{ steps: conversation.liveSteps, timing: conversation.activeTurn?.timing, outputs: conversation.liveOutputs, sender_agent: conversation.activeTurn?.sender_agent || (chat?.agent_id ? { id: chat.agent_id, name: chat.agent_name } : null) }"
+          :chat-id="chatId" :status="conversation.liveStatus" @open-output="openOutput"
         />
-        <section v-if="queuedMessages.length" class="thread__queue" aria-label="Queued messages">
+        <section v-if="conversation.queuedMessages.length" class="thread__queue" aria-label="Queued messages">
           <div class="thread__queue-heading caption dim" role="status">
-            {{ chat?.queue_paused ? 'Queue paused' : 'Queued' }} · {{ queuedMessages.length }}
+            {{ chat?.queue_paused ? 'Queue paused' : 'Queued' }} · {{ conversation.queuedMessages.length }}
             <button v-if="chat?.queue_paused && !streaming" class="btn btn--icon" aria-label="Resume queued messages" :disabled="controlBusy" @click="resumeQueue">
               <span class="material-icons" aria-hidden="true">play_arrow</span>
               <q-tooltip>Resume queued messages</q-tooltip>
             </button>
           </div>
-          <div v-for="message in queuedMessages" :key="message.id" class="thread__queued-message">
+          <div v-for="message in conversation.queuedMessages" :key="message.id" class="thread__queued-message">
             <div>
               <p>{{ message.content }}</p>
               <div class="thread__queued-images">
@@ -167,6 +167,7 @@ import { cacheError, chatCache, chatCacheScope } from '../chat-cache'
 import { preferences, reducedMotion } from '../preferences'
 import { CONFIG_KEYS, agentConfig, belongsToAgent, defaultChatConfig } from '../agent-config'
 import { reusableChatSettings } from '../new-chat-settings'
+import { useSelectionSnapshot } from '../selection-snapshot'
 
 const $q = useQuasar()
 const route = useRoute()
@@ -242,6 +243,11 @@ const messages = computed(() => {
     delivery: item.error ? 'failed' : 'sending', deliveryError: item.error
   }))]
 })
+const { snapshot: conversation, paused: selectionPaused } = useSelectionSnapshot(scroller, computed(() => ({
+  messages: messages.value, queuedMessages: queuedMessages.value,
+  activeTurn: activeTurn.value, liveSteps: liveSteps.value,
+  liveOutputs: liveOutputs.value, liveStatus: liveStatus.value
+})), chatId)
 const context = computed(() => latestContext(
   savedMessages.value, activeTurn.value, chat.value?.model || store.catalog.default_model
 ))
@@ -391,7 +397,7 @@ watch(() => route.hash, () => {
 function scrollDown (behavior = 'smooth') {
   nextTick(() => {
     const el = scroller.value
-    if (el && activeTab.value === 'chat') el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'instant' : behavior })
+    if (el && activeTab.value === 'chat' && !selectionPaused.value) el.scrollTo({ top: el.scrollHeight, behavior: reducedMotion() ? 'instant' : behavior })
   })
 }
 
