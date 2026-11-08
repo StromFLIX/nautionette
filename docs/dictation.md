@@ -35,6 +35,10 @@ native token-by-token streaming model. First text takes the window interval
 **plus inference and network time**. Slow hardware can produce less frequent
 updates; coalescing prevents an unbounded queue of obsolete partial results.
 At Stop, only the remaining window needs finalization, not the whole recording.
+The current implementation can still submit a byte-identical final snapshot or a
+quiet-only tail, and Stop waits behind any in-flight request. See the
+[streaming dictation spike](spikes/streaming-dictation.md) for reproduced cases,
+real native-streaming latency measurements, and the proposed improvement path.
 
 ## Default appliance
 
