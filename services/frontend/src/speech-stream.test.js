@@ -42,6 +42,19 @@ test('auth is a first-frame ticket, audio is PCM16 exactly once, Stop sends only
   assert.equal(events.length, 1, 'a normal final close is not an error')
 })
 
+test('empty capture sends only end and accepts an empty final transcript', async () => {
+  const { socket, pending, events } = fixture()
+  socket.receive({ type: 'ready' })
+  const session = await pending
+  const final = session.finish()
+  assert.deepEqual(JSON.parse(socket.sent[1]), { type: 'end', sequence: 0 })
+  socket.receive({ type: 'done', revision: 1, text: '' })
+  assert.equal(await final, '')
+  assert.equal(socket.sent.filter(x => x instanceof ArrayBuffer).length, 0)
+  assert.deepEqual(events, [])
+  assert.equal(socket.closed, true)
+})
+
 test('cancelled handshakes and completions release the connection without replay', async () => {
   let f = fixture()
   f.abort.abort()

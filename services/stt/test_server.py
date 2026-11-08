@@ -100,6 +100,15 @@ class ProtocolTests(unittest.TestCase):
         self.assertTrue(stream.closed)
         self.assertFalse(session.lines)
 
+    def test_empty_recording_returns_empty_final_without_inventing_words(self):
+        stream = FakeStream()
+        stream.stop = lambda: object()
+        session = server.Session(SimpleNamespace(create_stream=lambda **kwargs: stream))
+        self.assertEqual(session.finish(), {"type": "done", "revision": 1, "text": ""})
+        self.assertFalse(stream.samples)
+        session.close()
+        self.assertTrue(stream.closed)
+
     def test_native_errors_are_not_successful_empty_results(self):
         stream = FakeStream()
         session = server.Session(SimpleNamespace(create_stream=lambda **kwargs: stream))
