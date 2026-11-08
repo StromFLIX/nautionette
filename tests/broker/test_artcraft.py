@@ -341,3 +341,46 @@ def test_broker_downloader_is_fixed_bounded_and_verifies_before_staging(docker, 
     monkeypatch.setattr(module, "MAX_ARCHIVE", 2)
     with pytest.raises(ValueError, match="exceeds"):
         module._download(spec, target)
+
+
+def test_release_api_fallback_preserves_archive_digest_and_fixed_host(docker, monkeypatch, tmp_path):
+    import importlib.util
+    import urllib.error
+
+    module_spec = importlib.util.spec_from_file_location(
+        "nautionette_docker_broker.download_fallback_test", artcraft.__file__
+    )
+    module = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(module)
+    calls = []
+    payload = {
+        "tag_name": f"v{SPEC['version']}",
+        "assets": [
+            {
+                "name": f"cadcraft-{SPEC['version']}-linux-{SPEC['arch']}.tar.gz",
+                "id": 12345,
+                "browser_download_url": "https://untrusted.invalid/ignored",
+            }
+        ],
+    }
+
+    def incoming(request, **kwargs):
+        calls.append(request.full_url)
+        if request.full_url.startswith("https://github.com/"):
+            raise urllib.error.HTTPError(request.full_url, 504, "Gateway timeout", {}, None)
+        if "/tags/" in request.full_url:
+            return io.BytesIO(json.dumps(payload).encode())
+        assert request.full_url == "https://api.github.com/repos/storytold/cadcraft/releases/assets/12345"
+        assert request.get_header("Accept") == "application/octet-stream"
+        return io.BytesIO(b"archive")
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", incoming)
+    monkeypatch.setattr(module.time, "sleep", lambda *_: None)
+    target = tmp_path / "release"
+    module._download({**SPEC, "sha256": hashlib.sha256(b"archive").hexdigest()}, target)
+    assert target.read_bytes() == b"archive" and len(calls) == 3
+    with pytest.raises(ValueError, match="checksum"):
+        module._download(SPEC, target)
+    payload["tag_name"] = "v0.0.0"
+    with pytest.raises(ValueError, match="pinned version"):
+        module._release_asset_api_url(SPEC)

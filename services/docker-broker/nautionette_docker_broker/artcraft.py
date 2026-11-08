@@ -157,6 +157,32 @@ def _reap_unused_networks() -> None:
             daemon.log.warning("Unused ArtCraft installer network cleanup deferred")
 
 
+def _release_asset_api_url(spec: dict[str, str]) -> str:
+    """Resolve only the fixed release asset; never trust returned download URLs."""
+    base = f"https://api.github.com/repos/storytold/{spec['app']}/releases"
+    request = urllib.request.Request(  # noqa: S310 - fixed GitHub API and validated spec
+        f"{base}/tags/v{spec['version']}", headers={"User-Agent": "Nautionette-ArtCraft"}
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - fixed upstream
+        body = response.read(2 * 1024 * 1024 + 1)
+    if len(body) > 2 * 1024 * 1024:
+        raise ValueError("ArtCraft release metadata exceeds 2 MiB")
+    metadata = json.loads(body)
+    if not isinstance(metadata, dict) or metadata.get("tag_name") != f"v{spec['version']}":
+        raise ValueError("ArtCraft release metadata does not match the pinned version")
+    expected = asset_name(spec["app"], spec["version"], spec["arch"])
+    assets = metadata.get("assets", [])
+    if not isinstance(assets, list):
+        raise ValueError("Invalid ArtCraft release assets")
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        identifier = asset.get("id")
+        if asset.get("name") == expected and type(identifier) is int and identifier > 0:
+            return f"{base}/assets/{identifier}"
+    raise ValueError("Pinned ArtCraft release asset is unavailable")
+
+
 def _download(spec: dict[str, str], target: Path) -> None:
     # The broker handles only fixed HTTPS bytes, never extracts or executes them.
     # Native verification is network-none, so bootstrap works even when the host
@@ -164,9 +190,13 @@ def _download(spec: dict[str, str], target: Path) -> None:
     url = f"https://github.com/storytold/{spec['app']}/releases/download/v{spec['version']}/" + asset_name(
         spec["app"], spec["version"], spec["arch"]
     )
+    use_api = False
     for attempt in range(3):
         try:
-            request = urllib.request.Request(url, headers={"User-Agent": "Nautionette-ArtCraft"})  # noqa: S310 - fixed upstream and validated release fields
+            headers = {"User-Agent": "Nautionette-ArtCraft"}
+            if use_api:
+                headers["Accept"] = "application/octet-stream"
+            request = urllib.request.Request(url, headers=headers)  # noqa: S310 - fixed upstream and validated release fields
             digest, size = hashlib.sha256(), 0
             with urllib.request.urlopen(request, timeout=60) as incoming, target.open("wb") as out:  # noqa: S310 - fixed upstream
                 while chunk := incoming.read(1024 * 1024):
@@ -183,6 +213,14 @@ def _download(spec: dict[str, str], target: Path) -> None:
                 raise ValueError("Pinned ArtCraft release archive is unavailable") from exc
             if attempt == 2:
                 raise
+            if not use_api:
+                # Release pages may return 504 while GitHub's asset API works.
+                # Keep the selected version/name, size cap and pinned SHA-256.
+                try:
+                    url = _release_asset_api_url(spec)
+                    use_api = True
+                except (OSError, TimeoutError):
+                    pass  # The next bounded attempt can retry metadata lookup.
             time.sleep(attempt + 1)
 
 
