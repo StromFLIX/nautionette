@@ -43,9 +43,6 @@ services:
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-nautionette}
       AGENTGATEWAY_URL: http://agentgateway:4000
       LLM_BASE_URL: http://agentgateway:4000/v1
-      STT_BASE_URL: ${STT_BASE_URL-http://stt:8000/v1}
-      STT_MODEL: ${STT_MODEL:-small}
-      STT_API_KEY: ${STT_API_KEY:-}
       MCP_URL: http://agentgateway:4000/mcp
       BROKER_URL: http://docker-broker:9100
       WORKFLOW_MCP_URL: http://workflow-mcp:8000
@@ -250,16 +247,13 @@ services:
       retries: 5
     <<: *logging
 
-  # CPU-only, private dictation appliance. Swap STT_BASE_URL for any OpenAI-compatible
-  # transcription service without changing the frontend. Never gates backend startup.
+  # Self-hosted streaming dictation; no cloud API, credentials or public port.
+  # English/German models are cached in the volume. Never gates backend startup.
   stt:
     build:
       context: ./services/stt
-    image: ${STT_IMAGE:-${STACK_NAMESPACE:-nautionette}/stt:dev}
+    image: ${STACK_NAMESPACE:-nautionette}/stt:dev
     restart: unless-stopped
-    environment:
-      STT_MODEL: ${STT_MODEL:-small}
-      STT_THREADS: ${STT_THREADS:-4}
     volumes:
       - stt-models:/models
     tmpfs:

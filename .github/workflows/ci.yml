@@ -51,7 +51,7 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Deployment, snapshot, gateway buffers and agent image safety tests
-        run: uv run pytest tests/test_coolify_release.py tests/test_cli_oauth_deployment.py tests/worker/test_prepare_release.py tests/test_publish_agent_images.py tests/test_miniapp_smoke.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py tests/broker/test_chat_sessions.py tests/broker/test_chat_recovery.py tests/broker/test_sandbox_network.py
+        run: uv run pytest tests/test_coolify_release.py tests/test_cli_oauth_deployment.py tests/test_dictation_deployment.py tests/worker/test_prepare_release.py tests/test_publish_agent_images.py tests/test_miniapp_smoke.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py tests/broker/test_chat_sessions.py tests/broker/test_chat_recovery.py tests/broker/test_sandbox_network.py
 
       - name: Native creative app release contracts, installer isolation and Settings
         run: uv run pytest tests/lib/test_artcraft.py tests/broker/test_artcraft.py tests/broker/test_artcraft_offline.py tests/backend/test_artcraft.py tests/test_artcraft_deployment.py
@@ -177,7 +177,7 @@ jobs:
         run: |
           uv venv --python 3.13 /tmp/stt-venv
           uv pip sync --python /tmp/stt-venv/bin/python services/stt/requirements.txt
-      - name: Decode real audio and enforce appliance contract without model downloads
+      - name: Decode streaming PCM and enforce native session contracts without model downloads
         working-directory: services/stt
         run: /tmp/stt-venv/bin/python -m unittest test_server -v
 

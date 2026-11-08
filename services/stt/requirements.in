@@ -1,7 +1,6 @@
-# CPU appliance dependencies; requirements.txt locks the full dependency graph.
-faster-whisper==1.2.1
+# Private CPU streaming appliance. Full dependency graph is hash-locked below.
+moonshine-voice==0.1.6
 fastapi==0.162.0
 uvicorn==0.54.0
-python-multipart==0.0.33
-av==19.0.2
+websockets==17.3
 numpy==2.5.4

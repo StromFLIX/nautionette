@@ -12,9 +12,6 @@
     <p v-if="!configurationReady" class="composer__notice caption" role="status">Loading chat defaults…</p>
     <p v-if="imageError" class="composer__notice caption" role="alert">{{ imageError }}</p>
     <p v-if="voiceNotice" class="composer__notice caption" role="status">{{ voiceNotice }}</p>
-    <p v-if="voiceResult && modelValue === voiceResult.cleaned && !voiceActive" class="composer__voice-result caption">
-      Dictation cleaned up. <button type="button" @click="$emit('update:modelValue', voiceResult.original); voiceResult = null">Use original transcript</button>
-    </p>
     <p v-if="imageSupport !== true && hasImages" class="composer__notice caption" role="status">{{ imageNotice }}</p>
     <div v-if="commandSuggestions.length" class="composer__commands" aria-label="Pi command suggestions">
       <button v-for="command in commandSuggestions" :key="command.name" class="pick-menu__item" type="button" :disabled="busy" @click="chooseCommand(command.name)">
@@ -43,8 +40,8 @@
       </button>
       <span class="grow" />
       <div class="composer__actions" :class="{ 'composer__actions--recording': voiceActive }">
-      <VoiceControl v-model="voiceDraft" :model="model" :disabled="configurationBusy || !configurationReady" :cleanup="preferences.dictationCleanup" :language="preferences.dictationLanguage"
-        @active="voiceActive = $event" @processing="voiceProcessing = $event" @notice="voiceNotice = $event" @completed="voiceResult = $event" />
+      <VoiceControl v-model="voiceDraft" :disabled="configurationBusy || !configurationReady" :language="preferences.dictationLanguage"
+        @active="voiceActive = $event" @notice="voiceNotice = $event" />
       <span class="composer__divider" aria-hidden="true" />
       <button type="button" :class="showStop ? 'composer__stop' : ['composer__send', { 'composer__send--busy': busy }]"
         :aria-label="showStop ? 'Stop response' : running ? 'Queue message' : 'Send message'"
@@ -186,9 +183,7 @@ const focused = ref(false)
 const fileInput = ref(null)
 const imageError = ref('')
 const voiceActive = ref(false)
-const voiceProcessing = ref(false)
 const voiceNotice = ref('')
-const voiceResult = ref(null)
 const voiceDraft = computed({ get: () => props.modelValue, set: value => { emit('update:modelValue', value); nextTick(resizeInput) } })
 function resizeInput () {
   if (!input.value) return
@@ -336,8 +331,6 @@ defineExpose({
 .composer__actions { display: flex; align-items: center; flex: none; min-height: 40px; padding: 2px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-hover); transition: border-color var(--transition); }
 .composer__actions--recording { border-color: var(--accent); }
 .composer__divider { height: 20px; width: 1px; margin: 0 3px; background: var(--border-strong); }
-.composer__voice-result { margin: 6px 16px; color: var(--text-muted); }
-.composer__voice-result button { border: 0; background: none; color: var(--accent-text); text-decoration: underline; cursor: pointer; font: inherit; }
 .composer__send, .composer__stop { position: relative; display: grid; place-items: center; flex: none; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--accent-text); cursor: pointer; }
 .composer__actions .composer__send, .composer__actions .composer__stop { width: 42px; height: 38px; }
 .composer__send::before { content: ''; position: absolute; inset: 0; background: var(--accent); border-radius: inherit; transition: background var(--transition); }

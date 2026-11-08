@@ -1,5 +1,12 @@
 # Spike: near-instant Stop for chat dictation
 
+**Historical investigation, superseded by the [self-hosted implementation](../dictation.md).**
+The implemented path is always-on local Moonshine Small Streaming. Cloud cleanup,
+external STT configuration, feature flags and the proposed Whisper fallback were
+removed rather than implemented. Baseline browser diagnostics are available at
+commit `e933edf`; they were removed from current source because they assert retired
+WAV-upload behavior. The native benchmark and original traces remain as evidence.
+
 Investigated 2026-11-08 against application commit `5954ce6`. This is an investigation
 and isolated executable prototype, **not a rollout of a new chat recording mode**.
 No runtime setting, provider credential, application dependency, or production
@@ -118,7 +125,7 @@ This proves feasibility, **not selection of a production model**. Tiny finalized
 “my fellow America” rather than “my fellow Americans”, and had several unstable
 interims. We did not compute corpus WER, test German/code-switching/technical
 identifiers, test phone hardware, or compare against today's Whisper on identical
-hardware. The old Whisper CPU benchmark in [dictation.md](../dictation.md) is useful
+hardware. The old Whisper CPU benchmark in `docs/dictation.md` at commit `e933edf` is useful
 context but is **not** a controlled head-to-head comparison with these numbers.
 
 Moonshine's current model table lists German small/tiny streaming and MIT licensing

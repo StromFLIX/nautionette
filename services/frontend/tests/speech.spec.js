@@ -1,14 +1,12 @@
 import { test, expect } from '@playwright/test'
 import { mockDesign } from './design-fixture.js'
-import { openChatConfiguration, closeChatConfiguration } from './helpers.js'
 
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } })
 
-async function speechFixture (context, { denied = false, cleanup = false } = {}) {
+async function speechFixture (context, { denied = false, real = false, holdFinal = false, unavailable = false } = {}) {
   const state = await mockDesign(context)
-  const uploads = [], cleanups = []
-  await context.addInitScript(({ denied, cleanup }) => {
-    if (cleanup && !localStorage.getItem('nautionette.preferences.v1')) localStorage.setItem('nautionette.preferences.v1', JSON.stringify({ dictationCleanup: true }))
+  const frames = [], controls = [], sockets = [], tickets = [], forbidden = []
+  if (!real) await context.addInitScript(({ denied }) => {
     window.stoppedTracks = 0
     Object.defineProperty(navigator, 'mediaDevices', { value: {
       async getUserMedia () {
@@ -17,199 +15,174 @@ async function speechFixture (context, { denied = false, cleanup = false } = {})
       }
     } })
     window.AudioContext = class {
-      constructor () { this.sampleRate = 16000; this.destination = {}; this.node = null }
+      constructor () { this.sampleRate = 16000; this.destination = {} }
       async resume () {}
       async close () {}
       createGain () { return { gain: { value: 1 }, connect () {}, disconnect () {} } }
       createMediaStreamSource () {
         return { disconnect () {}, connect: node => {
-          window.feedVoice = seconds => { for (let n = 0; n < seconds * 4; n++) node.onaudioprocess?.({ inputBuffer: { getChannelData: () => new Float32Array(4000).fill(0.1) } }) }
+          window.feedVoice = (seconds, amplitude = 0.1) => {
+            for (let n = 0; n < seconds * 4; n++) node.onaudioprocess?.({ inputBuffer: { getChannelData: () => new Float32Array(4000).fill(amplitude) } })
+          }
           setTimeout(() => window.feedVoice(1), 0)
         } }
       }
       createScriptProcessor () { return { connect () {}, disconnect () {}, onaudioprocess: null } }
     }
-  }, { denied, cleanup })
-  await context.route('**/api/speech', route => route.fulfill({ json: { enabled: true } }))
-  await context.route('**/api/speech/transcribe?*', async route => {
-    uploads.push({ query: Object.fromEntries(new URL(route.request().url()).searchParams), bytes: route.request().postDataBuffer() })
-    const text = cleanup ? 'um fix the test' : 'Fix the test.'
-    const events = [{ type: 'transcript', text }, { type: 'delta', text }, { type: 'done', text }]
-    return route.fulfill({ contentType: 'text/event-stream', body: events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') })
+  }, { denied })
+  await context.route('**/api/speech', route => route.fulfill({ json: { enabled: true, languages: ['en', 'de'] } }))
+  await context.route('**/api/speech/stream-ticket', route => {
+    tickets.push(route.request().postDataJSON())
+    return route.fulfill({ json: { ticket: 'ephemeral-ticket' } })
   })
-  await context.route('**/api/speech/cleanup', route => {
-    cleanups.push(route.request().postDataJSON())
-    const events = [{ type: 'delta', text: 'Fix ' }, { type: 'delta', text: 'the test.' }, { type: 'done', text: 'Fix the test.' }]
-    return route.fulfill({ contentType: 'text/event-stream', body: events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('') })
+  await context.route('**/api/speech/cleanup', route => { forbidden.push(route.request().url()); return route.abort() })
+  await context.route('**/api/speech/transcribe?*', route => { forbidden.push(route.request().url()); return route.abort() })
+  await context.routeWebSocket('**/api/speech/stream', socket => {
+    sockets.push(socket)
+    let revision = 0, sequence = 0
+    const send = (type, text) => socket.send(JSON.stringify({ type, text, revision: ++revision }))
+    socket.onMessage(message => {
+      if (typeof message === 'string') {
+        const event = JSON.parse(message)
+        controls.push(event)
+        if (event.type === 'auth') socket.send(JSON.stringify({ type: unavailable ? 'error' : 'ready' }))
+        if (event.type === 'end') {
+          expect(event.sequence).toBe(sequence)
+          if (!holdFinal) send('done', sequence ? 'Fix the test.' : '')
+        }
+      } else {
+        expect(message.readUInt32LE(0)).toBe(sequence++)
+        frames.push(message)
+        send('transcript', 'Fix the test.')
+      }
+    })
   })
-  return { state, uploads, cleanups }
+  return { state, frames, controls, sockets, tickets, forbidden }
 }
+const draft = page => page.getByRole('textbox', { name: 'Message', exact: true })
+const mic = page => page.getByRole('button', { name: 'Dictate message', exact: true })
+const stop = page => page.getByRole('button', { name: 'Finish recording', exact: true })
 
-for (const width of [320, 390, 1440]) test(`joined microphone/send and header context fit at ${width}px`, async ({ page, context }, testInfo) => {
-  const { state, uploads } = await speechFixture(context)
+for (const width of [320, 390, 1440]) test(`local streaming mic/send fit at ${width}px and Stop never reuploads audio`, async ({ page, context }) => {
+  const f = await speechFixture(context)
   await page.setViewportSize({ width, height: 800 })
   await page.goto('/chats/alpha')
-  const draft = page.getByRole('textbox', { name: 'Message', exact: true })
-  await draft.fill('Existing draft')
-  await expect(page.getByRole('button', { name: 'Select model', exact: true })).toHaveCount(0)
-  await expect(page.locator('.composer__bar > button').first()).toHaveText('add')
-  await expect(page.locator('.pane-head .context-ring')).toBeVisible()
-  await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Finish recording', exact: true })).toBeVisible()
-  await expect(page.locator('.voice-control__wave')).toBeVisible()
+  await draft(page).fill('Existing draft')
+  await mic(page).click()
+  await expect(draft(page)).toHaveValue('Existing draft\nFix the test.')
+  await expect(stop(page)).toBeVisible()
   await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: testInfo.outputPath(`dictation-recording-${width}.png`) })
-  await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
-  await expect(draft).toHaveValue('Existing draft\nFix the test.')
-  expect(uploads).toHaveLength(1)
-  expect(uploads[0].query.cleanup).toBe('false')
-  expect(state.sent).toHaveLength(0)
+  const count = f.frames.length
+  await stop(page).click()
+  await expect(mic(page)).toBeEnabled()
+  expect(f.frames).toHaveLength(count)
+  expect(f.forbidden).toHaveLength(0)
+  expect(f.state.sent).toHaveLength(0)
   expect(await page.evaluate(() => stoppedTracks)).toBe(1)
-  await page.screenshot({ path: testInfo.outputPath(`dictation-draft-${width}.png`) })
+  await draft(page).fill('Reviewed editable transcript')
   await page.getByRole('button', { name: 'Send message', exact: true }).click()
-  await expect.poll(() => state.sent.length).toBe(1)
+  await expect.poll(() => f.state.sent.length).toBe(1)
 })
 
-test('live text appears before stop and the final window replaces rather than duplicates it', async ({ page, context }) => {
-  const { state, uploads } = await speechFixture(context)
-  await page.goto('/chats/alpha')
-  const draft = page.getByRole('textbox', { name: 'Message', exact: true })
-  await draft.fill('Existing draft')
-  await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
-  await page.evaluate(() => feedVoice(3))
-  await expect(draft).toHaveValue('Existing draft\nFix the test.')
-  await expect(page.getByRole('button', { name: 'Finish recording', exact: true })).toBeVisible()
-  expect(uploads.length).toBeGreaterThan(0)
-  expect(state.sent).toHaveLength(0)
-  await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Dictate message', exact: true })).toBeEnabled()
-  await expect(draft).toHaveValue('Existing draft\nFix the test.')
-})
-
-test('cleanup uses the chat model and original transcript can be recovered', async ({ page, context }) => {
-  const { cleanups } = await speechFixture(context, { cleanup: true })
-  await page.goto('/chats/alpha')
-  await openChatConfiguration(page)
-  await expect(page.getByRole('group', { name: 'Dictation', exact: true })).toHaveCount(0)
-  await expect(page.getByLabel("Clean up with this chat's model")).toHaveCount(0)
-  await closeChatConfiguration(page)
-  await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
-  await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
-  await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('Fix the test.')
-  expect(cleanups[0]).toMatchObject({ text: 'um fix the test', model: 'test/model' })
-  await page.getByRole('button', { name: 'Use original transcript', exact: true }).click()
-  await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('um fix the test')
-})
-
-test('dictation preferences live only in Settings and still configure chat recording', async ({ page, context }) => {
-  const { uploads, cleanups } = await speechFixture(context, { cleanup: true })
+test('old cleanup preferences cannot invoke a cloud model; language is persisted', async ({ page, context }) => {
+  const f = await speechFixture(context)
+  await context.addInitScript(() => localStorage.setItem('nautionette.preferences.v1', JSON.stringify({ dictationCleanup: true, dictationLanguage: 'de' })))
   await page.goto('/settings/workspace')
-  const cleanup = page.getByRole('switch', { name: 'Clean up dictation', exact: true })
-  const language = page.getByLabel('Dictation language', { exact: true })
-  await expect(cleanup).toBeChecked()
-  await language.selectOption('de')
-  await page.reload()
-  await expect(cleanup).toBeChecked()
-  await expect(language).toHaveValue('de')
+  await expect(page.getByRole('switch', { name: 'Clean up dictation', exact: true })).toHaveCount(0)
+  await expect(page.getByLabel('Dictation language', { exact: true })).toHaveValue('de')
+  await expect(page.getByLabel('Dictation language', { exact: true }).locator('option')).toHaveCount(2)
   await page.goto('/chats/alpha')
-  await openChatConfiguration(page)
-  await expect(page.getByRole('group', { name: 'Dictation', exact: true })).toHaveCount(0)
-  await expect(page.getByLabel('Dictation language', { exact: true })).toHaveCount(0)
-  await closeChatConfiguration(page)
-  await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
-  await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
-  await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('Fix the test.')
-  expect(uploads[0].query.language).toBe('de')
-  expect(cleanups).toHaveLength(1)
+  await mic(page).click()
+  await expect(draft(page)).toHaveValue('Fix the test.')
+  await stop(page).click()
+  await expect(mic(page)).toBeEnabled()
+  expect(f.tickets[0]).toEqual({ language: 'de' })
+  expect(f.forbidden).toHaveLength(0)
+  await expect(page.getByRole('button', { name: 'Use original transcript', exact: true })).toHaveCount(0)
 })
 
-test('cancel discards recording, releases the microphone and preserves the original typed text', async ({ page, context }) => {
-  const { uploads } = await speechFixture(context)
+test('cancel restores the original draft and releases the microphone', async ({ page, context }) => {
+  const f = await speechFixture(context)
   await page.goto('/chats/alpha')
-  const draft = page.getByRole('textbox', { name: 'Message', exact: true })
-  await draft.fill('Keep this')
-  await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
+  await draft(page).fill('Keep this')
+  await mic(page).click()
+  await expect(draft(page)).toHaveValue('Keep this\nFix the test.')
   await page.getByRole('button', { name: 'Cancel dictation', exact: true }).click()
-  await expect(draft).toHaveValue('Keep this')
-  expect(uploads).toHaveLength(0)
+  await expect(draft(page)).toHaveValue('Keep this')
+  expect(await page.evaluate(() => stoppedTracks)).toBe(1)
+  expect(f.controls.filter(x => x.type === 'end')).toHaveLength(0)
+})
+
+test('microphone permission errors preserve the typed draft and allow retry', async ({ page, context }) => {
+  await speechFixture(context, { denied: true })
+  await page.goto('/chats/alpha')
+  await draft(page).fill('Keep this')
+  await mic(page).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Microphone permission denied' })).toBeVisible()
+  await expect(draft(page)).toHaveValue('Keep this')
+  await expect(mic(page)).toBeEnabled()
+})
+
+test('private service failure happens before microphone capture', async ({ page, context }) => {
+  await speechFixture(context, { unavailable: true })
+  await page.goto('/chats/alpha')
+  await draft(page).fill('Keep this')
+  await mic(page).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Live dictation unavailable' })).toBeVisible()
+  await expect(draft(page)).toHaveValue('Keep this')
+  expect(await page.evaluate(() => stoppedTracks)).toBe(0)
+  await expect(mic(page)).toBeEnabled()
+})
+
+test('disconnect preserves recognized words and never reconnects or replays audio', async ({ page, context }) => {
+  const f = await speechFixture(context)
+  await page.goto('/chats/alpha')
+  await mic(page).click()
+  await expect(draft(page)).toHaveValue('Fix the test.')
+  f.sockets[0].close()
+  await expect(page.getByRole('status').filter({ hasText: 'recognized text was kept' })).toBeVisible()
+  await expect(draft(page)).toHaveValue('Fix the test.')
+  await expect(mic(page)).toBeEnabled()
+  expect(f.sockets).toHaveLength(1)
   expect(await page.evaluate(() => stoppedTracks)).toBe(1)
 })
 
-test('permission errors do not modify or send the draft', async ({ page, context }) => {
-  const { state, uploads } = await speechFixture(context, { denied: true })
+test('late final results after cancel cannot overwrite an editable draft', async ({ page, context }) => {
+  const f = await speechFixture(context, { holdFinal: true })
   await page.goto('/chats/alpha')
-  await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Keep this')
-  await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Microphone permission denied' })).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('Keep this')
-  expect(state.sent).toHaveLength(0)
-  expect(uploads).toHaveLength(0)
-})
-
-test('transcription failure retains the typed draft and permits a retry', async ({ page, context }) => {
-  await speechFixture(context)
-  await context.route('**/api/speech/transcribe?*', route => route.fulfill({ status: 502, json: { detail: 'Transcription service unavailable.' } }))
-  await page.goto('/chats/alpha')
-  const draft = page.getByRole('textbox', { name: 'Message', exact: true })
-  await draft.fill('Keep this draft')
-  await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
-  await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'Transcription service unavailable' })).toBeVisible()
-  await expect(draft).toHaveValue('Keep this draft')
-  await expect(page.getByRole('button', { name: 'Dictate message', exact: true })).toBeEnabled()
-})
-
-test('cancel during transcription ignores a late result and preserves the draft', async ({ page, context }) => {
-  await speechFixture(context)
-  let release
-  const held = new Promise(resolve => { release = resolve })
-  await context.route('**/api/speech/transcribe?*', async route => {
-    await held
-    await route.fulfill({ contentType: 'text/event-stream', body: 'data: {"type":"delta","text":"Late"}\n\ndata: {"type":"done","text":"Late"}\n\n' }).catch(() => {})
-  })
-  await page.goto('/chats/alpha')
-  const draft = page.getByRole('textbox', { name: 'Message', exact: true })
-  await draft.fill('Keep this draft')
-  await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
-  await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
+  await draft(page).fill('Original')
+  await mic(page).click()
+  await expect(draft(page)).toHaveValue('Original\nFix the test.')
+  await stop(page).click()
   await expect(page.getByText('Finalizing…', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Cancel dictation', exact: true }).click()
-  release()
-  await expect(draft).toHaveValue('Keep this draft')
-  await expect(page.getByRole('button', { name: 'Dictate message', exact: true })).toBeEnabled()
+  await draft(page).fill('User edits')
+  f.sockets[0].send(JSON.stringify({ type: 'done', revision: 99, text: 'Late result' }))
+  await expect(draft(page)).toHaveValue('User edits')
 })
 
-test.describe('real browser audio pipeline', () => {
-  test('AudioWorklet sends valid audio and shows text while the microphone is still active', async ({ page, context, browserName }) => {
-    test.skip(browserName !== 'chromium', 'Chromium fake microphone device')
-    const state = await mockDesign(context)
-    await context.grantPermissions(['microphone'])
-    let uploads = 0
-    await context.route('**/api/speech', route => route.fulfill({ json: { enabled: true } }))
-    await context.route('**/api/speech/transcribe?*', route => {
-      const audio = route.request().postDataBuffer()
-      expect(audio.subarray(0, 4).toString()).toBe('RIFF')
-      expect(audio.subarray(8, 12).toString()).toBe('WAVE')
-      uploads++
-      return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"type":"done","text":"Live microphone text."}\n\n' })
-    })
-    await page.goto('/chats/alpha')
-    await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
-    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('Live microphone text.', { timeout: 15000 })
-    await expect(page.getByRole('button', { name: 'Finish recording', exact: true })).toBeVisible()
-    expect(uploads).toBeGreaterThan(0)
-    expect(state.sent).toHaveLength(0)
-    await page.getByRole('button', { name: 'Finish recording', exact: true }).click()
-    await expect(page.getByRole('button', { name: 'Dictate message', exact: true })).toBeEnabled()
-  })
-})
-
-test('navigation releases an active microphone without transcribing into another chat', async ({ page, context }) => {
-  const { uploads } = await speechFixture(context)
+test('navigation closes an active microphone without transcribing into another chat', async ({ page, context }) => {
+  await speechFixture(context)
   await page.goto('/chats/alpha')
-  await page.getByRole('button', { name: 'Dictate message', exact: true }).click()
+  await mic(page).click()
+  await expect(draft(page)).toHaveValue('Fix the test.')
   await page.getByRole('link', { name: /Workflows/ }).first().click()
   await expect.poll(() => page.evaluate(() => stoppedTracks)).toBe(1)
-  expect(uploads).toHaveLength(0)
+})
+
+test('real AudioWorklet streams bounded binary frames and flushes on Stop', async ({ page, context }) => {
+  const f = await speechFixture(context, { real: true })
+  await context.grantPermissions(['microphone'])
+  await page.goto('/chats/alpha')
+  await mic(page).click()
+  await expect(draft(page)).toHaveValue('Fix the test.', { timeout: 15000 })
+  await expect(stop(page)).toBeVisible()
+  expect(f.frames.length).toBeGreaterThan(0)
+  expect(f.frames.every(frame => frame.length <= 65540)).toBe(true)
+  expect(f.frames.every(frame => frame.subarray(0, 4).toString() !== 'RIFF')).toBe(true)
+  await stop(page).click()
+  await expect(mic(page)).toBeEnabled()
+  expect(f.controls.filter(x => x.type === 'end')).toHaveLength(1)
+  expect(f.state.sent).toHaveLength(0)
 })
