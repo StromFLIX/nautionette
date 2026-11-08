@@ -30,9 +30,16 @@ for (const width of [1440, 390, 320]) {
       await expect(page.getByRole('heading', { name: 'Ada', exact: true })).toBeVisible()
       await page.getByRole('button', { name: 'Show all chats', exact: true }).click()
       await expect(page.locator('.chat-list-item')).toHaveCount(1)
+      // The editor can paint before acknowledging the visit has refreshed the
+      // list. Finish that round trip before deliberately unloading the page;
+      // WebKit's intercepted fetch otherwise races the full reload.
+      const readSaved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/chats/alpha/read-state' && response.status() === 200)
+      const listRefreshed = page.waitForResponse(response => new URL(response.url()).pathname === '/api/chats' && response.status() === 200)
       await page.locator('.chat-list-item').click()
       await expect(page).toHaveURL(/\/chats\/alpha$/)
       await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible()
+      expect(await (await readSaved).finished()).toBeNull()
+      expect(await (await listRefreshed).finished()).toBeNull()
       await page.reload()
       await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible()
       await page.getByRole('textbox', { name: 'Message' }).fill('Chat still works after removing the old UI.')
