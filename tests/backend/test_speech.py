@@ -72,6 +72,25 @@ def ticket(client, language="en", **kwargs):
     return response.json()["ticket"]
 
 
+def test_public_socket_transport_enforces_bounds_before_router_allocation(monkeypatch):
+    from nautionette_backend import server
+
+    configs = []
+
+    class Server:
+        def __init__(self, config):
+            configs.append(config)
+
+        def run(self):
+            pass
+
+    monkeypatch.setattr(server, "DrainingServer", Server)
+    server.main()
+    assert configs[0].ws_max_size == speech.MAX_FRAME
+    assert configs[0].ws_max_queue == 4
+    assert configs[0].ws_per_message_deflate is False
+
+
 def test_only_self_hosted_streaming_is_exposed(anonymous, client):
     assert anonymous.get("/api/speech").status_code == 401
     assert anonymous.post("/api/speech/stream-ticket", json={"language": "en"}).status_code == 401

@@ -1,9 +1,11 @@
 """Private CPU streaming recognizer. Model downloads at startup; inference stays local."""
 
 import asyncio
+import contextvars
 import json
 import os
 from contextlib import asynccontextmanager, suppress
+from functools import partial
 from pathlib import Path
 
 import numpy as np
@@ -21,18 +23,31 @@ slot = asyncio.Semaphore(1)
 
 async def native(function, *args):
     """Never free model state/release capacity while cancelled C++ work is still running."""
-    task = asyncio.create_task(asyncio.to_thread(function, *args))
-    try:
-        return await asyncio.shield(task)
-    except asyncio.CancelledError:
-        result = await task
-        # A cancelled session constructor has not yet handed ownership to its caller.
+    # An executor Future is not an independently cancellable asyncio Task during
+    # loop shutdown; only the actual native operation completes it.
+    task = asyncio.get_running_loop().run_in_executor(
+        None, contextvars.copy_context().run, partial(function, *args)
+    )
+    cancelled = False
+    while True:
+        try:
+            result = await asyncio.shield(task)
+            break
+        except asyncio.CancelledError:
+            if task.cancelled():
+                raise
+            cancelled = True
+            # A second cancellation must not cancel the join while C++ is still
+            # using model state. Keep shielding until the actual operation ends.
+    if cancelled:
+        # A cancelled constructor has not yet handed ownership to its caller.
         if isinstance(result, Session):
-            await asyncio.to_thread(result.close)
+            await native(result.close)
         elif isinstance(result, dict) and all(isinstance(model, Transcriber) for model in result.values()):
             for model in result.values():
-                await asyncio.to_thread(model.close)
-        raise
+                await native(model.close)
+        raise asyncio.CancelledError
+    return result
 
 
 def load_models(cache_root=Path("/models")):

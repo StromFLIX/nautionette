@@ -71,6 +71,11 @@ def main() -> None:
             port=8080,
             workers=1,
             proxy_headers=True,
+            # Dictation is the only WebSocket surface. Apply its frame/queue budget
+            # in the transport, before unauthenticated payloads reach the router.
+            ws_max_size=65540,
+            ws_max_queue=4,
+            ws_per_message_deflate=False,
             # Chat/sidebar SSE subscriptions can remain open indefinitely.
             # They must not hold shutdown open after the chat drain has finished.
             timeout_graceful_shutdown=5,

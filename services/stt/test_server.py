@@ -152,6 +152,26 @@ class SessionTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(asyncio.CancelledError):
             await task
 
+    async def test_repeated_cancellation_cannot_abandon_a_running_native_operation(self):
+        started, release = threading.Event(), threading.Event()
+
+        def inference():
+            started.set()
+            release.wait(2)
+
+        task = asyncio.create_task(server.native(inference))
+        await asyncio.to_thread(started.wait, 1)
+        task.cancel()
+        await asyncio.sleep(0.01)
+        task.cancel()
+        await asyncio.sleep(0.01)
+        try:
+            self.assertFalse(task.done(), "Repeated cancellation must not abandon native work")
+        finally:
+            release.set()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+
     async def test_cancelled_session_constructor_is_closed(self):
         started, release = threading.Event(), threading.Event()
         stream = FakeStream()

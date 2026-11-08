@@ -23,7 +23,7 @@ import { api } from '../api'
 import { createRecorder } from '../speech'
 
 const props = defineProps({ modelValue: { type: String, default: '' }, disabled: Boolean, language: { type: String, default: 'en' } })
-const emit = defineEmits(['update:modelValue', 'active', 'processing', 'notice'])
+const emit = defineEmits(['update:modelValue', 'active', 'notice'])
 const available = ref(false), unavailable = ref('Checking dictation availability…')
 const processing = ref(false), connecting = ref(false)
 let disposed = false, controller, session, deadline, base = '', inserted = ''
@@ -31,7 +31,6 @@ const { state, seconds, level, start, stop, cancel: cancelRecording, dispose } =
 const recording = computed(() => state.value === 'recording')
 const active = computed(() => connecting.value || processing.value || state.value !== 'idle')
 watch(active, value => emit('active', value), { flush: 'sync' })
-watch(processing, value => emit('processing', value), { flush: 'sync' })
 
 onMounted(async () => {
   try {
