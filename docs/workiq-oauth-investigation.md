@@ -30,6 +30,24 @@ the session (the last finished at 18:29 UTC); health checks continued returning
 200. Sentinel also showed the host disk about 97.6% used, a separate operational
 risk, not a demonstrated cause of this OAuth failure.
 
+On **2026-11-08 at 08:58–09:01 UTC**, direct SigNoz API queries confirmed the
+same failure after successful token exchange: the first gateway MCP `initialize`
+POST returned HTTP 400 (for example trace `9a5ea589584c8390b7bbda8ed2d827c5`).
+The old severity/source-only log export discarded its reason. A separate probe
+using the already configured target/token reproduced the 400 without a new
+OAuth login. No temporary diagnostic tasks remain.
+
+HTTPS probes now allow at most three bounded initialization attempts on the
+same isolated route and bearer token. Recognized authentication, session,
+protocol/parameter failures and post-initialization errors are not retried.
+Unclassified initialization 400s and selected transient statuses can retry;
+persistent failures still fail visibly. No OAuth code exchange, refresh token,
+route PUT or stdio process launch is replayed. Probe spans carry the safe stage,
+HTTP status and reason, and fixed console diagnostics include the numeric RPC
+code when available. Provider bodies, URLs and credentials remain excluded.
+This addresses the connection-check retry lifecycle; the exact upstream reason
+for the historical 400 was not retained and must not be inferred from it.
+
 The simplified UI removes separate discovery/provider actions, caches validated
 public setup for retry/relogin, and offers a small Login dialog on expiration.
 Browser login remains explicitly user initiated. Successful discovery/token

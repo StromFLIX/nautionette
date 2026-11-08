@@ -112,8 +112,11 @@ Cards also provide **Sign in again** without opening the setup form.
 
 Validated issuer/client/scope/callback settings are cached separately from tokens,
 so retries and relogin do not repeat discovery or reset the user's choices.
-Temporary metadata outages use a known valid setup; only read-only metadata
-requests can retry. Single-use codes, refresh tokens and uncertain dynamic
+Temporary metadata outages use a known valid setup. Read-only metadata and
+bounded HTTPS MCP initialization checks can retry; connection checks reuse the
+same bearer token and isolated route without asking for another sign-in.
+Permanent authentication/protocol errors still fail visibly. Single-use codes,
+refresh tokens and uncertain dynamic
 registrations are never replayed. **Remove saved connection** deletes local
 OAuth credentials and the remembered setup.
 Removing a live server also stops refresh and removes its gateway credential.
