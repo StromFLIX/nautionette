@@ -11,6 +11,10 @@
       </button>
     </div>
     <p class="caption dim">Connected tools are available in every chat.</p>
+    <div v-if="store.mcpAuth.snoozedUntil" class="row integration-snooze" role="status">
+      <p class="caption grow">Login reminders on this device are snoozed until {{ new Date(store.mcpAuth.snoozedUntil).toLocaleString() }}. Other devices are unaffected.</p>
+      <button class="btn btn--sm btn--outline" @click="actions.resumeMcpLoginReminders()">Resume login reminders</button>
+    </div>
 
     <div v-if="adding" class="integration-add">
       <strong>{{ editing ? `Connection settings · ${editing}` : 'Add a server' }}</strong>

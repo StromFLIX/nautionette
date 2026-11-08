@@ -32,7 +32,10 @@ test('only unprivileged loopback redirects are accepted', () => {
 
 test('real receiver binds before login, rejects wrong state/host/path/duplicates and returns code once', async t => {
   let opened = ''
-  const bridge = createReceivers({ openExternal: url => { opened = url } })
+  const focused = []
+  const returnLink = 'nautionette://oauth-return/' + 'a'.repeat(64)
+  const bridge = createReceivers({ openExternal: url => { opened = url },
+    onReceived: owner => focused.push(owner), returnURL: () => returnLink })
   t.after(() => bridge.close())
   const receiver = await bridge.prepare(1, 'http://127.0.0.1:0/callback')
   assert.ok(receiver.port > 1023)
@@ -44,9 +47,13 @@ test('real receiver binds before login, rejects wrong state/host/path/duplicates
   assert.equal((await callback(receiver, { state, code: 'secret' }, { headers: { Host: 'evil.test' } })).status, 400)
   assert.equal((await callback(receiver, { state, code: 'secret' }, { path: '/wrong' })).status, 400)
   assert.equal((await callback(receiver, { state, code: 'secret' }, { path: '/callback?state=' + state + '&state=' + state + '&code=secret' })).status, 400)
+  assert.deepEqual(focused, [])
   const response = await callback(receiver, { state, code: 'secret-code' })
   assert.equal(response.status, 200)
-  assert.ok(!response.body.includes('secret-code'))
+  assert.deepEqual(focused, [1])
+  assert.ok(response.body.includes(returnLink))
+  assert.ok(response.body.includes('history.replaceState'))
+  assert.ok(!response.body.includes('secret-code') && !response.body.includes(state))
   assert.deepEqual(await pending, { method: 'GET', fields: { state, code: 'secret-code' } })
   await assert.rejects(callback(receiver, { state, code: 'replay' }))
 })

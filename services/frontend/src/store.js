@@ -37,9 +37,18 @@ const state = reactive({
   drafts: [],
   runs: [],
   events: [],
-  mcpAuth: { connections: [], prompt: null, busyName: '', error: '' }
+  mcpAuth: { connections: [], prompt: null, busyName: '', error: '', snoozedUntil: 0 }
 })
+function mcpDeviceScope () {
+  try {
+    const url = new URL(server.url || globalThis.location.origin)
+    url.username = url.password = url.search = url.hash = ''
+    return url.href.replace(/\/$/, '')
+  } catch { return 'local' }
+}
 const mcpAuth = createMcpAuthState({ state: state.mcpAuth, scope: chatCacheScope,
+  deviceScope: mcpDeviceScope, storage: () => globalThis.localStorage, events: globalThis,
+  onError: error => { state.mcpAuth.error = error.message },
   fetchStatus: () => guard(() => api.mcpAuthStatus()) })
 
 const listeners = new Set()
@@ -161,6 +170,10 @@ export const actions = {
   dismissMcpLogin: () => mcpAuth.dismiss(),
   beginMcpLogin: name => mcpAuth.begin(name),
   finishMcpLogin: name => mcpAuth.finish(name),
+  snoozeMcpLogin: duration => mcpAuth.snooze(duration),
+  async resumeMcpLoginReminders () {
+    try { await mcpAuth.resume(); state.mcpAuth.error = '' } catch (error) { state.mcpAuth.error = error.message }
+  },
 
   async loadEvents () {
     const data = await guard(() => api.events())

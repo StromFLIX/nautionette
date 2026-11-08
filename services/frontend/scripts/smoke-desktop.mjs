@@ -39,15 +39,28 @@ try {
   const callback = page.evaluate(({ receiver, state, authorization }) => globalThis.nautionetteDesktop.oauth.authorize({
     id: receiver.id, state, authorization_url: authorization
   }), { receiver, state, authorization })
+  // A validated callback should bring this exact app window back, not leave
+  // the user staring at a localhost page behind a hidden desktop client.
+  await application.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0].hide() })
+  const forged = await fetch(receiver.redirect_uri + '?' + new URLSearchParams({ state: 'wrong', code: 'synthetic-code' }))
+  expect(forged.status).toBe(400)
+  expect(await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible())).toBe(false)
   let received = false
   for (let attempt = 0; attempt < 50; attempt++) {
     const response = await fetch(receiver.redirect_uri + '?' + new URLSearchParams({ state, code: 'synthetic-code' }))
-    if (response.ok) { received = true; break }
+    if (response.ok) {
+      const body = await response.text()
+      expect(body).toContain('Callback received')
+      expect(body).not.toContain('synthetic-code')
+      expect(body).not.toContain(state)
+      received = true; break
+    }
     await new Promise(resolve => setTimeout(resolve, 20))
   }
   expect(received).toBe(true)
   expect(await callback).toEqual({ method: 'GET', fields: { state, code: 'synthetic-code' } })
-  console.log(`Desktop OAuth: actual loopback listener answered on port ${receiver.port}; callback completed`)
+  expect(await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible())).toBe(true)
+  console.log(`Desktop OAuth: actual loopback listener answered on port ${receiver.port}; callback completed and owning app window returned`)
   const fixed = await page.evaluate(() => globalThis.nautionetteDesktop.oauth.prepare('http://localhost:12798'))
   expect(fixed.port).toBe(12798)
   const fixedResponse = await fetch('http://127.0.0.1:12798/')

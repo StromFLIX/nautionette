@@ -5,12 +5,14 @@
   "description": "Nautionette desktop and mobile client for your self-hosted instance",
   "author": "Nautionette contributors",
   "main": "desktop/main.cjs",
+  "desktopName": "nautionette.desktop",
   "build": {
     "appId": "dev.nautionette.app",
     "productName": "Nautionette",
     "directories": { "output": "out/desktop" },
     "files": ["dist/**/*", "desktop/**/*", "package.json"],
     "asar": true,
+    "protocols": [{ "name": "Nautionette return", "schemes": ["nautionette"] }],
     "artifactName": "nautionette-v${version}-${os}-${arch}.${ext}",
     "mac": {
       "target": ["dmg"],
@@ -19,7 +21,7 @@
     },
     "win": { "target": ["nsis"] },
     "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },
-    "linux": { "target": ["AppImage"], "category": "Office" }
+    "linux": { "target": ["AppImage"], "category": "Office", "syncDesktopName": true }
   },
   "type": "module",
   "scripts": {

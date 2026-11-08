@@ -28,7 +28,17 @@ function callbackFields (params, state) {
   return fields
 }
 
-function createReceivers ({ openExternal, timeout = 600000 }) {
+function callbackPage (returnURL) {
+  const nonce = crypto.randomBytes(16).toString('hex')
+  const link = typeof returnURL === 'string' && /^nautionette:\/\/oauth-return\/[a-f0-9]{64}$/.test(returnURL)
+    ? `<a href="${returnURL}">Open Nautionette</a>` : ''
+  return { nonce, html: `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Return to Nautionette</title>
+<style>body{font:16px system-ui;background:#101517;color:#e0e8e8;display:grid;place-items:center;min-height:95vh;margin:0}main{max-width:440px;padding:32px}a{display:inline-block;background:#78d9c3;color:#101517;text-decoration:none;padding:12px 20px;border-radius:8px}p{line-height:1.6}</style>
+<main><h1>Callback received</h1><p>Nautionette is checking your connection. Returning to your app…</p>${link}<p>If the app stays behind your browser, use the button or switch back to Nautionette. The connection result is shown in the app.</p></main>
+<script nonce="${nonce}">history.replaceState(null,'',location.pathname)</script></html>` }
+}
+
+function createReceivers ({ openExternal, onReceived = () => {}, returnURL = () => '', timeout = 600000 }) {
   const receivers = new Map()
   function cancel (owner) {
     const receiver = receivers.get(owner)
@@ -71,12 +81,19 @@ function createReceivers ({ openExternal, timeout = 600000 }) {
       // Multiple slow requests may have read concurrently. Consume exactly one.
       if (receiver.finished || !receivers.has(owner)) return fail(400)
       receiver.finished = true
-      response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store',
-        'Content-Security-Policy': "default-src 'none'", 'Referrer-Policy': 'no-referrer' })
-      response.once('finish', () => cancel(owner))
-      response.end('Login callback received. Return to Nautionette to see the connection result.')
+      let link = ''
+      try { link = returnURL(owner) } catch { /* Native focus can still return to the owner. */ }
+      const page = callbackPage(link)
+      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
+        'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${page.nonce}'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+        'Referrer-Policy': 'no-referrer', 'X-Content-Type-Options': 'nosniff' })
+      response.once('finish', () => {
+        try { onReceived(owner) } catch { /* OS focus restrictions must not lose the callback. */ }
+        cancel(owner)
+      })
       const resolve = receiver.resolve
       receiver.resolve = receiver.reject = null
+      response.end(page.html)
       resolve({ method: request.method, fields })
     }
     async function listen (host, port) {

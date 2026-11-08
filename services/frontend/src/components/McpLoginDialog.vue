@@ -13,11 +13,21 @@
       <p v-if="!supported()" class="caption" role="alert">{{ oauthClientMessage }}</p>
       <p v-if="stage && busy" class="caption" role="status">{{ stage }}</p>
       <p v-if="error" class="caption mcp-login-error" role="alert">{{ error }}</p>
+      <label v-if="!busy" class="field mcp-snooze-field">
+        <span>Snooze login reminders on this device</span>
+        <select v-model.number="snoozeFor">
+          <option :value="3600000">1 hour</option>
+          <option :value="28800000">8 hours</option>
+          <option :value="86400000">24 hours</option>
+          <option :value="604800000">7 days</option>
+        </select>
+        <span class="caption dim">Only this instance on this device. You can still choose Login in settings.</span>
+      </label>
       <div class="row">
         <button class="btn btn--primary" :disabled="busy || !supported()" @click="login">
           {{ busy ? 'Signing in…' : error ? 'Try again' : 'Login' }}
         </button>
-        <button class="btn" @click="close">{{ busy ? 'Cancel' : 'Later' }}</button>
+        <button class="btn" @click="busy ? close() : snooze()">{{ busy ? 'Cancel' : 'Snooze' }}</button>
         <button v-if="error" class="btn btn--outline" @click="settings">Connection settings</button>
       </div>
     </q-card>
@@ -25,7 +35,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { api, auth, server } from '../api'
 import { actions, store } from '../store'
@@ -37,7 +47,11 @@ const visible = computed(() => Boolean(selected.value) && !store.needsServer && 
 const supported = () => Boolean(desktopOAuth())
 const busy = ref(false),
   stage = ref(''),
-  error = ref('')
+  error = ref(''),
+  snoozeFor = ref(supported() ? 3600000 : 86400000)
+watch(selected, value => {
+  if (value && !busy.value) snoozeFor.value = supported() ? 3600000 : 86400000
+})
 let controller = null,
   attempt = 0,
   activeName = ''
@@ -86,6 +100,9 @@ function close() {
   actions.dismissMcpLogin()
   if (name) actions.finishMcpLogin(name)
 }
+function snooze() {
+  if (actions.snoozeMcpLogin(snoozeFor.value)) close()
+}
 function settings() {
   close()
   actions.openSettings('mcp')
@@ -106,6 +123,9 @@ onBeforeUnmount(close)
   margin-top: 20px;
   flex-wrap: wrap;
   gap: 8px;
+}
+.mcp-snooze-field {
+  margin-top: 20px;
 }
 .mcp-login-error {
   color: var(--danger, #e57373);

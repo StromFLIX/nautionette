@@ -5,7 +5,26 @@ const { pathToFileURL } = require('node:url')
 const { APP_ORIGIN, trustedRenderer, externalURL, assetPath } = require('./security.cjs')
 
 const { createReceivers } = require('./oauth.cjs')
-const oauth = createReceivers({ openExternal: url => shell.openExternal(url) })
+const { createAppReturns, createFocusOwner } = require('./oauth-return.cjs')
+let returnProtocol = false
+const focusOwner = createFocusOwner({ BrowserWindow, app })
+const appReturns = createAppReturns({ focus: focusOwner })
+const oauth = createReceivers({ openExternal: url => shell.openExternal(url),
+  onReceived: owner => appReturns.foreground(owner),
+  returnURL: owner => returnProtocol ? appReturns.issue(owner) : '' })
+const primaryInstance = app.requestSingleInstanceLock()
+if (!primaryInstance) app.quit()
+else {
+  app.on('second-instance', (_event, argv) => {
+    const link = argv.find(value => typeof value === 'string' && value.startsWith('nautionette:'))
+    if (link) appReturns.activate(link)
+    else {
+      const window = BrowserWindow.getAllWindows().find(item => !item.isDestroyed())
+      if (window) focusOwner(window.webContents.id)
+    }
+  })
+  app.on('open-url', (event, url) => { event.preventDefault(); appReturns.activate(url) })
+}
 
 // Only the bundled top-level renderer can use the narrow OAuth bridge.
 function oauthOwner (event) {
@@ -16,7 +35,7 @@ function oauthOwner (event) {
 ipcMain.handle('oauth:prepare', (event, redirect) => oauth.prepare(oauthOwner(event), redirect))
 ipcMain.handle('oauth:authorize', (event, payload) => oauth.authorize(oauthOwner(event), payload))
 ipcMain.handle('oauth:cancel', event => oauth.cancel(oauthOwner(event)))
-app.on('before-quit', () => oauth.close())
+app.on('before-quit', () => { oauth.close(); appReturns.close() })
 
 // Match the existing Capacitor origin allowed by the backend; no Node integration
 // or arbitrary IPC is exposed to the renderer.
@@ -35,9 +54,9 @@ function createWindow () {
     }
   })
   const owner = window.webContents.id
-  window.webContents.once('destroyed', () => oauth.cancel(owner))
+  window.webContents.once('destroyed', () => { oauth.cancel(owner); appReturns.clear(owner) })
   window.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
-    if (isMainFrame) oauth.cancel(owner)
+    if (isMainFrame) { oauth.cancel(owner); appReturns.clear(owner) }
   })
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (externalURL(url)) shell.openExternal(url).catch(() => {})
@@ -54,7 +73,10 @@ function createWindow () {
   window.loadURL(`${APP_ORIGIN}/`)
 }
 
-app.whenReady().then(() => {
+if (primaryInstance) app.whenReady().then(() => {
+  // Development must not replace an installed app's OS handler. Packaged
+  // installers declare this protocol too; the URL can only focus an owner.
+  if (app.isPackaged) returnProtocol = app.setAsDefaultProtocolClient('nautionette') || app.isDefaultProtocolClient('nautionette')
   const root = path.resolve(__dirname, '../dist')
   protocol.handle('capacitor', request => {
     const file = assetPath(root, request.url)

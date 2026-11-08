@@ -78,7 +78,8 @@ Transport, manual access tokens and optional public-client overrides are under
 **Advanced settings**. Providers advertising public-client dynamic registration
 can register the desktop client automatically. If a provider forbids automatic
 registration, enter its approved public client ID once in Advanced settings.
-No WorkIQ CLI is installed or run on the HTTPS path.
+No WorkIQ CLI is installed or run on the HTTPS path. The desktop return-to-app
+behavior described below applies to both HTTPS and CLI callbacks.
 
 The desktop binds its callback port before login begins. The backend generates
 PKCE/state, exchanges the returned code, verifies authenticated MCP through an
@@ -109,6 +110,15 @@ it does not navigate to the configuration page or automatically open a browser.
 Click Login to reuse the saved settings and open the browser. **Later** dismisses
 that incident; a new expiration after a successful sign-in can prompt again.
 Cards also provide **Sign in again** without opening the setup form.
+
+The popup's **Snooze** action mutes login reminders for this instance on this
+**device/app profile only**, for 1 hour, 8 hours, 24 hours or 7 days. Other devices
+continue to receive their reminders. The choice survives reload/restart in local
+storage (session-only if the browser denies storage). Devices without desktop
+authentication default to 24 hours. Manual **Sign in again** remains available;
+**Resume login reminders** in MCP settings clears the snooze early. At expiry,
+the app checks current connection status before showing another reminder. Snooze
+does not refresh credentials, grant access, hide tool errors or open a browser.
 
 Validated issuer/client/scope/callback settings are cached separately from tokens,
 so retries and relogin do not repeat discovery or reset the user's choices.
@@ -143,6 +153,20 @@ shared-account notice, then click **Connect**. The adapter pins
 EULA only after that explicit checkbox, and runs `auth login` in agentgateway.
 Broker-required/device-bound tenant policies are still enforced by Microsoft;
 this is not a policy bypass. The CLI owns PKCE, token exchange, storage and refresh.
+
+Updated desktop builds bring the **window that started the login** to the front
+once its state-validated loopback callback is received, including restoring a
+hidden/minimized window. The browser displays a credential-free receipt page.
+If OS focus restrictions keep it in front, **Open Nautionette** uses a registered
+focus-only app link with a short-lived, one-shot nonce. OAuth codes, state and
+tokens are never passed through that link; token exchange and the final MCP
+connection result still occur through the existing authenticated bridge. Query
+parameters are cleared from the receipt page's visible URL. Browsers/operating
+systems may still require confirmation for app links, and uninstalled Linux
+AppImages may need desktop integration for the link fallback.
+
+These desktop-return and bundled popup UI enhancements require an updated
+desktop build. They are separate from the earlier backend-only MCP probe retry.
 
 The gateway captures the CLI's actual browser-launch URL (`BROWSER`, `xdg-open`,
 or supported console output), validates its code/PKCE loopback flow and checks

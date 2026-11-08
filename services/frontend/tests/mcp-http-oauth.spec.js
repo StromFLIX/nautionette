@@ -115,14 +115,14 @@ test('expiration on a chat shows only a compact Login prompt and reuses saved se
   await expect(page).toHaveURL('/chats')
 })
 
-test('manual sign-in stays in a popup; Later does not open a browser or setup form', async ({ page, context }) => {
+test('manual sign-in stays in a popup; Snooze does not open a browser or setup form', async ({ page, context }) => {
   const state = await mock(context); await native(context)
   state.profiles.workiq = { ...config, mode: 'https', status: 'connected', revision: 'connected-1' }
   state.servers = [{ name: 'workiq', url, transport: 'http', managed: true, tool_count: 1, oauth: state.profiles.workiq }]
   await page.goto('/settings/mcp')
   await page.getByRole('button', { name: 'Sign in again' }).click()
   await expect(page.locator('.mcp-login-dialog')).toBeVisible()
-  await page.locator('.mcp-login-dialog').getByRole('button', { name: 'Later' }).click()
+  await page.locator('.mcp-login-dialog').getByRole('button', { name: 'Snooze', exact: true }).click()
   expect(state.starts).toEqual([])
   await expect(page.locator('.integration-add')).toHaveCount(0)
 })
@@ -146,6 +146,42 @@ test('hosted OAuth in a web client explains desktop compatibility and never star
   await page.locator('.integration-add').getByRole('button', { name: 'Connect', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('desktop app')
   expect(state.starts).toEqual([])
+})
+
+test('unsupported devices persist a timed snooze and can resume it from settings', async ({ page, context }) => {
+  const state = await mock(context)
+  state.profiles.workiq = { ...config, mode: 'https', status: 'reauth_required', revision: 'expired' }
+  await page.goto('/chats')
+  const dialog = page.locator('.mcp-login-dialog')
+  await expect(dialog.getByRole('button', { name: 'Login', exact: true })).toBeDisabled()
+  await page.getByLabel('Snooze login reminders on this device').selectOption('604800000')
+  await dialog.getByRole('button', { name: 'Snooze', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  const stored = await page.evaluate(() => localStorage.getItem('nautionette.mcp-login-snooze'))
+  expect(stored).not.toContain('test-token')
+  await page.reload()
+  await expect(dialog).toHaveCount(0)
+  await page.goto('/settings/mcp')
+  await expect(page.locator('.integration-snooze')).toContainText('Other devices are unaffected')
+  await page.getByRole('button', { name: 'Resume login reminders' }).click()
+  await expect(dialog).toBeVisible()
+  expect(state.starts).toEqual([])
+})
+
+test('snooze on one device does not suppress another device\'s reminders', async ({ page, context, browser }) => {
+  const state = await mock(context); await native(context)
+  state.profiles.workiq = { ...config, mode: 'https', status: 'reauth_required', revision: 'expired' }
+  await page.goto('/chats')
+  await page.locator('.mcp-login-dialog').getByRole('button', { name: 'Snooze', exact: true }).click()
+  await expect(page.locator('.mcp-login-dialog')).toHaveCount(0)
+  const second = await browser.newContext()
+  try {
+    const other = await mock(second)
+    other.profiles.workiq = { ...state.profiles.workiq }
+    const otherPage = await second.newPage()
+    await otherPage.goto(new URL('/chats', page.url()).href)
+    await expect(otherPage.locator('.mcp-login-dialog')).toBeVisible()
+  } finally { await second.close() }
 })
 
 test('failed relogin retries saved setup in the same popup', async ({ page, context }) => {
