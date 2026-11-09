@@ -10,7 +10,7 @@
   <link rel="icon" href="/favicon.svg?v=denkzeug-3" type="image/svg+xml" />
   <link rel="preload" href="/assets/fonts/Sora.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/assets/fonts/SourceSerif4.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="stylesheet" href="/styles.css?v=denkzeug-3" />
+  <link rel="stylesheet" href="/styles.css?v=product-preview-1" />
   <meta property="og:title" content="{{brand.name}} — a tool for thought" />
   <meta property="og:description" content="Your agents, workflows and miniapps. Free, remote and extensible. A little more room for what your mind can do." />
   <meta property="og:type" content="website" />
@@ -70,7 +70,7 @@
           </div>
           <div class="hero-actions">
             <a class="button" href="#start">Make it yours <span aria-hidden="true">↗</span></a>
-            <a class="text-link" href="#possibilities">See what’s possible <span aria-hidden="true">↓</span></a>
+            <a class="text-link" href="#workspace">See the workspace <span aria-hidden="true">↓</span></a>
           </div>
         </div>
         <div class="field-caption">
@@ -89,6 +89,29 @@
     </div>
 
   <div class="page-content">
+    <section class="product-section wrap section-space" id="workspace" aria-labelledby="workspace-title">
+      <div class="section-heading product-section__heading">
+        <h2 id="workspace-title">A workspace for<br />your AI agents.</h2>
+        <p>{{brand.name}} is an open-source app you run on your own server. Chat with agents that use tools and create files, then turn useful work into repeatable workflows or small apps.</p>
+      </div>
+      <div class="product-views">
+        <figure class="product-view product-view--desktop">
+          <a class="product-screen" href="/assets/product/desktop.webp" target="_blank" rel="noopener noreferrer" aria-label="Open the full-size desktop workspace screenshot in a new tab">
+            <span class="product-screen__bar"><span>Your workspace</span><span class="product-screen__zoom">Open full size <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M10 4H4v16h16v-6"/></svg></span></span>
+            <img src="/assets/product/desktop-small.webp" srcset="/assets/product/desktop-small.webp 1280w, /assets/product/desktop.webp 1920w" sizes="(max-width: 700px) calc(100vw - 40px), (max-width: 1000px) calc(100vw - 310px), 880px" width="1280" height="840" loading="lazy" decoding="async" alt="Denkzeug on a computer: saved agents and chats beside a conversation with tool calls and an editable product brief and slide deck." />
+          </a>
+          <figcaption><strong>Make it on your computer.</strong><span>Agents, tools and the files you create, in one place.</span></figcaption>
+        </figure>
+        <figure class="product-view product-view--phone">
+          <a class="product-phone" href="/assets/product/phone.webp" target="_blank" rel="noopener noreferrer" aria-label="Open the full-size phone workspace screenshot in a new tab">
+            <img src="/assets/product/phone.webp" width="780" height="1688" loading="lazy" decoding="async" alt="The same Denkzeug chat on a phone, showing its Outputs tab with editable document, presentation and PDF downloads." />
+          </a>
+          <figcaption><strong>Pick it up on your phone.</strong><span>The same work, wherever you are.</span></figcaption>
+        </figure>
+      </div>
+      <p class="product-section__note">Actual interface shown with sample content. Both clients connect to the same self-hosted instance. Select a screenshot to see it full size.</p>
+    </section>
+
     <section class="principles wrap section-space" id="idea" aria-labelledby="idea-title">
       <div class="section-heading">
         <h2 id="idea-title">Your tools.<br />Your terms.</h2>

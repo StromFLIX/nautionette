@@ -30,9 +30,15 @@ No usage statistics or customer results are fabricated.
   still; the visitor can explicitly play or pause and that choice is saved locally.
 
 The brief's own living-grid direction wins over generic SaaS hero treatments or
-prescriptive website kits. The supplied icon and the word itself are the hero,
-not an invented dashboard screenshot. The three illustrations below it explain
-artifact types, workflow structure and miniapps, and are labelled as examples.
+prescriptive website kits. The supplied icon and the word itself remain the hero.
+Immediately below, a plain-language product explanation and actual desktop/phone
+interface captures make the product concrete before the principles section.
+Desktop shows a conversation and editable work; the phone shows the same chat's
+Outputs. Screens are captured from the app with documented, deterministic sample
+content, never production/user data, and labelled accordingly. Device framing is
+CSS outside the captures, not a redrawn interface. Phone leads on small screens;
+full-size image links work with keyboard navigation and without JavaScript.
+The three later illustrations explain artifact types, workflows and miniapps.
 
 ## Brand assets
 

@@ -6,12 +6,12 @@ import { definitions } from '../../website/definitions.mjs'
 // second development server or changing the app's branding/router.
 async function website (page, { appURL = '', environment = 'production' } = {}) {
   await page.route('https://api.github.com/**', route => route.fulfill({ status: 503, body: '' }))
-  await page.route('http://denkzeug.test/**', async route => {
+  await page.context().route('http://denkzeug.test/**', async route => {
     const path = new URL(route.request().url()).pathname
     const config = { '/app-url.txt': appURL, '/environment.txt': environment, '/ios-url.txt': '' }
     if (path in config) return route.fulfill({ contentType: 'text/plain', body: config[path] })
     const file = new URL(`../../website${path === '/' ? '/index.html' : path}`, import.meta.url)
-    const mime = { html: 'text/html', css: 'text/css', js: 'text/javascript', mjs: 'text/javascript', svg: 'image/svg+xml', woff2: 'font/woff2' }
+    const mime = { html: 'text/html', css: 'text/css', js: 'text/javascript', mjs: 'text/javascript', svg: 'image/svg+xml', webp: 'image/webp', woff2: 'font/woff2' }
     try {
       await route.fulfill({ contentType: mime[file.pathname.split('.').at(-1)] || 'text/plain', body: await readFile(file) })
     } catch { await route.fulfill({ status: 404, body: 'Not found' }) }
@@ -83,6 +83,36 @@ test('evolving patterns keep the title and definition clear on desktop and phone
     }
   }
 })
+
+for (const width of [1440, 768, 390, 320]) {
+  test(`product screenshots explain the app and fit at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await website(page)
+    const product = page.getByRole('region', { name: 'A workspace for your AI agents.' })
+    await product.scrollIntoViewIfNeeded()
+    await expect(product).toContainText('open-source app you run on your own server')
+    await expect(product).toContainText('sample content')
+    for (const image of await product.locator('img').all()) {
+      await image.scrollIntoViewIfNeeded()
+      await expect.poll(() => image.evaluate(node => node.complete && node.naturalWidth > 0)).toBe(true)
+    }
+    const desktop = await product.locator('.product-view--desktop').boundingBox()
+    const phone = await product.locator('.product-view--phone').boundingBox()
+    if (width <= 700) expect(phone.y).toBeLessThan(desktop.y)
+    else expect(desktop.x + desktop.width).toBeLessThanOrEqual(phone.x)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    const link = product.getByRole('link', { name: /full-size desktop workspace/ })
+    await expect(link).toHaveAttribute('href', '/assets/product/desktop.webp')
+    await link.focus()
+    await expect(link).toBeFocused()
+    const opened = page.waitForEvent('popup')
+    await link.press('Enter')
+    const original = await opened
+    await expect(original).toHaveURL('http://denkzeug.test/assets/product/desktop.webp')
+    await expect.poll(() => original.locator('img').evaluate(image => image.complete && image.naturalWidth === 1920)).toBe(true)
+    await original.close()
+  })
+}
 
 test('motion pauses, persists and defaults to a still field for reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })

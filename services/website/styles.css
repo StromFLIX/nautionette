@@ -85,6 +85,33 @@ h3 { letter-spacing: -.045em; }
 .section-space { padding-block: 108px; }
 .section-heading { display: grid; grid-template-columns: 1fr 1fr; align-items: end; gap: 64px; }
 .section-heading > p { max-width: 395px; padding-bottom: 4px; font-size: 15px; color: var(--muted); line-height: 1.8; }
+/* Real product views, with device framing kept outside the captured interface. */
+.product-section { border-bottom: 1px solid var(--line); }
+.product-section__heading { margin-bottom: 48px; }
+.product-views { display: grid; grid-template-columns: minmax(0, 1fr) 244px; align-items: end; gap: 24px; }
+.product-view { min-width: 0; margin: 0; }
+.product-screen, .product-phone { display: block; overflow: hidden; background: var(--paper); box-shadow: 0 12px 32px -20px rgb(32 35 44 / .3); }
+.product-screen { border: 1px solid #cfd4e0; border-radius: 12px; }
+.product-screen__bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 36px; padding: 8px 13px; border-bottom: 1px solid var(--line); color: #565e70; font-size: 10px; }
+.product-screen__zoom { display: inline-flex; align-items: center; gap: 7px; }
+.product-screen img, .product-phone img { display: block; width: 100%; height: auto; }
+.product-phone { border: 7px solid var(--ink); border-radius: 26px; }
+.product-view figcaption { display: flex; flex-direction: column; gap: 5px; margin-top: 20px; font-size: 12px; line-height: 1.65; }
+.product-view figcaption strong { font-weight: 500; }
+.product-view figcaption > span { color: var(--muted); font-size: 11px; }
+.product-section__note { max-width: 82ch; margin-top: 28px; color: var(--muted); font-size: 10px; line-height: 1.8; }
+@media (hover: hover) and (pointer: fine) { .product-screen:hover, .product-phone:hover { outline: 2px solid #6878c4; outline-offset: 4px; } }
+@media (max-width: 1000px) and (min-width: 701px) { .product-views { grid-template-columns: minmax(0, 1fr) 210px; gap: 20px; } }
+@media (max-width: 700px) {
+  .product-section__heading { margin-bottom: 36px; }
+  .product-views { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .product-view--phone { order: -1; width: min(280px, 100%); justify-self: center; }
+  .product-view--phone figcaption { text-align: center; }
+  .product-view figcaption { margin-top: 16px; }
+  .product-screen__bar { font-size: 9px; }
+  .product-section__note { margin-top: 24px; }
+}
+
 .principle-grid { margin-top: 68px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 54px; }
 .principle { border-top: 1px solid var(--line); padding-top: 30px; }
 .principle h3 { font-size: 25px; margin: 25px 0 17px; }
