@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { mockDesign } from './design-fixture.js'
+import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 
 async function fixture (context) {
   await mockDesign(context)
@@ -19,9 +20,12 @@ async function fixture (context) {
   return chats
 }
 
-for (const width of [1440, 320]) {
-  test(`agent chat trees collapse by default, reveal all levels and fit at ${width}px`, async ({ page, context }) => {
+for (const [width, theme, interfaceSize] of [[1440, 'orbit', 100], [320, 'orbit', 100], [1440, 'daylight', 150], [320, 'daylight', 150]]) {
+  test(`agent chat trees collapse by default, reveal all levels and fit at ${width}px in ${theme} at ${interfaceSize}%`, async ({ page, context }) => {
     await fixture(context)
+    await context.addInitScript(({ key, theme, interfaceSize }) => {
+      localStorage.setItem(key, JSON.stringify({ theme, interfaceSize }))
+    }, { key: PREFERENCES_KEY, theme, interfaceSize })
     await page.setViewportSize({ width, height: 1000 })
     await page.goto('/chats')
     const list = page.locator('.side__list')
@@ -29,6 +33,14 @@ for (const width of [1440, 320]) {
     await expect(titles).toHaveText(['Build the website', 'Plan next release'])
     const rootToggle = page.getByRole('button', { name: 'Expand agent chats for Build the website (3)', exact: true })
     await expect(rootToggle).toHaveAttribute('aria-expanded', 'false')
+    await expect(rootToggle).toContainText('3 agent chats')
+    await expect(rootToggle).toContainText('1 active')
+    await expect(list.locator('.chat-status rect')).toHaveCount(0)
+    await expect(list.locator('.chat-status circle')).toHaveCount(2)
+    const parentTitleBox = await list.locator('a[href="/chats/root"] .row-item__title').boundingBox()
+    const toggleBox = await rootToggle.boundingBox()
+    expect(toggleBox.y).toBeGreaterThanOrEqual(parentTitleBox.y + parentTitleBox.height)
+    await page.screenshot({ path: `/tmp/chat-tree-collapsed-${width}-${theme}.png` })
     await expect(list.locator('a[href="/chats/root"] .chat-status')).toHaveAttribute('aria-label', 'Agent chats active')
     await expect(list.getByLabel('Unread agent replies', { exact: true })).toBeVisible()
     await rootToggle.focus()
@@ -37,8 +49,17 @@ for (const width of [1440, 320]) {
     await page.getByRole('button', { name: 'Expand agent chats for Design website branding (1)', exact: true }).click()
     await expect(titles).toHaveText(['Build the website', 'Design website branding', 'Research accessible colours', 'Implement responsive layout', 'Plan next release'])
     await expect(list.locator('a[href="/chats/research"]').locator('..')).toHaveAttribute('data-tree-depth', '2')
+    const family = list.getByRole('group', { name: 'Agent chats for Build the website', exact: true })
+    await expect(family.locator('.row-item__title')).toHaveText(['Design website branding', 'Research accessible colours', 'Implement responsive layout'])
+    await expect(family.getByRole('group', { name: 'Agent chats for Design website branding', exact: true })).toBeVisible()
+    await expect(family.locator('a[href="/chats/unrelated"]')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Collapse agent chats for Build the website (3)', exact: true })).toHaveAttribute('aria-controls', await family.getAttribute('id'))
+    const rail = family.locator(':scope > .chat-tree').last()
+    expect(await rail.evaluate(el => getComputedStyle(el, '::before').borderInlineStartWidth)).toBe('1px')
+    expect(await rail.evaluate(el => getComputedStyle(el, '::after').borderBlockStartWidth)).toBe('1px')
+    await expect(page).toHaveURL(/\/chats$/)
     expect(await list.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
-    await page.screenshot({ path: `/tmp/chat-tree-${width}.png` })
+    await page.screenshot({ path: `/tmp/chat-tree-${width}-${theme}.png` })
     await page.getByRole('button', { name: 'Collapse agent chats for Build the website (3)', exact: true }).click()
     await expect(titles).toHaveText(['Build the website', 'Plan next release'])
     await page.reload()
