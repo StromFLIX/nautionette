@@ -1,9 +1,7 @@
 """Opt-in real Docker check, offline: private delivery and Git across expiry."""
 
-import io
 import json
 import os
-import tarfile
 from contextlib import ExitStack
 
 import docker
@@ -38,17 +36,37 @@ def test_live_unprivileged_container_reads_rotated_credentials(repo_root):
             }
         ]
         git_credentials.prepare(container, credentials, {"owner/repo"})
-        archive = io.BytesIO()
-        with tarfile.open(fileobj=archive, mode="w") as tar:
-            tar.add(repo_root / "images/pi-base/project-git.mjs", arcname="project-git.mjs")
-        container.put_archive("/tmp", archive.getvalue())  # noqa: S108
         container.start()
+        # Exercise the shipped helper and its dependencies, not an incomplete
+        # /tmp copy. A stale local image must fail clearly instead of masking
+        # a bootstrap/import failure as the expected expired-token rejection.
+        for name in ("project-git.mjs", "brand.json"):
+            shipped = container.exec_run(
+                [
+                    "node",
+                    "-e",
+                    "process.stdout.write(require('node:fs').readFileSync(process.argv[1]))",
+                    f"/usr/local/lib/nautionette/{name}",
+                ]
+            )
+            assert shipped.exit_code == 0, f"Agent image is missing {name}; rebuild the current Pi base."
+            assert shipped.output == (repo_root / "images/pi-base" / name).read_bytes(), (
+                f"Agent image has stale {name}; rebuild the current Pi base."
+            )
+        ready = container.exec_run(
+            [
+                "node",
+                "--input-type=module",
+                "-e",
+                "await import('/usr/local/lib/nautionette/project-git.mjs')",
+            ]
+        )
+        assert ready.exit_code == 0, ready.output.decode("utf-8", errors="replace")
         script = """
             import { execFileSync } from 'node:child_process';
-            import { projectEnvironment } from '/tmp/project-git.mjs';
+            import { projectEnvironment } from '/usr/local/lib/nautionette/project-git.mjs';
             const env = {...process.env, ...projectEnvironment({project_ids: ['selected'],
                 project_remotes: {selected: 'owner/repo'}})};
-            env.GIT_CONFIG_VALUE_1 = '!node /tmp/project-git.mjs';
             try {
                 process.stdout.write(execFileSync('git', ['credential', 'fill'], {
                     env, input: 'url=https://github.com/owner/repo.git\\n\\n', stdio: 'pipe',
