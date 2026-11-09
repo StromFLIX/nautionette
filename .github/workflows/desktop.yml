@@ -41,7 +41,7 @@ jobs:
           cache-dependency-path: services/frontend/package-lock.json
       - run: npm ci
       - name: Loopback receivers and desktop security (all platforms)
-        run: node --test scripts/desktop.test.js scripts/oauth.test.js scripts/oauth-form.test.js
+        run: node --test scripts/desktop.test.js scripts/oauth.test.js scripts/oauth-form.test.js scripts/package-desktop.test.js
       - name: Use the release version
         if: startsWith(github.ref, 'refs/tags/v')
         run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --ignore-scripts --allow-same-version
@@ -49,7 +49,7 @@ jobs:
         # Unsigned by default. Never imply these installers are notarized.
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npm run desktop:build -- --${{ matrix.platform }} --${{ matrix.arch }}
+        run: npm run desktop:build:ci -- --${{ matrix.platform }} --${{ matrix.arch }}
       - name: Test packaged Linux renderer
         if: matrix.platform == 'linux'
         run: |

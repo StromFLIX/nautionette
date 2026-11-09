@@ -218,6 +218,12 @@ The **Desktop** workflow (`.github/workflows/desktop.yml`) builds on pushes to
 A `v<semver>` tag (for example `v1.2.3`) sets the desktop version and attaches
 `nautionette-v1.2.3-<mac|linux|win>-<arch>.<dmg|AppImage|exe>` to the same GitHub
 Release as Android. Branch/PR builds are available as Actions artifacts only.
+Packaging retries transient HTTP 429/5xx and network failures up to three attempts
+with 30/60-second backoff; checksum, compilation and signing errors fail normally.
+Installers upload independently, so a failed platform can leave a partial release.
+To recover an existing release, open its tag's **Desktop** Actions run and choose
+**Re-run failed jobs** (requires Actions write permission); rerunning a branch
+build does not attach installers to a release. Do not move an existing release tag.
 These desktop installers are **unsigned**, not notarized: macOS Gatekeeper and
 Windows SmartScreen can block or warn about them. Production signing/notarization
 requires the respective certificates and a separate signing setup. Only install
