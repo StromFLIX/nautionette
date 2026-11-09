@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { createChatRecovery } from '../../images/pi-base/chat-recovery.mjs'
 import { createTelemetry } from '../../images/pi-base/telemetry.mjs'
+import brand from '../../images/pi-base/brand.json' with { type: 'json' }
 
 const source = ['chat-files.mjs', 'agent-run.mjs'].map(name =>
   readFileSync(new URL(`../../images/pi-base/${name}`, import.meta.url), 'utf8')
@@ -16,7 +17,7 @@ async function run (job, events = null, mcpNames = null) {
   const commands = [], output = [], writes = [], removed = []
   let spawnArgs, spawnOptions
   await runInNewContext(source, {
-    Buffer, console, createChatRecovery, dirname,
+    Buffer, console, createChatRecovery, dirname, brand,
     createTelemetry: (job) => createTelemetry(job, { OTEL_SDK_DISABLED: 'true' }),
     mkdirSync () {}, existsSync (path) { return path.startsWith('/tmp/nautionette-mcp-') && mcpNames !== null },
     lstatSync () { return { isDirectory: () => true } },
@@ -164,10 +165,12 @@ for (const tools of [undefined, null, [], ['read'], ['name,with,commas']]) {
 
 test('selected packages receive same-turn background guidance without replacing the agent prompt', async () => {
   const result = await run({ chat_id: 'chat', prompt: 'hi', system_prompt: 'Review carefully.', packages: ['revision'] })
+  assert.equal(result.output.at(-1).ok, true, result.output.at(-1).error)
   const prompt = result.spawnArgs[result.spawnArgs.indexOf('--append-system-prompt') + 1]
   assert.match(prompt, /^Review carefully\./)
   assert.match(prompt, /bg_wait with the returned run ID/)
   assert.match(prompt, /cannot survive across turns/)
+  assert.ok(prompt.includes(`Use ${brand.name} durable workflows`))
   const withoutPackages = await run({ chat_id: 'chat', prompt: 'hi', system_prompt: 'Review carefully.', packages: [] })
   assert.equal(withoutPackages.spawnArgs[withoutPackages.spawnArgs.indexOf('--append-system-prompt') + 1], 'Review carefully.')
 })
