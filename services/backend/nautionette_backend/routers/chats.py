@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 import uuid
 from collections.abc import Callable
 from typing import Any
@@ -17,6 +18,7 @@ from .. import (
     agent_profiles,
     catalog,
     chat_attachments,
+    chat_branches,
     chat_drafts,
     chat_sessions,
     project_changes,
@@ -97,6 +99,29 @@ async def new_chat(payload: dict[str, Any], *, chat_id: str | None = None) -> di
     )
     if payload.get("title"):
         chat = db.update_chat(chat["id"], {"title": chat["title"]}) or chat
+    bus.publish("chat.created", {"chat_id": chat["id"], "title": chat["title"]})
+    return chat
+
+
+@router.post("/api/chats/{chat_id}/branch")
+async def branch_chat(chat_id: str) -> dict[str, Any]:
+    _chat_or_404(chat_id)
+    if db.one("SELECT id FROM chat_turns WHERE chat_id = ? AND state IN ('running', 'queued')", (chat_id,)):
+        raise HTTPException(409, "Wait for the response and queued messages to finish before branching")
+    try:
+        # A broker crash can release the file lock while its container survives.
+        # Reap orphan writers before snapshotting, as for resume and deletion.
+        await reconcile_chat_agents(chat_id)
+    except RuntimeError as exc:
+        raise HTTPException(503, "Chat agent cleanup is still in progress; retry shortly") from exc
+    try:
+        chat = await run_in_threadpool(chat_branches.branch, chat_id)
+    except RuntimeError as exc:
+        raise HTTPException(409, "Wait for the active agent to finish before branching") from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except (OSError, TimeoutError, subprocess.SubprocessError) as exc:
+        raise HTTPException(503, "Could not copy chat state; check storage and retry") from exc
     bus.publish("chat.created", {"chat_id": chat["id"], "title": chat["title"]})
     return chat
 

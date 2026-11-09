@@ -110,6 +110,17 @@ Model selection, agents, reasoning, tools and projects remain available behind
 in each chat; opening one chat's controls never expands the next chat's composer.
 Provider-reported context usage appears as a circle in the chat header.
 
+To explore a different idea without changing the original, choose **Chat options
+> Branch chat** (also available in a chat's sidebar menu). The new chat keeps the
+conversation, native agent context, settings and original attachments, with its
+own Git HEAD, index and working files, including uncommitted and untracked work.
+Subsequent messages and edits are independent; branching does not create or push
+a Git branch. A note links back to the original conversation. Published outputs
+stay in the original chat rather than sharing mutable ownership. Wait for active
+and queued responses to finish before branching. Copies are limited to 1 GiB and
+100,000 files; large workspaces should be trimmed first. Nested Git repositories
+and initialized submodules cannot currently be branched.
+
 The joined **microphone / send** control supports live dictation through a private
 CPU-only Moonshine streaming service included in Compose. English/German models
 recognize audio as it arrives; Stop flushes only the remaining audio and finalizes
