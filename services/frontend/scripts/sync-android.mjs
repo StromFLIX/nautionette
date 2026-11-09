@@ -37,5 +37,7 @@ for (const name of ['ic_launcher', 'ic_launcher_round', 'ic_launcher_foreground'
   const source = name === 'ic_launcher_foreground' ? 'ic_launcher_foreground.png' : 'ic_launcher.png'
   await copyFile(new URL(`native/icons/${source}`, root), new URL(`mipmap-xxxhdpi/${name}.png`, resources))
 }
-// Replace the stock green adaptive-icon background while preserving resource IDs.
-await writeFile(new URL('values/ic_launcher_background.xml', resources), '<?xml version="1.0" encoding="utf-8"?>\n<resources><color name="ic_launcher_background">#ffffff</color></resources>\n')
+// Full-bleed black + a transparent white-glyph foreground: the launcher owns
+// the outer shape. Reusing the padded iOS icon here creates a second rounded
+// square inside Android's mask and leaves uneven white slivers around the mark.
+await writeFile(new URL('values/ic_launcher_background.xml', resources), '<?xml version="1.0" encoding="utf-8"?>\n<resources><color name="ic_launcher_background">#000000</color></resources>\n')
