@@ -363,6 +363,7 @@ class GatewayClient:
                     raise ValueError("MCP tools/list did not return tools")
                 tools.extend(
                     {
+                        **{key: tool[key] for key in ("inputSchema", "annotations", "title") if key in tool},
                         "name": tool.get("name", "?"),
                         "description": (tool.get("description") or "").strip().split("\n")[0][:200],
                     }

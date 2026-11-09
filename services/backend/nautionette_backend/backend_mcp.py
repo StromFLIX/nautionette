@@ -39,6 +39,8 @@ _PREFIXES = (
 )
 _EXACT = {
     "/api/catalog",
+    "/api/mcp-oauth/gate",
+    "/api/mcp-oauth/tools",
     "/api/events/recent",
     "/api/chat-outputs/prepare",
     "/api/chat-outputs/publish",
@@ -216,7 +218,7 @@ class BackendMCP:
             message = (
                 "Invalid private output request; check the tool schema and limits. "
                 "Manage storage at /settings/storage"
-                if operation["path"].startswith(("/api/chat-outputs/", "/api/subagents/"))
+                if operation["path"].startswith(("/api/chat-outputs/", "/api/subagents/", "/api/mcp-oauth/"))
                 else exc.message
             )
             return self.result({"error": message}, error=True)
@@ -244,7 +246,7 @@ class BackendMCP:
         async with httpx.ASGITransport(app=self.app, raise_app_exceptions=False) as transport:
             response = await transport.handle_async_request(request)
             await response.aread()
-        if operation["method"] != "GET":
+        if operation["method"] != "GET" and not operation["path"].startswith("/api/mcp-oauth/"):
             bus.publish("agent.backend_operation", {"tool": name, "status": response.status_code})
         try:
             payload = response.json()

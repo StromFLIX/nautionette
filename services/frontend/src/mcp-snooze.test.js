@@ -8,12 +8,16 @@ function memory() {
 }
 function fixture(storage = memory(), clock = [1000000]) {
   const state = { connections: [], prompt: null, busyName: '' }, timers = new Map()
-  let instance = 'https://instance-a.test', serial = 0
+  let instance = 'https://instance-a.test', serial = 0, requests = [{ id: 'call-1', server: 'server' }]
+  const rejected = []
   const tracker = createMcpAuthState({ state, scope: () => instance + '|secret-api-token',
     deviceScope: () => instance, storage: () => storage, now: () => clock[0],
-    fetchStatus: async () => ({ connections: [expired] }),
+    fetchStatus: async () => ({ connections: [expired], requests }),
+    rejectRequests: async ids => { rejected.push(...ids); requests = requests.filter(wait => !ids.includes(wait.id)) },
     schedule: fn => { timers.set(++serial, fn); return serial }, unschedule: id => timers.delete(id) })
-  return { state, tracker, storage, clock, timers, instance: value => { instance = value } }
+  return { state, tracker, storage, clock, timers, rejected,
+    demand: () => { requests = [{ id: `call-${++serial}`, server: 'server' }] },
+    instance: value => { instance = value } }
 }
 
 test('snooze persists after reload on this device without credentials; another device still prompts', async () => {
@@ -30,13 +34,16 @@ test('snooze persists after reload on this device without credentials; another d
   reloaded.tracker.dispose(); a.tracker.dispose(); b.tracker.dispose()
 })
 
-test('expiration checks status and prompts again for the same incident without opening a browser', async () => {
+test('snooze fails the call and expiry does not resurrect it', async () => {
   const f = fixture()
   await f.tracker.refresh(); f.tracker.snooze(3600000)
   const timer = [...f.timers.values()][0]
   f.clock[0] += 3600001
   timer(); await new Promise(resolve => setImmediate(resolve))
   assert.equal(f.state.snoozedUntil, 0)
+  assert.equal(f.state.prompt, null)
+  assert.deepEqual(f.rejected, ['call-1'])
+  f.demand(); await f.tracker.refresh()
   assert.equal(f.state.prompt.name, 'server')
   f.tracker.dispose()
 })
@@ -44,13 +51,15 @@ test('expiration checks status and prompts again for the same incident without o
 test('snooze is per instance; manual Login bypasses it and Resume removes it', async () => {
   const f = fixture()
   await f.tracker.refresh(); f.tracker.snooze(86400000)
-  f.instance('https://instance-b.test'); f.tracker.clear(); await f.tracker.refresh()
+  f.instance('https://instance-b.test'); f.tracker.clear(); f.demand(); await f.tracker.refresh()
   assert.equal(f.state.prompt.name, 'server')
   f.instance('https://instance-a.test'); f.tracker.clear(); await f.tracker.refresh()
   assert.equal(f.state.prompt, null)
   f.tracker.open(expired)
   assert.equal(f.state.prompt.name, 'server')
   f.tracker.dismiss(); await f.tracker.resume()
+  assert.equal(f.state.prompt, null)
+  f.demand(); await f.tracker.refresh()
   assert.equal(f.state.prompt.name, 'server')
   assert.equal(f.state.snoozedUntil, 0)
   assert.deepEqual(JSON.parse(f.storage.getItem(MCP_SNOOZE_KEY)), {})
@@ -65,7 +74,7 @@ test('another window on this device observes snooze changes, but unrelated insta
   const state = { connections: [], prompt: null, busyName: '' }
   const tracker = createMcpAuthState({ state, scope: () => 'https://instance-a.test|private',
     deviceScope: () => 'https://instance-a.test', storage: () => storage, events,
-    fetchStatus: async () => ({ connections: [expired] }), schedule: () => 1, unschedule: () => {} })
+    fetchStatus: async () => ({ connections: [expired], requests: [{ id: 'call-1', server: 'server' }] }), schedule: () => 1, unschedule: () => {} })
   await tracker.refresh(); tracker.dismiss()
   storage.setItem(MCP_SNOOZE_KEY, JSON.stringify({ 'https://other.test': Date.now() + 3600000 }))
   for (const fn of handlers) fn({ key: MCP_SNOOZE_KEY })
@@ -91,6 +100,8 @@ test('browsers denying storage still snooze for this session; invalid durations 
   assert.equal(f.state.snoozedUntil, f.clock[0] + 3600000)
   assert.equal(f.timers.size, 1)
   await f.tracker.resume()
+  assert.equal(f.state.prompt, null)
+  f.demand(); await f.tracker.refresh()
   assert.equal(f.state.prompt.name, 'server')
   f.tracker.dispose()
 })

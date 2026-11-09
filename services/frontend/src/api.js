@@ -132,6 +132,7 @@ export const api = {
     request(`/api/model-integrations/copilot/login/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   mcpAuthStatus: () => request('/api/mcp-oauth/status'),
+  dismissMcpOAuth: requests => request('/api/mcp-oauth/dismiss', { method: 'POST', ...json({ requests }) }),
   prepareMcpOAuth: (name, config = {}) => request(`/api/mcp-oauth/prepare/${encodeURIComponent(name)}`, { method: 'POST', ...json(config) }),
   connectMcpServer: (name, config) => request(`/api/mcp-oauth/connect/${encodeURIComponent(name)}`, { method: 'POST', ...json(config) }),
   mcpOAuthCapabilities: () => request('/api/mcp-oauth/capabilities'),

@@ -14,7 +14,7 @@
           <span class="material-icons" aria-hidden="true">close</span>
         </button>
       </header>
-      <p id="mcp-login-description" class="mcp-login-description">Reconnect with your saved settings.</p>
+      <p id="mcp-login-description" class="mcp-login-description">{{ selected?.requests?.length ? 'A tool is waiting for sign-in (up to 3 minutes). Skip or snooze to fail this call without running it.' : 'Reconnect with your saved settings.' }}</p>
       <p v-if="!supported()" class="mcp-login-notice caption" role="alert">{{ oauthClientMessage }}</p>
       <p v-if="stage && busy" class="mcp-login-status caption" role="status">
         <span class="material-icons" aria-hidden="true">hourglass_top</span>
@@ -43,6 +43,7 @@
         <p id="mcp-login-snooze-hint" class="caption">Only this device, for this instance.</p>
       </section>
       <footer class="mcp-login-actions">
+        <button v-if="!busy && selected?.requests?.length" class="btn btn--outline" @click="close">Skip</button>
         <button
           class="btn"
           :class="!busy && !supported() ? 'btn--primary' : 'btn--outline'"
@@ -108,7 +109,7 @@ async function login() {
     })
     if (id !== attempt) return
     await Promise.all([actions.loadMcpAuth(), actions.loadCatalog(true)])
-    actions.dismissMcpLogin()
+    actions.dismissMcpLogin(false)
     $q.notify({ type: 'positive', message: `${name} connected` })
   } catch (failure) {
     if (id === attempt) error.value = failure.message

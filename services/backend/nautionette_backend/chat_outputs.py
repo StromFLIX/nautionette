@@ -52,6 +52,8 @@ RESERVED_TOOL_NAMES = frozenset(
         "backend_list_callable_agents",
         "backend_call_subagent",
         "backend_wait_for_subagent",
+        "backend_mcp_oauth_gate",
+        "backend_mcp_oauth_tools",
         "backend_prepare_chat_output",
         "backend_publish_chat_output",
         "backend_read_chat_output",

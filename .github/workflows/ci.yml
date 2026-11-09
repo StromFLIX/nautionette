@@ -71,7 +71,7 @@ jobs:
         run: uv run pytest tests/backend/test_output_maxio.py
 
       - name: Model integrations, dictation and OAuth sign-in
-        run: uv run pytest tests/backend/test_copilot_login.py tests/backend/test_mcp_oauth.py tests/backend/test_mcp_oauth_setup.py tests/backend/test_mcp_http_oauth.py tests/backend/test_mcp_stdio.py tests/backend/test_mcp_servers.py tests/backend/test_integrations.py tests/backend/test_events_and_clients.py tests/backend/test_live_connections.py tests/backend/test_speech.py
+        run: uv run pytest tests/backend/test_copilot_login.py tests/backend/test_mcp_oauth.py tests/backend/test_mcp_auth_wait.py tests/backend/test_mcp_oauth_setup.py tests/backend/test_mcp_http_oauth.py tests/backend/test_mcp_stdio.py tests/backend/test_mcp_servers.py tests/backend/test_integrations.py tests/backend/test_events_and_clients.py tests/backend/test_live_connections.py tests/backend/test_speech.py
 
       - name: CLI OAuth end-to-end with pinned real agentgateway (no provider account)
         run: |
