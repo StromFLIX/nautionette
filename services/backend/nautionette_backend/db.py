@@ -42,6 +42,21 @@ CREATE TABLE IF NOT EXISTS mcp_http_oauth (
     retry_at REAL NOT NULL,
     revision TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS mcp_oauth_tools (
+    name TEXT PRIMARY KEY,
+    server TEXT NOT NULL REFERENCES mcp_http_oauth(name) ON DELETE CASCADE,
+    schema TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS mcp_oauth_waits (
+    id TEXT PRIMARY KEY,
+    turn_id TEXT NOT NULL REFERENCES chat_turns(id) ON DELETE CASCADE,
+    tool_call_id TEXT NOT NULL,
+    tool TEXT NOT NULL,
+    server TEXT NOT NULL,
+    deadline REAL NOT NULL,
+    state TEXT NOT NULL,
+    UNIQUE(turn_id, tool_call_id)
+);
 CREATE TABLE IF NOT EXISTS mini_apps (
     id TEXT PRIMARY KEY,
     revision INTEGER NOT NULL DEFAULT 0,

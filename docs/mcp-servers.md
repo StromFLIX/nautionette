@@ -105,20 +105,27 @@ sealed before gateway updates, and uncertain refresh outcomes require a new
 login rather than replaying an old token.
 
 Expired/revoked connections are removed from federation to avoid breaking other
-MCP tools. A compact, provider-neutral **Login** dialog appears in the workspace;
-it does not navigate to the configuration page or automatically open a browser.
-Click Login to reuse the saved settings and open the browser. **Later** dismisses
-that incident; a new expiration after a successful sign-in can prompt again.
-Cards also provide **Sign in again** without opening the setup form.
+MCP tools. Expiry alone never interrupts the user. Saved tool schemas remain
+available so an agent can request a disconnected server's tools. Only an actual
+tool call creates a compact, provider-neutral **Login** dialog in the workspace.
+The call is held **before dispatch**, for up to **3 minutes**, while the user signs
+in with the saved settings. Once credentials are active in the gateway, the tool
+runs normally and returns its result to the agent. **Skip**, dismiss, **Cancel** or
+**Snooze** fails the held call without executing it; timeout and stopped turns
+cannot resume it either. No possibly-executed mutation is automatically replayed.
+Cards still provide manual **Sign in again** without opening the setup form.
 
 The popup's **Snooze** action mutes login reminders for this instance on this
-**device/app profile only**, for 1 hour, 8 hours, 24 hours or 7 days. Other devices
-continue to receive their reminders. The choice survives reload/restart in local
-storage (session-only if the browser denies storage). Devices without desktop
-authentication default to 24 hours. Manual **Sign in again** remains available;
-**Resume login reminders** in MCP settings clears the snooze early. At expiry,
-the app checks current connection status before showing another reminder. Snooze
-does not refresh credentials, grant access, hide tool errors or open a browser.
+**device/app profile only**, for 1 hour, 8 hours, 24 hours or 7 days. It fails the
+current held calls; new demands seen on that device during the snooze also fail
+instead of opening a dialog. Other devices' reminder preferences are unaffected,
+but the same failed call cannot be revived by signing in elsewhere. The choice
+survives reload/restart in local storage (session-only if storage is denied).
+Devices without desktop authentication default to 24 hours. Manual **Sign in
+again** remains available; **Resume login reminders** clears the snooze early.
+Neither resuming nor snooze expiry resurrects a failed call or prompts merely
+because credentials expired. A new tool demand is required. Snooze does not
+refresh credentials, grant access, hide tool errors or open a browser.
 
 Validated issuer/client/scope/callback settings are cached separately from tokens,
 so retries and relogin do not repeat discovery or reset the user's choices.

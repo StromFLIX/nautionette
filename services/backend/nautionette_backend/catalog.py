@@ -134,6 +134,11 @@ async def tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], li
         return owner_of.get(name) or prefixed(name) or (targets[0]["name"] if single_target else "other")
 
     tools = [{**tool, "server": server_for(tool["name"])} for tool in federated]
+    from . import mcp_auth_wait
+
+    mcp_auth_wait.remember_tools(tools)
+    live_names = {tool["name"] for tool in tools}
+    tools.extend(tool for tool in mcp_auth_wait.unavailable_tools() if tool["name"] not in live_names)
     servers = [
         {
             "name": target["name"],
@@ -142,6 +147,17 @@ async def tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], li
         }
         for target in targets
     ]
+    live_servers = {server["name"] for server in servers}
+    for tool in tools:
+        if tool["server"] not in live_servers and tool["server"] != "other":
+            servers.append(
+                {
+                    "name": tool["server"],
+                    "host": "",
+                    "count": sum(item["server"] == tool["server"] for item in tools),
+                }
+            )
+            live_servers.add(tool["server"])
     if any(tool["server"] == "other" for tool in tools):
         servers.append(
             {

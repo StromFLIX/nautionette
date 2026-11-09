@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createMcpTransport } from '../../images/agent-sets/default/extensions/nautionette/mcp-transport.ts'
+import { waitForMcpAuth } from '../../images/agent-sets/default/extensions/nautionette/mcp-auth.ts'
 
 function fixture (tool) {
   const requests = []
@@ -85,4 +86,35 @@ test('cancellation prevents both initial handshake and tool execution', async ()
   controller.abort()
   await assert.rejects(transport.rpc('tools/call', { name: 'read' }, controller.signal), /abort/i)
   assert.equal(requests.length, 0)
+})
+
+const gateResult = status => ({ content: [{ type: 'text', text: JSON.stringify({ status }) }] })
+test('OAuth gate holds dispatch until sign-in, then permits exactly one tool call', async () => {
+  const requests = [], statuses = ['waiting', 'ready']
+  const rpc = async (_method, params) => {
+    requests.push(params)
+    return params.name === 'backend_mcp_oauth_gate' ? gateResult(statuses.shift()) : { content: [] }
+  }
+  await waitForMcpAuth(rpc, { grant: 'private' }, 'example_write', 'call-1')
+  await rpc('tools/call', { name: 'example_write', arguments: { text: 'once' } })
+  assert.deepEqual(requests.map(item => item.name), ['backend_mcp_oauth_gate', 'backend_mcp_oauth_gate', 'example_write'])
+  assert.equal(requests[0].arguments.body.tool_call_id, requests[1].arguments.body.tool_call_id)
+})
+
+for (const status of ['failed', 'timed_out', 'unknown']) test(`OAuth ${status} never dispatches the held call`, async () => {
+  const requests = []
+  await assert.rejects(async () => {
+    const rpc = async (_method, params) => { requests.push(params.name); return gateResult(status) }
+    await waitForMcpAuth(rpc, { grant: 'private' }, 'example_write', 'call-1')
+    await rpc('tools/call', { name: 'example_write' })
+  }, /tool was not called/)
+  assert.deepEqual(requests, ['backend_mcp_oauth_gate'])
+})
+
+test('OAuth wait is abortable and private error bodies never reach model context', async () => {
+  const controller = new AbortController()
+  const rpc = async () => { controller.abort(); return gateResult('waiting') }
+  await assert.rejects(waitForMcpAuth(rpc, { grant: 'private' }, 'example_write', 'call-1', controller.signal), /abort/i)
+  await assert.rejects(waitForMcpAuth(async () => ({ isError: true, content: [{ type: 'text', text: 'private' }] }),
+    { grant: 'private' }, 'example_write', 'call-1'), error => !error.message.includes('private'))
 })

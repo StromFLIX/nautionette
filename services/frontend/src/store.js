@@ -49,7 +49,8 @@ function mcpDeviceScope () {
 const mcpAuth = createMcpAuthState({ state: state.mcpAuth, scope: chatCacheScope,
   deviceScope: mcpDeviceScope, storage: () => globalThis.localStorage, events: globalThis,
   onError: error => { state.mcpAuth.error = error.message },
-  fetchStatus: () => guard(() => api.mcpAuthStatus()) })
+  fetchStatus: () => guard(() => api.mcpAuthStatus()),
+  rejectRequests: ids => api.dismissMcpOAuth(ids) })
 
 const listeners = new Set()
 let source = null
@@ -167,7 +168,7 @@ export const actions = {
     try { await mcpAuth.refresh(); state.mcpAuth.error = '' } catch (error) { state.mcpAuth.error = error.message }
   },
   openMcpLogin: item => mcpAuth.open(item),
-  dismissMcpLogin: () => mcpAuth.dismiss(),
+  dismissMcpLogin: (failed = true) => mcpAuth.dismiss(failed),
   beginMcpLogin: name => mcpAuth.begin(name),
   finishMcpLogin: name => mcpAuth.finish(name),
   snoozeMcpLogin: duration => mcpAuth.snooze(duration),
