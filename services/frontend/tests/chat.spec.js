@@ -859,7 +859,7 @@ for (const width of [1440, 320]) {
     await expect(alpha).not.toContainText('In progress')
     await expect(alpha).toHaveClass(/row-item--running/)
     const hexagon = alpha.getByRole('img', { name: 'Active', exact: true })
-    await expect(hexagon.locator('polygon')).toHaveAttribute('points', '10,2 17,6 17,14 10,18 3,14 3,6')
+    await expect(hexagon.locator('rect')).toHaveAttribute('rx', '4')
     await expect(hexagon).toHaveCSS('animation-name', 'chat-status-pulse')
     await expect(hexagon).not.toHaveCSS('fill', 'none')
     const opacity = await hexagon.evaluate((el) => getComputedStyle(el).opacity)

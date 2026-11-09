@@ -32,7 +32,8 @@
 
     <q-dialog v-model="gate" persistent>
       <q-card class="token-card">
-        <div class="token-card__title">Connect</div>
+        <div class="token-card__brand"><BrandMark /><span>{{ brand.name }}</span></div>
+        <h1 class="token-card__title">Connect to your workspace</h1>
         <p class="caption muted">
           {{ isNative
             ? 'Point the app at your instance, then paste its access token.'
@@ -43,7 +44,7 @@
           type="url" inputmode="url" placeholder="https://nautionette.example.com"
         />
         <input
-          v-model="token" class="field" type="password" placeholder="access token"
+          v-model="token" class="field" type="password" placeholder="access token" aria-label="Access token"
           autofocus @keydown.enter="connect"
         />
         <div class="row token-card__actions">
@@ -62,6 +63,8 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import EnvironmentBanner from './components/EnvironmentBanner.vue'
 import NavRail from './components/NavRail.vue'
+import BrandMark from './components/BrandMark.vue'
+import { brand } from './brand'
 import AgentRail from './components/AgentRail.vue'
 import PinnedApps from './components/PinnedApps.vue'
 import SidePanel from './components/SidePanel.vue'
@@ -269,8 +272,10 @@ onUnmounted(() => {
 .token-card {
   width: 380px;
   max-width: 92vw;
-  padding: 22px;
+  padding: 28px;
 }
+.token-card__brand { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; font-size: 1.25rem; font-weight: 600; letter-spacing: -.055em; }
+.token-card__brand :deep(.brand-mark) { width: 32px; height: 32px; }
 
 .token-card__title {
   font-size: 1rem;

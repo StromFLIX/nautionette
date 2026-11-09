@@ -288,19 +288,19 @@ defineExpose({
 </script>
 
 <style scoped>
-.composer { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; max-height: 100%; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-input); transition: border-color var(--transition), box-shadow var(--transition); }
+.composer { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; max-height: 100%; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: var(--surface-panel); transition: border-color var(--transition), box-shadow var(--transition); }
 /* Keep the draft mounted so switching views preserves text, attachments and height. */
 .composer__draft { display: flex; flex-direction: column; min-height: 0; }
 .composer--configuration { overflow: hidden; }
 .composer--docked .composer__input { flex: 0 1 auto; min-height: calc(var(--chat-font-size) * 1.6 + 28px); }
 .composer--focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.composer--welcome { border-radius: var(--radius-xl); box-shadow: var(--shadow-md); }
-.composer--running { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft), 0 0 20px var(--accent-soft); }
-.composer--running.composer--focus { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 24px var(--accent-soft); }
+.composer--welcome { border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); }
+.composer--running { border-color: var(--agent-color); box-shadow: 0 0 0 1px var(--accent-soft); }
+.composer--running.composer--focus { box-shadow: 0 0 0 3px var(--accent-soft); }
 /* The running indicator is a border, never an overlay on the text. */
 .composer--running::before {
   content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 2px; pointer-events: none;
-  background: conic-gradient(from var(--composer-orbit-angle), transparent 0deg 240deg, var(--accent) 285deg, var(--accent-text) 315deg, var(--accent-hover) 330deg, transparent 360deg);
+  background: conic-gradient(from var(--composer-orbit-angle), transparent 0deg 250deg, var(--agent-color) 300deg, var(--accent-hover) 330deg, transparent 360deg);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor;
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); mask-composite: exclude;
   animation: composer-light-orbit 4s linear infinite;
@@ -331,10 +331,10 @@ defineExpose({
 .composer__actions { display: flex; align-items: center; flex: none; min-height: 40px; padding: 2px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-hover); transition: border-color var(--transition); }
 .composer__actions--recording { border-color: var(--accent); }
 .composer__divider { height: 20px; width: 1px; margin: 0 3px; background: var(--border-strong); }
-.composer__send, .composer__stop { position: relative; display: grid; place-items: center; flex: none; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--accent-text); cursor: pointer; }
+.composer__send, .composer__stop { position: relative; display: grid; place-items: center; flex: none; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--action-text); cursor: pointer; }
 .composer__actions .composer__send, .composer__actions .composer__stop { width: 42px; height: 38px; }
-.composer__send::before { content: ''; position: absolute; inset: 0; background: var(--accent); border-radius: inherit; transition: background var(--transition); }
-.composer__send:not(:disabled):hover::before { background: var(--accent-hover); }
+.composer__send::before { content: ''; position: absolute; inset: 0; background: var(--action-bg); border-radius: inherit; transition: background var(--transition); }
+.composer__send:not(:disabled):hover::before { background: var(--action-hover); }
 .composer__send > .material-icons { position: relative; }
 .composer__stop { background: var(--danger-soft); color: var(--danger); }
 .composer__send:disabled, .composer__stop:disabled { color: var(--text-dim); cursor: default; }
@@ -374,6 +374,7 @@ defineExpose({
   .composer__send, .composer__stop, .pick--icon { width: 32px; }
 }
 @media (pointer: coarse) {
+  .composer__input { font-size: max(16px, var(--chat-font-size)); }
   .pick, .composer__send, .composer__stop { min-height: 44px; }
   .pick--icon, .composer__send, .composer__stop { min-width: 44px; }
 }

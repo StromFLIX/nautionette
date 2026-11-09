@@ -3,6 +3,7 @@ import { Dark, setCssVar } from 'quasar'
 import { cssTokens, resolveTheme, themeById, validToken } from './themes'
 import { PREFERENCES_KEY, preferenceDefaults, sanitizePreferences, validPreference, workspaceDefaults } from './preferences-schema'
 import { compileSkinCss, installSkin } from './skins'
+import { brand } from './brand'
 
 export const preferenceError = ref('')
 function load () {
@@ -65,7 +66,7 @@ export function removeSkin (id) {
     skin: preferences.skin === id ? '' : preferences.skin })
 }
 export function recoverAppearance () {
-  Object.assign(preferences, { skin: '', theme: 'orbit', overrides: { ...preferences.overrides, orbit: {} } })
+  Object.assign(preferences, { skin: '', theme: brand.defaultTheme, overrides: { ...preferences.overrides, [brand.defaultTheme]: {} } })
   // Immediate removal, even before Vue flushes or if storage is unavailable.
   apply()
 }

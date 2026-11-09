@@ -1,5 +1,31 @@
 /** Theme schema and pure helpers. No CSS, storage, Vue or browser dependencies. */
+import { brand } from './brand.js'
+
 export const THEMES = [
+  {
+    id: 'denkzeug', name: brand.name, mode: 'light', description: 'Paper, ink & room to think',
+    colors: {
+      'surface-app': brand.colors.paper, 'surface-rail': '#f0f2f8', 'surface-panel': brand.colors.white,
+      'surface-raised': '#f0f2f8', 'surface-overlay': '#ffffff', 'surface-input': '#ffffff', 'surface-code': '#eff2f8',
+      text: brand.colors.ink, 'text-muted': '#606776', 'text-dim': '#606b7c', accent: brand.colors.agentStrong,
+      success: '#27704b', warning: '#875b26', danger: '#b8324b',
+      'syntax-comment': '#5e6f84', 'syntax-keyword': '#7750a5', 'syntax-string': '#256d47',
+      'syntax-number': '#955523', 'syntax-function': '#255da5', 'syntax-variable': '#2d3e53',
+      'syntax-builtin': '#7c6108', 'syntax-meta': '#a13660', 'flow-activity': brand.colors.agentStrong, 'flow-signal': '#78649d'
+    }
+  },
+  {
+    id: 'denkzeug-night', name: `${brand.name} night`, mode: 'dark', description: 'The same room, after dark',
+    colors: {
+      'surface-app': '#171b26', 'surface-rail': '#141823', 'surface-panel': '#1d2230',
+      'surface-raised': '#252b3b', 'surface-overlay': '#282f40', 'surface-input': '#222838', 'surface-code': '#141925',
+      text: '#edf0f8', 'text-muted': '#b7bece', 'text-dim': '#a4afc4', accent: '#a9b8ff',
+      success: '#98d4b0', warning: '#e2b783', danger: '#f5a1aa',
+      'syntax-comment': '#a4afc4', 'syntax-keyword': '#ceb2ff', 'syntax-string': '#a8d7b4',
+      'syntax-number': '#e8bc8a', 'syntax-function': '#abcbff', 'syntax-variable': '#e4e9f4',
+      'syntax-builtin': '#e9d694', 'syntax-meta': '#e9aec8', 'flow-activity': '#a9b8ff', 'flow-signal': '#c7b5e3'
+    }
+  },
   {
     id: 'orbit', name: 'Orbit', mode: 'dark', description: 'Graphite & mint',
     colors: {
@@ -64,7 +90,9 @@ export const THEME_TOKENS = [
   ...colors('Text & accent', [
     ['text', 'Primary text'], ['text-muted', 'Secondary text'], ['text-dim', 'Muted text'],
     ['accent', 'Accent'], ['accent-hover', 'Accent hover & links'], ['accent-press', 'Accent pressed'],
-    ['accent-soft', 'Accent tint'], ['accent-text', 'Text on accent']
+    ['accent-soft', 'Accent tint'], ['accent-text', 'Text on accent'],
+    ['action-bg', 'Primary action'], ['action-hover', 'Primary action hover'], ['action-text', 'Primary action text'],
+    ['agent-color', 'Agent activity'], ['session-color', 'Sessions'], ['workflow-color', 'Workflow activity']
   ]),
   ...colors('Messages & status', [
     ['bubble-out', 'Your message background'], ['bubble-text', 'Your message text'],
@@ -77,15 +105,15 @@ export const THEME_TOKENS = [
     ['syntax-builtin', 'Built-ins'], ['syntax-meta', 'Metadata'],
     ['flow-activity', 'Activity nodes'], ['flow-signal', 'Signal nodes']
   ]),
-  { key: 'font', label: 'Interface font', group: 'Typography', type: 'font', value: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
+  { key: 'font', label: 'Interface font', group: 'Typography', type: 'font', value: brand.interfaceFont },
   { key: 'font-mono', label: 'Code font', group: 'Typography', type: 'font', value: "ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace" },
   size('chat-font-size', 'Message text size', 'Typography', 15, 12, 22),
   size('code-font-size', 'Code text size', 'Typography', 12.5, 10, 20, 0.5),
   size('radius-xs', 'Small corners', 'Shape & layout', 4, 0, 16),
   size('radius-sm', 'Control corners', 'Shape & layout', 8, 0, 24),
-  size('radius-md', 'Card corners', 'Shape & layout', 12, 0, 32),
-  size('radius-lg', 'Composer & dialog corners', 'Shape & layout', 18, 0, 36),
-  size('radius-xl', 'Large corners', 'Shape & layout', 24, 0, 40),
+  size('radius-md', 'Card corners', 'Shape & layout', 10, 0, 32),
+  size('radius-lg', 'Composer & dialog corners', 'Shape & layout', 16, 0, 36),
+  size('radius-xl', 'Large corners', 'Shape & layout', 20, 0, 40),
   size('content-width', 'Conversation width', 'Shape & layout', 880, 560, 1200, 20),
   size('rail-width', 'Navigation width', 'Shape & layout', 72, 64, 96),
   size('header-height', 'Header height', 'Shape & layout', 64, 52, 80),
@@ -97,7 +125,7 @@ export const THEME_TOKENS = [
   size('space-6', 'Spacing · XXL', 'Spacing', 32, 24, 48)
 ]
 export const TOKEN_GROUPS = [...new Set(THEME_TOKENS.map(token => token.group))]
-export const themeById = id => THEMES.find(theme => theme.id === id) || THEMES[0]
+export const themeById = id => THEMES.find(theme => theme.id === id) || THEMES.find(theme => theme.id === brand.defaultTheme)
 const tokenByKey = new Map(THEME_TOKENS.map(token => [token.key, token]))
 const HEX = /^#[\da-f]{6}([\da-f]{2})?$/i
 
@@ -142,6 +170,8 @@ export function resolveTheme (id, input = {}) {
   const overrides = sanitizeOverrides(input)
   const base = { ...theme.colors, ...overrides }
   const dark = theme.mode === 'dark'
+  const branded = theme.id.startsWith('denkzeug')
+  const action = overrides['action-bg'] || (branded && !overrides.accent ? base.text : base.accent)
   return {
     ...Object.fromEntries(THEME_TOKENS.filter(token => token.value !== undefined).map(token => [token.key, token.value])),
     ...theme.colors,
@@ -149,6 +179,9 @@ export function resolveTheme (id, input = {}) {
     border: alpha(base.text, dark ? 0.09 : 0.12), 'border-strong': alpha(base.text, dark ? 0.17 : 0.22),
     'accent-hover': mix(base.accent, base.text, 0.18), 'accent-press': mix(base.accent, '#101517', 0.12),
     'accent-soft': alpha(base.accent, dark ? 0.12 : 0.09), 'accent-text': onColor(base.accent, base['surface-app']),
+    'action-bg': action, 'action-hover': mix(action, base['surface-app'], .14), 'action-text': onColor(action, base['surface-app']),
+    'agent-color': base.accent, 'session-color': base['flow-signal'],
+    'workflow-color': branded ? (dark ? '#e2b783' : '#875b26') : base.warning,
     'success-soft': alpha(base.success, 0.12), 'warning-soft': alpha(base.warning, 0.12),
     'warning-text': onColor(base.warning, base['surface-app']), 'danger-soft': alpha(base.danger, 0.12),
     'bubble-out': mix(base.accent, base['surface-app'], dark ? 0.85 : 0.92), 'bubble-text': base.text,
@@ -174,7 +207,7 @@ export function importTheme (text) {
   try { data = JSON.parse(text) } catch { throw new Error('This is not valid JSON. Nothing was changed.') }
   if (!data || data.version !== 1 || !THEMES.some(theme => theme.id === data.theme) ||
       !data.overrides || typeof data.overrides !== 'object' || Array.isArray(data.overrides)) {
-    throw new Error('Use a Nautionette theme export (version 1). Nothing was changed.')
+    throw new Error(`Use a ${brand.name} theme export (version 1). Nothing was changed.`)
   }
   for (const [key, value] of Object.entries(data.overrides)) {
     if (!validToken(key, value)) throw new Error(`Invalid theme token: ${key}. Nothing was changed.`)

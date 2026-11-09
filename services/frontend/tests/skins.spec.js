@@ -201,7 +201,7 @@ test('keyboard and startup safe mode recover even if a pack hides the whole app'
   await expect(page.locator('#app')).toBeHidden()
   await page.goto('/settings/appearance?safe-appearance=1')
   await expect(page.locator('#app')).toBeVisible()
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'orbit')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'denkzeug')
   await expect(page.locator('html')).toHaveAttribute('data-skin', '')
   await page.goto('/settings/appearance')
   await expect(page.locator('html')).toHaveAttribute('data-skin', '')

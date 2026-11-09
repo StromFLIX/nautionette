@@ -94,7 +94,7 @@ test('navigation icons reopen collapsed lists, including the current section', a
     await expect(collapseButton(page)).toHaveAttribute('aria-expanded', 'true')
   }
   await collapseButton(page).click()
-  await nav.getByRole('link', { name: 'Nautionette', exact: true }).click()
+  await nav.getByRole('link', { name: 'Denkzeug', exact: true }).click()
   await expect(page.locator('#shell-sidebar')).toBeVisible()
 })
 

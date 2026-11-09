@@ -1,6 +1,6 @@
 <template>
   <nav ref="rail" class="rail" data-skin-part="navigation" aria-label="Main navigation">
-    <RouterLink to="/chats" class="rail__brand" aria-label="Nautionette" @click="$emit('open-sidebar')">
+    <RouterLink to="/chats" class="rail__brand" :aria-label="brand.name" :title="brand.name" @click="$emit('open-sidebar')">
       <BrandMark />
     </RouterLink>
 
@@ -8,7 +8,7 @@
       <RouterLink
         v-for="item in items" :key="item.name" class="rail__item"
         :to="sidebarCollapsed && active === item.name ? route.fullPath : item.to"
-        :class="{ 'rail__item--active': active === item.name }" :aria-current="active === item.name ? 'page' : undefined"
+        :class="{ 'rail__item--active': active === item.name }" :style="{ '--nav-color': item.tone }" :aria-current="active === item.name ? 'page' : undefined"
         @click="$emit('open-sidebar')"
       >
         <span class="material-icons" aria-hidden="true">{{ item.icon }}</span>
@@ -35,6 +35,7 @@ import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { draftCount, health } from '../store'
 import BrandMark from './BrandMark.vue'
+import { brand } from '../brand'
 import { chatLocation } from '../router'
 
 // Reopening the current list should not leave its detail view or discard a draft.
@@ -52,10 +53,10 @@ const route = useRoute()
 const active = computed(() => route.name)
 
 const items = computed(() => [
-  { name: 'chats', label: 'Chats', icon: 'chat_bubble_outline', to: chatLocation() },
-  { name: 'workflows', label: 'Workflows', icon: 'account_tree', to: '/workflows', badge: draftCount.value || 0 },
-  { name: 'runs', label: 'Runs', icon: 'history', to: '/runs' },
-  { name: 'apps', label: 'Apps', icon: 'apps', to: { path: '/apps', query: route.query.agent ? { agent: route.query.agent } : {} } }
+  { name: 'chats', label: 'Chats', icon: 'chat_bubble_outline', tone: 'var(--agent-color)', to: chatLocation() },
+  { name: 'workflows', label: 'Workflows', icon: 'account_tree', tone: 'var(--workflow-color)', to: '/workflows', badge: draftCount.value || 0 },
+  { name: 'runs', label: 'Runs', icon: 'history', tone: 'var(--workflow-color)', to: '/runs' },
+  { name: 'apps', label: 'Apps', icon: 'apps', tone: 'var(--session-color)', to: { path: '/apps', query: route.query.agent ? { agent: route.query.agent } : {} } }
 ])
 </script>
 
@@ -65,7 +66,7 @@ const items = computed(() => [
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 16px 0 10px;
+  padding: 24px 0 14px;
   background: var(--surface-rail);
   border-right: 1px solid var(--border);
 }
@@ -75,9 +76,9 @@ const items = computed(() => [
   place-items: center;
   width: 40px;
   height: 40px;
-  margin-bottom: 18px;
+  margin-bottom: 28px;
   border-radius: var(--radius-md);
-  opacity: 0.9;
+  opacity: 1;
 }
 
 .rail__nav {
@@ -94,8 +95,8 @@ const items = computed(() => [
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  width: calc(100% - 12px);
+  gap: 6px;
+  width: calc(100% - 16px);
   min-height: 3.5rem;
   border: none;
   border-radius: var(--radius-md);
@@ -113,18 +114,18 @@ const items = computed(() => [
 }
 
 .rail__item--active {
-  background: var(--accent-soft);
-  color: var(--accent-hover);
+  background: color-mix(in srgb, var(--nav-color, var(--accent)) 9%, transparent);
+  color: var(--nav-color, var(--accent));
 }
 
 .rail__item--active::before {
   content: '';
   position: absolute;
-  left: -6px;
-  width: 2px;
-  height: 18px;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
+  left: -3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 2px;
+  background: var(--nav-color, var(--accent));
 }
 
 .rail__settings {

@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { brand } from './brand.js'
 import { THEMES, THEME_TOKENS, contrastRatio, cssTokens, exportTheme, importTheme, resolveTheme, sanitizeOverrides, validToken } from './themes.js'
 
 for (const theme of THEMES) {
@@ -20,6 +21,7 @@ for (const theme of THEMES) {
       assert.ok(contrastRatio(resolved[token.key], resolved['surface-code']) >= 4.5, token.key)
     }
     assert.ok(contrastRatio(resolved['accent-text'], resolved.accent) >= 4.5)
+    assert.ok(contrastRatio(resolved['action-text'], resolved['action-bg']) >= 4.5)
     assert.ok(contrastRatio(resolved['bubble-text'], resolved['bubble-out']) >= 4.5)
   })
 }
@@ -38,8 +40,8 @@ test('custom accents and surfaces derive related tokens without overwriting expl
   assert.equal(cssTokens('orbit', input)['--chat-font-size'], '1.125rem')
   assert.equal(cssTokens('orbit')['--code-font-size'], '0.78125rem')
   assert.equal(cssTokens('orbit')['--header-height'], '4rem')
-  assert.deepEqual(resolveTheme('not-a-theme'), base)
-  assert.equal(THEMES[0].colors.accent, '#79dfc5')
+  assert.deepEqual(resolveTheme('not-a-theme'), resolveTheme(brand.defaultTheme))
+  assert.equal(THEMES.find(theme => theme.id === 'orbit').colors.accent, '#79dfc5')
 })
 
 test('token validation permits bounded values and local fonts, never CSS or remote content', () => {

@@ -1,15 +1,9 @@
+@import './brand.css?v=denkzeug-3';
+
 @font-face { font-family: Sora; src: url('/assets/fonts/Sora.woff2') format('woff2'); font-style: normal; font-weight: 100 800; font-display: swap; }
 @font-face { font-family: 'Source Serif'; src: url('/assets/fonts/SourceSerif4.woff2') format('woff2'); font-style: normal; font-weight: 200 900; font-display: swap; }
 
 :root {
-  --paper: #f8f9fc;
-  --white: #fff;
-  --ink: #20232c;
-  --muted: #656b79;
-  --line: #e2e5ed;
-  --agent: #657ade;
-  --session: #a397c8;
-  --workflow: #d3a26e;
   --ease-out: cubic-bezier(.23, 1, .32, 1);
   --wrap: 1160px;
   color-scheme: light;

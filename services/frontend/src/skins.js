@@ -2,6 +2,7 @@ import generate from 'css-tree/generator'
 import parse from 'css-tree/parser'
 import walk from 'css-tree/walker'
 import { THEMES, importTheme, validToken } from './themes.js'
+import { brand } from './brand.js'
 
 export const MAX_SKIN_BYTES = 512000
 export const MAX_SKINS = 12
@@ -55,14 +56,14 @@ function stylesheet (css, assets) {
 }
 
 export function validateSkin (data) {
-  if (!record(data) || data.format !== 'nautionette-skin' || data.version !== 2) fail('Use a Nautionette skin pack (version 2) or a legacy theme export.')
+  if (!record(data) || data.format !== 'nautionette-skin' || data.version !== 2) fail(`Use a ${brand.name} skin pack (version 2) or a legacy theme export.`)
   if (bytes(JSON.stringify(data)) > MAX_SKIN_BYTES) fail('Skin packs must be smaller than 512 KB.')
   if (typeof data.id !== 'string' || !ID.test(data.id)) fail('Skin id must start with a lowercase letter and contain only letters, digits and hyphens (up to 64 characters).')
   if (typeof data.name !== 'string' || !data.name.trim() || data.name.length > 80) fail('Skin name is required (up to 80 characters).')
   for (const key of ['author', 'description']) {
     if (data[key] !== undefined && (typeof data[key] !== 'string' || data[key].length > 300)) fail(`Invalid skin ${key}.`)
   }
-  if (!THEMES.some(theme => theme.id === data.base)) fail('Choose orbit, nebula, daylight or sand as the skin base.')
+  if (!THEMES.some(theme => theme.id === data.base)) fail(`Choose a built-in theme as the skin base: ${THEMES.map(theme => theme.id).join(', ')}.`)
   if (!record(data.tokens)) fail('Skin tokens must be an object.')
   for (const [key, value] of Object.entries(data.tokens)) {
     if (!validToken(key, value)) fail(`Invalid skin token: ${key}.`)

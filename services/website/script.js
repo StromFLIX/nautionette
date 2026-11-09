@@ -1,6 +1,6 @@
 import { loadDownloads } from './releases.mjs'
 import { setupDefinition } from './definitions.mjs'
-import { mountActivity } from './activity.mjs?v=living-2'
+import { mountActivity } from './activity.mjs?v=living-3'
 import { appURL } from './urls.mjs'
 
 // Storage is optional: blocked cookies/storage must not break the page.

@@ -95,6 +95,7 @@
     </div>
 
     <div v-show="activeTab === 'chat'" class="thread__foot scroll-y">
+      <div v-if="(isNewChat && starting) || creationError || connectionError || cacheError || (draftError && (draft || attachments.length)) || controlError || readError" class="thread__notices scroll-y" role="region" aria-label="Chat notices" tabindex="0">
       <p v-if="isNewChat && starting" class="thread__creation caption dim" role="status">Creating chat… You can start typing.</p>
       <p v-if="creationError" class="thread__creation caption" role="alert">
         {{ creationError }}
@@ -109,6 +110,7 @@
       <p v-if="draftError && (draft || attachments.length)" class="caption" role="alert">{{ draftError }}</p>
       <p v-if="controlError" class="caption" role="alert">{{ controlError }}</p>
       <p v-if="readError" class="caption" role="alert">{{ readError }}</p>
+      </div>
       <button v-if="chat?.queue_paused && !streaming && !queuedMessages.length" class="btn btn--sm" :disabled="controlBusy" @click="resumeQueue">
         <span class="material-icons" aria-hidden="true">play_arrow</span>Resume chat
       </button>
@@ -592,7 +594,7 @@ async function regenerateTitle () {
 function rename () {
   $q.dialog({
     title: 'Rename chat',
-    prompt: { model: chat.value?.title || '', type: 'text', outlined: true, dark: true },
+    prompt: { model: chat.value?.title || '', type: 'text', outlined: true },
     cancel: true
   }).onOk((title) => patch({ title }))
 }
@@ -757,6 +759,11 @@ onUnmounted(() => {
   margin: 0 auto;
 }
 
+.thread__notices { flex: 0 1 auto; min-height: 0; width: 100%; max-width: var(--content-width); margin-inline: auto; }
+.thread__notices:empty { display: none; }
+.thread__foot:has(.composer--configuration) .thread__notices { max-height: 48px; }
+.thread__notices > p:last-child { margin-bottom: 10px; }
+
 .thread__creation {
   max-width: var(--content-width);
   margin: 0 auto 10px;
@@ -768,8 +775,8 @@ onUnmounted(() => {
   flex: none;
   width: 34px;
   height: 34px;
-  clip-path: var(--octagon);
-  color: var(--accent);
+  border-radius: var(--radius-sm);
+  color: var(--agent-color);
   font-size: 0.75rem;
   font-weight: 650;
 }
@@ -843,6 +850,8 @@ onUnmounted(() => {
 
 @media (max-height: 480px) {
   .thread__body { padding-block: 0; }
+  .pane-head { min-height: 56px; }
+  .pane-head__identity > .caption { display: none; }
 }
 
 @media (max-width: 420px) {

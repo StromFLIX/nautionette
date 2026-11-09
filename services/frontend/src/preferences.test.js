@@ -6,7 +6,7 @@ import { SETTINGS_SECTIONS, searchSettings } from './settings-registry.js'
 
 test('workspace defaults are complete, independent and valid', () => {
   const defaults = preferenceDefaults()
-  assert.equal(defaults.theme, 'orbit')
+  assert.equal(defaults.theme, 'denkzeug')
   assert.equal(defaults.interfaceSize, 125)
   assert.equal(defaults.newChatSettings, 'last')
   assert.equal(defaults.motion, 'system')

@@ -237,7 +237,7 @@ test('malformed stored preferences recover without changing instance settings', 
   const state = await mockDesign(context)
   await context.addInitScript(key => localStorage.setItem(key, '{broken'), PREFERENCES_KEY)
   await page.goto('/settings/appearance')
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'orbit')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'denkzeug')
   await expect(page.getByRole('alert')).toContainText('Defaults are in use')
   await page.getByRole('button', { name: 'Daylight theme', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'daylight')

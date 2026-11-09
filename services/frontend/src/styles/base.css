@@ -1,4 +1,5 @@
 @import './tokens.css';
+@import './brand.css';
 @import './settings.css';
 
 /* ------------------------------------------------------------------ base */
@@ -136,10 +137,10 @@ pre,
 
 .section-label {
   font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-muted);
 }
 
 /* Visible focus is never clipped by decorative brand shapes. */
@@ -168,6 +169,7 @@ button, a { touch-action: manipulation; }
 button:disabled { cursor: not-allowed; }
 input[type='checkbox'], input[type='range'] { accent-color: var(--accent); }
 input[type='checkbox'] { width: 1.125rem; height: 1.125rem; }
+@media (pointer: coarse) { input.field, select.field, textarea.field { font-size: max(16px, .8125rem); } }
 
 kbd {
   padding: 2px 5px;
@@ -194,7 +196,7 @@ kbd {
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: background var(--transition), border-color var(--transition), color var(--transition);
+  transition: background var(--transition), border-color var(--transition), color var(--transition), transform 140ms var(--ease);
 }
 
 .btn:disabled {
@@ -207,17 +209,16 @@ kbd {
 }
 
 .btn--primary {
-  background: var(--accent);
-  color: var(--accent-text);
+  background: var(--action-bg);
+  color: var(--action-text);
 }
 
 .btn--primary:not(:disabled):hover {
-  background: var(--accent-hover);
+  background: var(--action-hover);
 }
 
-.btn--primary:not(:disabled):active {
-  background: var(--accent-press);
-}
+.btn:not(:disabled):active { transform: scale(.98); }
+.btn--primary:not(:disabled):active { background: var(--action-hover); }
 
 .btn--outline {
   border-color: var(--border-strong);
@@ -656,7 +657,8 @@ pre.code {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--accent-hover);
+  background: var(--session-color);
+  border-radius: 2px;
 }
 
 .chat-status {
@@ -672,7 +674,7 @@ pre.code {
 }
 
 .chat-status--active {
-  color: var(--accent-hover);
+  color: var(--agent-color);
   fill: currentColor;
   animation: chat-status-pulse 1.8s ease-in-out infinite;
 }
@@ -717,8 +719,7 @@ pre.code {
 }
 
 .avatar--square {
-  border-radius: 0;
-  clip-path: var(--octagon);
+  border-radius: var(--radius-sm);
 }
 
 .avatar--draft {

@@ -1,8 +1,6 @@
 <template>
   <h2 class="settings__title">Appearance</h2>
-  <p class="settings__intro">A familiar palette or a completely different world. Make this workspace yours.</p>
-
-  <SkinLibrary />
+  <p class="settings__intro">{{ brand.name }} is the starting point. Your colors, spacing and saved designs are still yours.</p>
   <h3 class="setting__label">Built-in themes</h3>
 
   <section id="themes" class="theme-grid" aria-label="Color theme">
@@ -19,9 +17,11 @@
         <span v-if="!currentSkin && preferences.theme === theme.id" class="material-icons" aria-hidden="true">check_circle</span>
         <span v-else class="theme-card__mode">{{ theme.mode }}</span>
       </span>
-      <span class="theme-card__description">{{ theme.description }}<span v-if="Object.keys(preferences.overrides[theme.id] || {}).length"> · custom</span></span>
+      <span class="theme-card__description"><span v-if="theme.id === brand.defaultTheme">Default design. </span>{{ theme.description }}<span v-if="Object.keys(preferences.overrides[theme.id] || {}).length"> · custom</span></span>
     </button>
   </section>
+
+  <SkinLibrary />
 
   <div class="appearance__quick">
     <div class="appearance__accent">
@@ -42,7 +42,7 @@
   <details id="theme-editor" class="settings-disclosure appearance__editor">
     <summary><span class="material-icons" aria-hidden="true">tune</span><span class="grow">Customize every detail</span><span class="caption dim">{{ THEME_TOKENS.length }} tokens</span></summary>
     <div class="appearance__editor-body">
-      <p class="caption muted">Hex colors support transparency. Fonts use locally installed families. Sizes are in pixels at 100% interface size.</p>
+      <p class="caption muted">Hex colors support transparency. Sora is included; other font names use locally installed families. Sizes are in pixels at 100% interface size.</p>
       <div class="appearance__token-search">
         <input v-model="tokenQuery" class="field" type="search" placeholder="Filter tokens…" aria-label="Filter theme tokens" />
         <label class="caption muted row"><input v-model="modifiedOnly" type="checkbox" />Modified only</label>
@@ -95,6 +95,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import BrandMark from '../BrandMark.vue'
+import { brand } from '../../brand'
 import SkinLibrary from './SkinLibrary.vue'
 import { THEMES, THEME_TOKENS, TOKEN_GROUPS, contrastRatio, exportTheme, resolveTheme } from '../../themes'
 import { exportSkin, importDesign, MAX_SKIN_BYTES } from '../../skins'
@@ -117,7 +118,7 @@ const visibleGroups = computed(() => TOKEN_GROUPS.filter(group => tokensIn(group
 const contrastWarning = computed(() => {
   const tokens = currentTokens.value
   if (contrastRatio(tokens.text, tokens['surface-app']) < 4.5) return 'Text contrast is below 4.5:1.'
-  if (contrastRatio(tokens['accent-text'], tokens.accent, tokens['surface-app']) < 4.5) return 'Button text contrast is below 4.5:1.'
+  if (contrastRatio(tokens['action-text'], tokens['action-bg'], tokens['surface-app']) < 4.5) return 'Button text contrast is below 4.5:1.'
   return ''
 })
 function previewStyle (theme) {
@@ -172,25 +173,25 @@ function download () {
   try {
     const skin = currentSkin.value
     downloadDesign(skin ? exportSkin(skin, currentOverrides.value) : exportTheme(preferences.theme, currentOverrides.value),
-      skin ? `${skin.id}.skin.json` : `nautionette-${preferences.theme}.json`)
+      skin ? `${skin.id}.skin.json` : `${brand.name.toLowerCase()}-${preferences.theme}.json`)
   } catch (error) { transferError.value = error.message }
 }
 </script>
 
 <style scoped>
-.theme-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }
+.theme-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }
 .theme-card { display: block; min-width: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-md); padding: 6px 6px 12px; background: var(--surface-panel); color: var(--text); text-align: left; font: inherit; cursor: pointer; transition: border-color var(--transition), box-shadow var(--transition); }
 .theme-card:hover { border-color: var(--text-dim); }
 .theme-card--selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .theme-card__preview { display: grid; grid-template-columns: 12% 25% minmax(0, 1fr); aspect-ratio: 1.7; overflow: hidden; border-radius: var(--radius-sm); background: var(--preview-canvas); border: 1px solid var(--preview-border); }
 .theme-card__rail { display: flex; flex-direction: column; align-items: center; gap: 12%; padding-top: 28%; border-right: 1px solid var(--preview-border); }
-.theme-card__rail i { display: block; width: 56%; aspect-ratio: 1; clip-path: var(--octagon); background: var(--preview-accent); }
+.theme-card__rail i { display: block; width: 56%; aspect-ratio: 1; border-radius: 3px; background: var(--preview-accent); }
 .theme-card__rail b { width: 30%; height: 5px; border-radius: 2px; background: var(--preview-text); opacity: 0.25; }
 .theme-card__sidebar { display: flex; flex-direction: column; gap: 10%; padding: 20% 12%; background: var(--preview-panel); border-right: 1px solid var(--preview-border); }
 .theme-card__sidebar i, .theme-card__sidebar b { height: 4px; width: 70%; background: var(--preview-text); opacity: 0.16; border-radius: 2px; }
 .theme-card__sidebar i { width: 90%; background: var(--preview-accent); opacity: 0.65; }
 .theme-card__main { display: flex; flex-direction: column; gap: 7%; padding: 14% 12% 10%; }
-.theme-card__main span { display: block; width: 28%; aspect-ratio: 1; clip-path: var(--octagon); background: var(--preview-accent); opacity: 0.65; margin: 0 auto 5%; }
+.theme-card__main span { display: block; width: 28%; aspect-ratio: 1; border-radius: 3px; background: var(--preview-accent); opacity: 0.65; margin: 0 auto 5%; }
 .theme-card__main i { height: 7px; width: 70%; margin-left: auto; background: var(--preview-accent); opacity: 0.25; border-radius: 3px; }
 .theme-card__main b { height: 3px; width: 85%; background: var(--preview-text); opacity: 0.2; border-radius: 2px; }
 .theme-card__main b + b { width: 58%; }
@@ -212,7 +213,7 @@ function download () {
 .appearance__sample-keyword { color: var(--syntax-keyword); }
 .appearance__sample-string { color: var(--syntax-string); }
 .appearance__sample code { font-size: 0.6875rem; overflow-wrap: anywhere; }
-.appearance__sample-action { display: grid; place-items: center; width: 26px; height: 26px; background: var(--accent); color: var(--accent-text); clip-path: var(--octagon); }
+.appearance__sample-action { display: grid; place-items: center; width: 26px; height: 26px; background: var(--accent); color: var(--accent-text); border-radius: var(--radius-xs); }
 .appearance__sample-action .material-icons { font-size: 1rem; }
 .appearance__editor-body { padding: 6px 16px 16px; }
 .appearance__token-search { display: flex; align-items: center; gap: 20px; margin: 16px 0; }

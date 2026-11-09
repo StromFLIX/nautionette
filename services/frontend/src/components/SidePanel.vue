@@ -1,6 +1,7 @@
 <template>
   <div class="side stack grow">
     <header class="side__head">
+      <div class="side__identity"><BrandMark /><span>{{ brand.name }}</span><span class="side__instance">Your workspace</span></div>
       <div class="row side__heading">
         <h1 class="side__title grow truncate" :title="heading">{{ heading }}</h1>
         <button
@@ -203,6 +204,8 @@ import { api } from '../api'
 import ChatRow from './ChatRow.vue'
 import AppAvatar from './AppAvatar.vue'
 import PinnedApps from './PinnedApps.vue'
+import BrandMark from './BrandMark.vue'
+import { brand } from '../brand'
 import { appOwner } from '../miniapps'
 import { preferences } from '../preferences'
 import { CHAT_GROUP_OPTIONS, groupChats } from '../chat-groups'
@@ -307,9 +310,12 @@ function refresh () {
 }
 
 .side__head {
-  padding: 16px 14px 14px;
+  padding: 22px 18px 16px;
   border-bottom: 1px solid var(--border);
 }
+.side__identity { display: flex; align-items: center; gap: 7px; margin-bottom: 22px; color: var(--text); font-size: .6875rem; font-weight: 600; letter-spacing: -.025em; }
+.side__identity :deep(.brand-mark) { width: 20px; height: 20px; }
+.side__instance { margin-left: auto; font-size: .5625rem; font-weight: 400; color: var(--text-muted); letter-spacing: 0; }
 
 .side__heading {
   gap: var(--space-1);
@@ -318,9 +324,9 @@ function refresh () {
 .side__title {
   margin: 0;
   font-size: 1.125rem;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.3;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.045em;
 }
 
 .side__new, .side__filter--active {
@@ -353,8 +359,8 @@ function refresh () {
   align-items: center;
   gap: 6px;
   padding: 0 6px 0 10px;
-  height: 36px;
-  margin-top: 16px;
+  height: 38px;
+  margin-top: 18px;
   border-radius: var(--radius-sm);
   background: var(--surface-input);
   border: 1px solid transparent;
@@ -410,9 +416,9 @@ function refresh () {
   flex: none;
   color: var(--text-dim);
   font-size: 0.6875rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .seg {
@@ -577,6 +583,7 @@ function refresh () {
 }
 
 @media (max-width: 900px) {
+  .side__identity { margin-bottom: 14px; }
   .side__head {
     padding-top: calc(10px + var(--list-safe-top, env(safe-area-inset-top)));
     padding-right: max(12px, env(safe-area-inset-right));

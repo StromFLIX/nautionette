@@ -32,6 +32,7 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
     website = root / "services/website"
     files = {
         frontend / "public/brand/brand.json": manifest,
+        frontend / "src/brand-data.json": manifest,
         frontend / "desktop/brand.json": manifest,
         frontend / "public/brand/logo.svg": logo,
         frontend / "public/favicon.svg": favicon,

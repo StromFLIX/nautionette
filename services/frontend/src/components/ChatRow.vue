@@ -13,7 +13,7 @@
         viewBox="0 0 20 20" role="img" :aria-label="statusLabel" focusable="false"
       >
         <title>{{ statusLabel }}</title>
-        <polygon points="10,2 17,6 17,14 10,18 3,14 3,6" />
+        <rect x="3" y="3" width="14" height="14" rx="4" />
       </svg>
       <span class="row-item__title grow truncate" :title="chat.title">{{ chat.title }}</span>
       <span v-if="chat.unread" class="row-item__unread" role="img" aria-label="Unread messages" title="Unread messages" />
@@ -84,7 +84,7 @@ function rename () {
   const { id, title } = props.chat
   $q.dialog({
     title: 'Rename chat',
-    prompt: { model: title, type: 'text', outlined: true, dark: true },
+    prompt: { model: title, type: 'text', outlined: true },
     cancel: true
   }).onOk(async (title) => {
     try {

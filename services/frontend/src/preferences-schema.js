@@ -1,6 +1,7 @@
 import { THEMES, sanitizeOverrides } from './themes.js'
 import { sanitizeSkins } from './skins.js'
 import { CHAT_GROUP_OPTIONS } from './chat-groups.js'
+import { brand } from './brand.js'
 
 export const PREFERENCES_KEY = 'nautionette.preferences.v1'
 export const WORKSPACE_SETTINGS = [
@@ -9,9 +10,9 @@ export const WORKSPACE_SETTINGS = [
   { key: 'sideWidth', group: 'Layout', label: 'Sidebar width', description: 'You can also drag the sidebar edge.', type: 'number', value: 320, min: 260, max: 560, step: 10, unit: 'px' },
   { key: 'sideCollapsed', group: 'Layout', label: 'Collapse sidebar', description: 'Give the conversation more space on desktop. Click Chats, Workflows or Runs in the navigation to reopen its list.', type: 'boolean', value: false },
   { key: 'motion', group: 'Animations', label: 'Motion', description: 'Reduce all motion, or choose individual animations below. System accessibility preferences are always respected.', type: 'select', value: 'system', options: [['system', 'Follow system'], ['reduced', 'Reduce motion']] },
-  { key: 'chatListAnimation', group: 'Animations', label: 'Chat list animation', description: 'Pulse the small hexagon beside active chats. Off keeps a static filled hexagon.', type: 'boolean', value: true },
+  { key: 'chatListAnimation', group: 'Animations', label: 'Chat list animation', description: 'Gently pulse the activity tile beside working chats. Off keeps a static filled tile.', type: 'boolean', value: true },
   { key: 'messageWindowAnimation', group: 'Animations', label: 'Message window animation', description: 'Animate the running light around the message composer. Off keeps the highlighted border.', type: 'boolean', value: true },
-  { key: 'toolIndicatorAnimation', group: 'Animations', label: 'Tool-call indicator animation', description: 'Animate the summary octagon and running-tool dots. Off keeps static progress indicators.', type: 'boolean', value: true },
+  { key: 'toolIndicatorAnimation', group: 'Animations', label: 'Tool-call indicator animation', description: 'Animate the summary tile and running-tool indicator. Off keeps static progress indicators.', type: 'boolean', value: true },
   { key: 'sendShortcut', group: 'Chat', label: 'Send shortcut', description: 'Shift + Enter always adds a new line.', type: 'select', value: 'enter', options: [['enter', 'Enter'], ['modifier-enter', '⌘ / Ctrl + Enter']] },
   { key: 'dictationLanguage', group: 'Chat', label: 'Dictation language', description: 'Choose the English or German model for streaming dictation. Audio and transcripts stay on your server.', type: 'select', value: globalThis.navigator?.language?.startsWith('de') ? 'de' : 'en', options: [['en', 'English'], ['de', 'German']] },
   { key: 'newChatSettings', group: 'Chat', label: 'New chat settings', description: 'Reuse the last model, agent, environment, reasoning, tools, projects and extensions used on this device, or start from your configured defaults. Defaults apply until you have used a chat. Configuration controls always start closed.', type: 'select', value: 'last', options: [['last', 'Always use last settings'], ['defaults', 'Always use defaults']] },
@@ -25,7 +26,7 @@ export const WORKSPACE_SETTINGS = [
 ]
 export const WORKSPACE_GROUPS = [...new Set(WORKSPACE_SETTINGS.map(setting => setting.group))]
 export const workspaceDefaults = () => Object.fromEntries(WORKSPACE_SETTINGS.map(setting => [setting.key, setting.value]))
-export const preferenceDefaults = () => ({ theme: 'orbit', skin: '', skins: [], overrides: {}, ...workspaceDefaults() })
+export const preferenceDefaults = () => ({ theme: brand.defaultTheme, skin: '', skins: [], overrides: {}, ...workspaceDefaults() })
 
 export function validPreference (key, value) {
   const field = WORKSPACE_SETTINGS.find(setting => setting.key === key)

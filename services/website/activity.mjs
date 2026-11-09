@@ -1,6 +1,8 @@
 import { TILE_SIZE, GENERATION_MS, createField, nextGeneration, visibleCells } from './activity-simulation.mjs?v=living-2'
+import { brand } from './brand.mjs?v=denkzeug-3'
 export { TILE_SIZE, GENERATION_MS, createField, nextGeneration, visibleCells }
-const COLORS = ['101, 122, 222', '163, 151, 200', '211, 162, 110']
+const COLORS = [brand.colors.agent, brand.colors.session, brand.colors.workflow]
+  .map(color => [1, 3, 5].map(index => parseInt(color.slice(index, index + 2), 16)).join(', '))
 
 export function mountActivity (canvas, button, storage) {
   const context = canvas?.getContext('2d')

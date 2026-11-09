@@ -116,6 +116,8 @@ for (const width of [1440, 320]) {
 test('theme editor validates, resets and keeps each preset customization separate', async ({ page, context }) => {
   const state = await mockDesign(context)
   await page.goto('/settings/appearance#token-accent')
+  // Legacy themes and their independent customizations remain available.
+  await page.getByRole('button', { name: 'Orbit theme', exact: true }).click()
   const accent = page.getByLabel('Accent', { exact: true })
   await expect(accent).toBeVisible()
   await accent.fill('#aa4400')
@@ -259,7 +261,7 @@ test('unavailable preference storage does not break live customization or claim 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'sand')
   await expect(page.getByRole('alert')).toContainText('this session only')
   await page.reload()
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'orbit')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'denkzeug')
 })
 
 test('automation settings link to the actual workflow controls, including after reload', async ({ page, context }) => {

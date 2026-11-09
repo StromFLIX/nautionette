@@ -8,6 +8,7 @@
 import { computed } from 'vue'
 import { cssTokens } from '../../themes'
 import { compileSkinCss } from '../../skins'
+import { brand } from '../../brand'
 
 const props = defineProps({ skin: { type: Object, required: true } })
 // Sandboxed, network-free miniature. Untrusted CSS never styles the library card.
@@ -20,8 +21,8 @@ const document = computed(() => {
     .thread__body{padding:12px}.msg{margin-bottom:10px}.bubble{padding:10px;font-size:12px;border-radius:var(--radius-md)}.msg--user{margin-left:18px}.msg--user .bubble{background:var(--bubble-out);color:var(--bubble-text)}
     .composer{padding:8px;margin:8px 12px;border:1px solid var(--border-strong)}.btn{padding:5px 10px;font:inherit;font-size:11px;background:var(--accent);color:var(--accent-text)}
   </style><style>${compileSkinCss(props.skin, true)}</style></head><body>
-  <div class="shell" data-skin-part="shell"><nav class="rail" data-skin-part="navigation"><div class="rail__item rail__item--active">Chats</div><div class="rail__item">Flows</div></nav>
-  <main class="shell__main" data-skin-part="main"><header class="pane-head" data-skin-part="header">Nautionette</header><div class="thread__body" data-skin-part="conversation">
+  <div class="shell" data-skin-part="shell"><nav class="rail" data-skin-part="navigation"><div class="rail__item rail__item--active">Chats</div><div class="rail__item">Workflows</div></nav>
+  <main class="shell__main" data-skin-part="main"><header class="pane-head" data-skin-part="header">${brand.name}</header><div class="thread__body" data-skin-part="conversation">
   <div class="msg msg--user" data-skin-part="message" data-role="user"><div class="bubble">Make it feel like me.</div></div><div class="msg" data-skin-part="message" data-role="assistant"><div class="bubble">Your workspace. Your design.</div></div></div>
   <div class="composer" data-skin-part="composer"><button class="btn">Send message</button></div></main></div></body></html>`
 })

@@ -3,9 +3,9 @@
     <summary class="tool-group__summary">
       <svg class="tool-group__indicator" viewBox="0 0 24 24" focusable="false"
         :role="active ? 'img' : undefined" :aria-label="active ? (running ? 'Tool calls in progress' : 'Response in progress') : undefined" :aria-hidden="active ? undefined : true">
-        <path class="tool-group__indicator-track" d="M8 2H16L22 8V16L16 22H8L2 16V8Z" />
-        <path v-if="active" class="tool-group__indicator-arc" d="M8 2H16L22 8V16L16 22H8L2 16V8Z" pathLength="100" />
-        <circle v-if="running" class="tool-group__indicator-dot" cx="12" cy="12" r="3" />
+        <path class="tool-group__indicator-track" d="M7 3H17Q21 3 21 7V17Q21 21 17 21H7Q3 21 3 17V7Q3 3 7 3Z" />
+        <path v-if="active" class="tool-group__indicator-arc" d="M7 3H17Q21 3 21 7V17Q21 21 17 21H7Q3 21 3 17V7Q3 3 7 3Z" pathLength="100" />
+        <rect v-if="running" class="tool-group__indicator-dot" x="9" y="9" width="6" height="6" rx="2" />
       </svg>
       <span class="tool-group__label" aria-live="polite" aria-atomic="true">{{ summary.label }}</span>
       <span v-if="summary.failed" class="tool-group__failed">{{ summary.failed }} failed</span>
