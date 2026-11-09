@@ -41,3 +41,27 @@ contrast scrims are disabled because icon contrast is explicitly selected.
   and Android 15+, check light/dark themes with gesture and three-button
   navigation, opening/closing the keyboard, rotation, and background/resume. Bars
   should match the adjacent surfaces without gray strips or doubled insets.
+
+## Back navigation (iOS, Android and web)
+
+All clients use Vue Router's browser history, not a separate swipe-navigation
+stack. Cold detail links seed one parent list entry; reloads preserve existing
+history, including agent filters and the chat that opened Settings.
+
+- iOS: `npm run ios:add` / `npm run ios:sync` install
+  `ios/BridgeViewController.swift` and wire it into Main.storyboard. It enables
+  WKWebView's interactive back/forward gestures. A newly built iOS app is required.
+- Android: `@capacitor/app` supplies the system-back handler (gesture and button).
+  Quasar uses it to dismiss open dialogs first, then traverse browser history.
+  Rebuild/install the APK after syncing; server updates do not add native plugins.
+- Web: contain overscroll only on the vertical axis of page/vertical scroll areas.
+  Horizontal overscroll containment disables browser back/forward gestures. Keep
+  it only on components that intentionally own horizontal gestures, such as graphs.
+
+Regression coverage: `tests/back-navigation.spec.js` exercises back/forward,
+scoped chat lists, detail reloads, Settings origins and each section's deep links
+in Chromium and WebKit CI. Native sync tests verify generated iOS wiring.
+Device smoke check: open a chat from an agent list, edge-swipe back, then forward;
+repeat after reload, from a workflow/run/app, and from Settings opened in a chat.
+Verify vertical scrolling, horizontal code/graph panning and dialog dismissal are
+unaffected. Browser tests cannot synthesize the OS's interactive edge gesture.

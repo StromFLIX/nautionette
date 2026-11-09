@@ -16,7 +16,8 @@ body,
   height: var(--app-height);
   margin: 0;
   overflow: hidden;
-  overscroll-behavior: none;
+  /* Contain vertical bounce without disabling horizontal browser back/forward. */
+  overscroll-behavior-y: none;
 }
 
 body,
@@ -60,7 +61,7 @@ pre,
 
 .scroll-y {
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
 }

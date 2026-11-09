@@ -25,10 +25,19 @@ const UNDER = { chats: '/chats', workflows: '/workflows', runs: '/runs', apps: '
  * before the first render.
  */
 export async function seedHistory () {
-  const entry = router.resolve(window.location.pathname + window.location.search + window.location.hash)
+  // Resolve redirects first: / launches into the welcome composer, which is
+  // also a full-screen detail on mobile and needs the chat list underneath it.
+  await router.isReady()
+  const entry = router.currentRoute.value
   const list = UNDER[entry.name]
-  if (!list || entry.path === list) return
-  await router.replace({ path: list, query: ['chats', 'apps'].includes(entry.name) ? entry.query : {} })
+  const welcome = entry.name === 'chats' && entry.query.welcome === '1'
+  // Vue Router persists its back entry across reloads. Keep that real origin
+  // (including agent filters and settings callers) instead of inserting a new
+  // list/detail pair every time the page or native webview is restored.
+  if (window.history.state?.back || !list || (entry.path === list && !welcome)) return
+  const query = ['chats', 'apps'].includes(entry.name) ? { ...entry.query } : {}
+  delete query.welcome
+  await router.replace({ path: list, query })
   await router.push(entry.fullPath)
 }
 
