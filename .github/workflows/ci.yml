@@ -219,7 +219,8 @@ jobs:
           file: ${{ matrix.file }}
           push: false
           cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          # Cache availability must not turn a successful image build red.
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }},ignore-error=true
 
   miniapps:
     name: Mini-app compiler and isolated runtime
@@ -240,7 +241,7 @@ jobs:
           load: true
           tags: nautionette/miniapp-builder:dev
           cache-from: type=gha,scope=miniapp-builder
-          cache-to: type=gha,mode=max,scope=miniapp-builder
+          cache-to: type=gha,mode=max,scope=miniapp-builder,ignore-error=true
       - name: Build broker for real mini-app runtime tests
         uses: docker/build-push-action@v7
         with:
@@ -249,7 +250,7 @@ jobs:
           load: true
           tags: nautionette/docker-broker:dev
           cache-from: type=gha,scope=miniapp-test-broker
-          cache-to: type=gha,mode=max,scope=miniapp-test-broker
+          cache-to: type=gha,mode=max,scope=miniapp-test-broker,ignore-error=true
       - name: Offline compiler, scratch runtime, SQLite, syscall and socket isolation
         run: |
           uv sync --locked --all-packages
@@ -312,7 +313,7 @@ jobs:
           load: true
           tags: nautionette/miniapp-builder:dev
           cache-from: type=gha,scope=miniapp-builder
-          cache-to: type=gha,mode=max,scope=miniapp-builder
+          cache-to: type=gha,mode=max,scope=miniapp-builder,ignore-error=true
           labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
       - name: Git credential rotation in a live unprivileged container (offline)

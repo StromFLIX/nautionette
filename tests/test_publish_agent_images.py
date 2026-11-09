@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -135,3 +136,11 @@ def test_invalid_fingerprints_cannot_publish_mutable_tags(monkeypatch, name, val
     with pytest.raises(ValueError, match="exact image source fingerprints"):
         publish.main()
     assert calls == []
+
+
+def test_gha_cache_exports_are_optional_but_build_and_test_failures_stay_fatal():
+    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text()
+    exports = [line for line in workflow.splitlines() if "cache-to:" in line and "type=gha" in line]
+    assert exports
+    assert all("ignore-error=true" in line for line in exports)
+    assert "continue-on-error: true" not in workflow
