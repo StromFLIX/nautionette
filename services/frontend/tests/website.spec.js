@@ -56,6 +56,34 @@ for (const width of [1440, 390, 320]) {
   })
 }
 
+test('evolving patterns keep the title and definition clear on desktop and phones', async ({ page }) => {
+  await website(page)
+  await page.clock.install()
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 })
+    for (const [locale, advance] of [['en', 100], ['de', 3000], ['ar', 3500]]) {
+      await page.getByLabel('Definition language').selectOption(locale)
+      await page.clock.runFor(advance)
+      const alpha = await page.locator('canvas').evaluate(canvas => {
+        const bounds = canvas.getBoundingClientRect()
+        const ratio = canvas.width / bounds.width
+        const context = canvas.getContext('2d')
+        return ['.hero h1', '.definition'].map(selector => {
+          const box = document.querySelector(selector).getBoundingClientRect()
+          const pixels = context.getImageData(
+            Math.ceil((box.left - bounds.left + 8) * ratio), Math.ceil((box.top - bounds.top + 8) * ratio),
+            Math.floor((box.width - 16) * ratio), Math.floor((box.height - 16) * ratio)
+          ).data
+          let maximum = 0
+          for (let i = 3; i < pixels.length; i += 4) maximum = Math.max(maximum, pixels[i])
+          return maximum
+        })
+      })
+      expect(alpha).toEqual([0, 0])
+    }
+  }
+})
+
 test('motion pauses, persists and defaults to a still field for reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await website(page)
@@ -67,8 +95,7 @@ test('motion pauses, persists and defaults to a still field for reduced motion',
   expect(await pixels()).toBe(still)
   await button.click() // A visitor can explicitly opt in, even with reduced motion.
   await expect(page.getByRole('button', { name: 'Pause activity' })).toBeVisible()
-  await page.waitForTimeout(650)
-  expect(await pixels()).not.toBe(still)
+  await expect.poll(pixels, { timeout: 3500 }).not.toBe(still)
   await page.getByRole('button', { name: 'Pause activity' }).click()
   const paused = await pixels()
   await page.waitForTimeout(650)
@@ -87,8 +114,7 @@ test('the cellular field stops rendering when the hero is off-screen', async ({ 
   await page.waitForTimeout(700)
   expect(await pixels()).toBe(offscreen)
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }))
-  await page.waitForTimeout(700)
-  expect(await pixels()).not.toBe(offscreen)
+  await expect.poll(pixels, { timeout: 3500 }).not.toBe(offscreen)
 })
 
 test('blocked storage, clipboard denial and unsafe instance URLs have usable fallbacks', async ({ page }) => {

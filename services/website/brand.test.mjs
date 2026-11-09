@@ -79,6 +79,48 @@ test('activity remains deterministic, sparse and within bounds across sizes and 
   }
 })
 
+test('different visit seeds change the composition without mutating earlier frames', () => {
+  const field = createField(52, 33, 47)
+  const original = structuredClone(field)
+  assert.notDeepEqual(visibleCells(field), visibleCells(createField(52, 33, 48)))
+  nextGeneration(field)
+  visibleCells(field)
+  assert.deepEqual(field, original)
+})
+
+test('seven minutes of activity do not settle into a short loop or a fixed set of routes', () => {
+  for (const [columns, rows] of [[12, 26], [52, 33]]) {
+    let field = createField(columns, rows, 47)
+    const frames = new Set(), motifs = new Set(), routes = new Set(), paces = new Set(), lengths = new Set()
+    let forks = 0
+    for (let i = 0; i < 1000; i++) {
+      const cells = visibleCells(field)
+      frames.add(JSON.stringify([...cells].sort((a, b) => a[0] - b[0])))
+      assert.ok(cells.size <= Math.floor(columns * rows * .16), 'bursts remain sparse')
+      assert.ok(field.colonies.length <= (columns > 30 ? 6 : 3))
+      assert.ok(field.flows.length <= (columns > 30 ? 3 : 2))
+      for (const colony of field.colonies) motifs.add(colony.motif)
+      for (const flow of field.flows) {
+        const route = JSON.stringify(flow.paths)
+        if (!routes.has(route) && flow.paths.length > 1) forks++
+        routes.add(route)
+        paces.add(flow.pace)
+        lengths.add(flow.length)
+        for (const path of flow.paths) {
+          for (const index of path) assert.ok(index >= 0 && index < columns * rows)
+        }
+      }
+      field = nextGeneration(field)
+    }
+    assert.ok(frames.size > 900, `${frames.size} unique frames, not a short repeating cycle`)
+    assert.equal(motifs.size, 8)
+    assert.ok(routes.size > 15)
+    assert.ok(forks > 0)
+    assert.equal(paces.size, 3)
+    assert.equal(lengths.size, 4)
+  }
+})
+
 test('only safe deployment URLs become app links', () => {
   assert.equal(appURL(' https://my-instance.example/app '), 'https://my-instance.example/app')
   assert.equal(appURL('http://localhost:9000'), 'http://localhost:9000/')
@@ -98,6 +140,6 @@ test('website keeps working deployment and release contracts with reusable vecto
   assert.ok(svg.includes('<path'))
   assert.ok(!/<image|base64/.test(svg), 'the icon is a real vector, not an embedded bitmap')
   const dockerfile = readFileSync(new URL('./Dockerfile', import.meta.url), 'utf8')
-  for (const module of ['activity.mjs', 'definitions.mjs', 'urls.mjs']) assert.ok(dockerfile.includes(module))
+  for (const module of ['activity.mjs', 'activity-simulation.mjs', 'definitions.mjs', 'urls.mjs']) assert.ok(dockerfile.includes(module))
   assert.ok(dockerfile.includes('COPY assets/'))
 })

@@ -19,8 +19,14 @@ No usage statistics or customer results are fabricated.
 - **Layout:** centred name and definition; left-aligned text below; shared content
   edges; three principles, then three capabilities. No automatic scroll reveals.
 - **Motion:** one cellular field; quiet crossfades at a capped 24fps, one generation
-  per 420ms. Stops off-screen and in hidden tabs. Reduced motion starts still;
-  the visitor can explicitly play or pause and that choice is saved locally.
+  per 420ms. Eight Life motifs have varied orientations, locations and lifetimes;
+  short trains take newly generated routes, with occasional forks that rejoin.
+  Cohorts arrive and disperse on independent schedules, not a shared loop/reset.
+  A fresh seed changes each visit's composition; explicit seeds keep tests
+  reproducible. Density is bounded, with mobile-scaled populations and quieter
+  space behind the text. Simulation runs only on a generation change, never
+  per rendered frame. Stops off-screen and in hidden tabs. Reduced motion starts
+  still; the visitor can explicitly play or pause and that choice is saved locally.
 
 The brief's own living-grid direction wins over generic SaaS hero treatments or
 prescriptive website kits. The supplied icon and the word itself are the hero,
@@ -75,6 +81,9 @@ npm run test:website
 npx playwright install chromium
 npx playwright test tests/website.spec.js
 ```
+
+Unit checks simulate seven minutes on mobile and desktop, guarding against short
+loops, repeated routes, excessive density and unbounded populations.
 
 The website browser suite runs in CI with the existing frontend browser checks.
 It covers 1440/390/320px, every definition language, RTL, saved preferences,
