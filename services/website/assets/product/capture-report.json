@@ -1,0 +1,228 @@
+[
+  {
+    "name": "desktop",
+    "viewport": {
+      "width": 1280,
+      "height": 840
+    },
+    "deviceScaleFactor": 1.5,
+    "pixels": {
+      "width": 1920,
+      "height": 1260
+    },
+    "clock": "2026-06-15T10:30:00.000Z",
+    "timezone": "UTC",
+    "errors": [],
+    "requests": [
+      {
+        "path": "/api/chats/alpha",
+        "method": "GET"
+      },
+      {
+        "path": "/api/speech",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/alpha",
+        "method": "GET"
+      },
+      {
+        "path": "/api/system",
+        "method": "GET"
+      },
+      {
+        "path": "/api/agents",
+        "method": "GET"
+      },
+      {
+        "path": "/api/catalog",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats",
+        "method": "GET"
+      },
+      {
+        "path": "/api/projects",
+        "method": "GET"
+      },
+      {
+        "path": "/api/miniapps",
+        "method": "GET"
+      },
+      {
+        "path": "/api/mcp-oauth/status",
+        "method": "GET"
+      },
+      {
+        "path": "/api/workflows",
+        "method": "GET"
+      },
+      {
+        "path": "/api/drafts",
+        "method": "GET"
+      },
+      {
+        "path": "/api/runs",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/alpha/stream",
+        "method": "GET"
+      },
+      {
+        "path": "/api/events",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/alpha/read-state",
+        "method": "PATCH"
+      },
+      {
+        "path": "/api/chats/alpha/draft",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-0",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-1",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-2",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-3",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-4",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-5",
+        "method": "GET"
+      }
+    ]
+  },
+  {
+    "name": "phone",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "deviceScaleFactor": 2,
+    "pixels": {
+      "width": 780,
+      "height": 1688
+    },
+    "clock": "2026-06-15T10:30:00.000Z",
+    "timezone": "UTC",
+    "errors": [],
+    "requests": [
+      {
+        "path": "/api/chats/alpha",
+        "method": "GET"
+      },
+      {
+        "path": "/api/speech",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/alpha",
+        "method": "GET"
+      },
+      {
+        "path": "/api/system",
+        "method": "GET"
+      },
+      {
+        "path": "/api/agents",
+        "method": "GET"
+      },
+      {
+        "path": "/api/catalog",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats",
+        "method": "GET"
+      },
+      {
+        "path": "/api/projects",
+        "method": "GET"
+      },
+      {
+        "path": "/api/miniapps",
+        "method": "GET"
+      },
+      {
+        "path": "/api/mcp-oauth/status",
+        "method": "GET"
+      },
+      {
+        "path": "/api/workflows",
+        "method": "GET"
+      },
+      {
+        "path": "/api/drafts",
+        "method": "GET"
+      },
+      {
+        "path": "/api/runs",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/alpha/stream",
+        "method": "GET"
+      },
+      {
+        "path": "/api/events",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/alpha/read-state",
+        "method": "PATCH"
+      },
+      {
+        "path": "/api/chats/alpha/draft",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-0",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-1",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-2",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-3",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-4",
+        "method": "GET"
+      },
+      {
+        "path": "/api/chats/sample-5",
+        "method": "GET"
+      }
+    ]
+  }
+]

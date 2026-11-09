@@ -37,7 +37,8 @@
     "desktop:dev": "npm run build && electron .",
     "desktop:build": "npm run build && electron-builder --publish never",
     "desktop:build:ci": "node scripts/package-desktop.mjs",
-    "test:website": "node --test ../website/*.test.mjs"
+    "test:website": "node --test ../website/*.test.mjs",
+    "capture:website": "node scripts/capture-website.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
