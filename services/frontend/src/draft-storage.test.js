@@ -85,3 +85,34 @@ test('conflicting device edits never overwrite either draft', async () => {
   assert.equal(other.entry('one').text, 'second device')
   assert.match(other.entry('one').error, /conflict/)
 })
+
+test('synchronous journal preserves the newest edit/clear while file transactions commit', async () => {
+  const values = new Map()
+  const journal = { getItem: key => values.get(key), setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) }
+  const storage = createDraftStorage(crypto.randomUUID(), journal)
+  const attachment = { id: 'one', name: 'notes.txt', file: new Blob(['original bytes']) }
+  const data = { text: 'old', attachments: [attachment], dirty: true, revision: 0, mutation: 'old' }
+  await storage.put('chat', data)
+  const writing = storage.put('chat', { ...data, text: 'latest edit', mutation: 'latest' })
+  assert.equal(JSON.parse([...values.values()][0]).text, 'latest edit')
+  await writing
+  const restored = await storage.get('chat')
+  assert.equal(restored.text, 'latest edit')
+  assert.equal(await restored.attachments[0].file.text(), 'original bytes')
+  const clearing = storage.put('chat', { ...data, text: '', attachments: [], mutation: 'clear' })
+  assert.equal(JSON.parse([...values.values()][0]).text, '')
+  await clearing
+  assert.equal((await storage.get('chat')).text, '')
+  journal.getItem = () => '{corrupt'
+  assert.equal((await storage.get('chat')).text, '')
+})
+
+test('malformed server responses never corrupt a restored local draft', async () => {
+  const f = fixture(), drafts = f.make()
+  f.remote.get = async () => ({})
+  await drafts.open('one')
+  await drafts.sync('one')
+  assert.equal(drafts.entry('one').text, '')
+  assert.deepEqual(drafts.entry('one').attachments, [])
+  assert.match(drafts.entry('one').error, /sync unavailable/)
+})

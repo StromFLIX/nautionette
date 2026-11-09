@@ -1670,7 +1670,7 @@ for (const offline of [false, true]) {
     await page.goto('/chats/alpha')
     const input = page.getByRole('textbox', { name: 'Message', exact: true })
     await input.fill('  Keep my long draft\nincluding whitespace  ')
-    await page.locator('input[type=file]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Never lose these bytes') })
+    await page.locator('input[type=file]').setInputFiles([{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Never lose these bytes') }, imageFile])
     await chatRow(page, 'beta').click()
     await expect(input).toHaveValue('')
     await input.fill('A different draft')
@@ -1680,10 +1680,26 @@ for (const offline of [false, true]) {
     await page.reload()
     await expect(input).toHaveValue('  Keep my long draft\nincluding whitespace  ')
     await expect(page.locator('.composer__attachments')).toContainText('notes.txt')
+    await expect(page.locator('.composer__attachments img')).toBeVisible()
     await chatRow(page, 'beta').click()
     await expect(input).toHaveValue('A different draft')
   })
 }
+
+test('the latest draft edit and explicit clear survive an immediate reload', async ({ page, context }) => {
+  const state = initial()
+  await mockChats(context, state)
+  await page.goto('/chats/alpha')
+  const input = page.getByRole('textbox', { name: 'Message', exact: true })
+  for (const text of ['First long draft', 'Changed at the last instant', '']) {
+    await input.fill(text)
+    await page.reload()
+    await expect(input).toHaveValue(text)
+  }
+  await page.locator('input[type=file]').setInputFiles(imageFile)
+  await page.reload()
+  await expect(page.locator('.composer__attachments img')).toBeVisible()
+})
 
 test('composer draft text and images sync to a fresh device without becoming messages', async ({ browser }) => {
   const state = initial()
