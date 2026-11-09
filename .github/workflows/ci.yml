@@ -47,7 +47,7 @@ jobs:
       - name: Shared display branding matches every build context
         run: |
           python3 scripts/sync_brand.py --check
-          uv run pytest tests/test_branding.py
+          uv run pytest tests/test_branding.py tests/backend/test_display_brand.py
 
       - name: Lint
         run: uv run ruff check --output-format github .
@@ -154,6 +154,7 @@ jobs:
           npx playwright test
           tests/speech.spec.js tests/chat.spec.js tests/chat-branch.spec.js tests/chat-row.spec.js tests/chat-ordering.spec.js tests/live-connection.spec.js tests/appearance.spec.js tests/workspace.spec.js
           tests/projects.spec.js tests/settings-navigation.spec.js tests/command-palette.spec.js tests/hybrid-search.spec.js tests/website.spec.js
+          tests/branding.spec.js tests/settings-redesign.spec.js tests/process-redesign.spec.js tests/skins.spec.js tests/sidebar.spec.js
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js tests/agent-views.spec.js tests/subagents.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js
           tests/copilot-login.spec.js tests/mcp-oauth.spec.js tests/mcp-http-oauth.spec.js tests/mcp-stdio.spec.js tests/tool-calls.spec.js tests/activity-timing.spec.js tests/clipboard.spec.js

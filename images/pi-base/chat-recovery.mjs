@@ -2,6 +2,7 @@
 // Pi gets its own retry/compaction budget first. This budget belongs to the whole
 // container call (including steered inputs), not to each successful model step.
 import { randomUUID } from "node:crypto";
+import brand from "./brand.json" with { type: "json" };
 
 export const RECOVERY_DELAYS_MS = Object.freeze([2000, 5000]);
 
@@ -19,7 +20,7 @@ export function recoveryReason(error) {
 function continuationPrompt(reason) {
   // Never interpolate the provider's raw error: it is untrusted diagnostic data
   // and can contain secrets or instructions. The reason is a local fixed label.
-  return `Nautionette automatic recovery notice (not a new user request): ${reason}.
+  return `${brand.name} automatic recovery notice (not a new user request): ${reason}.
 The previous model request failed. This is the SAME live session and workspace; completed tool calls and their results are still in context.
 Review the user's latest instructions, work already completed, and tool results. Then continue only the unfinished work from the point of failure; do not restart the task or repeat completed actions.
 Preserve existing edits and commits. Before retrying any failed or uncertain external action, inspect its current state with a read-only check. If you cannot establish whether it already succeeded, stop and report that concrete blocker instead of risking a duplicate action.

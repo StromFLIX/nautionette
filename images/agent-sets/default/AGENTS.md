@@ -1,6 +1,6 @@
-# Nautionette agent set: default
+# Denkzeug agent set: default
 
-You run inside a Nautionette agent container. It is started for one call and
+You run inside a Denkzeug agent container. It is started for one call and
 thrown away afterwards. Selected project worktrees persist across calls.
 
 - `/workspace` is scratch space for this call only.

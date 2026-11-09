@@ -1,9 +1,17 @@
 const { app, BrowserWindow, protocol, net, session, shell, ipcMain } = require('electron')
 const path = require('node:path')
 const brand = require('./brand.json')
-const { existsSync } = require('node:fs')
+const { existsSync, mkdirSync } = require('node:fs')
 const { pathToFileURL } = require('node:url')
 const { APP_ORIGIN, trustedRenderer, externalURL, assetPath } = require('./security.cjs')
+const { existingDataPath } = require('./data-path.cjs')
+
+// Pin identity before acquiring the single-instance lock or opening a session.
+const dataPath = existingDataPath(app.getPath('appData'), app.getPath('userData'))
+mkdirSync(dataPath, { recursive: true })
+app.setPath('userData', dataPath)
+app.setPath('sessionData', dataPath)
+app.setName(brand.name)
 
 const { createReceivers } = require('./oauth.cjs')
 const { createAppReturns, createFocusOwner } = require('./oauth-return.cjs')
@@ -47,7 +55,7 @@ protocol.registerSchemesAsPrivileged([
 function createWindow () {
   const window = new BrowserWindow({
     width: 1280, height: 850, minWidth: 360, minHeight: 500,
-    title: brand.name, backgroundColor: '#101517',
+    title: brand.name, backgroundColor: brand.colors.paper,
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

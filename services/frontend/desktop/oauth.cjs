@@ -35,7 +35,7 @@ function callbackPage (returnURL) {
   const link = typeof returnURL === 'string' && /^nautionette:\/\/oauth-return\/[a-f0-9]{64}$/.test(returnURL)
     ? `<a href="${returnURL}">Open ${name}</a>` : ''
   return { nonce, html: `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Return to ${name}</title>
-<style>body{font:16px system-ui;background:#101517;color:#e0e8e8;display:grid;place-items:center;min-height:95vh;margin:0}main{max-width:440px;padding:32px}a{display:inline-block;background:#78d9c3;color:#101517;text-decoration:none;padding:12px 20px;border-radius:8px}p{line-height:1.6}</style>
+<style>body{font:16px system-ui;background:${brand.colors.paper};color:${brand.colors.ink};display:grid;place-items:center;min-height:95vh;margin:0}main{max-width:440px;padding:32px}h1{font-size:28px;letter-spacing:-.04em}a{display:inline-block;background:${brand.colors.ink};color:${brand.colors.white};text-decoration:none;padding:12px 20px;border-radius:8px}a:focus-visible{outline:2px solid ${brand.colors.agentStrong};outline-offset:4px}p{line-height:1.6}</style>
 <main><h1>Callback received</h1><p>${name} is checking your connection. Returning to your app…</p>${link}<p>If the app stays behind your browser, use the button or switch back to ${name}. The connection result is shown in the app.</p></main>
 <script nonce="${nonce}">history.replaceState(null,'',location.pathname)</script></html>` }
 }

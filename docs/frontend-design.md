@@ -6,9 +6,11 @@ Denkzeug is a workspace first. Keep the conversation prominent and put
 configuration one deliberate step away. Preserve capabilities; reduce their
 competition for attention.
 
-- **Octagonal identity:** `BrandMark.vue`, the favicon, selected identity surfaces
-  and Send use the same eight-sided geometry. Decorative shapes do not clip hit
-  targets or keyboard focus outlines.
+- **Denkzeug identity:** the approved nested-profile logo, Sora interface type,
+  paper/ink surfaces and blue/lilac/amber activity roles connect the website and
+  app. Rounded squares echo the tiled field without adding decorative motion to
+  working screens. Brand sources and compatibility boundaries live in
+  [`branding/README.md`](../branding/README.md).
 - **Progressive disclosure:** agents, reasoning, tools and projects live behind
   the composer's configuration control. Session facts, tool catalogs and detailed
   diagnostics expand when needed. An expanded composer remains usable in a short,
@@ -32,7 +34,7 @@ lazy-loaded panes and the search index. Add a section there rather than editing
   key: 'example',
   label: 'Example integration',
   icon: 'extension',
-  group: 'Connections',
+  group: 'Build & connect',
   scope: 'Instance',
   load: () => import('./components/settings/ExamplePane.vue'),
   entries: [
@@ -73,8 +75,8 @@ not reset the selected theme. There is no cross-device account synchronization.
 
 ### Chat rows, grouping and order
 
-Chat rows are a single line: a small hexagon, title, unread dot when applicable,
-and last completed activity time. Active responses use a filled, pulsing hexagon;
+Chat rows are a single line: a small rounded activity tile, title, unread marker when applicable,
+and last completed activity time. Active responses use a filled, gently pulsing tile;
 inactive chats use an empty outline. Avatars, latest-message previews and the
 separate **In progress** badge are not shown in the chat list. Workflow and run
 rows retain their existing layouts.
@@ -193,10 +195,13 @@ See [Agent configuration](agent-configuration.md) for the API and deployment con
 
 ## Themes
 
-`themes.js` is the browser-independent schema for four presets:
+`themes.js` is the browser-independent schema for six presets. New installations
+start with Denkzeug; existing valid theme, skin and font choices are retained:
 
 | Theme | Mode | Palette |
 | --- | --- | --- |
+| Denkzeug | Light | Paper, ink and soft activity colors (default) |
+| Denkzeug night | Dark | The same hierarchy with readable dark surfaces |
 | Orbit | Dark | Graphite and mint |
 | Nebula | Dark | Midnight and iris |
 | Daylight | Light | Porcelain and cobalt |
@@ -212,7 +217,7 @@ To add a token:
 
 1. Declare its key, label, group, type and bounds/default in `THEME_TOKENS`.
 2. Supply a value for each preset or derive it in `resolveTheme`.
-3. Add its Orbit first-paint fallback to `styles/tokens.css`.
+3. Add its Denkzeug first-paint fallback to `styles/tokens.css`.
 4. Consume its CSS variable in the component; avoid literal theme colors.
 5. Extend the theme tests for any new derivation or contrast pairing.
 
@@ -233,18 +238,18 @@ install/switch/download/remove, with sandboxed previews in `SkinPreview.vue`.
 Preferences keep `skins`, the selected `skin` id, its base `theme`, and independent
 `overrides["skin:<id>"]` tweaks. Switching off removes the whole stylesheet. Packs
 never load remote assets or execute scripts, but CSS can obscure controls: startup
-`?safe-appearance=1` and **Ctrl/Command + Alt + 0** restore Orbit without deleting
+`?safe-appearance=1` and **Ctrl/Command + Alt + 0** restore Denkzeug without deleting
 the library. See [Custom skin packs](skin-packs.md) for the authoring contract,
 `data-skin-part` hooks, examples, limits and recovery details.
 
 System reduced-motion preferences are always respected. **Workspace → Animations**
 retains the overall **Motion** control and provides three independent, default-on
-switches: **Chat list animation** (the active chat's pulsing hexagon), **Message window
+switches: **Chat list animation** (the active chat's pulsing tile), **Message window
 animation** (the composer's running border light), and **Tool-call indicator
-animation** (the tiny octagon to the left of the tool-call summary and the
+animation** (the tiny rounded square to the left of the tool-call summary and the
 right-hand dots on individual running tool rows). Turning one
 off keeps its static status cue without affecting the other animations. The
-octagon's light travels around its fixed outline on the latest group while the
+tile's light travels around its fixed outline on the latest group while the
 response is live, including model work between tools. Earlier completed groups
 retain a quiet static outline; an earlier group only stays animated if it still
 has genuinely pending tools. The center dot only indicates tool execution.

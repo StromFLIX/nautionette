@@ -164,7 +164,7 @@ Only install packs you trust. CSS cannot execute JavaScript or load remote asset
 here, but it **can still hide, move or visually misrepresent interface controls**.
 Validation does not guarantee a readable or accessible design.
 
-- Press **Ctrl / Cmd + Alt + 0** to immediately restore stock Orbit. This shortcut
+- Press **Ctrl / Cmd + Alt + 0** to immediately restore the stock Denkzeug appearance. This shortcut
   is registered outside the styled interface and works even when `#app` is hidden.
 - On touch devices, open `/settings/appearance?safe-appearance=1` on your instance.
   Safe mode runs before mounting the UI and persists the recovered selection when

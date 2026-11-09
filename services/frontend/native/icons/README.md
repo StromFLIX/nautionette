@@ -24,13 +24,15 @@ Android scales them down on lower-density devices. Adaptive XML resource names
 and their existing references remain unchanged; their background becomes white.
 The iOS copy uses the current Capacitor template's single universal AppIcon slot.
 
-When the approved logo changes, reopen the canonical SVG in VectorCraft, add
-square white padding with the same proportions, save this SVG and re-export the
-three documented sizes (512-point artboard: scales 2, 0.375 and 0.84375).
-Copy the 1024 export to `services/frontend/build/icon.png` and
-`services/frontend/desktop/icon.png` as well. This one
-tracked static build resource is intentionally retained despite the generic
-`build/` ignore rule. Do not edit the canonical logo as a side effect of export.
+Canonical launcher exports live in `branding/native/`; the files here, in
+`services/frontend/build/`, and in `services/frontend/desktop/` are synchronized
+copies. When the approved logo changes, reopen `branding/logo.svg` in VectorCraft,
+add square white padding with the same proportions, and re-export into
+`branding/native/` (512-point artboard: scales 2, 0.375 and 0.84375). Update
+`branding/native/source.sha256` after verifying the artwork, then run
+`python scripts/sync_brand.py` to update every platform copy. The tracked build
+resource is intentionally retained despite the generic `build/` ignore rule.
+Do not edit the canonical logo as a side effect of export.
 
 Device/emulator launcher-mask checks and signed installer builds still belong
 to the native release pipeline; unit tests do not substitute for those checks.

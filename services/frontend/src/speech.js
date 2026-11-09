@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { Capacitor } from '@capacitor/core'
+import { brand } from './brand.js'
 
 /** Bounded live mono PCM capture. Stop flushes the last worklet block before ending input. */
 export function createRecorder ({ onFinish, onError, maxSeconds = 120 }) {
@@ -79,7 +80,7 @@ export function createRecorder ({ onFinish, onError, maxSeconds = 120 }) {
       if (id !== generation) return
       cancel()
       const permissionMessage = Capacitor.isNativePlatform()
-        ? 'Microphone permission denied. Allow microphone access for Nautionette in your phone’s app settings and check that system microphone access is enabled, then try again.'
+        ? `Microphone permission denied. Allow microphone access for ${brand.name} in your phone’s app settings and check that system microphone access is enabled, then try again.`
         : 'Microphone permission denied. Allow microphone access in your browser settings.'
       onError(new Error(error.name === 'NotAllowedError' ? permissionMessage : error.name === 'NotFoundError' ? 'No microphone found.' : error.message || 'Could not start recording.'))
     }

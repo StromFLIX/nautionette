@@ -8,10 +8,13 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
 
+# Display copy is synchronized by scripts/sync_brand.py. Workflow identity stays stable.
+DISPLAY_NAME = "Denkzeug"
+
 MANIFEST = {
     "schema": 1,
     "name": "prepare_nautionette_release",
-    "title": "Prepare Nautionette release",
+    "title": "Prepare Denkzeug release",
     "description": (
         "Check the staging commit and version, write release notes, and return copy-paste Git commands "
         "and GitHub publishing links. Never publishes or deploys."
@@ -239,7 +242,7 @@ def publish_summary(tag, sha, previous, notes, checks, warnings, timestamp):
 )"""
     warning_text = "\n".join("- " + w for w in warnings) or "- No additional warnings."
     fence = "`" * max(4, max((len(x) + 1 for x in re.findall(r"`+", notes)), default=4))
-    return f"""# Prepare Nautionette release — {tag}
+    return f"""# Prepare {DISPLAY_NAME} release — {tag}
 
 **Preparation passed; nothing has been tagged, published, or deployed.**
 
@@ -748,13 +751,14 @@ or evidence limitations. Include no assumed test results. If a claim has no suit
             # Fail visibly, but always save an actionable summary, even on blocked checks.
             reason = str(exc)
             summary = (
-                f"# Nautionette release preparation blocked\n\n{reason}\n\n## Your next steps\n"
+                f"# {DISPLAY_NAME} release preparation blocked\n\n{reason}\n\n## Your next steps\n"
                 "1. Resolve the blocker above; no release/tag was created and no deployment was started.\n"
                 "2. Review [staging](https://app.nautionette.stage.stromflix.com), "
                 f"[Deploy Actions]({WEB}/actions/workflows/deploy.yml), "
                 f"[existing releases]({WEB}/releases), "
                 f"and [pipeline setup]({WEB}/blob/main/docs/github-pipelines.md).\n"
-                "3. Rerun **Prepare Nautionette release** once resolved. Publishing commands are withheld "
+                f"3. Rerun **Prepare {DISPLAY_NAME} release** once resolved. "
+                "Publishing commands are withheld "
                 "rather than filled with guessed versions or commit SHAs.\n"
             )
             await self.activity(

@@ -162,7 +162,7 @@ ready agent sets and ready workers; persistent failures and auth errors stay red
 For hosts using `MINIAPP_NETWORK_CIDR`, validate a separate production pool after
 staging approval; never reuse staging's reserved range across environments.
 
-The read-only **Prepare Nautionette release** workflow checks the healthy staging
+The read-only **Prepare Denkzeug release** workflow checks the healthy staging
 commit, ancestry, unused/increasing stable version, and evidence-backed notes. Its
 source is tracked in `workflows/prepare_nautionette_release.py` and regression-tested
 in CI. It does not publish or deploy. It deliberately does **not** pin checksums of

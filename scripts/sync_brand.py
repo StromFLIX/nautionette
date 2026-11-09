@@ -6,17 +6,40 @@ CI uses --check; no runtime network requests or branding build service are neede
 """
 
 import argparse
+import hashlib
 import json
 import re
 import sys
+from html import escape
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def validate_brand(brand: dict) -> None:
+    name = brand.get("name")
+    if (
+        not isinstance(name, str)
+        or not name.strip()
+        or len(name) > 80
+        or re.search(r"[<>/\\\\\x00-\x1f]", name)
+    ):
+        raise ValueError(
+            "Brand name must be plain display text without path separators or control characters."
+        )
+    for key in ["tagline", "description", "interfaceFont", "defaultTheme", "repository"]:
+        if not isinstance(brand.get(key), str) or not brand[key].strip():
+            raise ValueError(f"Missing display brand field: {key}")
+    for key in ["paper", "white", "ink", "muted", "line", "agent", "agentStrong", "session", "workflow"]:
+        value = brand.get("colors", {}).get(key)
+        if not isinstance(value, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            raise ValueError(f"Brand color {key} must be a six-digit hex color.")
+
+
 def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
     source = root / "branding"
     brand = json.loads((source / "brand.json").read_text())
+    validate_brand(brand)
     manifest = (json.dumps(brand, ensure_ascii=False, indent=2) + "\n").encode()
     logo = (source / "logo.svg").read_bytes()
     favicon = (
@@ -34,6 +57,8 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
         frontend / "public/brand/brand.json": manifest,
         frontend / "src/brand-data.json": manifest,
         frontend / "desktop/brand.json": manifest,
+        root / "images/pi-base/brand.json": manifest,
+        root / "images/agent-sets/default/extensions/nautionette/brand.json": manifest,
         frontend / "public/brand/logo.svg": logo,
         frontend / "public/favicon.svg": favicon,
         website / "assets/denkzeug-icon.svg": logo,
@@ -46,17 +71,31 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
         ).encode(),
         root / "libs/nautionette/src/nautionette/brand.py": (
             '"""Generated display branding. Technical namespaces remain unchanged."""\n\n'
-            + f"NAME = {brand['name']!r}\n"
-            + f"TAGLINE = {brand['tagline']!r}\n"
-            + f"DESCRIPTION = {brand['description']!r}\n"
+            + f"NAME = {json.dumps(brand['name'], ensure_ascii=False)}\n"
+            + f"TAGLINE = {json.dumps(brand['tagline'], ensure_ascii=False)}\n"
+            + f"DESCRIPTION = {json.dumps(brand['description'], ensure_ascii=False)}\n"
         ).encode(),
     }
     for font in sorted((source / "fonts").iterdir()):
         files[frontend / "public/brand/fonts" / font.name] = font.read_bytes()
         files[website / "assets/fonts" / font.name] = font.read_bytes()
-    for name in ["app-icon.png", "app-icon.icns", "app-icon.ico"]:
-        if (source / name).exists():
-            files[frontend / "public/brand" / name] = (source / name).read_bytes()
+    native = source / "native"
+    if native.exists():
+        if (native / "source.sha256").read_text().strip() != hashlib.sha256(logo).hexdigest():
+            raise ValueError(
+                "Refresh native icon exports and branding/native/source.sha256 for the new logo."
+            )
+        for name in ["app-icon.svg", "app-icon.png", "ic_launcher.png", "ic_launcher_foreground.png"]:
+            files[frontend / "native/icons" / name] = (native / name).read_bytes()
+        for destination in ["build/icon.png", "desktop/icon.png", "public/brand/app-icon.png"]:
+            files[frontend / destination] = (native / "app-icon.png").read_bytes()
+    for design in sorted((frontend / "src/skin-examples").glob("*.skin.json")):
+        text = re.sub(
+            r'("author"\s*:\s*)"[^"]*"',
+            lambda match: match[1] + json.dumps(brand["name"]),
+            design.read_text(),
+        )
+        files[design] = text.encode()
     tokens = {
         "paper": "paper",
         "white": "white",
@@ -83,15 +122,34 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
         + "".join(f"  --brand-{key}: {value};\n" for key, value in brand["colors"].items())
         + "}\n"
     ).encode()
+    agent_template = root / "images/agent-sets/default/AGENTS.template.md"
+    if agent_template.exists():
+        files[root / "images/agent-sets/default/AGENTS.md"] = (
+            agent_template.read_text().replace("{{brand.name}}", brand["name"]).encode()
+        )
+    release_workflow = root / "workflows/prepare_nautionette_release.py"
+    if release_workflow.exists():
+        text = re.sub(
+            r'^DISPLAY_NAME = "[^"]*"',
+            lambda _: "DISPLAY_NAME = " + json.dumps(brand["name"]),
+            release_workflow.read_text(),
+            flags=re.MULTILINE,
+        )
+        text = re.sub(
+            r'("title"\s*:\s*)"Prepare [^"]* release"',
+            lambda match: match[1] + json.dumps(f"Prepare {brand['name']} release"),
+            text,
+        )
+        files[release_workflow] = text.encode()
     template = website / "index.template.html"
     if template.exists():
         html = template.read_text()
         for key in ["name", "tagline", "description"]:
-            html = html.replace("{{brand." + key + "}}", brand[key])
+            html = html.replace("{{brand." + key + "}}", escape(brand[key], quote=True))
         files[website / "index.html"] = html.encode()
     index = frontend / "index.html"
     html = index.read_text()
-    html = re.sub(r"<title>[^<]*</title>", f"<title>{brand['name']}</title>", html)
+    html = re.sub(r"<title>[^<]*</title>", f"<title>{escape(brand['name'])}</title>", html)
     html = re.sub(
         r'(<meta name="theme-color" content=")[^"]*(" />)', rf"\g<1>{brand['colors']['paper']}\2", html
     )

@@ -3,6 +3,8 @@ import { accessSync, constants, existsSync, mkdirSync, readFileSync, readdirSync
 import { join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import brand from './brand.json' with { type: 'json' }
+
 const DEFAULT_HOOKS_ROOT = '/workspace/git-authorship'
 
 export function gitAuthorship(job) {
@@ -12,7 +14,7 @@ export function gitAuthorship(job) {
     throw new Error('Unknown Git authorship mode')
   }
   const automation = {
-    name: settings.automation_name ?? 'Nautionette',
+    name: settings.automation_name ?? brand.name,
     email: settings.automation_email ?? 'nautionette@users.noreply.github.com',
   }
   const human = { name: settings.human_name, email: settings.human_email }
@@ -105,7 +107,7 @@ export function prepareProjects(job, {
         const tree = git('hash-object', '-t', 'tree', '-w', '--stdin')
         revision = git('commit-tree', tree, '-m', 'Initialize project workspace')
       }
-      git('worktree', 'add', '--detach', '--lock', '--reason', `Nautionette chat ${job.chat_id}`, '--', worktree, revision)
+      git('worktree', 'add', '--detach', '--lock', '--reason', `${brand.name} chat ${job.chat_id}`, '--', worktree, revision)
       // A stable baseline keeps committed/pushed edits visible for the whole conversation.
       git('update-ref', `refs/nautionette/chats/${job.chat_id}`, revision)
     }

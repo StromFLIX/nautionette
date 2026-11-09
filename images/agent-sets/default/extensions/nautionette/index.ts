@@ -8,6 +8,7 @@
  *     a tool to the gateway is enough to give the agent a new capability.
  */
 import { writeFileSync } from "node:fs";
+import brand from "./brand.json" with { type: "json" };
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { modelApi } from "./model-api.ts";
 import { createMcpTransport } from "./mcp-transport.ts";
@@ -45,7 +46,7 @@ export default async function (pi: ExtensionAPI) {
   const reasoning = reasoningConfig();
   console.error(`[nautionette] model ${MODEL} uses ${api} through agentgateway`);
   pi.registerProvider(PROVIDER, {
-    name: "Nautionette gateway",
+    name: `${brand.name} gateway`,
     baseUrl: `${GATEWAY}/v1`,
     // agentgateway holds the real provider key; this value only has to exist.
     apiKey: "gateway",

@@ -1,8 +1,9 @@
-# Denkzeug — website direction 1
+# Denkzeug — shared brand direction
 
-This iteration is deliberately limited to the public website. Application names,
-package IDs, repositories, deployment domains, installers and API contracts remain
-Nautionette. Rebrand those only after the website direction is agreed.
+The approved website direction now carries through the application. Display names,
+logos, typography and visual hierarchy use Denkzeug. Domains, environment variable
+names, repository links, package/app IDs, installer filenames and API contracts stay
+unchanged until the separately approved technical migration.
 
 ## Design intent
 
@@ -35,13 +36,15 @@ artifact types, workflow structure and miniapps, and are labelled as examples.
 
 ## Brand assets
 
-`assets/denkzeug-icon.svg` is a real, single-path SVG traced from the supplied
-black-and-white brand image in VectorCraft. It has a transparent background and
-no raster dependency. Reuse it through an image element or inline its path with
-`fill="currentColor"`. Preserve the original silhouette and its open lower edge.
+The canonical `branding/logo.svg` is the approved VectorCraft refinement: the
+original silhouette with two nested inner contours, curved bases and a softer
+innermost line. It has a transparent background and no raster dependency.
+`assets/denkzeug-icon.svg` and the application's mark are generated copies.
+`favicon.svg` uses the same artwork and adapts to a dark browser theme.
 
-`favicon.svg` uses the same path and adapts to a dark browser theme. Website
-branding must not replace the application's icon yet.
+Edit `index.template.html`, not the generated `index.html`. Brand text, assets,
+fonts and colors are synchronized by `python scripts/sync_brand.py`; CI checks
+for drift. See [`branding/README.md`](../../branding/README.md) for all consumers.
 
 The locally served, Latin/Latin-extended WOFF2 subsets come from Google Fonts'
 [Sora](https://github.com/google/fonts/tree/main/ofl/sora) and
@@ -71,7 +74,7 @@ python -m http.server 9080 --directory services/website
 Existing deployment configuration (`APP_URL`, `APP_ENVIRONMENT`,
 `IOS_DOWNLOAD_URL`) still goes through `entrypoint.sh`. The container copies all
 local modules, fonts and SVG assets. The release loader continues to link only
-published Nautionette installers; failed or unavailable platform builds never
+published installers under their unchanged `nautionette-*` filenames; unavailable platform builds never
 produce a fabricated download URL.
 
 ```sh

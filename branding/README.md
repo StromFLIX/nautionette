@@ -1,6 +1,6 @@
 # Denkzeug display identity
 
-`brand.json`, `logo.svg` and `fonts/` are the canonical display identity. The logo
+`brand.json`, `logo.svg`, `fonts/` and `native/` are the canonical display identity. The logo
 is the approved nested-profile version, with curved bases and a softer inner
 contour. The SVG viewBox crops only presentation padding; its artwork is unchanged.
 
@@ -11,11 +11,26 @@ The website's editable HTML is `services/website/index.template.html`; its gener
 `index.html` remains usable without JavaScript.
 
 Frontend components import `{ brand }` from `src/brand.js` (`name`, `tagline`,
-`description`, `logo`, `colors`, `defaultTheme`). Python services use
-`from nautionette.brand import NAME`. Electron uses `desktop/brand.json`.
+`description`, `logo`, `colors`, `defaultTheme`). Its generated `src/brand-data.json`
+is bundled by Vite, rather than importing a public-directory file as a module.
+Python services use `from nautionette.brand import NAME`. Electron uses
+`desktop/brand.json`; Pi runtime/extension manifests and the agent-instruction
+Markdown are synchronized too. Edit `AGENTS.template.md` for those instructions.
 Use existing semantic theme tokens, not hardcoded light colors in components.
 The default Denkzeug palette uses paper/white/ink with blue agents, lilac sessions
 and amber workflows. Keep dark themes and user-imported designs functional.
+Existing valid preferences are never silently reset; new devices and appearance
+recovery start with Denkzeug. The 125% interface-size default is retained.
+
+## Native artwork
+
+`native/` holds the VectorCraft-exported square artwork and 1024/432/192px PNGs.
+After changing the canonical logo, re-export those files with the documented
+proportions and update `native/source.sha256` to the canonical SVG's SHA-256.
+The sync script refuses stale source provenance, then copies the exports into
+Android/iOS sync resources, the Electron installer resources, and the window icon.
+Do not independently redraw or manually copy marks into each platform. See
+`services/frontend/native/icons/README.md` for launcher sizing.
 
 ## Redesign contract
 

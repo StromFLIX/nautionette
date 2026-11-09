@@ -3,7 +3,7 @@
   "version": 2,
   "id": "windows-xp",
   "name": "Windows XP",
-  "author": "Nautionette",
+  "author": "Denkzeug",
   "description": "Luna-blue title bars, a green Start-style control, rolling hills and a desktop taskbar. Original artwork.",
   "base": "daylight",
   "tokens": {

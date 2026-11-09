@@ -19,6 +19,8 @@ import { createChatRecovery } from "./chat-recovery.mjs";
 import { prepareFiles, fileReferences } from "./chat-files.mjs";
 import { prepareSession } from "./chat-session.mjs";
 
+import brand from "./brand.json" with { type: "json" };
+
 const OUT = process.stdout;
 let telemetry;
 
@@ -208,7 +210,7 @@ async function main() {
     "This container is destroyed when your response ends. Background extension work cannot survive across turns. " +
     "Wait for every child you launch and consume its result before giving your final response. " +
     "For pi-subagents async runs, use bg_wait with the returned run ID before finishing, even if the extension suggests returning control for a later notification. " +
-    "Use Nautionette durable workflows, not extension background jobs, for work that must continue after this turn."
+    `Use ${brand.name} durable workflows, not extension background jobs, for work that must continue after this turn.`
   );
   const systemPrompt = systemInstructions.filter(Boolean).join("\n\n");
   if (systemPrompt) args.push("--append-system-prompt", systemPrompt);

@@ -47,6 +47,7 @@ ENV PI_OFFLINE=1 \
     PI_CODING_AGENT_DIR=/root/.pi/agent
 
 # The whole contract of a run: AGENT_JOB in, NDJSON out, then the container exits.
+COPY brand.json /usr/local/lib/nautionette/brand.json
 COPY agent-run.mjs /usr/local/lib/nautionette/agent-run.mjs
 COPY telemetry.mjs /usr/local/lib/nautionette/telemetry.mjs
 COPY trace-fetch.mjs /usr/local/lib/nautionette/trace-fetch.mjs

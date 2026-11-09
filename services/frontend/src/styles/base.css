@@ -722,6 +722,8 @@ pre.code {
   border-radius: var(--radius-sm);
 }
 
+.avatar--workflow { background: color-mix(in srgb, var(--workflow-color) 10%, var(--surface-panel)); color: var(--workflow-color); }
+
 .avatar--draft {
   background: var(--warning-soft);
   color: var(--warning);

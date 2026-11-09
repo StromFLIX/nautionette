@@ -143,7 +143,7 @@
           v-for="workflow in filteredWorkflows" :key="workflow.name" :to="`/workflows/${workflow.name}`"
           class="row-item" :class="{ 'row-item--active': route.params.name === workflow.name }"
         >
-          <div class="avatar avatar--square" :style="avatarStyle(workflow.name)">
+          <div class="avatar avatar--square avatar--workflow">
             <span class="material-icons">account_tree</span>
           </div>
           <div class="grow">
@@ -173,7 +173,7 @@
           v-for="run in filteredRuns" :key="run.workflow_id" :to="`/runs/${run.workflow_id}`"
           class="row-item" :class="{ 'row-item--active': route.params.id === run.workflow_id }"
         >
-          <div class="avatar avatar--square" :style="avatarStyle(run.workflow)">
+          <div class="avatar avatar--square avatar--workflow">
             <span class="material-icons">bolt</span>
           </div>
           <div class="grow">
@@ -198,7 +198,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { RUN_TONE, avatarStyle, scheduleTime, shortTime } from '../format'
+import { RUN_TONE, scheduleTime, shortTime } from '../format'
 import { actions, health, store } from '../store'
 import { api } from '../api'
 import ChatRow from './ChatRow.vue'

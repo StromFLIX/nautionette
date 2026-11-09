@@ -1,11 +1,22 @@
 import json
 
-from scripts.sync_brand import ROOT, expected_files, sync
+import pytest
+
+from scripts.sync_brand import ROOT, expected_files, sync, validate_brand
 
 
 def test_generated_branding_matches_sources():
     assert sync(check=True) == []
     assert expected_files() == expected_files()
+
+
+def test_brand_config_rejects_unsafe_copy_and_non_color_css():
+    brand = json.loads((ROOT / "branding/brand.json").read_text())
+    for name in ["bad\nname", "../name", "<script>", ""]:
+        with pytest.raises(ValueError):
+            validate_brand({**brand, "name": name})
+    with pytest.raises(ValueError, match="six-digit hex"):
+        validate_brand({**brand, "colors": {**brand["colors"], "paper": "url(https://example.test)"}})
 
 
 def test_display_branding_does_not_change_technical_identity():

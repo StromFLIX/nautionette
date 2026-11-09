@@ -59,6 +59,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from '../../api'
 import { gitAuthorshipPreview } from '../../git-authorship'
+import { brand } from '../../brand'
 
 const $q = useQuasar()
 const loaded = ref(false)
@@ -68,7 +69,7 @@ const form = reactive({
   git_authorship_mode: 'automation',
   git_human_name: '',
   git_human_email: '',
-  git_automation_name: 'Nautionette',
+  git_automation_name: brand.name,
   git_automation_email: 'nautionette@users.noreply.github.com'
 })
 const needsHuman = computed(() => form.git_authorship_mode !== 'automation')

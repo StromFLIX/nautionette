@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import brand from '../../images/pi-base/brand.json' with { type: 'json' }
 import { addCoauthor, gitAuthorship, prepareProjects, projectEnvironment } from '../../images/pi-base/project-git.mjs'
 
 const human = { name: 'Jane Contributor', email: '123+jane@users.noreply.github.com' }
@@ -132,6 +133,6 @@ test('missing human identities and malformed jobs fail instead of silently misat
   assert.throws(() => gitAuthorship({ git_authorship: { authorship_mode: 'unknown' } }))
   assert.throws(() => gitAuthorship({ git_authorship: { automation_name: 'Bot\nOther' } }))
   assert.throws(() => gitAuthorship({ git_authorship: { automation_email: 'invalid' } }))
-  assert.equal(projectEnvironment({ project_ids: [selected] }).GIT_AUTHOR_NAME, 'Nautionette')
+  assert.equal(projectEnvironment({ project_ids: [selected] }).GIT_AUTHOR_NAME, brand.name)
   assert.deepEqual(projectEnvironment({}), {})
 })

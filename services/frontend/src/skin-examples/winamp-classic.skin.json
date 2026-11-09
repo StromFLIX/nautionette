@@ -3,7 +3,7 @@
   "version": 2,
   "id": "winamp-classic",
   "name": "Winamp Classic",
-  "author": "Nautionette",
+  "author": "Denkzeug",
   "description": "Brushed metal, beveled controls, green phosphor displays. An original tribute to the classic player.",
   "base": "orbit",
   "tokens": {

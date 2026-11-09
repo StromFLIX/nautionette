@@ -1,6 +1,8 @@
 /** Small formatting helpers shared by the list and the detail panes. */
 
-const AVATAR_COLORS = ['accent', 'flow-activity', 'syntax-keyword', 'flow-signal', 'warning', 'success', 'syntax-function']
+const AVATAR_COLORS = ['agent-color', 'session-color', 'workflow-color']
+const graphemes = globalThis.Intl?.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null
+const letters = value => graphemes ? [...graphemes.segment(value)].map(item => item.segment) : [...value]
 
 export function avatarStyle (seed = '') {
   let hash = 0
@@ -10,10 +12,10 @@ export function avatarStyle (seed = '') {
 }
 
 export function initials (text = '?') {
-  const words = text.trim().split(/[\s_-]+/).filter(Boolean)
+  const words = String(text ?? '').trim().split(/[\s_-]+/).filter(Boolean)
   if (!words.length) return '?'
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
-  return (words[0][0] + words[1][0]).toUpperCase()
+  if (words.length === 1) return letters(words[0]).slice(0, 2).join('').toUpperCase()
+  return (letters(words[0])[0] + letters(words.at(-1))[0]).toUpperCase()
 }
 
 export function shortTime (seconds) {
