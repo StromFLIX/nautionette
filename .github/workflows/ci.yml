@@ -44,6 +44,11 @@ jobs:
       - name: Canonical image fingerprints match repository source
         run: python3 services/docker-broker/nautionette_docker_broker/image_context.py --check-lock
 
+      - name: Shared display branding matches every build context
+        run: |
+          python3 scripts/sync_brand.py --check
+          uv run pytest tests/test_branding.py
+
       - name: Lint
         run: uv run ruff check --output-format github .
 

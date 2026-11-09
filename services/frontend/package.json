@@ -2,22 +2,22 @@
   "name": "nautionette-frontend",
   "version": "0.1.0",
   "private": true,
-  "description": "Nautionette desktop and mobile client for your self-hosted instance",
-  "author": "Nautionette contributors",
+  "description": "Denkzeug desktop and mobile client for your self-hosted instance",
+  "author": "Denkzeug contributors",
   "main": "desktop/main.cjs",
   "desktopName": "nautionette.desktop",
   "build": {
     "appId": "dev.nautionette.app",
-    "productName": "Nautionette",
+    "productName": "Denkzeug",
     "directories": { "output": "out/desktop" },
     "files": ["dist/**/*", "desktop/**/*", "package.json"],
     "asar": true,
-    "protocols": [{ "name": "Nautionette return", "schemes": ["nautionette"] }],
+    "protocols": [{ "name": "Denkzeug return", "schemes": ["nautionette"] }],
     "artifactName": "nautionette-v${version}-${os}-${arch}.${ext}",
     "mac": {
       "target": ["dmg"],
       "category": "public.app-category.productivity",
-      "extendInfo": { "NSMicrophoneUsageDescription": "Record dictation for your Nautionette instance." }
+      "extendInfo": { "NSMicrophoneUsageDescription": "Record dictation for your Denkzeug instance." }
     },
     "win": { "target": ["nsis"] },
     "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true },

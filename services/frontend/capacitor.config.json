@@ -1,6 +1,6 @@
 {
   "appId": "dev.nautionette.app",
-  "appName": "Nautionette",
+  "appName": "Denkzeug",
   "webDir": "dist",
   "android": {
     "backgroundColor": "#101517",

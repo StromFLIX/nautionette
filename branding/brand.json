@@ -1,0 +1,19 @@
+{
+  "name": "Denkzeug",
+  "tagline": "A tool for thought. Yours to shape.",
+  "description": "Your agents, workflows and miniapps. A self-hosted tool for thought.",
+  "defaultTheme": "denkzeug",
+  "repository": "https://github.com/StromFLIX/nautionette",
+  "colors": {
+    "paper": "#f8f9fc",
+    "white": "#ffffff",
+    "ink": "#20232c",
+    "muted": "#656b79",
+    "line": "#e2e5ed",
+    "agent": "#657ade",
+    "agentStrong": "#4b5fc0",
+    "session": "#a397c8",
+    "workflow": "#d3a26e"
+  },
+  "interfaceFont": "'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+}
