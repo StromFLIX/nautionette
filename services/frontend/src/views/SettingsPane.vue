@@ -169,7 +169,7 @@ onUnmounted(() => { document.removeEventListener('keydown', shortcuts); observer
 .settings__search input::-webkit-search-cancel-button { display: none; }
 .settings__result-count { font-size: 0.6875rem; white-space: nowrap; color: var(--text-muted); }
 .settings__workspace { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 0; }
-.settings__tree { display: flex; flex-direction: column; min-width: 0; padding: 24px 16px 20px; border-right: 1px solid var(--border); background: var(--surface-app); overscroll-behavior: contain; }
+.settings__tree { display: flex; flex-direction: column; min-width: 0; padding: 24px 16px 20px; border-right: 1px solid var(--border); background: var(--surface-app); overscroll-behavior-y: contain; }
 .settings__group + .settings__group { margin-top: 28px; }
 .settings__group h2 { margin: 0 10px 10px; font-size: 0.75rem; font-weight: 600; line-height: 1.5; color: var(--text); letter-spacing: 0; text-transform: none; }
 .settings__category { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 9px 10px; margin: 2px 0; border-radius: var(--radius-sm); color: var(--text-muted); text-decoration: none; font-size: 0.8125rem; }
@@ -182,7 +182,7 @@ onUnmounted(() => { document.removeEventListener('keydown', shortcuts); observer
 .settings__count { font-size: 0.625rem; color: var(--accent); }
 .settings__tree-foot { display: flex; align-items: center; gap: 8px; padding: 32px 10px 0; margin-top: auto; font-size: 0.6875rem; color: var(--text-dim); }
 .settings__brand-mark { flex: none; width: 20px; height: 20px; background: currentColor; mask: var(--settings-brand-mark) center / contain no-repeat; }
-.settings__body { min-width: 0; padding: 32px 40px 48px; scroll-padding: 28px; overscroll-behavior: contain; }
+.settings__body { min-width: 0; padding: 32px 40px 48px; scroll-padding: 28px; overscroll-behavior-y: contain; }
 .settings__inner { width: 100%; max-width: 880px; margin: 0 auto; }
 .settings__scope-line { display: flex; align-items: flex-start; gap: 10px; color: var(--text-muted); margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
 .settings__scope-line p { margin: 3px 0 0; max-width: 66ch; font-size: 0.75rem; line-height: 1.6; }

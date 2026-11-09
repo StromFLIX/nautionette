@@ -158,7 +158,7 @@ function remove () {
 .miniapp__selected { background: var(--accent-soft); color: var(--accent); }
 .miniapp__frame { border: 0; width: 100%; min-height: 0; background: var(--surface-app); }
 .miniapp__notice { padding: 12px 18px; margin: 0; }
-.miniapp__details { min-height: 0; padding: 32px; background: var(--surface-app); overscroll-behavior: contain; }
+.miniapp__details { min-height: 0; padding: 32px; background: var(--surface-app); overscroll-behavior-y: contain; }
 .miniapp__info-inner { max-width: 880px; margin: auto; }
 .miniapp__info-inner .caption { line-height: 1.7; }
 .miniapp__section { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--border); }

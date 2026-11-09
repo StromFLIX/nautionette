@@ -36,12 +36,14 @@ test('iOS sync installs the approved icon into the current Capacitor template', 
     const ios = join(root, 'ios')
     mkdirSync(ios)
     execFileSync('tar', ['-xf', join(frontend, 'node_modules/@capacitor/cli/assets/ios-spm-template.tar.gz'), '-C', ios])
-    for (const source of ['ios/PrivacyInfo.xcprivacy', 'icons/app-icon.png']) {
+    for (const source of ['ios/PrivacyInfo.xcprivacy', 'ios/BridgeViewController.swift', 'icons/app-icon.png']) {
       mkdirSync(join(root, 'native', source.split('/')[0]), { recursive: true })
       copyFileSync(join(frontend, 'native', source), join(root, 'native', source))
     }
     const sync = () => execFileSync(process.execPath, [join(frontend, 'scripts/sync-ios.mjs')], { cwd: root })
     sync()
+    assert.deepEqual(readFileSync(join(ios, 'App/App/BridgeViewController.swift')), readFileSync(join(frontend, 'native/ios/BridgeViewController.swift')))
+    assert.match(readFileSync(join(ios, 'App/App/Base.lproj/Main.storyboard'), 'utf8'), /customClass="BridgeViewController"/)
     const slot = join(ios, 'App/App/Assets.xcassets/AppIcon.appiconset')
     const contents = JSON.parse(readFileSync(join(slot, 'Contents.json'), 'utf8'))
     assert.equal(contents.images[0].filename, 'AppIcon-512@2x.png')

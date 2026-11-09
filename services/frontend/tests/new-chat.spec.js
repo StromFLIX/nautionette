@@ -49,7 +49,9 @@ for (const width of [1440, 390, 320]) {
       await expect(page).toHaveURL(/\/chats$/)
       await expect(chatRow(page, 'alpha')).toBeVisible()
       await expect(message(page)).toBeHidden()
-      await page.goBack()
+      // The welcome composer now sits above the list in real browser history.
+      // Its back button pops to the list; forward restores the unsent draft.
+      await page.goForward()
       await expect(message(page)).toBeFocused()
       await expect(message(page)).toHaveValue('Ready to chat from launch')
     }

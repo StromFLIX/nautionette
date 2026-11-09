@@ -166,7 +166,7 @@ jobs:
         run: npx playwright test tests/mcp-http-oauth.spec.js --browser=webkit --workers=1 --reporter=dot,github
 
       - name: Live stream recovery and navigation (WebKit)
-        run: npx playwright test tests/live-connection.spec.js tests/navigation.spec.js tests/miniapps.spec.js --browser=webkit --workers=1 --reporter=dot,github
+        run: npx playwright test tests/live-connection.spec.js tests/navigation.spec.js tests/back-navigation.spec.js tests/miniapps.spec.js --browser=webkit --workers=1 --reporter=dot,github
 
       - name: Streaming text selection and copying (WebKit)
         run: npx playwright test tests/clipboard.spec.js --browser=webkit --grep 'selection survives|a drag is protected' --workers=1 --reporter=dot,github
