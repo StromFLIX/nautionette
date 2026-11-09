@@ -8,6 +8,22 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
 })
 
+// Reloading while intercepted fetches or lazy modules are still resolving
+// produces WebKit access-control/module errors during unload, not route errors.
+// Keep assertions on pageerror: finish those requests before deliberate unloads.
+function settledNavigation (page) {
+  const pending = new Set()
+  let changed = Date.now()
+  const persistent = request => /\/api\/events$|\/stream$/.test(new URL(request.url()).pathname)
+  page.on('request', request => { if (!persistent(request)) { pending.add(request); changed = Date.now() } })
+  const done = request => { if (pending.delete(request)) changed = Date.now() }
+  page.on('requestfinished', done)
+  page.on('requestfailed', done)
+  return async () => {
+    await expect.poll(() => pending.size === 0 && Date.now() - changed >= 150).toBe(true)
+  }
+}
+
 for (const reload of [false, true]) {
   test(`back from a chat restores its agent list; forward reopens it (reload=${reload})`, async ({ page, context }) => {
     const state = await mockAgents(context)
@@ -75,17 +91,22 @@ for (const [detail, list] of [
     await context.route('**/api/runs/example', route => route.fulfill({ json: { run: { workflow: 'digest', status: 'completed' }, history_status: 'expired', note: 'Saved run' } }))
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
+    const settled = settledNavigation(page)
     await page.goto(detail)
     await expect(page.locator('.shell')).toBeVisible()
+    await settled()
     const position = await page.evaluate(() => history.state.position)
     await page.reload()
     await expect(page.locator('.shell')).toBeVisible()
+    await settled()
     expect(await page.evaluate(() => history.state.position)).toBe(position)
     await page.goBack()
     await expect(page).toHaveURL(new URL(list, 'http://127.0.0.1:9012').href)
     await expect(page.locator('#shell-sidebar')).toBeVisible()
+    await settled()
     await page.goForward()
     await expect(page).toHaveURL(new URL(detail, 'http://127.0.0.1:9012').href)
+    await settled()
     expect(errors).toEqual([])
   })
 }
