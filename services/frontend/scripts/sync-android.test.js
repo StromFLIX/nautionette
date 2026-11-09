@@ -10,7 +10,14 @@ for (const existing of [[], ['RECORD_AUDIO'], ['MODIFY_AUDIO_SETTINGS'], ['RECOR
     const root = await mkdtemp(join(tmpdir(), 'nautionette-android-'))
     try {
       const native = 'android/app/src/main/java/dev/nautionette/app'
-      for (const dir of ['scripts', 'desktop', 'native/android', 'native/icons', 'android/app/src/main/res/values', 'android/app/src/main/res/mipmap-mdpi', native]) await mkdir(join(root, dir), { recursive: true })
+      for (const dir of ['scripts', 'desktop', 'native/android', 'native/icons', 'android', native]) await mkdir(join(root, dir), { recursive: true })
+      execFileSync('tar', ['-xf', new URL('../node_modules/@capacitor/cli/assets/android-template.tar.gz', import.meta.url).pathname, '-C', join(root, 'android')])
+      const resources = join(root, 'android/app/src/main/res')
+      const adaptiveIcons = new Map()
+      for (const name of ['ic_launcher', 'ic_launcher_round']) {
+        const path = join(resources, `mipmap-anydpi-v26/${name}.xml`)
+        adaptiveIcons.set(path, await readFile(path, 'utf8'))
+      }
       await copyFile(new URL('./sync-android.mjs', import.meta.url), join(root, 'scripts/sync-android.mjs'))
       await copyFile(new URL('./native-brand.mjs', import.meta.url), join(root, 'scripts/native-brand.mjs'))
       await copyFile(new URL('../desktop/brand.json', import.meta.url), join(root, 'desktop/brand.json'))
@@ -43,8 +50,22 @@ for (const existing of [[], ['RECORD_AUDIO'], ['MODIFY_AUDIO_SETTINGS'], ['RECOR
         const source = name === 'ic_launcher_foreground' ? 'ic_launcher_foreground.png' : 'ic_launcher.png'
         assert.deepEqual(await readFile(join(root, `android/app/src/main/res/mipmap-xxxhdpi/${name}.png`)), await readFile(join(root, `native/icons/${source}`)))
       }
+      const backgroundPath = join(resources, 'values/ic_launcher_background.xml')
+      const background = await readFile(backgroundPath, 'utf8')
+      assert.match(background, /<color name="ic_launcher_background">#000000<\/color>/)
+      for (const [path, original] of adaptiveIcons) {
+        assert.equal(await readFile(path, 'utf8'), original, 'preserve both adaptive icon resource IDs')
+        assert.match(original, /<background android:drawable="@color\/ic_launcher_background"/)
+        assert.match(original, /<foreground android:drawable="@mipmap\/ic_launcher_foreground"/)
+      }
+      for (const density of ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi']) {
+        for (const name of ['ic_launcher', 'ic_launcher_round', 'ic_launcher_foreground']) {
+          await assert.rejects(readFile(join(resources, `mipmap-${density}/${name}.png`)), { code: 'ENOENT' })
+        }
+      }
       for (const name of names) assert.equal(await readFile(join(root, native, name), 'utf8'), await readFile(new URL(`../native/android/${name}`, import.meta.url), 'utf8'))
       sync()
+      assert.equal(await readFile(backgroundPath, 'utf8'), background)
       assert.equal(await readFile(manifestPath, 'utf8'), manifest, 'repeated sync must not duplicate permissions')
       assert.equal(await readFile(stringsPath, 'utf8'), strings)
     } finally {

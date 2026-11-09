@@ -99,7 +99,14 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
             raise ValueError(
                 "Refresh native icon exports and branding/native/source.sha256 for the new logo."
             )
-        for name in ["app-icon.svg", "app-icon.png", "ic_launcher.png", "ic_launcher_foreground.png"]:
+        for name in [
+            "app-icon.svg",
+            "app-icon.png",
+            "android-icon.svg",
+            "android-foreground.svg",
+            "ic_launcher.png",
+            "ic_launcher_foreground.png",
+        ]:
             files[frontend / "native/icons" / name] = (native / name).read_bytes()
         for destination in ["build/icon.png", "desktop/icon.png", "public/brand/app-icon.png"]:
             files[frontend / destination] = (native / "app-icon.png").read_bytes()
