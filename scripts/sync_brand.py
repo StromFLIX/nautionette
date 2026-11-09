@@ -45,9 +45,9 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
         ).encode(),
         root / "libs/nautionette/src/nautionette/brand.py": (
             '"""Generated display branding. Technical namespaces remain unchanged."""\n\n'
-            + f"NAME = {brand['name']!r}\n"
-            + f"TAGLINE = {brand['tagline']!r}\n"
-            + f"DESCRIPTION = {brand['description']!r}\n"
+            + f"NAME = {json.dumps(brand['name'], ensure_ascii=False)}\n"
+            + f"TAGLINE = {json.dumps(brand['tagline'], ensure_ascii=False)}\n"
+            + f"DESCRIPTION = {json.dumps(brand['description'], ensure_ascii=False)}\n"
         ).encode(),
     }
     for font in sorted((source / "fonts").iterdir()):
