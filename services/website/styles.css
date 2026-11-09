@@ -105,7 +105,7 @@ h3 { letter-spacing: -.045em; }
 @media (max-width: 700px) {
   .product-section__heading { margin-bottom: 36px; }
   .product-views { grid-template-columns: minmax(0, 1fr); gap: 36px; }
-  .product-view--phone { order: -1; width: min(280px, 100%); justify-self: center; }
+  .product-view--phone { width: min(280px, 100%); justify-self: center; }
   .product-view--phone figcaption { text-align: center; }
   .product-view figcaption { margin-top: 16px; }
   .product-screen__bar { font-size: 9px; }

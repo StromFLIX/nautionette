@@ -85,7 +85,7 @@ test('evolving patterns keep the title and definition clear on desktop and phone
 })
 
 for (const width of [1440, 768, 390, 320]) {
-  test(`product screenshots explain the app and fit at ${width}px`, async ({ page }) => {
+  test(`product screenshots keep desktop-to-phone order and fit at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     await website(page)
     const product = page.getByRole('region', { name: 'A workspace for your AI agents.' })
@@ -98,7 +98,7 @@ for (const width of [1440, 768, 390, 320]) {
     }
     const desktop = await product.locator('.product-view--desktop').boundingBox()
     const phone = await product.locator('.product-view--phone').boundingBox()
-    if (width <= 700) expect(phone.y).toBeLessThan(desktop.y)
+    if (width <= 700) expect(desktop.y + desktop.height).toBeLessThanOrEqual(phone.y)
     else expect(desktop.x + desktop.width).toBeLessThanOrEqual(phone.x)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
     const link = product.getByRole('link', { name: /full-size desktop workspace/ })

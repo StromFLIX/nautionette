@@ -36,8 +36,10 @@ interface captures make the product concrete before the principles section.
 Desktop shows a conversation and editable work; the phone shows the same chat's
 Outputs. Screens are captured from the app with documented, deterministic sample
 content, never production/user data, and labelled accordingly. Device framing is
-CSS outside the captures, not a redrawn interface. Phone leads on small screens;
-full-size image links work with keyboard navigation and without JavaScript.
+CSS outside the captures, not a redrawn interface. Desktop leads on every screen,
+followed by the remote phone view: make it, then pick it up. Visual and document
+order stay aligned on mobile. Full-size image links work with keyboard navigation
+and without JavaScript.
 The three later illustrations explain artifact types, workflows and miniapps.
 
 ## Brand assets
