@@ -110,7 +110,7 @@ jobs:
           uv run pytest tests/backend/test_chat_search_model.py
 
       - name: Backend restart draining and safe crash recovery
-        run: uv run pytest tests/backend/test_chat_draining.py tests/backend/test_chat_restart_process.py tests/backend/test_chat_recovery.py tests/backend/test_chat_queue.py tests/backend/test_chat_activity.py tests/backend/test_chat_sessions.py
+        run: uv run pytest tests/backend/test_chat_draining.py tests/backend/test_chat_restart_process.py tests/backend/test_chat_recovery.py tests/backend/test_chat_queue.py tests/backend/test_chat_activity.py tests/backend/test_chat_sessions.py tests/backend/test_chat_branches.py tests/backend/test_chat_branch_projects.py
 
       - name: GitHub connections, migrations and project credentials
         run: uv run pytest tests/backend/test_github_connections.py tests/backend/test_github_setup.py tests/backend/test_projects.py tests/backend/test_project_changes.py tests/backend/test_project_credentials.py tests/broker/test_projects.py tests/broker/test_git_credentials.py
@@ -152,7 +152,7 @@ jobs:
       - name: Chat, settings, extensions and theme controls
         run: >-
           npx playwright test
-          tests/speech.spec.js tests/chat.spec.js tests/chat-row.spec.js tests/chat-ordering.spec.js tests/live-connection.spec.js tests/appearance.spec.js tests/workspace.spec.js
+          tests/speech.spec.js tests/chat.spec.js tests/chat-branch.spec.js tests/chat-row.spec.js tests/chat-ordering.spec.js tests/live-connection.spec.js tests/appearance.spec.js tests/workspace.spec.js
           tests/projects.spec.js tests/settings-navigation.spec.js tests/command-palette.spec.js tests/hybrid-search.spec.js tests/website.spec.js
           tests/git-authorship.spec.js tests/system.spec.js tests/agent-profiles.spec.js tests/agent-views.spec.js tests/subagents.spec.js
           tests/packages.spec.js tests/new-chat-settings.spec.js tests/new-chat.spec.js

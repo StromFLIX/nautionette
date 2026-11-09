@@ -31,12 +31,18 @@
       <button v-if="chatId" class="btn btn--icon" aria-label="Chat options">
         <span class="material-icons">more_vert</span>
         <q-menu anchor="bottom right" self="top right" class="pick-menu">
-          <ChatMenuItems :chat="chat" :title-busy="titleBusy" :has-messages="Boolean(savedMessages.length)" :settings-busy="settingsPending > 0"
+          <ChatMenuItems :chat="chat && { ...chat, answering: streaming, queued_count: queuedMessages.length }" :title-busy="titleBusy" :has-messages="Boolean(savedMessages.length)" :settings-busy="settingsPending > 0"
+            :branch-busy="branchBusy" @branch="branch"
             @toggle-unread="markUnread" @rename="rename" @regenerate-title="regenerateTitle"
             @toggle-timeout="patch({ timeout_exempt: $event })" @delete="remove" />
         </q-menu>
       </button>
     </header>
+
+    <p v-if="chat?.parent_chat_id" class="caption dim thread__branch" role="note">
+      Branched from <RouterLink :to="chatLocation(chat.parent_chat_id)">{{ chat.parent_chat_title || 'original chat' }}</RouterLink>.
+      Messages and project work are independent. Earlier outputs remain in the original chat.
+    </p>
 
     <div v-if="chatId" class="thread__tabs" role="tablist" aria-label="Chat workspace" @keydown="navigateTabs">
       <button id="chat-conversation-tab" type="button" role="tab" :aria-selected="activeTab === 'chat'" :tabindex="activeTab === 'chat' ? 0 : -1" aria-controls="chat-conversation-panel" @click="activeTab = 'chat'">Chat</button>
@@ -170,12 +176,14 @@ import { preferences, reducedMotion } from '../preferences'
 import { CONFIG_KEYS, agentConfig, belongsToAgent, defaultChatConfig } from '../agent-config'
 import { reusableChatSettings } from '../new-chat-settings'
 import { useSelectionSnapshot } from '../selection-snapshot'
+import { useChatBranch } from '../chat-branch'
 
 const $q = useQuasar()
 const route = useRoute()
 const router = useRouter()
 
 const chat = ref(null)
+const { branch, branchBusy } = useChatBranch(() => chat.value)
 const profile = computed(() => store.catalog.agents?.find(agent => agent.id === chat.value?.agent_id))
 const savedMessages = ref([])
 const outputs = ref([])
@@ -679,6 +687,8 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.thread__branch { margin: 0; padding: 8px 16px; }
+.thread__branch a { color: inherit; text-decoration: underline; }
 .msg--search-match { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius-sm); scroll-margin: 24px; }
 .thread__queued-images { display: flex; flex-wrap: wrap; gap: 8px; }
 .thread {

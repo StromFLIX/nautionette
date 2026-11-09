@@ -365,6 +365,8 @@ _MIGRATIONS = (
     "ALTER TABLE chat_turns ADD COLUMN job TEXT",
     "ALTER TABLE chat_turns ADD COLUMN stop_requested INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN pi_session_id TEXT",
+    "ALTER TABLE chats ADD COLUMN parent_chat_id TEXT",
+    "ALTER TABLE chats ADD COLUMN parent_chat_title TEXT",
     "ALTER TABLE chats ADD COLUMN queue_paused INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN timeout_exempt INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE chats ADD COLUMN model TEXT",
@@ -681,12 +683,19 @@ class Database:
         answering = {
             turn["chat_id"] for turn in self.query("SELECT chat_id FROM chat_turns WHERE state = 'running'")
         }
+        queued = {
+            turn["chat_id"]: turn["n"]
+            for turn in self.query(
+                "SELECT chat_id, COUNT(*) AS n FROM chat_turns WHERE state = 'queued' GROUP BY chat_id"
+            )
+        }
         for row in rows:
             summary = summaries.get(row["id"])
             row["agent_customized"] = bool(row["agent_customized"])
             row["timeout_exempt"] = bool(row["timeout_exempt"])
             row["unread"] = bool(row["unread"])
             row["answering"] = row["id"] in answering
+            row["queued_count"] = queued.get(row["id"], 0)
             row["tools"] = json.loads(row["tools"]) if row.get("tools") else None
             row["project_ids"] = (
                 json.loads(row["project_ids"])

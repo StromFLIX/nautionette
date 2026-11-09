@@ -26,7 +26,7 @@
       <span class="material-icons" aria-hidden="true">more_vert</span>
       <q-menu v-model="menuOpen" anchor="bottom right" self="top right" class="pick-menu">
         <ChatMenuItems :chat="chat" :unread="chat.unread" :read-busy="readBusy === chat.id"
-          :title-busy="titleBusy" :has-messages="Boolean(chat.message_count)" :settings-busy="settingsBusy"
+          :title-busy="titleBusy" :has-messages="Boolean(chat.message_count)" :settings-busy="settingsBusy" :branch-busy="branchBusy" @branch="branch"
           @toggle-unread="$emit('toggle-unread', chat, $event)" @rename="rename" @regenerate-title="regenerateTitle"
           @toggle-timeout="save({ timeout_exempt: $event })" @delete="remove" />
       </q-menu>
@@ -46,6 +46,7 @@ import { actions } from '../store'
 import { chatCache } from '../chat-cache'
 import { chatDrafts } from '../chat-drafts'
 import ChatMenuItems from './ChatMenuItems.vue'
+import { useChatBranch } from '../chat-branch'
 
 const props = defineProps({
   chat: { type: Object, required: true },
@@ -60,6 +61,7 @@ const router = useRouter()
 const menuOpen = ref(false)
 const titleBusy = ref(false)
 const settingsBusy = ref(false)
+const { branch, branchBusy } = useChatBranch(() => props.chat)
 const statusLabel = computed(() => props.chat.answering ? 'Active' : 'Inactive')
 const activityAt = computed(() => chatActivityAt(props.chat))
 

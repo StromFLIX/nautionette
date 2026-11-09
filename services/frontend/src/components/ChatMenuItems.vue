@@ -3,6 +3,11 @@
     <span class="material-icons" aria-hidden="true">{{ unread ? 'mark_email_read' : 'mark_email_unread' }}</span>
     {{ unread ? 'Mark as read' : 'Mark as unread' }}
   </button>
+  <button v-close-popup class="pick-menu__item" :disabled="!chat || branchBusy || chat.answering || chat.queued_count > 0" @click="$emit('branch')">
+    <span class="material-icons pick__icon" aria-hidden="true">call_split</span>
+    {{ branchBusy ? 'Branching chat…' : 'Branch chat' }}
+    <q-tooltip>{{ chat?.answering || chat?.queued_count > 0 ? 'Wait for the response and queued messages to finish' : 'Copy the conversation and project work into an independent chat' }}</q-tooltip>
+  </button>
   <button v-close-popup class="pick-menu__item" @click="$emit('rename')">
     <span class="material-icons pick__icon" aria-hidden="true">edit</span>Rename
   </button>
@@ -29,9 +34,10 @@ defineProps({
   chat: { type: Object, default: null },
   unread: { type: Boolean, default: false },
   readBusy: { type: Boolean, default: false },
+  branchBusy: { type: Boolean, default: false },
   titleBusy: { type: Boolean, default: false },
   hasMessages: { type: Boolean, default: false },
   settingsBusy: { type: Boolean, default: false }
 })
-defineEmits(['toggle-unread', 'rename', 'regenerate-title', 'toggle-timeout', 'delete'])
+defineEmits(['toggle-unread', 'branch', 'rename', 'regenerate-title', 'toggle-timeout', 'delete'])
 </script>

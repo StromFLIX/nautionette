@@ -84,13 +84,13 @@ def _untracked(directory: Path, path: str, budget: list[int]) -> dict[str, Any]:
     }
 
 
-def _summary(project_id: str, chat_id: str, deadline: float) -> dict[str, Any]:
+def worktree_metadata(project_id: str, chat_id: str) -> tuple[Path, Path] | None:
+    """Resolve only this chat's registered worktree, across the agent mount boundary."""
     root = projects.PROJECTS_DIR
     directory = _inside(root / ".sessions" / project_id / chat_id, root)
     pointer = _inside(directory / ".git", root)
-    empty = {"files": [], "additions": 0, "deletions": 0, "file_count": 0, "scope": "pending"}
     if not pointer.exists():
-        return empty
+        return None
     common = _inside(projects.checkout(project_id) / ".git", root)
     # Only accept this repository's worktree metadata, not arbitrary paths from .git.
     text = pointer.read_text().strip()
@@ -108,6 +108,14 @@ def _summary(project_id: str, chat_id: str, deadline: float) -> dict[str, Any]:
     registration = _inside(metadata / "gitdir", root).read_text().strip()
     if registration != str(directory / ".git"):
         raise ValueError("Worktree belongs to another chat")
+    return directory, metadata
+
+
+def _summary(project_id: str, chat_id: str, deadline: float) -> dict[str, Any]:
+    resolved = worktree_metadata(project_id, chat_id)
+    if resolved is None:
+        return {"files": [], "additions": 0, "deletions": 0, "file_count": 0, "scope": "pending"}
+    directory, metadata = resolved
     reference = f"refs/nautionette/chats/{chat_id}"
     found = _git(directory, metadata, deadline, "for-each-ref", "--format=%(objectname)", reference).strip()
     # Push updates remote-tracking refs even for detached HEAD worktrees. Find the
