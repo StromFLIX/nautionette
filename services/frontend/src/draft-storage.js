@@ -1,15 +1,47 @@
 import { openDB } from 'idb'
 
 // Separate from the bounded history cache: drafts must never be evicted with history.
-export function createDraftStorage (name = 'nautionette.composer-drafts') {
+export function createDraftStorage (name = 'nautionette.composer-drafts', journal = globalThis.localStorage) {
   let database
   const open = () => (database ||= openDB(name, 1, {
     upgrade (db) { db.createObjectStore('drafts') }
   }))
+  const journalKey = key => `${name}.${key}`
   return {
-    get: async key => (await open()).get('drafts', key),
-    put: async (key, value) => (await open()).put('drafts', value, key),
-    remove: async key => (await open()).delete('drafts', key)
+    async get (key) {
+      const saved = await (await open()).get('drafts', key)
+      // A tiny synchronous text/metadata journal closes the unload gap while
+      // IndexedDB commits the original File bytes. Read it after the DB read.
+      let data
+      try {
+        const latest = journal?.getItem(journalKey(key))
+        if (!latest) return saved
+        data = JSON.parse(latest)
+        if (typeof data.text !== 'string' || !Array.isArray(data.attachments)) return saved
+      } catch { return saved }
+      data.attachments = data.attachments.map(item => {
+        const original = saved?.attachments.find(file => file.id === item.id)?.file
+        return { ...item, ...(original ? { file: original } : {}) }
+      })
+      return data
+    },
+    async put (key, value) {
+      try {
+        journal?.setItem(journalKey(key), JSON.stringify({
+          ...value, attachments: value.attachments.map(({ file, ...metadata }) => metadata)
+        }))
+      } catch (error) {
+        // Never allow an older journal to mask a newer IndexedDB snapshot.
+        try { journal?.removeItem(journalKey(key)) } catch { /* IndexedDB is still usable. */ }
+        await (await open()).put('drafts', value, key)
+        throw error
+      }
+      await (await open()).put('drafts', value, key)
+    },
+    async remove (key) {
+      journal?.removeItem(journalKey(key))
+      await (await open()).delete('drafts', key)
+    }
   }
 }
 
@@ -34,7 +66,10 @@ export function createDraftStore ({ storage, remote, upload, scope, uuid = () =>
     // Snapshot synchronously, including File/Blob bytes, not Vue proxies.
     const { text, attachments, revision, dirty, mutation } = entry
     const data = structuredClone({ text, attachments, revision, dirty, mutation })
-    entry.writing = (entry.writing || entry.ready).then(() => storage.put(entry.key, data)).then(() => {
+    // Start the transaction now. Chaining it behind a previous commit leaves a
+    // JS-only gap where an immediate reload can cancel the newest edit/clear.
+    // IndexedDB itself serializes read-write transactions in creation order.
+    entry.writing = storage.put(entry.key, data).then(() => {
       if (entry.localError) { entry.localError = ''; notify(entry) }
     }).catch(() => {
       entry.localError = 'Could not save this draft on this device. Keep this page open until you send.'
@@ -54,6 +89,7 @@ export function createDraftStore ({ storage, remote, upload, scope, uuid = () =>
         const version = entry.version
         if (!entry.dirty || entry.revision === null) {
           const saved = await remote.get(entry.id)
+          if (typeof saved.text !== 'string' || !Array.isArray(saved.attachments) || !Number.isInteger(saved.revision)) throw new Error('Invalid draft response')
           if (entry.deleted || entry.scope !== scope()) return
           if (!entry.dirty && entry.version === version) {
             entry.text = saved.text
