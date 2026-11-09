@@ -86,15 +86,10 @@
             <span class="side__group-count">{{ group.chats.length }} {{ group.chats.length === 1 ? 'chat' : 'chats' }}</span>
           </h2>
 
-          <template v-for="chat in group.chats" :key="chat.id">
-            <ChatRow
-              v-for="node in chatTreeRows(chat.treeNode, query.trim() ? searchExpandedChats : expandedChats)" :key="node.chat.id"
-              :chat="node.chat" :active-route-id="route.params.id" :read-busy="readBusy"
-              :tree-depth="node.depth" :descendant-count="node.count" :tree-expanded="node.open"
-              :tree-answering="node.summary.answering" :tree-unread="node.summary.unread" :tree-activity-at="node.summary.last_activity_at"
-              @toggle-tree="toggleChatTree(node.chat.id)" @toggle-unread="setUnread"
-            />
-          </template>
+          <ChatTree v-for="chat in group.chats" :key="chat.id" :node="chat.treeNode"
+            :expanded="query.trim() ? searchExpandedChats : expandedChats"
+            :active-route-id="route.params.id" :read-busy="readBusy"
+            @toggle-tree="toggleChatTree" @toggle-unread="setUnread" />
         </div>
 
         <button
@@ -206,7 +201,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { RUN_TONE, scheduleTime, shortTime } from '../format'
 import { actions, health, store } from '../store'
 import { api } from '../api'
-import ChatRow from './ChatRow.vue'
+import ChatTree from './ChatTree.vue'
 import AppAvatar from './AppAvatar.vue'
 import PinnedApps from './PinnedApps.vue'
 import { appOwner } from '../miniapps'

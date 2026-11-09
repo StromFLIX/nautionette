@@ -1,12 +1,15 @@
 <template>
   <div class="welcome scroll-y" data-skin-part="welcome">
+    <button class="btn btn--icon welcome__back" aria-label="Back to chats" @click="backTo(chatLocation())">
+      <span class="material-icons" aria-hidden="true">arrow_back</span>
+    </button>
     <div class="welcome__inner">
       <div class="welcome__intro">
         <div class="welcome__wordmark"><BrandMark class="welcome__mark" /><span>{{ brand.name }}</span></div>
         <h1 class="welcome__title">What should happen next?</h1>
         <p class="welcome__lead">A little more room for what’s on your mind.</p>
       </div>
-      <Composer v-model="text" v-model:attachments="attachments" :agent-id="config.agent_id" :agent-name="config.agent_name || ''" :agent-customized="Boolean(config.agent_customized)" :system-prompt="config.system_prompt || ''"
+      <Composer ref="composer" v-model="text" v-model:attachments="attachments" :agent-id="config.agent_id" :agent-name="config.agent_name || ''" :agent-customized="Boolean(config.agent_customized)" :system-prompt="config.system_prompt || ''"
         :agent-set="config.agent_set" :model="config.model" :reasoning-effort="config.reasoning_effort" :tools="config.tools" :project-ids="config.project_ids" :packages="config.packages || []"
         variant="welcome" :busy="busy" :configuration-ready="store.catalogLoaded" placeholder="Ask, build, or automate…"
         @update:agent-id="chooseAgent" @update:agent-set="override('agent_set', $event)" @update:model="override('model', $event)"
@@ -32,9 +35,9 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { chatLocation } from '../router'
+import { backTo, chatLocation } from '../router'
 import Composer from './Composer.vue'
 import BrandMark from './BrandMark.vue'
 import { brand } from '../brand'
@@ -53,6 +56,15 @@ const { text, attachments, error: draftError } = useChatDraft(ref('local:welcome
 const scope = chatCacheScope()
 const remembered = chatSettings.load(scope)
 const route = useRoute(), router = useRouter()
+const composer = ref(null)
+async function focusWelcome () {
+  // /chats itself is the list on mobile: never focus its hidden composer.
+  if (route.query.welcome !== '1' || store.needsToken || store.needsServer) return
+  await nextTick()
+  composer.value?.focus()
+}
+onMounted(focusWelcome)
+watch(() => [route.query.welcome, store.needsToken, store.needsServer], focusWelcome)
 const selectedAgent = ref(typeof route.query.agent === 'string' ? route.query.agent : undefined)
 const overrides = ref({})
 const customized = ref(false)
@@ -92,6 +104,7 @@ function override (key, value) {
 <style scoped>
 .welcome { position: relative; isolation: isolate; flex: 1; display: flex; justify-content: center; padding: clamp(48px, 10vh, 110px) 40px 40px; background: var(--surface-app); }
 .welcome::before { content: ''; position: absolute; z-index: -1; inset: 0; pointer-events: none; background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px); background-size: 28px 28px; opacity: .35; mask-image: radial-gradient(ellipse at 50% 0, #000, transparent 72%); }
+.welcome__back { display: none; }
 .welcome__inner { width: 100%; max-width: 760px; min-width: 0; }
 .welcome__intro { text-align: center; margin-bottom: 32px; }
 .welcome__wordmark { display: flex; justify-content: center; align-items: center; gap: 14px; margin-bottom: 36px; }
@@ -111,5 +124,16 @@ function override (key, value) {
 @media (max-width: 370px) { .welcome__paths { grid-template-columns: 1fr; gap: 0; } .welcome__paths a { align-items: center; padding: 2px 0; } .welcome__paths a > span { display: flex; gap: 10px; align-items: baseline; } .welcome__paths small { margin: 0; } }
 .welcome__warn { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 24px; padding: 12px 14px; border: 1px solid var(--warning-soft); border-radius: var(--radius-md); background: var(--warning-soft); color: var(--warning); font-size: 0.75rem; }
 .welcome__warn .material-icons { font-size: 1.0625rem; }
-@media (max-width: 900px) { .welcome { padding: 32px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); } }
+@media (max-width: 900px) {
+  .welcome { padding: calc(56px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .welcome__back { display: inline-flex; position: absolute; top: calc(8px + env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left)); }
+  .welcome__intro { margin-bottom: 20px; }
+  .welcome__wordmark { margin-bottom: 18px; }
+}
+/* Keep the invitation and editor together when a phone keyboard reduces the viewport. */
+@media (max-width: 900px) and (max-height: 600px) {
+  .welcome { padding-top: calc(48px + env(safe-area-inset-top)); }
+  .welcome__wordmark, .welcome__lead, .welcome__paths { display: none; }
+  .welcome__intro { margin-bottom: 16px; }
+}
 </style>

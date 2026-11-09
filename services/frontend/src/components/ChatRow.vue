@@ -1,13 +1,5 @@
 <template>
-  <div class="chat-list-item" :class="{ 'chat-list-item--menu-open': menuOpen, 'chat-list-item--tree': descendantCount || treeDepth }"
-    :style="{ '--tree-depth': Math.min(treeDepth, 4) }" :data-tree-depth="treeDepth">
-    <button v-if="descendantCount" type="button" class="chat-list-item__disclosure"
-      :aria-label="`${treeExpanded ? 'Collapse' : 'Expand'} agent chats for ${chat.title} (${descendantCount})`"
-      :aria-expanded="treeExpanded" :title="`${descendantCount} delegated ${descendantCount === 1 ? 'chat' : 'chats'}${treeAnswering ? ' · Active' : ''}${treeUnread ? ' · Unread replies' : ''}`"
-      @click="$emit('toggle-tree')">
-      <span class="material-icons" aria-hidden="true">{{ treeExpanded ? 'expand_more' : 'chevron_right' }}</span>
-      <span class="chat-list-item__count">{{ descendantCount }}</span>
-    </button>
+  <div class="chat-list-item" :class="{ 'chat-list-item--menu-open': menuOpen }" :data-tree-depth="treeDepth">
     <RouterLink
       :to="chatLocation(chat.id)"
       class="row-item" :class="{
@@ -21,7 +13,7 @@
         viewBox="0 0 20 20" role="img" :aria-label="statusLabel" focusable="false"
       >
         <title>{{ statusLabel }}</title>
-        <rect x="3" y="3" width="14" height="14" rx="4" />
+        <circle cx="10" cy="10" r="4" />
       </svg>
       <span class="row-item__title grow truncate" :title="chat.title">{{ chat.title }}</span>
       <span v-if="chat.unread || treeUnread" class="row-item__unread" role="img" :aria-label="chat.unread ? 'Unread messages' : 'Unread agent replies'" :title="chat.unread ? 'Unread messages' : 'Unread agent replies'" />
@@ -61,13 +53,11 @@ const props = defineProps({
   activeRouteId: { type: String, default: '' },
   readBusy: { type: String, default: '' },
   treeDepth: { type: Number, default: 0 },
-  descendantCount: { type: Number, default: 0 },
-  treeExpanded: { type: Boolean, default: false },
   treeAnswering: { type: Boolean, default: false },
   treeUnread: { type: Boolean, default: false },
   treeActivityAt: { type: Number, default: 0 }
 })
-defineEmits(['toggle-unread', 'toggle-tree'])
+defineEmits(['toggle-unread'])
 
 const $q = useQuasar()
 const route = useRoute()
@@ -160,32 +150,6 @@ function remove () {
   padding-block: calc(var(--list-padding) * 0.6);
   padding-inline-end: calc(var(--chat-menu-width) + 8px);
 }
-
-.chat-list-item--tree {
-  padding-inline-start: calc(var(--tree-depth) * 10px + 36px);
-}
-
-.chat-list-item__disclosure {
-  position: absolute;
-  inset-inline-start: calc(var(--tree-depth) * 10px);
-  top: 0;
-  height: 100%;
-  width: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 6px;
-}
-.chat-list-item__disclosure:hover { color: var(--text); }
-.chat-list-item__disclosure:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
-.chat-list-item__disclosure .material-icons { font-size: 16px; }
-.chat-list-item__count { font-size: 0.65rem; font-variant-numeric: tabular-nums; }
 
 .chat-list-item__menu {
   position: absolute;

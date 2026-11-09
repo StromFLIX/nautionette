@@ -658,7 +658,6 @@ pre.code {
   height: 8px;
   border-radius: 50%;
   background: var(--session-color);
-  border-radius: 2px;
 }
 
 .chat-status {
@@ -667,10 +666,9 @@ pre.code {
   width: 0.8rem;
   height: 0.8rem;
   color: var(--text-dim);
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linejoin: round;
+  /* Small filled dots indicate presence, not unchecked tasks. */
+  fill: currentColor;
+  stroke: none;
 }
 
 .chat-status--active {
