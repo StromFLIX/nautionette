@@ -189,8 +189,11 @@ async def connect_server(name: str, payload: dict) -> dict:
 
 
 def auth_status() -> dict:
+    from .mcp_auth_wait import pending
+
     return {
-        "connections": [{"name": name, **info} for name, info in mcp_http_oauth.public_connections().items()]
+        "connections": [{"name": name, **info} for name, info in mcp_http_oauth.public_connections().items()],
+        "requests": pending(),
     }
 
 

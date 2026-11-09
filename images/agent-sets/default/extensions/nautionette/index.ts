@@ -11,6 +11,7 @@ import { writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { modelApi } from "./model-api.ts";
 import { createMcpTransport } from "./mcp-transport.ts";
+import { AUTH_TRANSPORT_TOOLS, authControl, waitForMcpAuth } from "./mcp-auth.ts";
 import { modelLimits } from "./model-limits.ts";
 import { reasoningConfig, reasoningPayload } from "./reasoning.ts";
 import { allowedTools } from "./tool-selection.ts";
@@ -93,8 +94,18 @@ export default async function (pi: ExtensionAPI) {
     await transport.connect();
     const listed = await rpc("tools/list");
     const all: any[] = listed.tools ?? [];
+    const authGates = all.some(tool => tool.name === "backend_mcp_oauth_gate");
+    const oauthTools = new Set<string>();
+    if (authGates) {
+      const saved = await authControl(rpc, "backend_mcp_oauth_tools", {});
+      for (const name of saved.oauth_tools || []) oauthTools.add(name);
+      const names = new Set(all.map(tool => tool.name));
+      for (const tool of saved.tools || []) {
+        if (!names.has(tool.name)) { all.push(tool); names.add(tool.name); }
+      }
+    }
     transport.setReadOnlyTools(all.filter(tool => tool.annotations?.readOnlyHint === true).map(tool => tool.name));
-    const tools = all.filter((tool) => !isOutputTransportTool(tool.name) && !SUBAGENT_TOOLS.has(tool.name) && !CRAFT_TOOL_NAMES.has(tool.name) && (ALLOWED === null || ALLOWED.has(tool.name)));
+    const tools = all.filter((tool) => !AUTH_TRANSPORT_TOOLS.has(tool.name) && !isOutputTransportTool(tool.name) && !SUBAGENT_TOOLS.has(tool.name) && !CRAFT_TOOL_NAMES.has(tool.name) && (ALLOWED === null || ALLOWED.has(tool.name)));
 
     // Payload-free provenance for the supervisor's workflow accounting. Tool
     // names come from discovery, never namespace/name heuristics.
@@ -110,6 +121,9 @@ export default async function (pi: ExtensionAPI) {
         promptSnippet: tool.description?.split("\n")[0],
         parameters: tool.inputSchema ?? { type: "object", properties: {} },
         async execute(_toolCallId: string, params: unknown, signal?: AbortSignal) {
+          if (oauthTools.has(tool.name)) {
+            await waitForMcpAuth(rpc, grant || {}, tool.name, _toolCallId, signal);
+          }
           const result = await rpc("tools/call", { name: tool.name, arguments: params ?? {} }, signal);
           const text = renderToolResult(result);
           if (result?.isError) throw new Error(text);

@@ -8,10 +8,18 @@ const fields = [{ key: 'name', label: 'Name', pattern: '[a-z0-9][a-z0-9-]{0,23}'
   { key: 'url', label: 'Endpoint URL', pattern: 'https?://.+', placeholder: 'https://mcp.example.com/mcp' },
   { key: 'token', label: 'Access token', kind: 'secret', optional: true, pattern: '.+' }]
 async function mock (context) {
-  const state = { starts: [], prepares: [], connects: [], callbacks: [], servers: [], profiles: {}, failConnect: false, failLogin: false, clientRequired: false }
+  const state = { starts: [], prepares: [], connects: [], callbacks: [], servers: [], profiles: {}, dismissed: [], demand: true, failConnect: false, failLogin: false, clientRequired: false }
   await context.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname, method = route.request().method()
-    if (path === '/api/mcp-oauth/status') return route.fulfill({ json: { connections: Object.entries(state.profiles).map(([name, item]) => ({ name, ...item })) } })
+    if (path === '/api/mcp-oauth/status') return route.fulfill({ json: {
+      connections: Object.entries(state.profiles).map(([name, item]) => ({ name, ...item })),
+      requests: state.demand ? Object.entries(state.profiles).filter(([name, item]) => item.status === 'reauth_required' && !state.dismissed.includes(`${name}:${item.revision}`))
+        .map(([name, item]) => ({ id: `${name}:${item.revision}`, server: name, deadline: Date.now() / 1000 + 180 })) : []
+    } })
+    if (path === '/api/mcp-oauth/dismiss') {
+      state.dismissed.push(...route.request().postDataJSON().requests)
+      return route.fulfill({ json: { status: 'failed' } })
+    }
     if (path === '/api/mcp-oauth/capabilities') return route.fulfill({ json: { available: false, http: { available: true } } })
     if (path.startsWith('/api/mcp-oauth/connect/')) {
       const payload = route.request().postDataJSON()
@@ -100,7 +108,7 @@ test('retry keeps the endpoint and last configuration without extra buttons', as
   await expect(page.getByText('workiq connected', { exact: true })).toBeVisible()
 })
 
-test('expiration on a chat shows only a compact Login prompt and reuses saved settings', async ({ page, context }) => {
+test('a waiting tool shows a compact Login prompt and reuses saved settings', async ({ page, context }) => {
   const state = await mock(context); await native(context)
   state.profiles.workiq = { ...config, mode: 'https', status: 'reauth_required', revision: 'expired-1' }
   await page.goto('/chats')
@@ -118,6 +126,26 @@ test('expiration on a chat shows only a compact Login prompt and reuses saved se
   await page.evaluate(() => globalThis.finishLogin())
   await expect(dialog).toHaveCount(0)
   await expect(page).toHaveURL('/chats')
+  expect(state.dismissed).toEqual([])
+})
+
+test('expiry alone does not interrupt the user; a tool demand is required', async ({ page, context }) => {
+  const state = await mock(context); await native(context)
+  state.profiles.workiq = { ...config, mode: 'https', status: 'reauth_required', revision: 'expired' }
+  state.demand = false
+  await page.goto('/chats')
+  await expect(page.locator('.mcp-login-dialog')).toHaveCount(0)
+  await page.reload()
+  await expect(page.locator('.mcp-login-dialog')).toHaveCount(0)
+  expect(state.starts).toEqual([])
+  state.demand = true
+  await page.reload()
+  const dialog = page.locator('.mcp-login-dialog')
+  await expect(dialog).toContainText('A tool is waiting')
+  await dialog.getByRole('button', { name: 'Skip', exact: true }).click()
+  await expect.poll(() => state.dismissed).toEqual(['workiq:expired'])
+  await page.reload()
+  await expect(dialog).toHaveCount(0)
 })
 
 for (const [width, theme, interfaceSize] of [[1440, 'orbit', 125], [390, 'orbit', 125], [320, 'orbit', 150], [1440, 'daylight', 125], [390, 'daylight', 150]]) {
@@ -244,6 +272,10 @@ test('unsupported devices persist a timed snooze and can resume it from settings
   await page.goto('/settings/mcp')
   await expect(page.locator('.integration-snooze')).toContainText('Other devices are unaffected')
   await page.getByRole('button', { name: 'Resume login reminders' }).click()
+  await expect(dialog).toHaveCount(0)
+  expect(state.dismissed).toEqual(['workiq:expired'])
+  state.profiles.workiq.revision = 'new-demand'
+  await page.reload()
   await expect(dialog).toBeVisible()
   expect(state.starts).toEqual([])
 })

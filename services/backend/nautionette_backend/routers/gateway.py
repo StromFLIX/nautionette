@@ -5,8 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+from pydantic import BaseModel, Field
 
-from .. import integrations, mcp_http_oauth, mcp_oauth, mcp_oauth_setup, mcp_servers
+from .. import integrations, mcp_auth_wait, mcp_http_oauth, mcp_oauth, mcp_oauth_setup, mcp_servers
 from ..catalog import reset_default_model
 from ..events import bus
 from ..fields import normalise
@@ -84,6 +85,44 @@ async def mcp_oauth_capabilities() -> dict[str, Any]:
 @router.get("/api/mcp-oauth/status")
 async def mcp_oauth_status() -> dict[str, Any]:
     return mcp_oauth.auth_status()
+
+
+class OAuthGate(BaseModel):
+    grant: str | None = Field(default=None, max_length=128)
+    tool: str = Field(min_length=1, max_length=256)
+    tool_call_id: str = Field(min_length=1, max_length=256)
+    cancel: bool = False
+
+
+class OAuthDismiss(BaseModel):
+    requests: list[str] = Field(max_length=100)
+
+
+@router.post("/api/mcp-oauth/gate")
+async def mcp_oauth_gate(body: OAuthGate) -> dict:
+    """Private pre-dispatch gate; never expose its capability to the model."""
+    return mcp_auth_wait.gate(body.model_dump())
+
+
+@router.post("/api/mcp-oauth/tools")
+async def mcp_oauth_tools(body: dict[str, Any] = Body(default={})) -> dict:
+    """Private bridge discovery, including saved tools awaiting authentication."""
+    from ..catalog import EMPTY_CONFIG, tool_catalog
+    from ..clients import gateway
+    from ..db import db
+    from ..gateway_config import attempt
+
+    tools, _ = await tool_catalog(await attempt(gateway.config(), dict(EMPTY_CONFIG)))
+    return {
+        "tools": tools,
+        "oauth_tools": [row["name"] for row in db.query("SELECT name FROM mcp_oauth_tools")],
+    }
+
+
+@router.post("/api/mcp-oauth/dismiss")
+async def dismiss_mcp_oauth(body: OAuthDismiss) -> dict:
+    mcp_auth_wait.reject(body.requests)
+    return {"status": "failed"}
 
 
 @router.post("/api/mcp-oauth/prepare/{name}")

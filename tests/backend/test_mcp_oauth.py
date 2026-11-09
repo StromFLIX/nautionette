@@ -251,4 +251,8 @@ def test_unsupported_or_invalid_input_does_not_run_commands(client, oauth, chang
 def test_login_codes_urls_and_cli_control_are_not_agent_facing_tools(client):
     from nautionette_backend.main import backend_mcp
 
-    assert not any("mcp_oauth" in tool.name for tool in backend_mcp.tools)
+    private = {"mcp_oauth_gate", "mcp_oauth_tools"}
+    assert {tool.name for tool in backend_mcp.tools if "mcp_oauth" in tool.name} == private
+    from nautionette_backend.chat_outputs import RESERVED_TOOL_NAMES
+
+    assert {"backend_" + name for name in private} <= RESERVED_TOOL_NAMES
