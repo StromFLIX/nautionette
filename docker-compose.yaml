@@ -35,6 +35,7 @@ services:
     environment:
       <<: *telemetry
       APP_TOKEN: ${APP_TOKEN:-}
+      APP_RELEASE_TAG: ${APP_RELEASE_TAG:-}
       INTERNAL_TOKEN: ${INTERNAL_TOKEN:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       TEMPORAL_HISTORY_RETENTION_DAYS: ${TEMPORAL_HISTORY_RETENTION_DAYS:-7}

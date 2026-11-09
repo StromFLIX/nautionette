@@ -6,7 +6,7 @@
       </button>
       <div class="settings__breadcrumb grow"><span>Workspace</span><span aria-hidden="true">/</span><h1>Settings</h1></div>
       <kbd class="settings__shortcut">⌘ / Ctrl ,</kbd>
-      <span class="caption dim">v{{ store.system.version || 'dev' }}</span>
+      <BuildVersion class="caption dim" :system="store.system" />
     </header>
 
     <div class="settings__searchbar">
@@ -84,6 +84,7 @@ import { health, store } from '../store'
 import { brand } from '../brand'
 import { SETTINGS_GROUPS, SETTINGS_SECTIONS, searchSettings } from '../settings-registry'
 import PackageSearch from '../components/settings/PackageSearch.vue'
+import BuildVersion from '../components/BuildVersion.vue'
 
 const route = useRoute()
 const router = useRouter()

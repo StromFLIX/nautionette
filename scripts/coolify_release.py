@@ -366,14 +366,25 @@ def staging_verified(repository: str, commit: str) -> bool:
     return False
 
 
-def deploy(target: str, commit: str) -> str | None:
+def build_metadata_matches(api: Coolify, app: str, commit: str, release_tag: str) -> bool:
+    rows = api.call(f"/applications/{app}/envs")
+    values = {row.get("key"): row.get("value") for row in rows if not row.get("is_preview", False)}
+    return values.get("APP_VERSION") == commit and (values.get("APP_RELEASE_TAG") or "") == release_tag
+
+
+def deploy(target: str, commit: str, release_tag: str = "") -> str | None:
+    # Metadata describes this deployment's intent, not any tag on the source.
+    if release_tag and (
+        target != "production" or len(release_tag) > 64 or not STABLE_TAG.fullmatch(release_tag)
+    ):
+        raise ValueError("Release metadata requires a production stable vX.Y.Z tag")
     api = Coolify()
     app = identifier(required("COOLIFY_APPLICATION_UUID"))
     # Preflight health configuration before making changes.
     https_url(required("APP_URL"))
     required("APP_TOKEN")
     timeout = health_timeout()
-    if api.deployed(app, commit):
+    if api.deployed(app, commit) and build_metadata_matches(api, app, commit, release_tag):
         wait_for_coolify_health(api, app, commit, timeout)
         wait_for_health(target, timeout)
         return None
@@ -419,7 +430,14 @@ def deploy(target: str, commit: str) -> str | None:
                     "is_buildtime": True,
                     "is_runtime": True,
                     "is_literal": True,
-                }
+                },
+                {
+                    "key": "APP_RELEASE_TAG",
+                    "value": release_tag,
+                    "is_buildtime": True,
+                    "is_runtime": True,
+                    "is_literal": True,
+                },
             ]
         },
     )
@@ -429,6 +447,13 @@ def deploy(target: str, commit: str) -> str | None:
         for row in versions
     ):
         raise RuntimeError("Coolify did not accept the source version; nothing was deployed")
+    if not any(
+        row.get("key") == "APP_RELEASE_TAG"
+        and (row.get("value") or "") == release_tag
+        and not row.get("is_preview", False)
+        for row in versions
+    ):
+        raise RuntimeError("Coolify did not accept the release metadata; nothing was deployed")
     ensure_output_storage_credentials(api, app)
     queued = api.call("/deploy", "POST", {"uuid": app, "force": False})
     deployments = queued.get("deployments", [])
@@ -476,7 +501,16 @@ def main() -> None:
         ).strip()
         if commit != current:
             return  # A late CI result must not roll staging back.
-    deployment = deploy(target, commit)
+    # candidate() has already verified the published release and resolved its
+    # exact commit. Staging must always clear any previous release label.
+    release_tag = (
+        event["inputs"]["release_tag"]
+        if event_name == "workflow_dispatch"
+        else event["release"]["tag_name"]
+        if target == "production"
+        else ""
+    )
+    deployment = deploy(target, commit, release_tag)
     if deployment:
         print(f"Deployed {commit} to {target}; deployment {deployment}; health checks passed.")
 

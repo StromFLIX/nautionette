@@ -26,6 +26,8 @@ async def healthz() -> dict[str, Any]:
     return {
         "status": "ok",
         "version": settings.version,
+        "build_commit": settings.build_commit,
+        "release_tag": settings.release_tag,
         "environment": settings.environment,
         "chat_draining": is_draining(),
     }
@@ -57,6 +59,8 @@ async def system_status() -> dict[str, Any]:
             agent_sets = []
     return {
         "version": settings.version,
+        "build_commit": settings.build_commit,
+        "release_tag": settings.release_tag,
         "environment": settings.environment,
         "auth_enabled": settings.auth_enabled,
         "model": settings.agent_model,

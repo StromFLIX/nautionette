@@ -261,6 +261,8 @@ def api(monkeypatch):
             self.final_commit = COMMIT
             self.accept_pin = True
             self.accept_version = True
+            self.release_tag = ""
+            self.accept_release_tag = True
             self.description = ""
             self.application_status = "running:healthy"
             self.output_envs = [
@@ -282,6 +284,10 @@ def api(monkeypatch):
             if path.startswith("/deployments/"):
                 return {"status": self.final_status, "commit": self.final_commit}
             if path.endswith("/envs/bulk"):
+                if self.accept_release_tag:
+                    for row in payload["data"]:
+                        if row["key"] == "APP_RELEASE_TAG":
+                            self.release_tag = row["value"]
                 if self.accept_output_credentials:
                     for row in payload["data"]:
                         if row["key"] in {"MAXIO_ACCESS_KEY", "MAXIO_SECRET_KEY"}:
@@ -294,6 +300,7 @@ def api(monkeypatch):
             if path.endswith("/envs"):
                 return [
                     {"key": "APP_VERSION", "value": COMMIT if self.accept_version else "stale"},
+                    {"key": "APP_RELEASE_TAG", "value": self.release_tag},
                     *self.output_envs,
                 ]
             return {
@@ -335,7 +342,10 @@ def test_failed_staging_smoke_blocks_promotion_before_any_writes(api, monkeypatc
 def test_duplicate_deploy_is_a_noop(api):
     api.already_deployed.add("prod")
     assert release.deploy("production", COMMIT) is None
-    assert api.calls == [("/applications/prod", "GET", None)]
+    assert api.calls == [
+        ("/applications/prod/envs", "GET", None),
+        ("/applications/prod", "GET", None),
+    ]
 
 
 def test_duplicate_deploy_requires_coolify_healthy_status(api, monkeypatch):
@@ -383,7 +393,14 @@ def test_pins_before_queueing_and_waits_for_verified_result(api):
                         "is_buildtime": True,
                         "is_runtime": True,
                         "is_literal": True,
-                    }
+                    },
+                    {
+                        "key": "APP_RELEASE_TAG",
+                        "value": "",
+                        "is_buildtime": True,
+                        "is_runtime": True,
+                        "is_literal": True,
+                    },
                 ]
             },
         ),
@@ -455,7 +472,8 @@ def test_failed_output_credential_persistence_never_queues_or_logs_secrets(api, 
     for _, method, payload in api.calls:
         if method == "PATCH" and "data" in payload:
             for row in payload["data"]:
-                assert row["value"] not in output
+                if row["key"] in {"MAXIO_ACCESS_KEY", "MAXIO_SECRET_KEY"}:
+                    assert row["value"] not in output
 
 
 def test_rejected_commit_pin_never_queues(api):
@@ -767,3 +785,105 @@ def test_only_complete_successful_staging_verification_can_authorize_production(
 
     monkeypatch.setattr(release, "request", get)
     assert release.staging_verified(REPO, COMMIT) is (failure is None)
+
+
+def test_manual_release_wires_explicit_tag_but_keeps_raw_revision(tmp_path, monkeypatch, manual_api, api):
+    manual_main(tmp_path, monkeypatch)
+    api.already_deployed.add("stage")
+    release.main()
+    metadata = next(
+        payload["data"]
+        for path, method, payload in api.calls
+        if path.endswith("/envs/bulk") and method == "PATCH"
+    )
+    assert {row["key"]: row["value"] for row in metadata} == {
+        "APP_VERSION": COMMIT,
+        "APP_RELEASE_TAG": "v1.2.3",
+    }
+
+
+def test_automatic_release_wires_explicit_tag(tmp_path, monkeypatch, api):
+    path = tmp_path / "release-event.json"
+    path.write_text(
+        json.dumps(
+            event(
+                action="published",
+                release={
+                    "tag_name": "v1.2.3",
+                    "draft": False,
+                    "prerelease": False,
+                },
+            )
+        )
+    )
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(path))
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "release")
+    monkeypatch.setenv("GITHUB_SHA", COMMIT)
+    monkeypatch.setattr(release.subprocess, "check_output", lambda *a, **kw: COMMIT)
+    api.already_deployed.add("stage")
+    release.main()
+    assert api.release_tag == "v1.2.3"
+
+
+def test_staging_event_clears_release_even_if_its_commit_has_a_tag(tmp_path, monkeypatch, api):
+    path = tmp_path / "staging-event.json"
+    path.write_text(
+        json.dumps(
+            event(
+                action="completed",
+                workflow_run={
+                    "head_sha": COMMIT,
+                    "conclusion": "success",
+                    "event": "push",
+                    "head_branch": "main",
+                    "head_repository": {"full_name": REPO},
+                },
+            )
+        )
+    )
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(path))
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_run")
+    monkeypatch.setattr(release.subprocess, "check_output", lambda *a, **kw: COMMIT)
+    api.release_tag = "v1.2.3"
+    release.main()
+    assert api.release_tag == ""
+
+
+def test_same_commit_with_changed_release_metadata_redeploys(api):
+    api.already_deployed.update({"prod", "stage"})
+    assert release.deploy("production", COMMIT, "v1.2.3") == "deploy123"
+    assert api.release_tag == "v1.2.3"
+    # The next delivery is a no-op, still verifying the full source revision.
+    api.calls.clear()
+    assert release.deploy("production", COMMIT, "v1.2.3") is None
+    assert all(method == "GET" for _, method, _ in api.calls)
+
+
+def test_same_commit_staging_deployment_clears_stale_release_metadata(api):
+    api.already_deployed.add("prod")
+    api.release_tag = "v1.2.3"
+    assert release.deploy("staging", COMMIT) == "deploy123"
+    assert api.release_tag == ""
+
+
+def test_duplicate_with_wrong_raw_revision_cannot_bypass_version_verification(api):
+    api.already_deployed.update({"prod", "stage"})
+    api.accept_version = False
+    with pytest.raises(RuntimeError, match="source version"):
+        release.deploy("production", COMMIT)
+    assert not any(path == "/deploy" for path, _, _ in api.calls)
+
+
+def test_rejected_release_metadata_never_queues(api):
+    api.already_deployed.add("stage")
+    api.accept_release_tag = False
+    with pytest.raises(RuntimeError, match="release metadata"):
+        release.deploy("production", COMMIT, "v1.2.3")
+    assert not any(path == "/deploy" for path, _, _ in api.calls)
+
+
+@pytest.mark.parametrize("target,tag", [("staging", "v1.2.3"), ("production", "v1.2.3-rc.1")])
+def test_invalid_deployment_release_intent_is_rejected_before_io(api, target, tag):
+    with pytest.raises(ValueError, match="production stable"):
+        release.deploy(target, COMMIT, tag)
+    assert api.calls == []

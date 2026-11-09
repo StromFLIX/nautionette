@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from urllib.parse import urlsplit, urlunsplit
 
 
@@ -72,7 +73,17 @@ class Settings:
         self.agent_model = os.environ.get("AGENT_MODEL", "openai/gpt-4o-mini")
         self.model_key_present = bool(os.environ.get("MODEL_KEY_PRESENT", "").strip())
         self.public_demo = _flag("PUBLIC_DEMO", False)
+        # Keep the raw revision for telemetry/deployed-commit verification.
         self.version = os.environ.get("APP_VERSION", "dev")
+        self.build_commit = self.version if re.fullmatch(r"[0-9a-f]{40}", self.version) else None
+        # Optional deployment intent, never inferred from Git tags or environment.
+        release_tag = os.environ.get("APP_RELEASE_TAG", "")
+        self.release_tag = (
+            release_tag
+            if len(release_tag) <= 64
+            and re.fullmatch(r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", release_tag)
+            else None
+        )
         self.environment = os.environ.get("APP_ENVIRONMENT", "production").strip().lower()
         if self.environment not in {"production", "staging", "development"}:
             raise ValueError("APP_ENVIRONMENT must be production, staging, or development")
