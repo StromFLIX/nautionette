@@ -27,6 +27,39 @@ async function pauseCreations (context) {
   return requests
 }
 
+for (const width of [1440, 390, 320]) {
+  test(`app launch opens a focused welcome composer without creating a chat at ${width}px`, async ({ page, context }) => {
+    const state = await mockAgents(context)
+    await page.setViewportSize({ width, height: 844 })
+    await page.goto('/')
+    await expect(page.getByRole('heading', { name: 'What should happen next?', exact: true })).toBeVisible()
+    await expect(message(page)).toBeInViewport()
+    await expect(message(page)).toBeFocused()
+    if (width === 390) await page.screenshot({ path: '/tmp/mobile-chat-welcome.png' })
+    expect(state.created).toEqual([])
+    await message(page).fill('Ready to chat from launch')
+    if (width <= 900) {
+      await expect(page.locator('#shell-sidebar')).toBeHidden()
+      // Approximate the viewport left above an on-screen keyboard.
+      await page.setViewportSize({ width, height: 380 })
+      await expect(message(page)).toBeInViewport()
+      await expect(send(page)).toBeInViewport()
+      if (width === 390) await page.screenshot({ path: '/tmp/mobile-chat-keyboard-viewport.png' })
+      await page.getByRole('button', { name: 'Back to chats', exact: true }).click()
+      await expect(page).toHaveURL(/\/chats$/)
+      await expect(chatRow(page, 'alpha')).toBeVisible()
+      await expect(message(page)).toBeHidden()
+      await page.goBack()
+      await expect(message(page)).toBeFocused()
+      await expect(message(page)).toHaveValue('Ready to chat from launch')
+    }
+    await send(page).click()
+    await expect(page).toHaveURL(/\/chats\/created-1$/)
+    await expect.poll(() => state.sent.length).toBe(1)
+    expect(state.sent[0].text).toBe('Ready to chat from launch')
+  })
+}
+
 for (const width of [1440, 901]) {
   test(`welcome omits examples and session details while keeping chat controls at ${width}px`, async ({ page, context }) => {
     const state = await mockAgents(context)

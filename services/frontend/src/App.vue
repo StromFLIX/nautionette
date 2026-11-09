@@ -91,7 +91,8 @@ const gate = ref(store.needsServer)
 const token = ref(auth.token)
 const serverUrl = ref(server.url)
 
-const hasSelection = computed(() => Boolean(route.params.id || route.params.name))
+const welcomeOpen = computed(() => route.name === 'chats' && !route.params.id && route.query.welcome === '1')
+const hasSelection = computed(() => Boolean(route.params.id || route.params.name) || welcomeOpen.value)
 // Settings replaces the list, but keeps the desktop navigation in reach.
 const fullPage = computed(() => route.name === 'settings')
 const mobileMedia = window.matchMedia('(max-width: 900px)')
