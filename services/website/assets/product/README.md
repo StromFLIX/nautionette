@@ -32,17 +32,21 @@ on loopback.
 | File | Natural pixels | Bytes | Encoding |
 | --- | --- | ---: | --- |
 | `desktop.webp` | 1920 × 1260 | 61,212 | Lossless WebP |
-| `desktop-small.webp` | 1280 × 840 | 117,910 | Lanczos downsample, lossless WebP |
+| `desktop-small.webp` | 1280 × 840 | 40,080 | Native DPR 1 browser capture, lossless WebP |
 | `phone.webp` | 780 × 1688 | 40,458 | Lossless WebP |
 | `desktop.png` | 1920 × 1260 | 174,012 | Original browser capture |
+| `desktop-small.png` | 1280 × 840 | 107,457 | Original browser capture at DPR 1 |
 | `phone.png` | 780 × 1688 | 127,793 | Original browser capture |
 
-Combined distribution WebPs: **219,580 bytes** (under 350 KB total). Lossless
-WebP decoding was checked pixel-for-pixel against both original PNGs. The small
-variant is a resize of the original desktop image, not a second composition.
+Combined distribution WebPs: **141,750 bytes** (under 200 KB total). Lossless
+WebP decoding was checked pixel-for-pixel against all three original PNGs. The
+small variant is a third actual browser capture, **not a resize**: it uses the
+same desktop viewport, fixture state and framing assertions, rendered directly
+at DPR 1. No resampling or lossy encoding softens the native UI text.
 
-Desktop: viewport **1280 × 840**, DPR **1.5**. Phone: viewport **390 × 844**, DPR
-**2**. Both use the unmodified Denkzeug light theme, original solid logo and
+Desktop: viewport **1280 × 840**, DPR **1.5**. Desktop-small: the same viewport
+**1280 × 840**, DPR **1**. Phone: viewport **390 × 844**, DPR **2**.
+All variants use the unmodified Denkzeug light theme, original solid logo and
 **125% interface size** (`html` font-size 20 px, no browser zoom).
 Locale `en-US`; timezone `UTC`; fixed browser clock `2026-06-15T10:30:00Z`;
 reduced motion. Capture environment: Node 24.22.2, Playwright 1.64.1, Chromium
@@ -64,22 +68,24 @@ The equivalent capture command is `node scripts/capture-website.mjs`. It starts
 and stops its own loopback Vite server, checks the rendered theme, font size,
 full desktop message/card framing, phone download-button visibility, lack of
 horizontal overflow, browser/HTTP errors, loading/error notices and accidental
-sends/settings writes. It retains `desktop.png`, `phone.png` and
-`capture-report.json` (viewports, clock, observed API requests and empty error
-lists). Two consecutive captures were verified byte-identical by SHA-256.
+sends/settings writes. It retains `desktop.png`, `desktop-small.png`, `phone.png`
+and `capture-report.json` (three variants, viewports, clock, observed API requests
+and empty error lists). Each retained image requires two consecutive identical
+browser screenshot frames. Desktop and phone were verified byte-identical by
+SHA-256 to their original captures. Chromium can vary the small idle SVG context
+meter's rasterization between browser contexts; content and layout are fixed.
 
 When UI or API contracts change, update only the fixture and capture assertions
 to the new real app contracts; do not inject layout overrides to preserve an old
-look. Re-run the command, inspect both PNGs and the small WebP visually, then
+look. Re-run the command, inspect all three PNGs and WebPs visually, then
 re-encode and update the table above. The dotted header ring with a dash is the
 app's idle context meter, not a loading spinner.
 
 ### Native PhotoCraft attempt and concrete infrastructure blocker
 
 PhotoCraft **0.22.0** was discovered via `craft_apps` / `craft_tools`. Its
-`doc_export` schema supports lossless WebP by omitting `quality`, and
-`image.imageSize` supports a 1280 × 840 Lanczos resize. However this session's
-PhotoCraft engine had **no filesystem read authority**:
+`doc_export` schema supports lossless WebP by omitting `quality`. However the
+original capture session's PhotoCraft engine had **no filesystem read authority**:
 
 ```text
 doc_open({"path":"/workspace/desktop.png"})
@@ -94,7 +100,7 @@ is claimed. With filesystem authority enabled, the intended native sequence is:
 ```text
 doc_open({"path":"desktop.png"})
 doc_export({"path":"desktop.webp","format":"webp"})
-command_run({"id":"image.imageSize","params":{"width":1280,"height":840,"resample":"lanczos"}})
+doc_open({"path":"desktop-small.png"})
 doc_export({"path":"desktop-small.webp","format":"webp"})
 doc_open({"path":"phone.png"})
 doc_export({"path":"phone.webp","format":"webp"})
@@ -111,17 +117,19 @@ uv pip install --python /workspace/image-env/bin/python Pillow==12.2.0
 from pathlib import Path
 from PIL import Image
 root = Path('services/website/assets/product')
-for name in ['desktop', 'phone']:
+for name in ['desktop', 'desktop-small', 'phone']:
     with Image.open(root / f'{name}.png') as image:
         image.save(root / f'{name}.webp', lossless=True, method=6)
         with Image.open(root / f'{name}.webp') as exported:
             assert exported.convert('RGB').tobytes() == image.convert('RGB').tobytes()
-        if name == 'desktop':
-            image.resize((1280, 840), Image.Resampling.LANCZOS).save(
-                root / 'desktop-small.webp', lossless=True, method=6)
 PY
 ```
 
-Capture checks passed on both viewports. Frontend unit/script tests: **247/247
+Capture checks passed for all three variants (two viewport sizes, three DPRs).
+The desktop-small follow-up preserves the original full desktop and phone PNG
+and WebP bytes unchanged; only the small distribution WebP is replaced, and its
+native browser PNG is retained. No PhotoCraft authority bypass was attempted.
+
+At the original capture commit, frontend unit/script tests: **247/247
 passed**. `vite build` passed. These checks do not claim a production deployment
 or real document-generation run.

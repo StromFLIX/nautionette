@@ -7,7 +7,8 @@ import { mockWebsiteProduct, captureTime, chatPath } from '../tests/website-prod
 
 // Capture the real Vue application; never navigate to a production backend.
 // This command intentionally produces source PNGs only. See the asset README
-// for the native PhotoCraft lossless WebP export/resize commands.
+// for the native PhotoCraft lossless WebP export commands. Every variant is
+// captured at its native device pixel ratio; no screenshot is resized.
 const frontendRoot = fileURLToPath(new URL('../', import.meta.url))
 const destination = fileURLToPath(new URL('../../website/assets/product/', import.meta.url))
 await mkdir(destination, { recursive: true })
@@ -18,7 +19,7 @@ let browser
 const report = []
 try {
   browser = await chromium.launch({ headless: true })
-  for (const [name, width, height, deviceScaleFactor] of [['desktop', 1280, 840, 1.5], ['phone', 390, 844, 2]]) {
+  for (const [name, width, height, deviceScaleFactor] of [['desktop', 1280, 840, 1.5], ['desktop-small', 1280, 840, 1], ['phone', 390, 844, 2]]) {
     const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor, locale: 'en-US', timezoneId: 'UTC', colorScheme: 'light', reducedMotion: 'reduce', serviceWorkers: 'block' })
     const page = await context.newPage()
     await page.clock.setFixedTime(captureTime)
@@ -59,12 +60,23 @@ try {
     expect(errors).toEqual([])
     expect(fixture.state.sent).toEqual([])
     expect(fixture.state.writes).toEqual([])
-    await page.screenshot({ path: `${destination}${name}.png`, animations: 'disabled', caret: 'hide' })
+    // Require consecutive identical browser frames, including the idle SVG meter,
+    // before retaining a capture. This avoids a transient compositor frame.
+    let previous, capture
+    for (let attempt = 0; attempt < 8; attempt++) {
+      capture = await page.screenshot({ animations: 'disabled', caret: 'hide' })
+      if (previous?.equals(capture)) break
+      previous = capture
+      capture = null
+      await page.waitForTimeout(100)
+    }
+    expect(capture, `Stable ${name} browser frames`).not.toBeNull()
+    await writeFile(`${destination}${name}.png`, capture)
     report.push({ name, viewport: { width, height }, deviceScaleFactor, pixels: { width: width * deviceScaleFactor, height: height * deviceScaleFactor }, clock: captureTime.toISOString(), timezone: 'UTC', errors, requests: fixture.requests })
     await context.close()
   }
   await writeFile(`${destination}capture-report.json`, JSON.stringify(report, null, 2) + '\n')
-  console.log(`Captured and checked desktop + phone PNGs in ${destination}`)
+  console.log(`Captured and checked desktop + desktop-small + phone PNGs in ${destination}`)
 } finally {
   await browser?.close()
   await server.close()
