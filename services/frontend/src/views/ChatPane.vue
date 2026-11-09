@@ -100,6 +100,7 @@
         <button class="btn btn--sm" @click="connectChat">Reconnect live updates</button>
       </p>
       <p v-if="cacheError" class="caption" role="alert">{{ cacheError }}</p>
+      <p v-if="draftError && (draft || attachments.length)" class="caption" role="alert">{{ draftError }}</p>
       <p v-if="controlError" class="caption" role="alert">{{ controlError }}</p>
       <p v-if="readError" class="caption" role="alert">{{ readError }}</p>
       <button v-if="chat?.queue_paused && !streaming && !queuedMessages.length" class="btn btn--sm" :disabled="controlBusy" @click="resumeQueue">
@@ -144,7 +145,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
 import { useQuasar } from 'quasar'
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from 'vue-router'
 import ChatWelcome from '../components/ChatWelcome.vue'
@@ -157,6 +158,7 @@ import MessageBubble from '../components/MessageBubble.vue'
 import ChatAttachment from '../components/ChatAttachment.vue'
 import ChatOutputs from '../components/ChatOutputs.vue'
 import { uploadAttachments } from '../attachments'
+import { chatDrafts, useChatDraft } from '../chat-drafts'
 import { avatarStyle, initials } from '../format'
 import { backTo, chatLocation } from '../router'
 import { actions, chatSettings, draftCount, onLiveEvent, store } from '../store'
@@ -199,8 +201,8 @@ watch(activeTab, (tab) => {
     acknowledgeRead()
   })
 })
-const draft = ref('')
-const attachments = ref([])
+const draftKey = ref('local:initial')
+const { text: draft, attachments, error: draftError } = useChatDraft(draftKey)
 const sendingDraft = ref(false)
 const activeTurn = ref(null)
 const reconnecting = ref(false)
@@ -462,6 +464,7 @@ async function start ({ text, configuration, attachments: images = [] }) {
     if (chatId.value !== created.id || request.scope !== chatCacheScope()) return
     draft.value = text
     attachments.value = images
+    chatDrafts.save('local:welcome', '', [])
     chat.value = chat.value || created
     await send()
   } catch (error) {
@@ -475,7 +478,8 @@ async function send () {
   if (sendingDraft.value || !chatId.value) return
   const id = chatId.value
   const version = generation
-  const text = draft.value.trim()
+  const original = draft.value
+  const text = original.trim()
   const images = attachments.value
   if (!text && !images.length) return
   sendingDraft.value = true
@@ -486,8 +490,11 @@ async function send () {
     if (version !== generation || id !== chatId.value) return
     delivery.enqueue(id, text, selectedProjects, uploaded)
     chatSettings.remember(chat.value)
-    draft.value = ''
-    attachments.value = []
+    // Do not erase edits made while file uploads were in progress.
+    if (draft.value === original && attachments.value.map(item => item.id).join() === images.map(item => item.id).join()) {
+      draft.value = ''
+      attachments.value = []
+    }
     scrollDown()
   } catch (error) {
     $q.notify({ type: 'negative', message: error.message })
@@ -585,8 +592,10 @@ function rename () {
 function remove () {
   $q.dialog({ title: 'Delete chat', message: `Delete “${chat.value?.title}”?`, cancel: true })
     .onOk(async () => {
-      await api.deleteChat(chatId.value)
-      await chatCache.remove(chatId.value)
+      const id = chatId.value
+      await api.deleteChat(id)
+      await chatCache.remove(id)
+      await chatDrafts.remove(id)
       await actions.loadChats()
       router.push(chatLocation())
     })
@@ -621,11 +630,11 @@ watch(() => route.params.id, (id, previous) => {
   selectedOutputId.value = ''
   selectedOutputRevision.value = null
   activeTurn.value = null
-  if (!created) {
-    composerKey.value++
-    draft.value = ''
-    attachments.value = []
-  }
+  if (created) {
+    chatDrafts.save(id, draft.value, attachments.value.map(item => ({ ...toRaw(item) })))
+    chatDrafts.save('local:new', '', [])
+  } else composerKey.value++
+  draftKey.value = id === 'new' ? 'local:new' : id || 'local:welcome'
   sendingDraft.value = false
   connectChat()
   if (isNewChat.value) createNewChat()

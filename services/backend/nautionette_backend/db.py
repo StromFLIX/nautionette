@@ -95,6 +95,13 @@ CREATE TABLE IF NOT EXISTS chats (
     updated_at REAL NOT NULL,
     promoted_to TEXT
 );
+CREATE TABLE IF NOT EXISTS chat_drafts (
+    chat_id TEXT PRIMARY KEY REFERENCES chats(id) ON DELETE CASCADE,
+    revision INTEGER NOT NULL,
+    mutation_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    attachment_ids TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,

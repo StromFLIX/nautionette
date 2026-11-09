@@ -540,21 +540,38 @@ Copilot vision metadata without advertised endpoints is unverified. A provider
 capability declaration is not an end-to-end image test: HTTP 200 can still hide
 image loss, so no automatic or billable vision probes run during discovery.
 
-Attachments upload before a message enters the durable outbox. Upload failures keep the
-current draft for retry; successful uploads are reused. Uploading requires connectivity,
-and unsent draft files do not survive page reload. Once uploaded, only attachment IDs
-and metadata enter the outbox and transcript cache—not file bytes. Attachments in history
-are fetched through authenticated endpoints, so offline snapshots retain text and
-attachment metadata but cannot load images or download files without a connection.
+Composer drafts are saved per chat in IndexedDB as you edit, including original file
+bytes, separately from the bounded history cache. Switching chats, leaving the chat view,
+or reloading restores unsent text and files. Drafts in existing chats also sync to the
+server in the background, and are retrieved when opening that chat on another device or
+returning to a visible window. The welcome/new-chat placeholder is device-local until a
+chat is created. Offline edits stay local and retry on reconnect; storage/sync failures
+are shown beside the composer. Concurrent edits use revision checks: a stale device
+keeps its local copy and shows a conflict rather than silently replacing either draft.
+Drafts are private composer state, never messages, search results, or agent context.
+Sending hands the message to the durable outbox before clearing that chat's draft.
+Browser storage can still be removed by clearing site data or device/browser eviction;
+only successfully synced drafts are recoverable from another device.
+
+Attachments upload during draft sync or before a message enters the durable outbox.
+Upload failures keep the current draft for retry; successful uploads are reused. Once
+uploaded, only attachment IDs and metadata enter the outbox and transcript cache—not
+file bytes. Historical or remotely restored files are fetched through authenticated
+endpoints and require connectivity unless their original bytes are already saved locally.
 
 `POST /api/chats/{id}/attachments?name=...` accepts raw bytes with their `Content-Type`
 (or `application/octet-stream` if unknown) and returns `{id, name, mime_type, size}`.
 Send the returned IDs as `attachment_ids` with a message.
 `GET /api/chats/{id}/attachments/{attachment_id}` retrieves the original bytes;
-`DELETE` discards an upload only while it is unattached. The legacy `/images` routes
+`DELETE` discards an upload only while it is unattached and not referenced by a saved draft. The legacy `/images` routes
 remain aliases. Bytes live in the existing SQLite `chat_images` table separately
 from messages/events and are deleted with the message or chat. Unattached uploads
-older than 24 hours are cleaned up on subsequent uploads; at most 20 drafts per chat.
+older than 24 hours are cleaned up on subsequent uploads unless referenced by a saved draft;
+at most 20 unsent uploads per chat. Saved draft attachments do not expire.
+`GET /api/chats/{id}/draft` reads `{revision, mutation_id, text, attachments}`;
+`PUT` takes `{revision, mutation_id, text, attachment_ids?}`. Writes are revision-checked
+(409 on conflict), retries of the same mutation are idempotent, and clearing retains a
+revision tombstone so delayed writes cannot resurrect a sent draft.
 
 Queued attachment messages wait for their own turn so steering cannot drop files.
 Pi receives supported images through RPC; all originals are written privately to

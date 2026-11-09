@@ -160,6 +160,8 @@ export const api = {
   chats: () => request('/api/chats'),
   searchChats: (query, signal) => request(`/api/search/chats?${new URLSearchParams({ q: query })}`, { signal }),
   createChat: (payload) => request('/api/chats', { method: 'POST', ...json(payload) }),
+  chatDraft: id => request(`/api/chats/${id}/draft`, { signal: AbortSignal.timeout(15000) }),
+  saveChatDraft: (id, payload) => request(`/api/chats/${id}/draft`, { method: 'PUT', ...json(payload), signal: AbortSignal.timeout(15000) }),
   chat: (id, signal = AbortSignal.timeout(15000)) => request(`/api/chats/${id}`, { signal }),
   projectChanges: (id, signal) => request(`/api/chats/${encodeURIComponent(id)}/project-changes`, { signal }),
   outputRevisions: (chatId, outputId, signal) => request(`/api/chats/${encodeURIComponent(chatId)}/outputs/${encodeURIComponent(outputId)}/revisions`, { signal }),

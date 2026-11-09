@@ -44,6 +44,7 @@ import { chatLocation } from '../router'
 import { api } from '../api'
 import { actions } from '../store'
 import { chatCache } from '../chat-cache'
+import { chatDrafts } from '../chat-drafts'
 import ChatMenuItems from './ChatMenuItems.vue'
 
 const props = defineProps({
@@ -118,6 +119,7 @@ function remove () {
         // confirmation or request was pending.
         if (route.name === 'chats' && route.params.id === id) await router.push(chatLocation())
         await chatCache.remove(id)
+        await chatDrafts.remove(id)
         await actions.loadChats()
       } catch (error) {
         $q.notify({ type: 'negative', message: error.message })

@@ -60,7 +60,7 @@ jobs:
         run: uv run pytest tests/lib/test_telemetry.py tests/lib/test_telemetry_http.py
 
       - name: Model capability, images and durable chat output guards
-        run: uv run pytest tests/backend/test_catalog.py tests/backend/test_model_limits.py tests/backend/test_model_capabilities.py tests/backend/test_chat_images.py tests/backend/test_chat_outputs.py tests/backend/test_output_storage.py
+        run: uv run pytest tests/backend/test_catalog.py tests/backend/test_model_limits.py tests/backend/test_model_capabilities.py tests/backend/test_chat_images.py tests/backend/test_chat_drafts.py tests/backend/test_chat_outputs.py tests/backend/test_output_storage.py
 
       - name: Real MaxIO binary uploads, large-file restore, integrity and migration
         env:

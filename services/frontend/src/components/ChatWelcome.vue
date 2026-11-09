@@ -15,6 +15,7 @@
         @update:packages="override('packages', $event)"
         @send="$emit('start', { text, configuration: config, attachments })" />
 
+      <p v-if="draftError" class="caption" role="alert">{{ draftError }}</p>
       <p v-if="!store.catalogLoaded && store.catalogError" class="caption" role="alert">{{ store.catalogError }} <button class="btn btn--sm" @click="actions.loadCatalog(true)">Retry defaults</button></p>
 
       <div v-if="store.ready && store.system.model_key_present === false" class="welcome__warn" role="status">
@@ -37,11 +38,11 @@ import { preferences } from '../preferences'
 import { agentConfig, copyConfig, defaultChatConfig, resolveAgentConfig } from '../agent-config'
 import { reusableChatSettings } from '../new-chat-settings'
 import { chatCacheScope } from '../chat-cache'
+import { useChatDraft } from '../chat-drafts'
 
 defineProps({ busy: { type: Boolean, default: false } })
 defineEmits(['start'])
-const text = ref('')
-const attachments = ref([])
+const { text, attachments, error: draftError } = useChatDraft(ref('local:welcome'))
 // Capture history once per new-chat draft, so saving an override cannot feed back
 // into its own source. With no history (or in defaults mode), follow async defaults.
 const scope = chatCacheScope()
