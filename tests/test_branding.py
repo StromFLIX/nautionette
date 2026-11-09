@@ -31,10 +31,11 @@ def test_display_branding_does_not_change_technical_identity():
     assert brand["repository"] == "https://github.com/StromFLIX/nautionette"
 
 
-def test_approved_logo_has_curved_nested_contours_and_no_raster_dependency():
+def test_original_solid_logo_has_no_nested_strokes_or_raster_dependency():
     logo = (ROOT / "branding/logo.svg").read_text()
-    assert "curved_base" in logo
-    assert 'opacity="0.65"' in logo
+    assert logo.count("<path ") == 1
+    assert "stroke=" not in logo
+    assert "opacity=" not in logo
     assert "<image" not in logo
     assert "base64" not in logo
 

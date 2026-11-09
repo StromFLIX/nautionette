@@ -1,8 +1,8 @@
 # Denkzeug display identity
 
 `brand.json`, `logo.svg`, `fonts/` and `native/` are the canonical display identity. The logo
-is the approved nested-profile version, with curved bases and a softer inner
-contour. The SVG viewBox crops only presentation padding; its artwork is unchanged.
+is the original solid single-path mark. The nested-line experiment is not used:
+its thin contours were too soft at interface sizes. Keep small marks solid and crisp.
 
 Run `python scripts/sync_brand.py` after edits, and commit its generated copies.
 `--check` fails on drift without writing. Each Docker context remains independent;

@@ -13,5 +13,6 @@ test('display branding has a single source and does not rename technical namespa
   assert.ok(Object.isFrozen(brand))
   const source = readFileSync(new URL('../../../branding/logo.svg', import.meta.url), 'utf8')
   assert.equal(readFileSync(new URL('../public/brand/logo.svg', import.meta.url), 'utf8'), source)
-  assert.match(source, /opacity="0\.65"/)
+  assert.equal((source.match(/<path\b/g) || []).length, 1)
+  assert.doesNotMatch(source, /stroke=|opacity=/)
 })

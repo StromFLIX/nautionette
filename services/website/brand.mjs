@@ -19,5 +19,5 @@ export const brand = Object.freeze({
     "workflowStrong": "#875b26"
   },
   "interfaceFont": "'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  "logoVersion": "ca8e68655e23"
+  "logoVersion": "298d2a31e696"
 })

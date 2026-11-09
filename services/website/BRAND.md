@@ -36,9 +36,9 @@ artifact types, workflow structure and miniapps, and are labelled as examples.
 
 ## Brand assets
 
-The canonical `branding/logo.svg` is the approved VectorCraft refinement: the
-original silhouette with two nested inner contours, curved bases and a softer
-innermost line. It has a transparent background and no raster dependency.
+The canonical `branding/logo.svg` is the original solid single-path mark,
+restored for crisp rendering at small sizes. The nested-line experiment is not
+used in the product. It has a transparent background and no raster dependency.
 `assets/denkzeug-icon.svg` and the application's mark are generated copies.
 `favicon.svg` uses the same artwork and adapts to a dark browser theme.
 

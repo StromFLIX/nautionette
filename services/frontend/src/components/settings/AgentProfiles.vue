@@ -35,13 +35,17 @@
       <label class="profile-editor__label" for="profile-prompt">System prompt <span class="dim">optional</span></label>
       <textarea id="profile-prompt" class="field profile-editor__prompt" :value="draft.config.system_prompt || ''" rows="5" maxlength="32000" :disabled="busy" placeholder="How should this agent think, speak and help?" @input="setPrompt($event.target.value)" />
       <p class="caption dim">Additional instructions for new chats. The app’s core operating rules still apply.</p>
-      <fieldset :disabled="busy" class="setting">
+      <fieldset :disabled="busy" class="profile-subagents" aria-describedby="profile-subagents-help">
         <legend class="setting__label">Allowed subagents</legend>
-        <p class="caption dim">None by default. Changes apply to the agent’s next delegation, including existing chats. Calls use the target agent’s configuration and instance-wide depth, width and parallel limits.</p>
-        <label v-for="agent in agents" :key="agent.id" class="row">
-          <input v-model="draft.allowed_subagents" type="checkbox" :value="agent.id" /> {{ agent.name }}
-        </label>
-        <p v-if="!agents.length" class="caption dim">Save another agent first.</p>
+        <p id="profile-subagents-help" class="caption muted">None by default. Choose which agents this agent may delegate to. Changes apply to its next delegation, including existing chats; instance-wide depth, width and parallel limits still apply.</p>
+        <div v-if="agents.length" class="profile-subagents__choices">
+          <label v-for="agent in agents" :key="agent.id" class="profile-subagents__option" :class="{ 'profile-subagents__option--selected': draft.allowed_subagents.includes(agent.id) }">
+            <input v-model="draft.allowed_subagents" type="checkbox" :value="agent.id" />
+            <AgentAvatar :agent="agent" />
+            <span>{{ agent.name }}</span>
+          </label>
+        </div>
+        <p v-else class="caption dim">Save another agent first.</p>
       </fieldset>
       <AgentConfigFields v-model="draft.config" :defaults="globalConfig" inheritable :disabled="busy" />
       <AgentPackages :key="draft.id" :model-value="draft.config.packages || []" :disabled="busy" @update:model-value="draft.config.packages = $event" @busy="packageBusy = $event" />
@@ -233,6 +237,18 @@ function remove (agent) {
 .profile-editor__image-actions { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; flex: 1; }
 @media (pointer: coarse) { .profile-editor__image-actions .btn { min-height: 44px; } }
 .profile-editor__prompt { width: 100%; resize: vertical; line-height: 1.6; }
+.profile-subagents { min-width: 0; margin: 24px 0; padding: 0; border: 0; }
+.profile-subagents > legend { float: none; width: 100%; padding: 0; margin-bottom: 8px; }
+.profile-subagents > p { margin: 0; line-height: 1.7; }
+.profile-subagents__choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.profile-subagents__option { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 48px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-app); cursor: pointer; --agent-avatar-size: 28px; }
+.profile-subagents__option > input { flex: none; margin: 0; }
+.profile-subagents__option > span:last-child { min-width: 0; overflow-wrap: anywhere; font-size: .8125rem; line-height: 1.5; }
+.profile-subagents__option--selected { border-color: var(--accent); background: var(--accent-soft); }
+.profile-subagents__option:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.profile-subagents[disabled] .profile-subagents__option { opacity: .55; cursor: default; }
+@media (hover: hover) and (pointer: fine) { .profile-subagents__option:hover { border-color: var(--accent); } }
+@media (max-width: 760px) { .profile-subagents__choices { grid-template-columns: minmax(0, 1fr); } }
 .profile-editor__actions { flex-wrap: wrap; gap: 6px; padding-top: 18px; border-top: 1px solid var(--border); }
 @media (max-width: 640px) {
   .profile-card { padding: 12px; }
