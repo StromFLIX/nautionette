@@ -13,7 +13,15 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 
-from .. import agent_profiles, catalog, chat_attachments, chat_sessions, project_changes, projects
+from .. import (
+    agent_profiles,
+    catalog,
+    chat_attachments,
+    chat_drafts,
+    chat_sessions,
+    project_changes,
+    projects,
+)
 from ..agent import (
     agent_job,
     promote_chat,
@@ -157,6 +165,18 @@ async def get_chat(chat_id: str) -> dict[str, Any]:
     return db.chat_snapshot(chat_id)
 
 
+@router.get("/api/chats/{chat_id}/draft")
+def get_draft(chat_id: str) -> dict[str, Any]:
+    _chat_or_404(chat_id)
+    return chat_drafts.read(chat_id)
+
+
+@router.put("/api/chats/{chat_id}/draft")
+def save_draft(chat_id: str, payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
+    _chat_or_404(chat_id)
+    return chat_drafts.save(chat_id, payload)
+
+
 @router.get("/api/chats/{chat_id}/project-changes")
 def get_project_changes(chat_id: str) -> dict[str, Any]:
     return project_changes.chat_changes(_chat_or_404(chat_id))
@@ -279,7 +299,10 @@ def get_attachment(chat_id: str, image_id: str) -> Response:
 def discard_attachment(chat_id: str, image_id: str) -> dict[str, bool]:
     _chat_or_404(chat_id)
     db.execute(
-        "DELETE FROM chat_images WHERE id = ? AND chat_id = ? AND message_id IS NULL", (image_id, chat_id)
+        "DELETE FROM chat_images WHERE id = ? AND chat_id = ? AND message_id IS NULL AND NOT EXISTS "
+        "(SELECT 1 FROM chat_drafts d, json_each(d.attachment_ids) a "
+        "WHERE d.chat_id = chat_images.chat_id AND a.value = chat_images.id)",
+        (image_id, chat_id),
     )
     return {"ok": True}
 

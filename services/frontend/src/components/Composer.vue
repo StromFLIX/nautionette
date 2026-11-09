@@ -157,7 +157,6 @@ import { agentConfig, sameConfig } from '../agent-config'
 import ReasoningPicker from './ReasoningPicker.vue'
 import ChatAttachment from './ChatAttachment.vue'
 import { addAttachments, isImage } from '../attachments'
-import { api } from '../api'
 import ToolPicker from './ToolPicker.vue'
 import ProjectPicker from './ProjectPicker.vue'
 import PackagePicker from './PackagePicker.vue'
@@ -244,7 +243,8 @@ function paste (event) {
 function removeImage (image) {
   emit('update:attachments', props.attachments.filter(item => item.id !== image.id))
   imageError.value = ''
-  if (image.uploaded) api.discardAttachment(image.uploadedChat, image.uploaded.id).catch(() => {})
+  // Synced drafts on another device may still reference this upload. Removing
+  // it from this composer must not destroy their attachment bytes.
 }
 const agentSets = computed(() => store.catalog.agent_sets || [])
 const allTools = computed(() => store.catalog.tools || [])

@@ -38,8 +38,13 @@ def store_attachment(chat_id: str, data: bytes, mime_type: str, name: str) -> di
         mime_type = "application/octet-stream"
     if mime_type in MIME_TYPES.values():
         _validate_image(data, mime_type)
-    # Unsent uploads expire; attached files live and die with their message/chat.
-    db.execute("DELETE FROM chat_images WHERE message_id IS NULL AND created_at < ?", (time.time() - 86400,))
+    # Orphan uploads expire, but saved draft files must survive indefinitely.
+    db.execute(
+        "DELETE FROM chat_images WHERE message_id IS NULL AND created_at < ? AND NOT EXISTS "
+        "(SELECT 1 FROM chat_drafts d, json_each(d.attachment_ids) a "
+        "WHERE d.chat_id = chat_images.chat_id AND a.value = chat_images.id)",
+        (time.time() - 86400,),
+    )
     pending = db.one(
         "SELECT COUNT(*) AS n FROM chat_images WHERE chat_id = ? AND message_id IS NULL", (chat_id,)
     )

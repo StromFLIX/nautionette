@@ -31,6 +31,19 @@ async function mockChats (context, state) {
     if (path === '/api/workflows') return route.fulfill({ json: { workflows: [] } })
     if (path === '/api/drafts') return route.fulfill({ json: { drafts: [] } })
     if (path === '/api/runs') return route.fulfill({ json: { runs: [] } })
+    const draftPath = path.match(/^\/api\/chats\/([^/]+)\/draft$/)
+    if (draftPath) {
+      if (!state.syncDrafts) return route.fulfill({ status: 503, json: { detail: 'Draft sync offline in this fixture' } })
+      const id = draftPath[1]
+      state.drafts ||= {}
+      const saved = state.drafts[id] || { revision: 0, text: '', attachments: [] }
+      if (method === 'GET') return route.fulfill({ json: saved })
+      const payload = route.request().postDataJSON()
+      if (saved.mutation_id === payload.mutation_id) return route.fulfill({ json: saved })
+      if (saved.revision !== payload.revision) return route.fulfill({ status: 409, json: { detail: 'Conflict' } })
+      state.drafts[id] = { ...payload, revision: saved.revision + 1, attachments: payload.attachment_ids.map(id => state.uploads.find(item => item.image.id === id).image) }
+      return route.fulfill({ json: state.drafts[id] })
+    }
     const changesPath = path.match(/^\/api\/chats\/([^/]+)\/project-changes$/)
     if (changesPath) {
       if (state.changesFailure) return route.fulfill({ status: 503, json: { detail: 'Unavailable' } })
@@ -1476,7 +1489,7 @@ test('failed image uploads preserve the draft and queued images retain metadata 
   await page.locator('textarea').fill('See screenshot')
   await page.locator('input[type=file]').setInputFiles(imageFile)
   await page.getByRole('button', { name: 'Queue message', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('Invalid image')
+  await expect(page.getByRole('alert').filter({ hasText: 'Invalid image' })).toBeVisible()
   await expect(page.locator('textarea')).toHaveValue('See screenshot')
   await expect(page.locator('.composer img')).toBeVisible()
   state.uploadFailure = false
@@ -1565,7 +1578,7 @@ test('failed file upload preserves the draft; queued files retain metadata acros
   await page.goto('/chats/alpha')
   await page.locator('input[type=file]').setInputFiles(pdfFile)
   await page.getByRole('button', { name: 'Queue message', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('Invalid image')
+  await expect(page.getByRole('alert').filter({ hasText: 'Invalid image' })).toBeVisible()
   await expect(page.locator('.composer .chat-file')).toBeVisible()
   state.uploadFailure = false
   state.offline = true
@@ -1647,4 +1660,51 @@ test('welcome composer includes reasoning selection in chat creation', async ({ 
   expect(state.chats.created.chat.reasoning_effort).toBe('xhigh')
   await openChatConfiguration(page)
   await expect(page.getByRole('button', { name: 'Reasoning effort', exact: true })).toContainText('Extra high')
+})
+
+for (const offline of [false, true]) {
+  test(`composer drafts survive immediate chat switching and reload with files (sync offline: ${offline})`, async ({ page, context }) => {
+    const state = initial()
+    state.syncDrafts = !offline
+    await mockChats(context, state)
+    await page.goto('/chats/alpha')
+    const input = page.getByRole('textbox', { name: 'Message', exact: true })
+    await input.fill('  Keep my long draft\nincluding whitespace  ')
+    await page.locator('input[type=file]').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('Never lose these bytes') })
+    await chatRow(page, 'beta').click()
+    await expect(input).toHaveValue('')
+    await input.fill('A different draft')
+    await chatRow(page, 'alpha').click()
+    await expect(input).toHaveValue('  Keep my long draft\nincluding whitespace  ')
+    await expect(page.locator('.composer__attachments')).toContainText('notes.txt')
+    await page.reload()
+    await expect(input).toHaveValue('  Keep my long draft\nincluding whitespace  ')
+    await expect(page.locator('.composer__attachments')).toContainText('notes.txt')
+    await chatRow(page, 'beta').click()
+    await expect(input).toHaveValue('A different draft')
+  })
+}
+
+test('composer draft text and images sync to a fresh device without becoming messages', async ({ browser }) => {
+  const state = initial()
+  state.syncDrafts = true
+  state.models = [{ id: 'test/model', name: 'Vision', image_support: true }]
+  const first = await browser.newContext(), second = await browser.newContext()
+  try {
+    await mockChats(first, state); await mockChats(second, state)
+    const web = await first.newPage(), mobile = await second.newPage()
+    await web.goto('/chats/alpha')
+    await web.getByRole('textbox', { name: 'Message', exact: true }).fill('Draft from another device')
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4xkAAAAASUVORK5CYII=', 'base64')
+    await web.locator('input[type=file]').setInputFiles({ name: 'pixel.png', mimeType: 'image/png', buffer: png })
+    await expect.poll(() => state.drafts?.alpha?.attachments.length).toBe(1)
+    await mobile.goto('/chats/alpha')
+    await expect(mobile.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue('Draft from another device')
+    await expect(mobile.locator('.composer__attachments img')).toBeVisible()
+    expect(state.chats.alpha.messages).toEqual([])
+    await mobile.getByRole('button', { name: 'Send message', exact: true }).click()
+    await expect.poll(() => state.drafts.alpha.text).toBe('')
+    expect(state.attempts).toHaveLength(1)
+    expect(state.uploads).toHaveLength(1)
+  } finally { await first.close(); await second.close() }
 })

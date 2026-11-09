@@ -30,7 +30,7 @@ async function download () {
   error.value = ''
   status.value = ''
   try {
-    const file = props.attachment.file || await api.attachment(props.chatId, props.attachment.id, request.signal)
+    const file = props.attachment.file || await api.attachment(props.chatId || props.attachment.uploadedChat, props.attachment.uploaded?.id || props.attachment.id, request.signal)
     if (request.signal.aborted) return
     if (url) URL.revokeObjectURL(url)
     const result = await saveDownload(file, props.attachment.name || 'attachment', props.attachment.mime_type || file.type, request.signal)
