@@ -14,10 +14,10 @@ defineProps({ runtime: { type: Object, default: null } })
 
 <style scoped>
 .app-resources { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
-.app-resources > div { min-width: 0; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-app); }
-.app-resources dt { color: var(--text-muted); font-size: .6875rem; margin-bottom: 8px; }
-.app-resources dd { margin: 0; font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
-.app-resources small { color: var(--text-dim); font-size: .625rem; font-weight: 400; }
+.app-resources > div { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); }
+.app-resources dt { color: var(--text-muted); font-size: .8125rem; line-height: 1.6; margin-bottom: 10px; }
+.app-resources dd { margin: 0; font-size: 1.125rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; line-height: 1.6; }
+.app-resources small { color: var(--text-dim); font-size: .75rem; font-weight: 400; line-height: 1.5; }
 .app-resources meter { display: block; width: 100%; height: 6px; margin-top: 8px; accent-color: var(--accent); }
 @media (max-width: 1100px) { .app-resources { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 380px) { .app-resources { gap: 6px; } .app-resources > div { padding: 10px; } }

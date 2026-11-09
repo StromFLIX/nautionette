@@ -7,7 +7,7 @@
     </div>
     <template v-if="graph?.history_status === 'expired'">
       <div class="execution-flow__source"><slot name="source" /></div>
-      <div class="empty" role="status">
+      <div class="empty execution-flow__expired" role="status">
         <span class="material-icons" aria-hidden="true">history</span>
         <strong>Execution history expired</strong>
         <span>Temporal no longer retains the detailed steps for this run.</span>
@@ -15,7 +15,7 @@
       </div>
     </template>
     <WorkflowGraph v-else-if="graph" :key="graph.nodes[0]?.run_id || workflowId" :graph="graph" :live-paused="Boolean(error)"><template #source><slot name="source"><span class="caption muted">Execution history</span></slot></template></WorkflowGraph>
-    <div v-else-if="!error" class="empty"><q-spinner size="24px" /><span>Loading execution...</span></div>
+    <div v-else-if="!error" class="empty"><q-spinner size="24px" /><span>Loading execution…</span></div>
   </div>
 </template>
 
@@ -85,6 +85,9 @@ onUnmounted(() => {
 <style scoped>
 .execution-flow { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .execution-flow__source:has(select) { padding: 10px 16px; }
-.execution-flow__error { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 0.75rem; background: var(--warning-soft); color: var(--warning); overflow-wrap: anywhere; }
+.execution-flow__error { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 0.8125rem; line-height: 1.6; background: var(--warning-soft); color: var(--warning); overflow-wrap: anywhere; }
 .execution-flow__error > .material-icons { font-size: 1.125rem; }
+.execution-flow__expired { gap: 14px; padding: 32px 24px; text-align: center; font-size: 0.9375rem; line-height: 1.7; }
+.execution-flow__expired > .material-icons { display: grid; place-items: center; width: 56px; height: 56px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); color: var(--text-muted); }
+.execution-flow__expired > span:not(.material-icons) { max-width: 42ch; color: var(--text-muted); }
 </style>

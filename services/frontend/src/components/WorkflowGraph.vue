@@ -46,7 +46,7 @@
           @node-click="({ node }) => selectedId = node.id" @pane-click="selectedId = null"
           @nodes-initialized="initialize"
         >
-          <Background :gap="22" :size="1" pattern-color="var(--border-strong)" />
+          <Background :gap="24" :size="0.75" pattern-color="var(--border)" />
           <template #node-loop="{ data, sourcePosition, targetPosition }">
             <Handle type="target" :position="targetPosition" />
             <div class="flow-loop" :class="[
@@ -104,7 +104,7 @@
           <button class="btn btn--icon" aria-label="Fit all steps" @click="fitAll"><span class="material-icons">fit_screen</span><q-tooltip>Fit all steps</q-tooltip></button>
           <button v-if="activeNode" class="btn btn--icon flow__active-control" aria-label="Focus active step" @click="focus(activeNode.id)"><span class="material-icons">my_location</span><q-tooltip>Focus active step</q-tooltip></button>
         </div>
-        <div v-if="!graph?.nodes?.length" class="flow__empty">No diagram available.</div>
+        <div v-if="!graph?.nodes?.length" class="flow__empty"><strong>No diagram available</strong><span>Open the workflow’s Code view for its source, or the run’s Details view for saved inputs and results.</span></div>
       </div>
 
       <aside v-if="selected" class="flow__inspector scroll-y" aria-label="Step details">
@@ -275,9 +275,9 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 <style scoped>
 .flow { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface-app); }
 .flow--expanded { position: fixed; inset: 0; height: var(--app-height); z-index: 5000; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-.flow__toolbar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; min-height: 52px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--surface-panel); }
+.flow__toolbar { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; min-height: 56px; padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--surface-panel); }
 .flow__source { min-width: 0; flex: 1; }
-.flow__eyebrow { font-size: 0.6875rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0; }
+.flow__eyebrow { font-size: 0.8125rem; font-weight: 500; color: var(--text-muted); }
 .flow__tools { display: flex; gap: 2px; flex: none; }
 .flow .btn--icon { width: 34px; height: 34px; }
 .flow .btn .material-icons { font-size: 1.25rem; }
@@ -289,7 +289,7 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow :deep(.vue-flow__node) { border: none; border-radius: 8px; width: 264px; padding: 0; background: transparent; box-shadow: none; }
 .flow :deep(.vue-flow__node:focus-visible) { outline: 2px solid var(--accent); outline-offset: 4px; }
 .flow :deep(.vue-flow__edge-path) { transition: stroke 160ms; }
-.flow-node { --node-color: var(--text-muted); display: flex; flex-direction: column; width: 100%; height: 100%; padding: 0.75rem 0.875rem 0.625rem; border: 1px solid var(--border-strong); border-left: 3px solid var(--node-color); border-radius: var(--radius-sm); background: var(--surface-panel); color: var(--text); box-shadow: var(--shadow-sm); cursor: pointer; transition: border-color 140ms, box-shadow 140ms; text-align: left; }
+.flow-node { --node-color: var(--text-muted); display: flex; flex-direction: column; width: 100%; height: 100%; padding: 0.75rem 0.875rem 0.625rem; border: 1px solid var(--border); border-left: 3px solid var(--node-color); border-radius: var(--radius-md); background: var(--surface-panel); color: var(--text); cursor: pointer; transition: border-color 140ms, box-shadow 140ms; text-align: left; }
 .flow-loop { --node-color: var(--warning); width: 100%; height: 100%; border: 1px dashed color-mix(in srgb, var(--warning) 65%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--warning) 3%, transparent); cursor: pointer; }
 .flow-loop__header { height: 6.625rem; padding: 0.875rem 1.125rem; border-bottom: 1px dashed color-mix(in srgb, var(--warning) 35%, var(--border)); background: color-mix(in srgb, var(--warning) 7%, var(--surface-app)); border-radius: 8px 8px 0 0; }
 .flow-loop__name { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 0.875rem; line-height: 1.3125rem; font-weight: 600; margin-top: 8px; }
@@ -297,24 +297,24 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow-loop--added { border-color: var(--success); }
 .flow-loop--removed { border-color: var(--danger); }
 .flow-loop--changed { border-color: var(--warning); }
-.flow-node--workflow, .flow-node--child { --node-color: var(--accent-hover); }
+.flow-node--workflow, .flow-node--child { --node-color: var(--warning); }
 .flow-node--activity { --node-color: var(--flow-activity); }
 .flow-node--condition, .flow-node--loop, .flow-node--timer { --node-color: var(--warning); }
 .flow-node--signal { --node-color: var(--flow-signal); }
 .flow-node--completed, .flow-node--added { border-color: var(--success); }
-.flow-node--running { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md); }
+.flow-node--running { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .flow-node--failed, .flow-node--timed_out, .flow-node--removed { border-color: var(--danger); }
 .flow-node--removed { border-style: dashed; background: color-mix(in srgb, var(--danger-soft) 25%, var(--surface-panel)); }
 .flow-node--changed, .flow-node--retrying { border-color: var(--warning); }
-.flow-node:hover, .flow-node--selected { box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md); border-color: var(--accent-hover); }
+.flow-node--selected { box-shadow: 0 0 0 2px var(--accent-soft); border-color: var(--accent); }
+@media (hover: hover) and (pointer: fine) { .flow-node:hover { border-color: var(--accent); } }
 .flow-node--dimmed { opacity: 0.3; }
-.flow-node__top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 0.625rem; line-height: 1rem; }
-.flow-node__kind { display: flex; align-items: center; gap: 4px; color: var(--node-color); text-transform: uppercase; font-weight: 600; }
+.flow-node__top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 0.6875rem; line-height: 1rem; }
+.flow-node__kind { display: flex; align-items: center; gap: 4px; color: var(--node-color); font-weight: 600; }
 .flow-node__kind .material-icons { font-size: 0.9375rem; }
 .flow-node__status { display: flex; align-items: center; gap: 4px; color: var(--text-muted); }
 .flow-node__status i, .flow__live i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .flow-node--running .flow-node__status { color: var(--accent-hover); }
-.flow-node--running .flow-node__status i, .flow__live--running i { animation: flow-pulse 1.8s ease-in-out infinite; }
 .flow-node--completed .flow-node__status { color: var(--success); }
 .flow-node--failed .flow-node__status, .flow-node--timed_out .flow-node__status { color: var(--danger); }
 .flow-node__inspect { font-size: 0.875rem; color: var(--text-dim); }
@@ -326,11 +326,11 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow-node__bottom { display: flex; justify-content: space-between; gap: 8px; margin-top: auto; color: var(--text-dim); font-size: 0.625rem; line-height: 0.9375rem; }
 .flow-node__bottom span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .flow-node__bottom span:last-child { flex: none; }
-.flow__zoom { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-raised); box-shadow: var(--shadow-md); }
+.flow__zoom { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-sm); }
 .flow__scale { width: 42px; text-align: center; font-size: 0.6875rem; font-variant-numeric: tabular-nums; color: var(--text-muted); }
 .flow__separator { width: 1px; height: 18px; background: var(--border-strong); margin: 0 4px; }
 .flow__active-control { color: var(--accent-hover); }
-.flow__footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex: none; min-height: 34px; padding: 7px 16px; border-top: 1px solid var(--border); font-size: 0.625rem; color: var(--text-dim); }
+.flow__footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex: none; min-height: 38px; padding: 8px 20px; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-dim); }
 .flow__live { display: flex; align-items: center; gap: 6px; text-transform: capitalize; }
 .flow__live--running { color: var(--accent-hover); }
 .flow__completed { color: var(--text-dim); margin-left: 8px; }
@@ -347,24 +347,25 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('keydown'
 .flow__inspector { width: 310px; max-width: 45%; flex: none; padding: 14px 18px 24px; border-left: 1px solid var(--border-strong); background: var(--surface-panel); }
 .flow__inspector-head { display: flex; justify-content: space-between; align-items: center; }
 .flow__inspector h2 { font-size: 1rem; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; margin: 6px 0 12px; }
-.flow__facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px 12px; font-size: 0.6875rem; margin: 16px 0; }
+.flow__facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px 12px; font-size: 0.8125rem; line-height: 1.6; margin: 20px 0; }
 .flow__facts dt { color: var(--text-dim); }
 .flow__facts dd { margin: 0; overflow-wrap: anywhere; }
 .flow__expression-label { display: block; font-size: 0.625rem; color: var(--text-dim); margin-top: 3px; }
 .flow__payload { margin-top: 20px; }
-.flow__payload h3 { color: var(--text-muted); font-size: 0.6875rem; font-weight: 600; margin-bottom: 8px; }
-.flow__payload pre { margin: 0; font-size: 0.6875rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-muted); }
+.flow__payload h3 { color: var(--text-muted); font-size: 0.8125rem; font-weight: 600; margin-bottom: 8px; }
+.flow__payload pre { margin: 0; font-size: 0.75rem; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text-muted); }
 .flow__payload .flow__error { color: var(--danger); }
-.flow__empty { position: absolute; top: 40%; width: 100%; text-align: center; color: var(--text-dim); }
-@keyframes flow-pulse { 50% { opacity: 0.3; } }
+.flow__empty { position: absolute; top: 35%; left: 50%; transform: translateX(-50%); display: grid; gap: 10px; width: min(380px, calc(100% - 40px)); text-align: center; color: var(--text-muted); font-size: 0.875rem; line-height: 1.7; }
+.flow__empty strong { color: var(--text); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .flow * { animation: none !important; transition: none !important; } .flow :deep(.vue-flow__edge-path) { animation: none !important; } }
 @media (max-width: 700px) {
   .flow__toolbar { padding: 7px 10px; }
-  .flow .btn--icon { min-width: 36px; width: 36px; height: 36px; }
+  .flow .btn--icon { min-width: 40px; width: 40px; height: 40px; }
   .flow__inspector { position: absolute; bottom: 0; left: 0; right: 0; width: 100%; max-width: none; max-height: 54%; border-left: none; border-top: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); z-index: 6; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
   .flow__inspector-head { position: sticky; top: -14px; background: var(--surface-panel); z-index: 1; }
   .flow__footer { padding: 7px 12px; }
   .flow__warning { font-size: 0.625rem; padding: 5px 12px; }
   .flow__zoom { bottom: 12px; }
 }
+@media (pointer: coarse) { .flow .btn--icon { min-width: 44px; width: 44px; height: 44px; } .flow__search input { font-size: 1rem; } }
 </style>

@@ -85,12 +85,12 @@ onUnmounted(cleanup)
 </script>
 
 <style scoped>
-.output-card { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow-wrap: anywhere; }
+.output-card { min-width: 0; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); overflow-wrap: anywhere; }
 .output-card__head { display: flex; align-items: flex-start; gap: 10px; }
-.output-card__head > .material-icons { color: var(--accent); font-size: 1.25rem; margin-top: 2px; }
+.output-card__head > .material-icons { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-app); color: var(--accent); font-size: 1.125rem; }
 .output-card__head h2, .output-card__head p { margin: 0 0 6px; }
-.output-card__head h2 { font-size: 1rem; font-weight: 600; }
-.output-card__summary { white-space: pre-wrap; font-size: 0.875rem; }
+.output-card__head h2 { font-size: 1rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.5; }
+.output-card__summary { white-space: pre-wrap; font-size: 0.875rem; line-height: 1.75; max-width: 75ch; color: var(--text-muted); }
 .output-card__previews { display: grid; gap: 12px; margin: 12px 0; }
 .output-card__files { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 8px; list-style: none; margin: 12px 0 0; padding: 0; }
 .output-card__files li { min-width: 0; }
@@ -101,4 +101,8 @@ onUnmounted(cleanup)
 .output-card__jump { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
 .output-card--compact { max-width: 360px; margin-top: 12px; padding: 12px; }
 .output-card--compact :deep(.output-image__open img) { max-height: 160px; }
+.output-card__download:focus-visible, .output-card__jump:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.output-card__download:active:not(:disabled) { background: var(--surface-hover); }
+@media (hover: hover) and (pointer: fine) { .output-card__download:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-hover); } }
+@media (max-width: 560px) { .output-card { padding: 16px; } .output-card--compact { padding: 12px; } }
 </style>

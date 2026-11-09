@@ -1,10 +1,10 @@
 <template>
-  <EmptyState v-if="!name" icon="account_tree" :title="store.workflows.length ? 'Choose a workflow' : 'An idea, on repeat'"
-    :description="store.workflows.length ? 'Select a workflow to explore its steps and schedule.' : 'Start with a conversation. Turn it into something that runs for you.'"
+  <EmptyState v-if="!name" icon="account_tree" tone="workflow" :title="store.workflows.length ? 'Choose a workflow' : 'Make a process repeatable'"
+    :description="store.workflows.length ? 'Workflows are repeatable processes. Select one to inspect its steps, run it, or set a schedule.' : 'Describe a task in chat and ask your agent to turn it into a workflow. Run it when you need it, or give it a schedule.'"
     to="/chats" action="Open chats" />
 
   <!-- a draft waiting for a human -->
-  <div v-else-if="draft" class="stack grow">
+  <div v-else-if="draft" class="stack grow process-pane">
     <header class="pane-head draft-head" data-skin-part="header">
       <button class="btn btn--icon pane-head__back" aria-label="Back to workflows" @click="backTo('/workflows')">
         <span class="material-icons">arrow_back</span>
@@ -64,12 +64,12 @@
   </div>
 
   <!-- a published workflow -->
-  <div v-else-if="workflow" class="stack grow">
+  <div v-else-if="workflow" class="stack grow process-pane">
     <header class="pane-head" data-skin-part="header">
       <button class="btn btn--icon pane-head__back" aria-label="Back to workflows" @click="backTo('/workflows')">
         <span class="material-icons">arrow_back</span>
       </button>
-      <div class="avatar-sq" :style="avatarStyle(workflow.name)">
+      <div class="avatar-sq" aria-hidden="true">
         <span class="material-icons">account_tree</span>
       </div>
       <div class="grow">
@@ -134,6 +134,8 @@
         </section>
 
         <section class="block">
+          <h2 class="section-label">Run this workflow</h2>
+          <p class="block__intro">{{ Object.keys(inputProperties).length ? 'Review the inputs for this execution. Scheduled runs use the inputs saved with their schedule.' : 'This workflow needs no inputs. Start a run to follow its steps and inspect the result.' }}</p>
           <div v-for="(schema, key) in inputProperties" :key="key" class="field-row">
             <label class="field-row__label" :for="`workflow-input-${key}`">
               {{ key }}
@@ -169,7 +171,8 @@
         </section>
 
         <section class="block schedule-block">
-          <div class="section-label">Schedule</div>
+          <h2 class="section-label">Schedule</h2>
+          <p class="block__intro">Choose when this process repeats and the timezone it follows.</p>
 
           <div v-if="workflow.schedule" class="schedule-current">
             <span class="material-icons schedule-current__icon">event_repeat</span>
@@ -255,7 +258,8 @@
         </section>
 
         <section class="block">
-          <div class="section-label">Results go to</div>
+          <h2 class="section-label">Results go to</h2>
+          <p class="block__intro">Keep results together, or start a separate conversation for each run.</p>
           <div class="row segmented" style="margin-top: 8px">
             <button
               v-for="option in chatModes" :key="option.value" class="segment"
@@ -266,7 +270,8 @@
         </section>
 
         <section class="block">
-          <div class="section-label">Trigger</div>
+          <h2 class="section-label">Trigger</h2>
+          <p class="block__intro">Start this workflow from another tool with the current inputs.</p>
           <TriggerSnippet class="block__panel" :workflow="workflow.name" :inputs="payload()" />
         </section>
       </template>
@@ -276,6 +281,8 @@
       </section>
 
       <section v-else class="block">
+        <h2 class="section-label">Execution history</h2>
+        <p class="block__intro">Each run records the inputs, steps, and outcome of one execution.</p>
         <RouterLink
           v-for="entry in workflow.runs || []" :key="entry.workflow_id"
           class="run-row" :to="`/runs/${entry.workflow_id}`"
@@ -285,7 +292,12 @@
           <span class="caption dim">{{ entry.trigger }}</span>
           <span class="caption dim">{{ fullTime(entry.created_at) }}</span>
         </RouterLink>
-        <p v-if="!workflow.runs?.length" class="caption dim">No runs yet.</p>
+        <div v-if="!workflow.runs?.length" class="history-empty">
+          <span class="material-icons" aria-hidden="true">history</span>
+          <h3>No runs yet</h3>
+          <p>Run this workflow to create its first execution record.</p>
+          <button class="btn btn--outline" @click="tab = 'Run'">Configure a run</button>
+        </div>
       </section>
     </div>
   </div>
@@ -306,7 +318,7 @@ import TriggerSnippet from '../components/TriggerSnippet.vue'
 import WorkflowGraph from '../components/WorkflowGraph.vue'
 import ExecutionFlow from '../components/ExecutionFlow.vue'
 import { compareGraphs } from '../flow'
-import { RUN_TONE, avatarStyle, diffLines, fullTime, scheduleTime } from '../format'
+import { RUN_TONE, diffLines, fullTime, scheduleTime } from '../format'
 import { backTo } from '../router'
 import { actions, store } from '../store'
 import { api } from '../api'
@@ -543,9 +555,9 @@ onMounted(load)
   width: 100%;
   max-width: 290px;
   min-width: 0;
-  height: 32px;
-  padding: 4px 8px;
-  font-size: 0.75rem;
+  height: 36px;
+  padding: 6px 10px;
+  font-size: 0.8125rem;
   text-overflow: ellipsis;
 }
 
@@ -557,13 +569,24 @@ onMounted(load)
   min-width: 100px;
 }
 
+.process-pane { min-width: 0; min-height: 0; }
+
 .pane-body {
-  padding: 18px 22px 40px;
+  padding: 28px 32px 48px;
 }
+
+.pane-body .section-label { margin: 0 0 8px; color: var(--text); font-size: 0.9375rem; font-weight: 600; text-transform: none; letter-spacing: -0.015em; }
+.block__intro { max-width: 65ch; margin: 0 0 18px; color: var(--text-muted); font-size: 0.875rem; line-height: 1.7; }
+.history-empty { padding: 28px 20px; margin-top: 20px; border: 1px dashed var(--border-strong); border-radius: var(--radius-md); text-align: center; }
+.history-empty > .material-icons { color: var(--text-muted); font-size: 1.75rem; }
+.history-empty h3 { margin: 12px 0 6px; font-size: 1rem; }
+.history-empty p { margin: 0 0 18px; color: var(--text-muted); font-size: 0.875rem; line-height: 1.6; }
 
 .block {
   max-width: 760px;
-  margin-bottom: 26px;
+  margin-bottom: 32px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--border);
 }
 
 .block--wide {
@@ -597,7 +620,8 @@ onMounted(load)
 }
 
 .segment {
-  padding: 5px 12px;
+  min-height: 36px;
+  padding: 7px 12px;
   border: none;
   border-radius: var(--radius-xs);
   background: none;
@@ -607,9 +631,12 @@ onMounted(load)
   cursor: pointer;
 }
 
-.segment:hover {
-  color: var(--text);
+@media (hover: hover) and (pointer: fine) {
+  .segment:hover { color: var(--text); }
+  .run-row:hover { background: var(--surface-hover); }
 }
+.segment:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.segment:active { background: var(--surface-hover); }
 
 .segment--active {
   background: var(--accent-soft);
@@ -638,12 +665,15 @@ onMounted(load)
   align-items: center;
   gap: 12px;
   margin-top: 10px;
-  padding: 10px 0 10px 12px;
-  border-left: 3px solid var(--accent);
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--surface-panel);
 }
 
 .schedule-current__icon {
-  color: var(--accent);
+  color: var(--warning);
   font-size: 1.25rem;
 }
 
@@ -699,31 +729,31 @@ onMounted(load)
 }
 
 .schedule-actions {
-  margin-top: 14px;
+  margin-top: 18px;
+  flex-wrap: wrap;
 }
 
 .run-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 10px;
-  border-radius: var(--radius-sm);
+  padding: 14px 10px;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-xs);
   color: inherit;
   text-decoration: none;
-}
-
-.run-row:hover {
-  background: var(--surface-hover);
 }
 
 .avatar-sq {
   display: grid;
   place-items: center;
   flex: none;
-  width: 34px;
-  height: 34px;
-  clip-path: var(--octagon);
-  color: var(--accent);
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .avatar-sq .material-icons {
@@ -771,16 +801,9 @@ onMounted(load)
     padding: 0 8px;
   }
 
-  .pane-head .btn--primary {
-    width: 36px;
-    padding: 0;
-    overflow: hidden;
-    font-size: 0;
-  }
-
-  .pane-head .btn--primary::after {
-    content: '✓';
-    font-size: 1rem;
+  .draft-head .btn--primary {
+    flex: 1 1 100%;
+    min-height: 40px;
   }
 
   .run-row {
@@ -818,5 +841,9 @@ onMounted(load)
   .schedule-day {
     width: auto;
   }
+}
+@media (pointer: coarse) {
+  .flow-picker, .pane-body .field { font-size: 1rem; }
+  .segment { min-height: 44px; }
 }
 </style>

@@ -64,19 +64,21 @@ const sources = { workflow: 'MCP · direct workflow call', agent_mcp: 'MCP · ag
 
 <style scoped>
 .run-statistics { max-width: 860px; }
+.run-statistics .section-label { font-size: 0.8125rem; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
 .statistics-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
-.statistics-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); padding: 14px; }
-.statistics-card strong { display: block; font-size: 1.5rem; margin-top: 6px; font-variant-numeric: tabular-nums; }
-h3 { font-size: 0.9375rem; margin: 24px 0 12px; }
+.statistics-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); padding: 18px; }
+.statistics-card strong { display: block; font-size: 1.625rem; font-weight: 600; letter-spacing: -0.035em; margin-top: 10px; font-variant-numeric: tabular-nums; }
+h3 { font-size: 1rem; font-weight: 600; margin: 32px 0 16px; padding-top: 24px; border-top: 1px solid var(--border); letter-spacing: -0.02em; }
 .caption { line-height: 1.6; }
 .token-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; font-size: 0.8125rem; }
 .token-counts dt { color: var(--text-muted); }
 .token-counts dd { margin: 4px 0 0; font-variant-numeric: tabular-nums; }
-.statistics-table-wrap { overflow-x: auto; }
+.statistics-table-wrap { overflow-x: auto; overscroll-behavior-inline: contain; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .statistics-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
-.statistics-table th, .statistics-table td { text-align: right; padding: 10px 8px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.statistics-table th, .statistics-table td { text-align: right; padding: 13px 12px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
 .statistics-table th:first-child { text-align: left; width: 55%; min-width: 110px; overflow-wrap: anywhere; word-break: break-word; }
-.statistics-table thead th { font-weight: 500; color: var(--text-muted); }
+.statistics-table thead th { font-weight: 500; color: var(--text-muted); background: var(--surface-panel); }
+.statistics-table tbody tr:last-child > * { border-bottom: 0; }
 .statistics-table tbody th { font-weight: 500; }
 .statistics-table small { display: block; color: var(--text-muted); margin-top: 4px; font-weight: 400; }
 .statistics-scope { margin-top: 24px; }

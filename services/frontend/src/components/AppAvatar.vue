@@ -17,7 +17,7 @@ watch(image, () => { failed.value = false; loaded.value = false })
 </script>
 
 <style scoped>
-.app-avatar { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--app-avatar-size, 36px); height: var(--app-avatar-size, 36px); border-radius: var(--radius-sm); overflow: hidden; }
+.app-avatar { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--app-avatar-size, 36px); height: var(--app-avatar-size, 36px); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 .app-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .app-avatar__image--pending { opacity: 0; }
 .app-avatar .material-icons { font-size: calc(var(--app-avatar-size, 36px) * .55); }

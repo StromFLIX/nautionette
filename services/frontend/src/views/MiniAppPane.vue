@@ -1,9 +1,9 @@
 <template>
-  <div v-if="!route.params.id" class="app-empty stack grow">
-    <span class="material-icons" aria-hidden="true">apps</span>
-    <h1>Your apps</h1><p>Choose an agent and open an app, or ask your agent to build one.</p>
-    <RouterLink class="btn btn--outline" to="/settings/app-runtimes">App runtimes</RouterLink>
-  </div>
+  <EmptyState v-if="!route.params.id" icon="apps" title="An interface for your task"
+    :description="`Apps are interfaces your agent builds in ${brand.name}. Open one from the list, or ask your agent to build one in chat.`"
+    to="/chats" action="Open chats">
+    <RouterLink class="miniapp__runtime-link" to="/settings/app-runtimes">Manage app runtimes</RouterLink>
+  </EmptyState>
   <section v-else class="miniapp stack grow" aria-label="Mini-app">
     <header class="miniapp__head row">
       <button class="btn btn--icon miniapp__back" aria-label="Back to apps" @click="backTo(appList)"><span class="material-icons">arrow_back</span></button>
@@ -69,6 +69,8 @@ import { connectMiniapp, miniappDocument } from '../miniapp-bridge'
 import { appOwner, appState } from '../miniapps'
 import AppAvatar from '../components/AppAvatar.vue'
 import AppResources from '../components/AppResources.vue'
+import EmptyState from '../components/EmptyState.vue'
+import { brand } from '../brand'
 const route = useRoute(), router = useRouter()
 const item = ref(null), frame = ref(null), runtime = ref(null), diagnostics = ref(null)
 const error = ref(''), resourceError = ref(''), diagnosticError = ref('')
@@ -149,23 +151,24 @@ function remove () {
 
 <style scoped>
 .miniapp { min-width: 0; min-height: 0; height: 100%; }
-.miniapp__head { flex: none; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--border); min-width: 0; }
+.miniapp__head { flex: none; gap: 12px; padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--surface-panel); min-width: 0; }
 .miniapp__identity { min-width: 0; }
-.miniapp__head h1 { margin: 0; font-size: 1rem; }
+.miniapp__head h1 { margin: 0; font-size: 1rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.4; }
 .miniapp__head p { margin: 4px 0 0; }
 .miniapp__selected { background: var(--accent-soft); color: var(--accent); }
 .miniapp__frame { border: 0; width: 100%; min-height: 0; background: var(--surface-app); }
 .miniapp__notice { padding: 12px 18px; margin: 0; }
-.miniapp__details { min-height: 0; padding: 28px; background: var(--surface-panel); }
-.miniapp__info-inner { max-width: 960px; margin: auto; }
+.miniapp__details { min-height: 0; padding: 32px; background: var(--surface-app); overscroll-behavior: contain; }
+.miniapp__info-inner { max-width: 880px; margin: auto; }
+.miniapp__info-inner .caption { line-height: 1.7; }
 .miniapp__section { margin-top: 28px; padding-top: 22px; border-top: 1px solid var(--border); }
 .miniapp__section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-.miniapp__section-head h2 { margin: 0; font-size: .9375rem; font-weight: 650; }
+.miniapp__section-head h2 { margin: 0; font-size: 1rem; font-weight: 600; letter-spacing: -0.02em; }
 .miniapp__section-head p { margin: 8px 0 0; }
 .miniapp__actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .miniapp__actions .material-icons { font-size: 1.125rem; }
 .miniapp__actions a { text-decoration: none; }
-.miniapp__release { padding: 14px; margin-bottom: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-app); }
+.miniapp__release { padding: 18px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); }
 .miniapp__release-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .miniapp__release-row strong { font-size: .875rem; }
 .miniapp__release-row time { margin-left: auto; }
@@ -174,7 +177,7 @@ function remove () {
 .miniapp__pin-label .material-icons { font-size: .875rem; }
 .miniapp__error { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; color: var(--danger); padding: 12px; background: var(--surface-panel); border-radius: var(--radius-xs); }
 .miniapp__meta { margin: 12px 0 0; }
-.miniapp__disclosure summary { cursor: pointer; font-size: .875rem; font-weight: 600; }
+.miniapp__disclosure summary { padding-block: 6px; cursor: pointer; font-size: .9375rem; font-weight: 600; line-height: 1.6; }
 .miniapp__disclosure summary span { margin-left: 8px; font-weight: 400; }
 .miniapp__disclosure[open] summary { margin-bottom: 16px; color: var(--accent); }
 .miniapp__grants { list-style: none; padding: 0; }
@@ -185,10 +188,8 @@ function remove () {
 .miniapp__failed { color: var(--danger); }
 .miniapp__footer { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 28px; }
 .miniapp__back { display: none; }
-.app-empty { min-height: 0; align-items: center; justify-content: center; padding: 32px; text-align: center; }
-.app-empty > .material-icons { font-size: 3rem; color: var(--accent); }
-.app-empty h1 { font-size: 1.5rem; margin: 18px 0 4px; }
-.app-empty p { max-width: 340px; color: var(--text-muted); }
+.miniapp__runtime-link { color: var(--text-muted); font-size: .8125rem; text-underline-offset: 4px; }
+.miniapp__runtime-link:focus-visible, .miniapp__disclosure summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 @media (max-width: 900px) { .miniapp__back { display: inline-flex; } .miniapp__head { padding: calc(8px + env(safe-area-inset-top)) 8px 8px; gap: 4px; --app-avatar-size: 30px; } .miniapp__details { padding: 20px 14px max(24px, env(safe-area-inset-bottom)); } .miniapp__section-head { align-items: flex-start; } }
 @media (max-width: 380px) { .miniapp__head > .app-avatar { display: none; } }
 </style>
