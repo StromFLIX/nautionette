@@ -7,6 +7,37 @@ import re
 import sqlite3
 
 
+def add_delegated_chat_tree(conn: sqlite3.Connection) -> None:
+    """Keep delegation ancestry independent of branches and repair old auto-labels once."""
+    if any(row["name"] == "delegated_parent_chat_id" for row in conn.execute("PRAGMA table_info(chats)")):
+        return
+    conn.execute("ALTER TABLE chats ADD COLUMN delegated_parent_chat_id TEXT")
+    conn.execute(
+        "UPDATE chats SET delegated_parent_chat_id = "
+        "(SELECT parent_chat_id FROM agent_calls WHERE child_chat_id = chats.id ORDER BY rowid LIMIT 1)"
+    )
+    for row in conn.execute(
+        "SELECT c.id, c.title, c.agent_name, m.content, m.meta FROM chats c "
+        "JOIN messages m ON m.rowid = (SELECT rowid FROM messages WHERE chat_id = c.id "
+        "AND role = 'user' ORDER BY rowid LIMIT 1) "
+        "WHERE c.delegated_parent_chat_id IS NOT NULL AND c.title_state = 'manual' "
+        "AND c.title_revision = 1"
+    ):
+        sender = json.loads(row["meta"]).get("sender_agent") or {}
+        # Do not change renamed chats, human branches, or conversations without
+        # an authenticated delegated sender. No model calls during startup.
+        if row["title"] != f"{sender.get('name', 'Agent')} → {row['agent_name']}":
+            continue
+        title = " ".join(row["content"].split())[:80]
+        if title:
+            conn.execute(
+                "UPDATE chats SET title = ?, title_state = 'provisional', "
+                "title_revision = title_revision + 1 WHERE id = ?",
+                (title, row["id"]),
+            )
+    conn.execute("CREATE INDEX IF NOT EXISTS chats_delegated_parent ON chats(delegated_parent_chat_id)")
+
+
 def add_agent_grouping(conn: sqlite3.Connection, model: str, agent_set: str) -> None:
     """Classify old custom presets once, never against a profile on every read.
 

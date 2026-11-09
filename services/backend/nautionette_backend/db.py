@@ -17,7 +17,12 @@ from pathlib import Path
 from typing import Any
 
 from .config import settings
-from .migrations import add_agent_grouping, remove_dashboards, remove_internet_approval
+from .migrations import (
+    add_agent_grouping,
+    add_delegated_chat_tree,
+    remove_dashboards,
+    remove_internet_approval,
+)
 from .output_ids import publication_request_id
 from .search_index import install as install_search_index
 from .search_index import load_extension as load_search_extension
@@ -479,6 +484,7 @@ class Database:
             remove_dashboards(self._conn)
             remove_internet_approval(self._conn)
             add_agent_grouping(self._conn, settings.agent_model, settings.default_agent_set)
+            add_delegated_chat_tree(self._conn)
             # Backfill only legacy rows, never overwrite live message timestamps on restart.
             self._conn.execute(
                 "UPDATE chats SET last_message_at = COALESCE("
@@ -665,7 +671,17 @@ class Database:
 
     def list_chats(self, limit: int = 200) -> list[dict[str, Any]]:
         rows = self.query(
-            f"SELECT *, {_CHAT_UNREAD} FROM chats ORDER BY last_activity_at DESC, id LIMIT ?",  # noqa: S608
+            # The recent page selects families, not fragments: retain older
+            # ancestors and descendants so the sidebar can show the whole tree.
+            f"WITH RECURSIVE recent AS ("  # noqa: S608
+            "SELECT id FROM chats ORDER BY last_activity_at DESC, id LIMIT ?), "
+            "ancestors(id) AS (SELECT id FROM recent UNION "
+            "SELECT c.delegated_parent_chat_id FROM chats c JOIN ancestors a ON c.id = a.id "
+            "WHERE c.delegated_parent_chat_id IS NOT NULL), "
+            "family(id) AS (SELECT id FROM ancestors UNION "
+            "SELECT c.id FROM chats c JOIN family f ON c.delegated_parent_chat_id = f.id) "
+            f"SELECT *, {_CHAT_UNREAD} FROM chats WHERE id IN (SELECT id FROM family) "
+            "ORDER BY last_activity_at DESC, id",
             (limit,),
         )
         if not rows:

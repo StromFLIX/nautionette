@@ -85,10 +85,15 @@
             <span class="side__group-count">{{ group.chats.length }} {{ group.chats.length === 1 ? 'chat' : 'chats' }}</span>
           </h2>
 
-          <ChatRow
-            v-for="chat in group.chats" :key="chat.id"
-            :chat="chat" :active-route-id="route.params.id" :read-busy="readBusy" @toggle-unread="setUnread"
-          />
+          <template v-for="chat in group.chats" :key="chat.id">
+            <ChatRow
+              v-for="node in chatTreeRows(chat.treeNode, query.trim() ? searchExpandedChats : expandedChats)" :key="node.chat.id"
+              :chat="node.chat" :active-route-id="route.params.id" :read-busy="readBusy"
+              :tree-depth="node.depth" :descendant-count="node.count" :tree-expanded="node.open"
+              :tree-answering="node.summary.answering" :tree-unread="node.summary.unread" :tree-activity-at="node.summary.last_activity_at"
+              @toggle-tree="toggleChatTree(node.chat.id)" @toggle-unread="setUnread"
+            />
+          </template>
         </div>
 
         <button
@@ -206,6 +211,7 @@ import PinnedApps from './PinnedApps.vue'
 import { appOwner } from '../miniapps'
 import { preferences } from '../preferences'
 import { CHAT_GROUP_OPTIONS, groupChats } from '../chat-groups'
+import { chatAncestors, chatForest, filterChatForest, chatTreeRows } from '../chat-tree'
 import { belongsToAgent } from '../agent-config'
 import { chatLocation } from '../router'
 
@@ -245,12 +251,32 @@ watch(activeMinutes, () => { showOlder.value = false })
 const activeLabel = computed(() =>
   ({ 60: 'hour', 1440: '24 hours', 10080: '7 days', 43200: '30 days' }[activeMinutes.value] || 'selected range'))
 
+const expandedChats = ref(new Set())
+const searchExpandedChats = ref(new Set())
+function toggleChatTree (id) {
+  const expansion = query.value.trim() ? searchExpandedChats : expandedChats
+  const next = new Set(expansion.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  expansion.value = next
+}
+
+// Reveal the selected conversation on direct navigation, but let users collapse
+// it again. Polling the same ancestry must not undo their disclosure choice.
+watch(() => JSON.stringify([route.params.id, chatAncestors(store.chats, route.params.id)]), () => {
+  expandedChats.value = new Set([...expandedChats.value, ...chatAncestors(store.chats, route.params.id)])
+}, { immediate: true })
+
+function isTreeActive (chat) {
+  return chatTreeRows(chat.treeNode, new Set(), true).some(node => props.isChatActive(node.chat))
+}
+
 const chatGroups = computed(() =>
   groupChats(filteredChats.value, groupBy.value, store.projects)
-    .map(group => ({ ...group, chats: group.chats.filter(chat => showOlder.value || props.isChatActive(chat)) }))
+    .map(group => ({ ...group, chats: group.chats.filter(chat => showOlder.value || isTreeActive(chat)) }))
     .filter(group => group.chats.length))
 
-const visibleCount = computed(() => filteredChats.value.filter(chat => props.isChatActive(chat)).length)
+const visibleCount = computed(() => filteredChats.value.filter(isTreeActive).length)
 const hiddenCount = computed(() => filteredChats.value.length - visibleCount.value)
 
 async function setUnread (chat, unread) {
@@ -275,7 +301,17 @@ const heading = computed(() => selectedAgent.value?.name || ({ chats: 'Chats', w
 const matches = (haystack) => haystack.toLowerCase().includes(query.value.trim().toLowerCase())
 
 const filteredChats = computed(() =>
-  store.chats.filter((chat) => belongsToAgent(chat, route.query.agent) && matches(`${chat.title} ${chat.last_message?.preview || ''}`)))
+  filterChatForest(chatForest(store.chats), chat =>
+    belongsToAgent(chat, route.query.agent) && matches(`${chat.title} ${chat.last_message?.preview || ''}`))
+    .map(treeNode => ({ ...treeNode.summary, treeNode })))
+
+// Search reveals context paths without discarding the normal disclosure state.
+// Track IDs rather than reactive objects so list polling cannot reopen a tree.
+watch(() => JSON.stringify([query.value.trim(), filteredChats.value.flatMap(chat =>
+  chatTreeRows(chat.treeNode, new Set(), true).filter(node => node.children.length).map(node => node.chat.id))]), () => {
+  searchExpandedChats.value = new Set(filteredChats.value.flatMap(chat =>
+    chatTreeRows(chat.treeNode, new Set(), true).filter(node => node.children.length).map(node => node.chat.id)))
+}, { immediate: true })
 
 const filteredWorkflows = computed(() =>
   store.workflows.filter((workflow) => matches(`${workflow.name} ${workflow.title || ''} ${workflow.description || ''}`)))

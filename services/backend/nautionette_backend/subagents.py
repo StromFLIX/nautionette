@@ -179,16 +179,11 @@ async def start(grant: str, request_id: str, agent_id: str, text: str, chat_id: 
         )
         try:
             if not chat_id:
-                chat = await new_chat(
-                    {
-                        "agent_id": agent_id,
-                        "title": (
-                            f"{job.get('agent_name') or 'Agent'} → "
-                            f"{agent_profiles.get_agent(agent_id)['name']}"
-                        ),
-                    }
-                )
+                # Leave the title provisional: normal message admission generates
+                # a task title from the delegated prompt, just like a human chat.
+                chat = await new_chat({"agent_id": agent_id})
                 chat_id = chat["id"]
+                db.execute("UPDATE chats SET delegated_parent_chat_id=? WHERE id=?", (parent_chat, chat_id))
                 db.execute("UPDATE agent_calls SET child_chat_id=? WHERE id=?", (chat_id, call_id))
 
             def before_accept() -> None:

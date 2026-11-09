@@ -76,6 +76,11 @@ def test_roundtrip_idempotence_sender_wait_and_continuation(client, db, scope):
     assert first.status_code == 200, first.text
     result = first.json()
     assert result["state"] == "running" and result["depth"] == 1
+    child_chat = db.get_chat(result["chat_id"])
+    assert child_chat["delegated_parent_chat_id"] == scope["chat"]["id"]
+    assert child_chat["parent_chat_id"] is None  # not a human branch
+    assert child_chat["title"] == "Find facts"
+    assert child_chat["title_state"] == "provisional"
     assert start(client, scope).json()["id"] == result["id"]
     assert start(client, scope, text="Different").status_code == 409
     assert db.one("SELECT COUNT(*) AS n FROM agent_calls")["n"] == 1
@@ -141,6 +146,16 @@ def test_nested_depth_parallel_and_default_empty_allowlist(client, db, scope):
         second = client.post("/api/subagents/call", json=payload)
         assert second.status_code == 200, second.text
         assert second.json()["depth"] == 2
+        assert db.get_chat(second.json()["chat_id"])["delegated_parent_chat_id"] == first["chat_id"]
+        # A recent nested child retains its older ancestors and siblings,
+        # even when the ordinary recent-chat page would contain just one row.
+        db.execute("UPDATE chats SET last_activity_at=1")
+        db.execute("UPDATE chats SET last_activity_at=100 WHERE id=?", (second.json()["chat_id"],))
+        assert {chat["id"] for chat in db.list_chats(limit=1)} == {
+            scope["chat"]["id"],
+            first["chat_id"],
+            second.json()["chat_id"],
+        }
         assert "parallel" in start(client, scope, "sibling").json()["detail"]
         with child_scope(db, second.json()) as grandchild:
             payload.update(grant=grandchild, request_id="too-deep")
