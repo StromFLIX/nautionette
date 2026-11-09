@@ -6,7 +6,7 @@
     <div class="setting">
       <label for="git-mode" class="setting__label">Attribution</label>
       <select id="git-mode" v-model="form.git_authorship_mode" class="field">
-        <option value="automation">Nautionette only (current default)</option>
+        <option value="automation">Automation only (current default)</option>
         <option value="human_author">You as author · automation as committer</option>
         <option value="human_author_bot_coauthor">You as author · automation as co-author (recommended)</option>
         <option value="bot_author_human_coauthor">Automation as author · you as co-author</option>

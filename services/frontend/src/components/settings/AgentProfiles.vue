@@ -1,7 +1,7 @@
 <template>
   <section id="agent-profiles" class="setting profiles">
     <div class="row profiles__head">
-      <div class="grow"><h3 class="setting__label">Agents</h3><p class="caption dim">People to chat with. Each with their own tools, projects and instructions.</p></div>
+      <div class="grow"><h3 class="setting__label">Agents</h3><p class="caption dim">Save a configuration to reuse across chats. Existing conversations keep their own settings.</p></div>
       <button v-if="!editing" class="btn btn--primary btn--sm" type="button" :disabled="busy || !store.catalogLoaded" @click="open()"><span class="material-icons" aria-hidden="true">add</span>New agent</button>
     </div>
     <p v-if="error" class="caption field-hint--bad" role="alert">{{ error }}</p>
@@ -33,7 +33,7 @@
       <p class="caption dim">Click the avatar or choose a file. PNG, JPEG or WebP · up to 5 MiB. Previewed as a rounded rectangle and stored with this agent.</p>
       <p v-if="imageError" class="caption field-hint--bad" role="alert">{{ imageError }}</p>
       <label class="profile-editor__label" for="profile-prompt">System prompt <span class="dim">optional</span></label>
-      <textarea id="profile-prompt" class="field profile-editor__prompt" :value="draft.config.system_prompt || ''" rows="5" maxlength="32000" :disabled="busy" placeholder="How should this person think, speak and help?" @input="setPrompt($event.target.value)" />
+      <textarea id="profile-prompt" class="field profile-editor__prompt" :value="draft.config.system_prompt || ''" rows="5" maxlength="32000" :disabled="busy" placeholder="How should this agent think, speak and help?" @input="setPrompt($event.target.value)" />
       <p class="caption dim">Additional instructions for new chats. The app’s core operating rules still apply.</p>
       <fieldset :disabled="busy" class="setting">
         <legend class="setting__label">Allowed subagents</legend>
@@ -212,7 +212,7 @@ function remove (agent) {
 .profiles__head .material-icons { font-size: 1rem; }
 .profiles__list { display: grid; gap: 10px; }
 .profile-card { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); }
-.profile-card__mark { display: grid; place-items: center; width: 34px; height: 34px; flex: none; clip-path: var(--octagon); background: var(--accent-soft); color: var(--accent); font-size: 1.0625rem; }
+.profile-card__mark { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent); font-size: 1.0625rem; }
 .profile-card__info { display: grid; gap: 4px; min-width: 100px; flex-basis: 45%; overflow-wrap: anywhere; }
 .profile-card__info strong { font-size: 0.8125rem; font-weight: 600; }
 .profile-card__open { border: 0; padding: 0; text-align: left; background: none; color: var(--text); cursor: pointer; font: inherit; }

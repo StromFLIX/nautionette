@@ -24,7 +24,7 @@
         <span class="material-icons" aria-hidden="true">{{ section.icon }}</span><span class="grow">{{ section.label }}</span><span class="material-icons" aria-hidden="true">expand_more</span>
         <q-menu class="pick-menu">
           <template v-for="group in SETTINGS_GROUPS" :key="group">
-            <div class="pick-menu__label section-label">{{ group }}</div>
+            <div class="pick-menu__label settings__menu-group">{{ group }}</div>
             <button v-for="item in sectionsIn(group)" :key="item.key" v-close-popup type="button" class="pick-menu__item" @click="openSection(item.key)">
               <span class="grow">{{ item.label }}</span><span v-if="tab === item.key" class="material-icons pick-menu__check" aria-hidden="true">check</span>
             </button>
@@ -36,7 +36,7 @@
     <div class="settings__workspace grow">
       <nav class="settings__tree scroll-y" aria-label="Settings categories">
         <section v-for="group in SETTINGS_GROUPS" :key="group" class="settings__group">
-          <h2 class="section-label">{{ group }}</h2>
+          <h2>{{ group }}</h2>
           <RouterLink v-for="item in sectionsIn(group)" :key="item.key" :to="`/settings/${item.key}`" replace
             class="settings__category" :class="{ 'settings__category--active': !searching && tab === item.key }"
             :aria-current="!searching && tab === item.key ? 'page' : undefined" @click="query = ''">
@@ -46,7 +46,7 @@
             <span v-else-if="item.key === 'system' && health === 'degraded'" class="dot dot--bad" aria-label="Needs attention" />
           </RouterLink>
         </section>
-        <div class="settings__tree-foot"><span class="material-icons" aria-hidden="true">tune</span>Your workspace. Your way.</div>
+        <div class="settings__tree-foot"><span class="settings__brand-mark" :style="{ '--settings-brand-mark': `url(${brand.logo})` }" aria-hidden="true" />{{ brand.name }} settings</div>
       </nav>
 
       <div ref="body" class="settings__body scroll-y">
@@ -67,8 +67,8 @@
             <PackageSearch v-if="query.trim().length >= 2" :query="query" @select="choosePackage" />
           </section>
           <!-- Search never discards the current pane's in-progress form. -->
-          <div v-show="!searching">
-            <div class="settings__scope-line"><span>{{ section.group }}</span><span class="settings__scope">{{ section.scope }}</span></div>
+          <div v-show="!searching" class="settings__pane">
+            <div class="settings__scope-line"><span class="settings__scope">{{ section.scope }}</span><p>{{ scopeNote }}</p></div>
             <component :is="panes[tab]" ref="pane" :key="tab" />
           </div>
         </div>
@@ -81,6 +81,7 @@
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { health, store } from '../store'
+import { brand } from '../brand'
 import { SETTINGS_GROUPS, SETTINGS_SECTIONS, searchSettings } from '../settings-registry'
 import PackageSearch from '../components/settings/PackageSearch.vue'
 
@@ -93,6 +94,7 @@ const pane = ref(null)
 const panes = Object.fromEntries(SETTINGS_SECTIONS.map(item => [item.key, defineAsyncComponent(item.load)]))
 const section = computed(() => SETTINGS_SECTIONS.find(item => item.key === route.params.tab) || SETTINGS_SECTIONS[0])
 const tab = computed(() => section.value.key)
+const scopeNote = computed(() => section.value.scopeNote || 'Shared across this instance, independent of this device.')
 const searching = computed(() => Boolean(query.value.trim()))
 const results = computed(() => searchSettings(query.value))
 const sectionsIn = group => SETTINGS_SECTIONS.filter(item => item.group === group)
@@ -151,10 +153,13 @@ onUnmounted(() => { document.removeEventListener('keydown', shortcuts); observer
 <style scoped>
 .settings { min-width: 0; overflow: hidden; }
 .settings__head { gap: 14px; }
+.settings__head button, .settings__category, .settings__mobile-nav { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.settings__category:focus-visible, .settings__result:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.settings__category:active { background: var(--surface-hover); }
 .settings__breadcrumb { display: flex; align-items: center; gap: 12px; font-size: 0.8125rem; color: var(--text-dim); }
 .settings__breadcrumb h1 { color: var(--text); font-weight: 600; }
 .settings__shortcut { margin-right: 12px; }
-.settings__searchbar { padding: 20px 28px; border-bottom: 1px solid var(--border); background: var(--surface-app); }
+.settings__searchbar { padding: 18px 24px; border-bottom: 1px solid var(--border); background: var(--surface-app); }
 .settings__search { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 10px 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-input); }
 .settings__search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .settings__search > .material-icons { color: var(--text-dim); font-size: 1.25rem; }
@@ -162,24 +167,27 @@ onUnmounted(() => { document.removeEventListener('keydown', shortcuts); observer
 .settings__search input::placeholder { color: var(--text-dim); }
 .settings__search input::-webkit-search-cancel-button { display: none; }
 .settings__result-count { font-size: 0.6875rem; white-space: nowrap; color: var(--text-muted); }
-.settings__workspace { display: grid; grid-template-columns: 228px minmax(0, 1fr); }
-.settings__tree { display: flex; flex-direction: column; min-width: 0; padding: 20px 14px 16px; border-right: 1px solid var(--border); background: var(--surface-panel); }
-.settings__group + .settings__group { margin-top: 24px; }
-.settings__group h2 { margin: 0 10px 8px; font-size: 0.625rem; letter-spacing: 0.1em; }
-.settings__category { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 8px 10px; margin: 2px 0; border-radius: var(--radius-sm); color: var(--text-muted); text-decoration: none; font-size: 0.78125rem; }
+.settings__workspace { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 0; }
+.settings__tree { display: flex; flex-direction: column; min-width: 0; padding: 24px 16px 20px; border-right: 1px solid var(--border); background: var(--surface-app); overscroll-behavior: contain; }
+.settings__group + .settings__group { margin-top: 28px; }
+.settings__group h2 { margin: 0 10px 10px; font-size: 0.75rem; font-weight: 600; line-height: 1.5; color: var(--text); letter-spacing: 0; text-transform: none; }
+.settings__category { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 9px 10px; margin: 2px 0; border-radius: var(--radius-sm); color: var(--text-muted); text-decoration: none; font-size: 0.8125rem; }
 .settings__category > .material-icons { font-size: 1.0625rem; }
-.settings__category:hover { background: var(--surface-hover); color: var(--text); }
+@media (hover: hover) and (pointer: fine) {
+  .settings__category:hover { background: var(--surface-hover); color: var(--text); }
+  .settings__result:hover { background: var(--surface-hover); }
+}
 .settings__category--active { color: var(--accent); background: var(--accent-soft); }
 .settings__count { font-size: 0.625rem; color: var(--accent); }
-.settings__tree-foot { display: flex; align-items: center; gap: 8px; padding: 28px 10px 0; margin-top: auto; font-size: 0.625rem; color: var(--text-dim); }
-.settings__tree-foot .material-icons { font-size: 0.875rem; }
-.settings__body { min-width: 0; padding: 28px 40px 40px; scroll-padding: 28px; }
-.settings__inner { width: 100%; max-width: 940px; margin: 0 auto; }
-.settings__scope-line { display: flex; align-items: center; justify-content: space-between; color: var(--text-dim); font-size: 0.6875rem; margin-bottom: 10px; }
-.settings__scope { display: inline-flex; align-items: center; flex: none; height: 24px; padding: 0 8px; color: var(--text-muted); border: 1px solid var(--border); border-radius: var(--radius-xs); font-size: 0.625rem; white-space: nowrap; }
+.settings__tree-foot { display: flex; align-items: center; gap: 8px; padding: 32px 10px 0; margin-top: auto; font-size: 0.6875rem; color: var(--text-dim); }
+.settings__brand-mark { flex: none; width: 20px; height: 20px; background: currentColor; mask: var(--settings-brand-mark) center / contain no-repeat; }
+.settings__body { min-width: 0; padding: 32px 40px 48px; scroll-padding: 28px; overscroll-behavior: contain; }
+.settings__inner { width: 100%; max-width: 880px; margin: 0 auto; }
+.settings__scope-line { display: flex; align-items: flex-start; gap: 10px; color: var(--text-muted); margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.settings__scope-line p { margin: 3px 0 0; max-width: 66ch; font-size: 0.75rem; line-height: 1.6; }
+.settings__scope { display: inline-flex; align-items: center; flex: none; min-height: 26px; padding: 3px 8px; color: var(--text-muted); background: var(--surface-panel); border-radius: var(--radius-xs); font-size: 0.6875rem; font-weight: 500; white-space: nowrap; }
 .settings__section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
 .settings__result { display: flex; align-items: center; gap: 16px; padding: 18px 8px; border-bottom: 1px solid var(--border); border-radius: var(--radius-xs); text-decoration: none; color: var(--text); }
-.settings__result:hover { background: var(--surface-hover); }
 .settings__result-icon { color: var(--text-dim); font-size: 1.25rem; }
 .settings__result-path { font-size: 0.625rem; color: var(--text-dim); }
 .settings__result h3 { margin: 4px 0; font-weight: 600; font-size: 0.875rem; }
@@ -187,6 +195,11 @@ onUnmounted(() => { document.removeEventListener('keydown', shortcuts); observer
 .settings__result-arrow { font-size: 1rem; color: var(--accent); }
 .settings__no-results { color: var(--text-muted); overflow-wrap: anywhere; }
 .settings__mobile-nav { display: none; }
+.settings__menu-group { text-transform: none; letter-spacing: 0; font-size: 0.75rem; font-weight: 600; }
+@media (pointer: coarse) {
+  .settings__search input { font-size: max(16px, 1rem); }
+  .settings__category, .settings__mobile-nav { min-height: 44px; }
+}
 @media (max-width: 1100px) {
   .settings__workspace { grid-template-columns: 208px minmax(0, 1fr); }
   .settings__body { padding: 24px; }
@@ -199,6 +212,9 @@ onUnmounted(() => { document.removeEventListener('keydown', shortcuts); observer
   .settings__mobile-nav .material-icons { font-size: 1.125rem; }
   .settings__body { padding: 20px max(16px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
   .settings__head { gap: 8px; }
+  .settings__scope-line { gap: 8px; margin-bottom: 20px; padding-bottom: 16px; }
+  .settings__scope-line p { margin-top: 2px; }
+  .settings__result-count { display: none; }
   .settings__result { gap: 10px; padding: 16px 0; }
   .settings__result .settings__scope, .settings__result-arrow { display: none; }
 }

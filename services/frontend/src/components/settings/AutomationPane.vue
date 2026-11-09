@@ -1,6 +1,6 @@
 <template>
   <h2 class="settings__title">Automation</h2>
-  <p class="settings__intro">Schedules, inputs and delivery live with each workflow.</p>
+  <p class="settings__intro">Workflows are repeatable processes. Set schedules, inputs and delivery on each workflow; inspect past executions in Runs.</p>
   <section id="workflow-settings" class="setting">
     <div class="row">
       <h3 class="setting__group-title grow">Workflows</h3>
@@ -24,7 +24,9 @@ import { avatarStyle } from '../../format'
 
 <style scoped>
 .automation-row { display: flex; align-items: center; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--border); text-decoration: none; color: var(--text); }
-.automation-row:hover { background: var(--surface-hover); }
+@media (hover: hover) and (pointer: fine) {
+  .automation-row:hover { background: var(--surface-hover); }
+}
 .automation-row strong { font-size: 0.8125rem; overflow-wrap: anywhere; }
 .automation-row p { margin: 4px 0 0; }
 .automation-empty { padding: 24px 0; }

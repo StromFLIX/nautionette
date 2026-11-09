@@ -1,6 +1,6 @@
 <template>
   <h2 class="settings__title">Workspace</h2>
-  <p class="settings__intro">Keep it focused. Keep it yours.</p>
+  <p class="settings__intro">Adjust navigation, conversation layout and accessibility for the way you work. Changes are saved automatically on this device.</p>
   <section v-for="group in WORKSPACE_GROUPS" :key="group" class="setting">
     <h3 class="setting__group-title">{{ group }}</h3>
     <div v-for="field in WORKSPACE_SETTINGS.filter(item => item.group === group)" :id="field.key" :key="field.key" class="preference-row">

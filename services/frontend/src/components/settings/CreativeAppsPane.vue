@@ -153,8 +153,8 @@ onUnmounted(() => { disposed = true; clearTimeout(timer); unsubscribe() })
 .craft-policy summary { cursor: pointer; color: var(--text-muted); }
 .craft-filters { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; }
 .craft-filters select { width: auto; max-width: 100%; }
-.craft-app { margin: 12px 0; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-panel); overflow-wrap: anywhere; }
-.craft-app--outdated { border-left: 3px solid var(--accent); }
+.craft-app { margin: 0; padding: 24px 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.craft-app--outdated { border-left: 3px solid var(--accent); padding-left: 16px; }
 .craft-app__head .grow, .craft-updates__head .grow { min-width: 0; flex-basis: 210px; }
 .craft-app h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .craft-app p { margin: 10px 0; line-height: 1.6; }
@@ -168,5 +168,5 @@ input[type=checkbox] { accent-color: var(--accent); }
 .craft-advanced summary { cursor: pointer; color: var(--text-muted); }
 .craft-app__version { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .craft-app__version input { width: 120px; min-width: 0; }
-@media (max-width: 640px) { .craft-app, .craft-updates { padding: 14px; } .craft-app__version > label { width: 100%; } .craft-updates__head > button { flex-grow: 1; } }
+@media (max-width: 640px) { .craft-updates { padding: 16px; } .craft-app__version > label { width: 100%; } .craft-updates__head > button { flex-grow: 1; } }
 </style>

@@ -1,5 +1,6 @@
 <template>
   <h2 class="settings__title">Agents & models</h2>
+  <p class="settings__intro">Agents are reusable configurations for conversations: instructions, a model, tools and projects. Connect model providers here, then choose an agent when starting a chat.</p>
 
   <AgentProfiles />
 

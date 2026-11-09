@@ -1,6 +1,6 @@
 <template>
   <h2 class="settings__title">Activity</h2>
-  <p class="settings__intro">A live record of your workspace.</p>
+  <p class="settings__intro">Recent instance events for diagnosing changes and failures. For workflow execution history, open Runs.</p>
   <section id="activity-log" class="setting">
     <input v-model="query" class="field" type="search" placeholder="Filter events…" aria-label="Filter activity" />
     <details v-for="(event, index) in events" :key="`${event.at}-${event.kind}-${index}`" class="settings-disclosure activity-event">

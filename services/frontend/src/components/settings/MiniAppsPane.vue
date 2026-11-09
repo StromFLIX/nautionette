@@ -1,6 +1,6 @@
 <template>
   <section id="app-runtimes" class="runtime-settings">
-    <div class="runtime-settings__heading"><div><h2 class="settings__title">App runtimes</h2><p class="caption muted">Live resource samples. Sleeping apps stay asleep.</p></div><button class="btn btn--outline btn--sm" :disabled="loading" @click="load"><span class="material-icons" aria-hidden="true">refresh</span>Refresh</button></div>
+    <div class="runtime-settings__heading"><div><h2 class="settings__title">App runtimes</h2><p class="settings__intro">Apps are interfaces with their own runtime and data. Inspect live resources here; sleeping apps stay asleep.</p></div><button class="btn btn--outline btn--sm" :disabled="loading" @click="load"><span class="material-icons" aria-hidden="true">refresh</span>Refresh</button></div>
     <p v-if="error" class="caption" role="alert">{{ error }}</p>
     <p v-if="loading && !overview" class="caption dim" role="status">Reading app resources…</p>
     <template v-if="overview">

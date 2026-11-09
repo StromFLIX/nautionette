@@ -1,5 +1,6 @@
 <template>
   <h2 class="settings__title">Projects</h2>
+  <p class="settings__intro">Connect repositories for agents to work on. Access is shared by the instance; each chat selects its own writable projects.</p>
   <p v-if="error" class="projects-error" role="alert">{{ error }}</p>
   <p v-if="route.query.github === 'pending'" class="caption" role="status">Waiting for organization approval.</p>
   <div id="github-app" class="setting">

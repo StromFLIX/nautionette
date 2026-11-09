@@ -1,5 +1,6 @@
 <template>
   <h2 class="settings__title">MCP servers</h2>
+  <p class="settings__intro">Connect external tools and services. Agents and chats choose which connected tools they can use.</p>
   <div id="mcp-servers" class="setting">
     <div class="row integration-head">
       <div class="setting__label grow">Servers</div>

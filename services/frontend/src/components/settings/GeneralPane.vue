@@ -1,6 +1,6 @@
 <template>
   <h2 class="settings__title">General</h2>
-  <p class="settings__intro">A starting point for every new chat.</p>
+  <p class="settings__intro">Choose the starting configuration for new conversations. Saved agents inherit these defaults unless you override them.</p>
   <p v-if="loadError" class="caption field-hint--bad" role="alert">{{ loadError }} <button class="btn btn--sm" @click="load">Retry</button></p>
 
   <section id="default-chat-agent" class="setting general-starting-agent">
@@ -18,13 +18,19 @@
 
   <section id="subagent-limits" class="setting">
     <h3 class="setting__label">Agent delegation limits · instance-wide</h3>
-    <p class="caption dim">Allow subagents in each saved agent’s settings. Zero disables calls. Root depth is 0; width counts all child calls per turn, including continuations. Parallelism counts unfinished subagent calls across one tree, including waiting parents (not the root). At capacity, new calls fail instead of queueing. Lower limits apply immediately; increases apply to new trees.</p>
-    <label for="subagent-depth">Maximum depth</label>
-    <input id="subagent-depth" v-model.number="form.subagent_max_depth" class="field" type="number" min="0" max="10" :disabled="saving || !loaded" />
-    <label for="subagent-width">Maximum children per turn</label>
-    <input id="subagent-width" v-model.number="form.subagent_max_width" class="field" type="number" min="0" max="100" :disabled="saving || !loaded" />
-    <label for="subagent-parallel">Maximum parallel calls per tree</label>
-    <input id="subagent-parallel" v-model.number="form.subagent_max_parallel" class="field" type="number" min="0" max="100" :disabled="saving || !loaded" />
+    <p class="caption dim">Allow subagents in each saved agent’s settings. Zero disables calls. Lower limits apply immediately; increases apply to new trees.</p>
+    <div class="general-limits">
+      <div><label for="subagent-depth">Maximum depth</label>
+        <input id="subagent-depth" v-model.number="form.subagent_max_depth" class="field" type="number" min="0" max="10" :disabled="saving || !loaded" /></div>
+      <div><label for="subagent-width">Maximum children per turn</label>
+        <input id="subagent-width" v-model.number="form.subagent_max_width" class="field" type="number" min="0" max="100" :disabled="saving || !loaded" /></div>
+      <div><label for="subagent-parallel">Maximum parallel calls per tree</label>
+        <input id="subagent-parallel" v-model.number="form.subagent_max_parallel" class="field" type="number" min="0" max="100" :disabled="saving || !loaded" /></div>
+    </div>
+    <details class="integration-details">
+      <summary>How delegation limits work</summary>
+      <p class="caption dim">Root depth is 0; width counts all child calls per turn, including continuations. Parallelism counts unfinished subagent calls across one tree, including waiting parents (not the root). At capacity, new calls fail instead of queueing.</p>
+    </details>
   </section>
 
   <details id="history" class="settings-disclosure general-history">
@@ -42,8 +48,9 @@
     <button class="btn btn--primary" :disabled="saving || !loaded" @click="saveSettings">{{ saving ? 'Saving…' : 'Save' }}</button>
   </div>
 
-  <details class="settings-disclosure general-connection">
-    <summary><span class="material-icons" aria-hidden="true">link</span><span class="grow">Connection</span><span class="caption dim">This device</span></summary>
+  <section class="setting general-connection" aria-labelledby="connection-title">
+    <div class="row"><h3 id="connection-title" class="setting__label grow">Connection</h3><span class="caption dim">This device</span></div>
+    <p class="caption dim">Connect this browser or app to your instance. These credentials do not change anyone else’s connection.</p>
     <div class="general-detail">
       <section id="server" class="setting">
         <label for="server-url" class="setting__label">Server</label>
@@ -60,7 +67,7 @@
         </div>
       </section>
     </div>
-  </details>
+  </section>
 </template>
 
 <script setup>
@@ -127,7 +134,10 @@ onMounted(load)
 .general-starting-agent .material-icons { font-size: 0.9375rem; }
 .general-baseline { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 28px; }
 .general-baseline h3 { margin: 0; }
-.general-detail { padding: 8px 18px 20px; }
+.general-detail { padding: 0 0 16px 24px; }
+.general-connection > .general-detail { padding: 20px 0 0; }
+.general-limits { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.general-limits label { display: block; min-height: 2.8em; margin-bottom: 6px; font-size: 0.75rem; line-height: 1.4; color: var(--text-muted); }
 .general-detail .setting__label { display: block; margin-bottom: 8px; }
 .general-detail > p { margin: 10px 0 0; }
 .general-detail .row > .field { flex: 1; }
@@ -137,7 +147,9 @@ onMounted(load)
 .settings__save { margin: 20px 0 36px; }
 @media (max-width: 600px) {
   .general-starting-agent .row { flex-wrap: wrap; }
-  .general-detail { padding-inline: 12px; }
+  .general-detail { padding-left: 20px; }
+  .general-limits { grid-template-columns: 1fr; }
+  .general-limits label { min-height: 0; }
   .settings__save { gap: 4px; }
 }
 </style>

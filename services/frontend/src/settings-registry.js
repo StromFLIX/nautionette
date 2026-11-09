@@ -6,7 +6,8 @@ const entry = (id, label, description, keywords = '') => ({ id, label, descripti
 /** A settings contribution supplies one pane and its search entries. No shell edits needed. */
 export const SETTINGS_SECTIONS = [
   {
-    key: 'general', label: 'General', icon: 'tune', group: 'Preferences', scope: 'Instance',
+    key: 'general', label: 'General', icon: 'tune', group: 'Your experience', scope: 'Instance',
+    scopeNote: 'Chat defaults are shared across this instance. Connection credentials below stay on this device.',
     load: () => import('./components/settings/GeneralPane.vue'),
     entries: [
       entry('default-chat-agent', 'Default agent', 'Start new chats with global defaults or a saved agent.', 'profile configuration preset'),
@@ -22,26 +23,28 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
-    key: 'appearance', label: 'Appearance', icon: 'palette', group: 'Preferences', scope: 'This device',
+    key: 'appearance', label: 'Appearance', icon: 'palette', group: 'Your experience', scope: 'This device',
+    scopeNote: 'Design choices are saved in this browser or app, not for everyone on the instance.',
     load: () => import('./components/settings/AppearancePane.vue'),
     entries: [
-      entry('themes', 'Color theme', 'Orbit, Nebula, Daylight or Sand. Make any of them yours.', 'dark light mode palette preset'),
+      entry('themes', 'Color theme', 'Choose a light or dark palette, then make it yours.', 'dark light mode palette preset'),
       entry('skin-library', 'Skin packs', 'Complete custom designs, including Winamp Classic and Windows XP examples.', 'library CSS layout textures typography import export download upload'),
       entry('theme-transfer', 'Import & export designs', 'Share complete skin packs or legacy themes as JSON, without account data.', 'backup restore download upload'),
-      entry('skin-recovery', 'Recover appearance', 'Restore Orbit with Ctrl / Cmd + Alt + 0, or open ?safe-appearance=1.', 'reset broken skin safe mode'),
+      entry('skin-recovery', 'Recover appearance', 'Restore the default appearance with Ctrl / Cmd + Alt + 0, or open ?safe-appearance=1.', 'reset broken skin safe mode'),
       ...THEME_TOKENS.map(token => entry(`token-${token.key}`, token.label, `Customize ${token.group.toLowerCase()}.`, `theme color style ${token.key} ${token.group}`))
     ]
   },
   {
-    key: 'workspace', label: 'Workspace', icon: 'space_dashboard', group: 'Preferences', scope: 'This device',
+    key: 'workspace', label: 'Workspace', icon: 'space_dashboard', group: 'Your experience', scope: 'This device',
+    scopeNote: 'Layout and accessibility preferences apply only to this browser or app.',
     load: () => import('./components/settings/WorkspacePane.vue'),
     entries: WORKSPACE_SETTINGS.map(field => entry(field.key, field.label, field.description || field.group, field.group))
   },
   {
-    key: 'agents', label: 'Agents & models', icon: 'memory', group: 'Connections', scope: 'Instance',
+    key: 'agents', label: 'Agents & models', icon: 'memory', group: 'Build & connect', scope: 'Instance',
     load: () => import('./components/settings/AgentsPane.vue'),
     entries: [
-      entry('agent-profiles', 'Saved agents', 'People with their own image, system prompt, model, tools and projects.', 'profile preset defaults inherit override duplicate avatar portrait persona instructions grouping'),
+      entry('agent-profiles', 'Saved agents', 'Reusable configurations with their own image, system prompt, model, tools and projects.', 'profile preset defaults inherit override duplicate avatar portrait persona instructions grouping'),
       entry('agent-profiles', 'Allowed subagents', 'Per-agent allowlist, empty by default. Enable delegation separately in the Agents tool group.', 'call wait permissions delegation'),
       entry('agent-sets', 'Agent sets', 'Available container environments and image readiness.', 'container docker runtime'),
       entry('model-integrations', 'Model integrations', 'Add, configure or test a model provider.', 'API key credentials OpenAI Anthropic OpenRouter gateway'),
@@ -49,19 +52,20 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
-    key: 'packages', label: 'Extension library', icon: 'inventory_2', group: 'Connections', scope: 'Workspace',
+    key: 'packages', label: 'Extension library', icon: 'inventory_2', group: 'Build & connect', scope: 'Workspace',
+    scopeNote: 'Install once for the workspace; enable separately in each agent or chat.',
     load: () => import('./components/settings/PackagesPane.vue'),
     entries: [entry('pi-packages', 'Extension library', 'Install extensions, skills and prompts for the workspace. Select them separately in agents and chats.', 'npm git search resources secrets environment configuration install update rollback')]
   },
   {
-    key: 'creative-apps', label: 'Creative apps', icon: 'draw', group: 'Connections', scope: 'Instance',
+    key: 'creative-apps', label: 'Creative apps', icon: 'draw', group: 'Build & connect', scope: 'Instance',
     load: () => import('./components/settings/CreativeAppsPane.vue'),
     entries: [
       entry('creative-apps', 'ArtCraft applications', 'Native creative tools. See outdated apps, update all, enable automatic updates or choose exact versions.', 'PhotoCraft VectorCraft FilmCraft LightCraft PdfCraft EffectCraft DesignCraft FigCraft WordCraft SoundCraft DeckCraft CADCraft GridCraft images PDF CAD spreadsheets slides audio video Rust headless latest automatic updates outdated releases')
     ]
   },
   {
-    key: 'mcp', label: 'MCP servers', icon: 'extension', group: 'Connections', scope: 'Instance',
+    key: 'mcp', label: 'MCP servers', icon: 'extension', group: 'Build & connect', scope: 'Instance',
     load: () => import('./components/settings/McpPane.vue'),
     entries: [
       entry('mcp-servers', 'MCP servers', 'Connect hosted HTTPS OAuth servers or run trusted stdio tools with CLI OAuth in agentgateway.', 'URL endpoint credentials authentication tools stdio command arguments environment npx uvx brave oauth workiq loopback desktop callback login'),
@@ -69,7 +73,7 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
-    key: 'projects', label: 'Projects', icon: 'folder_open', group: 'Development', scope: 'Instance',
+    key: 'projects', label: 'Projects', icon: 'folder_open', group: 'Build & connect', scope: 'Instance',
     load: () => import('./components/settings/ProjectsPane.vue'),
     entries: [
       entry('github-app', 'GitHub connection', 'Connect an account and manage repository access.', 'app installation permissions organization'),
@@ -78,7 +82,7 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
-    key: 'git', label: 'Git authorship', icon: 'attribution', group: 'Development', scope: 'Instance',
+    key: 'git', label: 'Git authorship', icon: 'attribution', group: 'Build & connect', scope: 'Instance',
     load: () => import('./components/settings/GitPane.vue'),
     entries: [
       entry('git-mode', 'Commit attribution', 'Choose authors, committers and co-authors.', 'mode GitHub credits'),
@@ -90,7 +94,8 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
-    key: 'automation', label: 'Automation', icon: 'account_tree', group: 'Operations', scope: 'Per workflow',
+    key: 'automation', label: 'Automation', icon: 'account_tree', group: 'Run & manage', scope: 'Per workflow',
+    scopeNote: 'Schedules, inputs and delivery are saved with each workflow, not on this device.',
     load: () => import('./components/settings/AutomationPane.vue'),
     entries: [
       entry('workflow-settings', 'Schedules & triggers', 'Configure recurrence, timezone and inputs for each workflow.', 'hourly daily weekly monthly webhook API'),
@@ -98,12 +103,12 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
-    key: 'app-runtimes', label: 'App runtimes', icon: 'apps', group: 'Operations', scope: 'Instance',
+    key: 'app-runtimes', label: 'App runtimes', icon: 'apps', group: 'Run & manage', scope: 'Instance',
     load: () => import('./components/settings/MiniAppsPane.vue'),
     entries: [entry('app-runtimes', 'App runtimes & resources', 'Running, sleeping and archived apps with memory, CPU, SQLite storage and image usage.', 'mini apps agents containers diagnostics debug limits RAM OOM processes')]
   },
   {
-    key: 'storage', label: 'Storage', icon: 'storage', group: 'Operations', scope: 'Instance',
+    key: 'storage', label: 'Storage', icon: 'storage', group: 'Run & manage', scope: 'Instance',
     load: () => import('./components/settings/StoragePane.vue'),
     entries: [
       entry('storage-overview', 'Output storage usage', 'Private MaxIO S3 bucket, originals, previews, revisions and migration health.', 'disk capacity available free filesystem database bytes requirements'),
@@ -113,7 +118,7 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
-    key: 'system', label: 'System', icon: 'monitor_heart', group: 'Operations', scope: 'Instance',
+    key: 'system', label: 'System', icon: 'monitor_heart', group: 'Run & manage', scope: 'Instance',
     load: () => import('./components/settings/SystemPane.vue'),
     entries: [
       entry('system-title', 'System health', 'Service status, diagnostics and runtime configuration.', 'worker temporal docker gateway version authentication'),
@@ -122,7 +127,7 @@ export const SETTINGS_SECTIONS = [
     ]
   },
   {
-    key: 'activity', label: 'Activity', icon: 'bolt', group: 'Operations', scope: 'Instance',
+    key: 'activity', label: 'Activity', icon: 'bolt', group: 'Run & manage', scope: 'Instance',
     load: () => import('./components/settings/ActivityPane.vue'),
     entries: [entry('activity-log', 'Activity log', 'Recent system events.', 'history notifications audit events runs errors')]
   }
