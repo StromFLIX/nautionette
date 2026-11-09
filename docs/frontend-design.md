@@ -2,7 +2,7 @@
 
 ## Direction
 
-Nautionette is a workspace first. Keep the conversation prominent and put
+Denkzeug is a workspace first. Keep the conversation prominent and put
 configuration one deliberate step away. Preserve capabilities; reduce their
 competition for attention.
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import http from 'node:http'
 import { once } from 'node:events'
 import oauth from '../desktop/oauth.cjs'
+import { brand } from './native-brand.mjs'
 
 const { createReceivers, redirectURL } = oauth
 const state = 's'.repeat(43)
@@ -52,6 +53,9 @@ test('real receiver binds before login, rejects wrong state/host/path/duplicates
   assert.equal(response.status, 200)
   assert.deepEqual(focused, [1])
   assert.ok(response.body.includes(returnLink))
+  assert.ok(response.body.includes(`<title>Return to ${brand.name}</title>`))
+  assert.ok(response.body.includes(`Open ${brand.name}</a>`))
+  assert.ok(!response.body.includes('Nautionette'))
   assert.ok(response.body.includes('history.replaceState'))
   assert.ok(!response.body.includes('secret-code') && !response.body.includes(state))
   assert.deepEqual(await pending, { method: 'GET', fields: { state, code: 'secret-code' } })

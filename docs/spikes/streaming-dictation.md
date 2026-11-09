@@ -25,7 +25,7 @@ prove which model, transport, or endpointing algorithm Anthropic uses. We did no
 inspect a Claude recording session and should not claim its implementation is known.
 Zero perceived delay is plausible; zero computation/network delay is not guaranteed.
 
-Nautionette **already does live transcription**, but repeated file transcription
+Denkzeug **already does live transcription**, but repeated file transcription
 is not the same as a native stateful streaming recognizer. Both a transport adapter
 and a recognizer/protocol change are needed for the larger improvement. Just putting
 the current WAV requests onto a WebSocket does not remove their inference cost.

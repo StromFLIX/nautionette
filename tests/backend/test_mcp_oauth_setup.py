@@ -123,6 +123,9 @@ def test_generic_dynamic_registration_is_saved_and_not_repeated_on_retry(client,
     auth = client.get(BASE + "/login/" + identifier).json()["authorization"]
     assert "registered-dynamic-client" in auth["authorization_url"]
     assert len(registrations) == 1
+    from nautionette.brand import NAME
+
+    assert registrations[0]["client_name"] == NAME
     client.delete(BASE + "/login/" + identifier)
     again = client.post(BASE + "/prepare/example", json={}).json()
     assert again["client_id"] == "registered-dynamic-client"

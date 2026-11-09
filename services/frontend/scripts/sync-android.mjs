@@ -1,4 +1,5 @@
-import { copyFile, readFile, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { configureAndroidStrings } from './native-brand.mjs'
 
 // Keep generated Gradle files out of Git while retaining our small native bridge.
 // Run after cap add/sync so the activity replacement cannot be overwritten.
@@ -19,3 +20,22 @@ for (const permission of ['RECORD_AUDIO', 'MODIFY_AUDIO_SETTINGS']) {
   }
 }
 await writeFile(manifestPath, manifest)
+// Keep the app and launcher/activity labels in sync without touching package IDs,
+// custom_url_scheme or permission identifiers in the generated Android project.
+const stringsPath = new URL('android/app/src/main/res/values/strings.xml', root)
+await writeFile(stringsPath, configureAndroidStrings(await readFile(stringsPath, 'utf8')))
+// Android downscales the highest-density approved artwork. Remove only the
+// generated Capacitor launcher bitmaps, not unrelated resources or custom IDs.
+const resources = new URL('android/app/src/main/res/', root)
+for (const density of ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']) {
+  for (const name of ['ic_launcher', 'ic_launcher_round', 'ic_launcher_foreground']) {
+    await rm(new URL(`mipmap-${density}/${name}.png`, resources), { force: true })
+  }
+}
+await mkdir(new URL('mipmap-xxxhdpi/', resources), { recursive: true })
+for (const name of ['ic_launcher', 'ic_launcher_round', 'ic_launcher_foreground']) {
+  const source = name === 'ic_launcher_foreground' ? 'ic_launcher_foreground.png' : 'ic_launcher.png'
+  await copyFile(new URL(`native/icons/${source}`, root), new URL(`mipmap-xxxhdpi/${name}.png`, resources))
+}
+// Replace the stock green adaptive-icon background while preserving resource IDs.
+await writeFile(new URL('values/ic_launcher_background.xml', resources), '<?xml version="1.0" encoding="utf-8"?>\n<resources><color name="ic_launcher_background">#ffffff</color></resources>\n')

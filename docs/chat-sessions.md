@@ -6,7 +6,7 @@ then use the same path as new chats. Workflow agent calls remain one-shot.
 
 ## Ownership and context
 
-- Nautionette owns chat IDs, accepted inputs, queueing, permissions, credentials,
+- Denkzeug owns chat IDs, accepted inputs, queueing, permissions, credentials,
   scheduling and the SQL/UI projection.
 - Pi owns structured user/assistant/tool messages, tool-call relationships, native
   compaction boundaries, extension session entries and model/context projection.
@@ -17,12 +17,12 @@ then use the same path as new chats. Workflow agent calls remain one-shot.
   Current settings, authorized tools, instructions and fresh project credentials
   are applied on every container start. Old tool declarations do not grant access.
 
-Pi uses its model-aware context and automatic compaction, not Nautionette's old
+Pi uses its model-aware context and automatic compaction, not Denkzeug's old
 200-message/character trimming. Compaction retains a summary and recent entries;
 raw older history stays in the session. `/compact [instructions]` invokes native
 manual compaction, and the UI records compaction start/completion/failure. Native
 session-replacing extension commands are cancelled rather than silently switching
-the chat to an ephemeral file; start a new Nautionette chat instead.
+the chat to an ephemeral file; start a new Denkzeug chat instead.
 
 Each accepted turn pins the serving integration's advertised context, input and
 output limits into its durable job. Pi uses the smaller of the context and input

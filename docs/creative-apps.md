@@ -1,6 +1,6 @@
 # Native creative applications
 
-Nautionette prepares the entire current ArtCraft catalog at deployment:
+Denkzeug prepares the entire current ArtCraft catalog at deployment:
 PhotoCraft, VectorCraft, FilmCraft, LightCraft, PdfCraft, EffectCraft, DesignCraft,
 FigCraft, WordCraft, SoundCraft, DeckCraft, CADCraft and GridCraft.
 

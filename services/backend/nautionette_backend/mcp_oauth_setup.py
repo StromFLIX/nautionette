@@ -11,6 +11,7 @@ import json
 import time
 
 from fastapi import HTTPException
+from nautionette.brand import NAME
 
 from . import mcp_http_oauth as hosted
 from .db import db
@@ -182,7 +183,7 @@ async def register(name: str, profile: dict) -> dict:
     candidate = {**profile, "registration_outcome": "pending"}
     save(name, candidate)  # Fence a lost registration response; never blindly register twice.
     metadata = {
-        "client_name": "Nautionette",
+        "client_name": NAME,
         "redirect_uris": [profile["redirect_uri"]],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],

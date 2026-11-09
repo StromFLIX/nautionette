@@ -5,11 +5,13 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from nautionette.brand import NAME
+
 DEFAULTS = {
     "git_authorship_mode": "automation",
     "git_human_name": "",
     "git_human_email": "",
-    "git_automation_name": "Nautionette",
+    "git_automation_name": NAME,
     "git_automation_email": "nautionette@users.noreply.github.com",
 }
 MODES = {"automation", "human_author", "human_author_bot_coauthor", "bot_author_human_coauthor"}

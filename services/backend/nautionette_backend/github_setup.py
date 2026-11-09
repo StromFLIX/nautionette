@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import urlencode, urlsplit
 
 from fastapi import HTTPException
+from nautionette.brand import NAME
 
 from . import projects
 from .db import db
@@ -145,10 +146,10 @@ def start(state: str) -> dict[str, Any]:
         "browser": browser,
         "url": f"https://github.com/{owner}/apps/new?{urlencode({'state': state})}",
         "manifest": {
-            "name": f"Nautionette-{secrets.token_hex(4)}",
+            "name": f"{NAME}-{secrets.token_hex(4)}",
             "url": origin,
             "public": False,
-            "description": "GitHub repositories for Nautionette chat workspaces",
+            "description": f"GitHub repositories for {NAME} chat workspaces",
             "redirect_url": f"{origin}{BASE_PATH}/callback",
             "setup_url": f"{origin}{BASE_PATH}/installed",
             "setup_on_update": True,

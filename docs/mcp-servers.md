@@ -164,7 +164,7 @@ this is not a policy bypass. The CLI owns PKCE, token exchange, storage and refr
 Updated desktop builds bring the **window that started the login** to the front
 once its state-validated loopback callback is received, including restoring a
 hidden/minimized window. The browser displays a credential-free receipt page.
-If OS focus restrictions keep it in front, **Open Nautionette** uses a registered
+If OS focus restrictions keep it in front, **Open Denkzeug** uses a registered
 focus-only app link with a short-lived, one-shot nonce. OAuth codes, state and
 tokens are never passed through that link; token exchange and the final MCP
 connection result still occur through the existing authenticated bridge. Query

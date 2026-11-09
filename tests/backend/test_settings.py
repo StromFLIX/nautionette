@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from nautionette.brand import NAME
 from nautionette_backend import conversations, git_authorship, runtime
 
 DEFAULTS = {
@@ -19,7 +20,7 @@ DEFAULTS = {
     "git_authorship_mode": "automation",
     "git_human_name": "",
     "git_human_email": "",
-    "git_automation_name": "Nautionette",
+    "git_automation_name": NAME,
     "git_automation_email": "nautionette@users.noreply.github.com",
 }
 

@@ -99,7 +99,7 @@ Configure the `staging` and `production` GitHub environments as documented in
 
 Publishing a stable `vX.Y.Z` release then promotes the exact commit only if it is
 currently deployed to staging. Neither the Action nor successful no-op workflow
-results send Nautionette chat messages. Failures are not suppressed.
+results send Denkzeug chat messages. Failures are not suppressed.
 
 The existing Python lint/format CI failures were fixed in a formatting-only
 follow-up: all tracked Python ASTs are unchanged, lint/format checks pass, the

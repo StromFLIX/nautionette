@@ -519,7 +519,7 @@ class Supervisor:
                     ):
                         login.status, login.message = (
                             "complete",
-                            "CLI reports login complete; Nautionette must still verify the MCP connection.",
+                            "CLI reports login complete; the app must still verify the MCP connection.",
                         )
                     else:
                         login.fail(

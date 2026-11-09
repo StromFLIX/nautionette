@@ -1,9 +1,11 @@
+import { brand } from './brand.js'
+
 export function desktopOAuth () {
   const bridge = globalThis.nautionetteDesktop?.oauth
   return bridge?.version === 1 && ['prepare', 'authorize', 'cancel'].every(key => typeof bridge[key] === 'function') ? bridge : null
 }
 
-export const oauthClientMessage = 'OAuth requires an updated Nautionette Windows, macOS or Linux desktop app. Switch from the web/mobile client, or update an older desktop app.'
+export const oauthClientMessage = `OAuth requires an updated ${brand.name} Windows, macOS or Linux desktop app. Switch from the web/mobile client, or update an older desktop app.`
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 

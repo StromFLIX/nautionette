@@ -1,5 +1,6 @@
 const { app, BrowserWindow, protocol, net, session, shell, ipcMain } = require('electron')
 const path = require('node:path')
+const brand = require('./brand.json')
 const { existsSync } = require('node:fs')
 const { pathToFileURL } = require('node:url')
 const { APP_ORIGIN, trustedRenderer, externalURL, assetPath } = require('./security.cjs')
@@ -46,7 +47,8 @@ protocol.registerSchemesAsPrivileged([
 function createWindow () {
   const window = new BrowserWindow({
     width: 1280, height: 850, minWidth: 360, minHeight: 500,
-    title: 'Nautionette', backgroundColor: '#101517',
+    title: brand.name, backgroundColor: '#101517',
+    icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false, contextIsolation: true, sandbox: true,

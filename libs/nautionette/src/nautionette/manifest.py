@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from .brand import NAME
+
 SCHEMA_VERSION = 1
 
 NAME_RE = r"^[a-z][a-z0-9_]{2,63}$"
@@ -27,7 +29,7 @@ _JSON_SCHEMA_OBJECT = {
 
 MANIFEST_SCHEMA: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "Nautionette workflow manifest",
+    "title": f"{NAME} workflow manifest",
     "type": "object",
     "required": ["schema", "name", "inputs", "outputs"],
     "properties": {

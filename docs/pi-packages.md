@@ -127,7 +127,7 @@ The runner includes this instruction whenever packages are selected. RPC reports
 `hasUI=true`, so pi-subagents' headless auto-drain does not apply: its suggestion
 to return control and await a later notification is incompatible with our
 per-turn containers. This is not cross-turn background persistence. Use durable
-Nautionette workflows for that.
+Denkzeug workflows for that.
 
 Installation success is not a compatibility guarantee. RPC-compatible extensions,
 Pi skills and text prompts are supported. Terminal widgets, interactive setup or
@@ -183,5 +183,5 @@ node images/pi-base/verify-pi-runtime.mjs /path/to/pi-coding-agent
 
 Rebuild the Pi base and derived agent images to deploy the runtime upgrade;
 rebuilding only the frontend will not change the Pi version. Pi 1.0's fullscreen
-TUI default does not affect Nautionette's RPC/JSON modes. Pi now normalizes prompt
+TUI default does not affect Denkzeug's RPC/JSON modes. Pi now normalizes prompt
 images before sending them; transport fixtures must be valid, decodable images.

@@ -78,7 +78,7 @@ an additional headless build/interface. The existing native CLIs are a much
 smaller initial integration than adding a server-side WASM platform.
 
 CADCraft's hosting guide says no SharedArrayBuffer/COOP/COEP is required. Avoid
-adding global cross-origin isolation headers to Nautionette speculatively. For
+adding global cross-origin isolation headers to Denkzeug speculatively. For
 0.7.0 the actual WASM in the ZIP was 22,546,717 bytes (~21.5 MiB), larger than the
 older approximate size in the hosting guide. Pin and measure real artifacts.
 
@@ -99,7 +99,7 @@ Important limitations observed in source:
 
 1. The bridge **only accepts and answers its same-origin parent window**. A
    cross-origin iframe can display the app, but the existing host bridge does not
-   then work with a cross-origin Nautionette parent.
+   then work with a cross-origin Denkzeug parent.
 2. This is a **file** bridge, not arbitrary command execution. Opening an iframe
    does not attach native MCP to the browser's document.
 3. Save delivery is considered successful when `postMessage` succeeds, before the
@@ -131,7 +131,7 @@ one actual document, instead of continuously reopening snapshots.
 Caveats:
 
 - The server is native, not WASM. It has no user-account authorization model:
-  possession of a file link is access. Put it behind Nautionette's scoped access
+  possession of a file link is access. Put it behind Denkzeug's scoped access
   layer, keep management credentials server-side, and self-host it. Do not send
   private work to the upstream public sharing server.
 - A private shared server is a pragmatic first implementation, but its files are
@@ -193,7 +193,7 @@ The initial stale-read attempt was diagnostic, not silently counted as success.
 The corrected test explicitly polled before inspecting. This validates a small
 native collaboration/durability scenario; FigCraft's browser joining path was
 source-inspected, **not** end-to-end tested in this investigation. The full
-Nautionette integration and large/concurrent documents were not tested.
+Denkzeug integration and large/concurrent documents were not tested.
 
 ### Small-document process memory observations
 
@@ -210,7 +210,7 @@ These exclude container shim/wrapper, browser/GPU memory, shared server and real
 large-document workloads. They are not deployment capacity benchmarks. They do
 support trying small native headless containers before a more complex runtime.
 
-## 3. Where this fits into Nautionette
+## 3. Where this fits into Denkzeug
 
 Existing architecture provides most of the plumbing:
 
@@ -334,7 +334,7 @@ public jobs, tool history and telemetry; redact at the receiving edge too. Stabl
 tool schemas remain discoverable before any app runtime exists.
 
 This scopes the **new app capability**, not every existing agent permission.
-Nautionette currently uses an instance-wide app token and can grant agents global
+Denkzeug currently uses an instance-wide app token and can grant agents global
 backend management tools. Those agents retain that broader authority; do not
 advertise full hostile-tenant isolation merely because app tools are scoped.
 A multi-user/tenant product would additionally need principal-based authorization
@@ -373,7 +373,7 @@ it safe.
 
 ### Browser isolation
 
-Do **not** host third-party app JavaScript on Nautionette's authenticated origin:
+Do **not** host third-party app JavaScript on Denkzeug's authenticated origin:
 a same-origin iframe with scripts/storage can access the app bearer token and
 other parent state. WASM does not remove this JavaScript/DOM risk.
 
@@ -390,7 +390,7 @@ Recommended shape:
 - narrow CSP/frame-ancestors, no arbitrary navigation, no unneeded popup/clipboard
   privileges, bounded payloads and narrowly permitted network destinations.
 
-One shared app origin isolates apps from Nautionette but not app instances from
+One shared app origin isolates apps from Denkzeug but not app instances from
 one another. Plan accordingly. Browser origin isolation is not a CPU/RAM quota or
 a substitute for container isolation.
 
@@ -532,7 +532,7 @@ Required regression/security checks:
   inspect/edit/export it; a stale turn/grant cannot mutate after revocation.
 - Cross-origin messages, wrong sources, arbitrary URLs/images/paths, oversized
   payloads, mount traversal and network escape attempts are rejected.
-- App code cannot read Nautionette localStorage/bearer tokens or parent DOM.
+- App code cannot read Denkzeug localStorage/bearer tokens or parent DOM.
 - User edits survive tab switches; browser/server/container failure restores only
   confirmed state and exposes unsaved/unknown outcomes honestly.
 - A lost mutation reply is not silently retried; deletion/checkpoint/restart races
@@ -560,5 +560,5 @@ unrelated workflow workers or live chat agents just to register an app.
 - [FigCraft inspected source](https://github.com/storytold/figcraft/tree/102404e8c3d23d86c3490c1a6beff3202bb73e25)
 - [FigCraft server](https://github.com/storytold/figcraft/blob/102404e8c3d23d86c3490c1a6beff3202bb73e25/docs/server.md)
 - [FigCraft live-session MCP commands](https://github.com/storytold/figcraft/blob/102404e8c3d23d86c3490c1a6beff3202bb73e25/docs/mcp.md#live-sessions)
-- [Nautionette frontend design](frontend-design.md)
-- [Nautionette MCP runtime/trust boundary](mcp-servers.md)
+- [Denkzeug frontend design](frontend-design.md)
+- [Denkzeug MCP runtime/trust boundary](mcp-servers.md)

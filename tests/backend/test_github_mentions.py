@@ -297,7 +297,9 @@ async def test_ack_uses_scoped_token_chat_link_and_reconciles_existing_reply(men
     token_request = remote.await_args_list[0]
     assert token_request.kwargs["json"] == {"repository_ids": [123], "permissions": {"issues": "write"}}
     body = remote.await_args_list[2].kwargs["json"]["body"]
-    assert "https://nautionette.example.com/chats/chat123" in body
+    from nautionette.brand import NAME
+
+    assert f"[{NAME}](https://nautionette.example.com/chats/chat123)" in body
     remote.reset_mock()
     remote.side_effect = [
         {"token": "issue-token"},

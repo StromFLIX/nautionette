@@ -1,4 +1,9 @@
-# Nautionette
+# Denkzeug
+
+Previously Nautionette. This is a display rebrand: repository URLs, instance
+addresses, package/import names, environment variables, app IDs, URI schemes,
+installer filenames and saved user/Git identities retain their existing values.
+The canonical display identity lives in [`branding/`](branding/README.md).
 
 [Site](http://nautionette.94.130.151.7.sslip.io) · [App](http://app.nautionette.94.130.151.7.sslip.io)
 
@@ -830,7 +835,7 @@ only the matching App/installation rather than replacing other accounts.
 
 The App manifest registers the webhook and callback URLs, Contents/Workflows/Issues write
 permissions, Metadata read access, and push/repository/issue-comment events. GitHub generates the private key and webhook
-secret; Nautionette exchanges the registration code server-side. No IDs or PEM uploads
+secret; Denkzeug exchanges the registration code server-side. No IDs or PEM uploads
 are needed. An unfinished registration can resume with **Complete installation**;
 organization approval may be required. **Repository access** reopens GitHub's chooser.
 
@@ -862,7 +867,7 @@ organization; this is App registration, not a third-party OAuth service.
 
 Authorize numeric GitHub user IDs per connection under **Settings > Projects**, then
 comment `@your-app-slug[bot] <request>` on an issue in an added, ready repository.
-Nautionette creates a visible chat, acknowledges with its authenticated chat link,
+Denkzeug creates a visible chat, acknowledges with its authenticated chat link,
 and runs the default agent. Follow-up mentions on the same issue continue that chat,
 including through the normal queue while it is busy. Unlisted users and bot comments
 cannot trigger work. Mention access is disabled until an allowlist is saved; GitHub
@@ -958,7 +963,7 @@ selected repositories. The options are:
 
 | Mode | Author | Committer | `Co-authored-by` trailer |
 | --- | --- | --- | --- |
-| Nautionette only (default) | Automation | Automation | None |
+| Denkzeug only (default) | Automation | Automation | None |
 | You as author | Human | Automation | None |
 | You as author + automation co-author (recommended) | Human | Automation | Automation |
 | Automation as author + you as co-author | Automation | Automation | Human |
@@ -1385,7 +1390,7 @@ Mistral, DeepSeek and xAI ship as entries in one registry, and **Custom** covers
 that speaks the OpenAI chat completions API. Every integration becomes an agentgateway route, so
 they all behave the same way; OpenRouter is added automatically on first start for continuity.
 
-Nautionette never stores a model list. It asks each provider what it serves — OpenRouter and custom
+Denkzeug never stores a model list. It asks each provider what it serves — OpenRouter and custom
 endpoints through their own catalog, Copilot through the authenticated account — and labels every
 entry in the pickers by both integration and model vendor. A prefixed integration wins over the
 OpenRouter wildcard for its own namespace, so `openai/*` goes direct once OpenAI is configured.
@@ -1401,7 +1406,7 @@ For **GitHub Copilot**, use **Sign in with GitHub** when adding the integration,
 or on its existing card to reconnect. Open the GitHub authorization link, enter
 the displayed one-time code, and authorize with an account that has Copilot
 access. GitHub may name the authorization app **GitHub Copilot**. Keep the
-Nautionette form open until sign-in completes, then use **Test** to verify model
+Denkzeug form open until sign-in completes, then use **Test** to verify model
 access. The device flow does not need a public callback URL.
 
 The backend holds the pending device code only in memory until cancellation or

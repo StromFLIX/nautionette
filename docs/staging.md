@@ -139,7 +139,7 @@ namespace(s), use Temporal administration to:
 
 These are intentional differences from production. Completed history and app data
 remain available, but work already done in production must not execute a second
-time. Do not rely on Nautionette's `disabled` setting alone: Temporal can fire
+time. Do not rely on Denkzeug's `disabled` setting alone: Temporal can fire
 existing schedules without the backend. Do not start the broker early: it starts
 missing workers automatically. When the staging backend first starts, its normal
 recovery marks copied active chat turns interrupted and reconciles run statuses.
@@ -212,7 +212,7 @@ writes and correct its storage isolation before retrying; do not bypass the guar
 
 ## 4. Enable commit-pinned releases
 
-The simpler path is GitHub Actions -> Coolify; Nautionette does not need a public
+The simpler path is GitHub Actions -> Coolify; Denkzeug does not need a public
 release webhook or a polling workflow. `.github/workflows/deploy.yml` handles:
 
 ```text
@@ -240,7 +240,7 @@ Configure in **each** environment:
 | Variable | `APP_URL` | That environment's HTTPS app origin |
 | Variable | `DEPLOY_HEALTH_TIMEOUT_SECONDS` | Optional post-deployment readiness budget in seconds (default `600`, range `1`–`1800`) |
 | Secret | `COOLIFY_TOKEN` | Server-side Coolify API token allowing application read/update and deploy |
-| Secret | `APP_TOKEN` | That environment's Nautionette access token for component health checks |
+| Secret | `APP_TOKEN` | That environment's Denkzeug access token for component health checks |
 
 In `production`, also set variable `COOLIFY_STAGING_APPLICATION_UUID` to the new
 staging UUID. Use GitHub's secret UI/approved secret-management channel, never chat
@@ -312,7 +312,7 @@ inspection; they are not part of routine startup.
 
 ## Quiet no-op workflows
 
-Successful Nautionette workflows can return:
+Successful Denkzeug workflows can return:
 
 ```python
 return {"notify": False, "reason": "No new release / already processed"}
@@ -328,5 +328,5 @@ an error rather than returning `notify=False`.
 
 This governs automatic result-to-chat delivery, not direct Fastmail/GitHub/chat
 calls inside a workflow. Branch before those calls (and before agent calls) for
-no-op inputs. The release Action makes **no Nautionette notification calls at all**;
+no-op inputs. The release Action makes **no Denkzeug notification calls at all**;
 unrelated events, prereleases and healthy duplicate deployments are silent.

@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from fastapi import HTTPException
+from nautionette.brand import NAME
 from nautionette_backend import github_setup, projects
 
 
@@ -39,6 +40,8 @@ def test_manifest_registers_permissions_callbacks_and_webhooks_without_secrets(c
         "url": "https://nautionette.example.com/api/projects/github-app/webhook",
         "active": True,
     }
+    assert manifest["name"].startswith(f"{NAME}-")
+    assert manifest["description"] == f"GitHub repositories for {NAME} chat workspaces"
     assert manifest["default_permissions"]["contents"] == "write"
     assert manifest["default_permissions"]["issues"] == "write"
     assert "issue_comment" in manifest["default_events"]

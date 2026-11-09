@@ -14,6 +14,7 @@ import time
 from typing import Any
 
 from fastapi import HTTPException
+from nautionette.brand import NAME
 
 from . import github_setup, projects
 from .db import db
@@ -119,7 +120,7 @@ async def acknowledge(config: dict[str, Any], project: dict[str, Any], payload: 
         path,
         token,
         json={
-            "body": f"Request received. Follow the work in [Nautionette]({origin}/chats/{chat_id}) "
+            "body": f"Request received. Follow the work in [{NAME}]({origin}/chats/{chat_id}) "
             "(instance sign-in required). Mention me again on this issue to continue the same chat.\n\n"
             + marker
         },

@@ -91,7 +91,7 @@ The npm package `@microsoft/workiq@1.0.1` reports native CLI version
 - `ClientAppFactory.CreatePublicClientApp`: checks that setting before the OS
   branches; sets `http://localhost` and builds the public client without broker.
 - `LoginHandler`: prints explicit success/failure messages; a failed login may
-  still exit 0. Nautionette checks those messages, not exit code alone.
+  still exit 0. Denkzeug checks those messages, not exit code alone.
 
 ```sh
 # Same HOME/configuration directory as the gateway-hosted MCP process:
@@ -138,7 +138,7 @@ Gateway CLI creates PKCE/state + loopback listener
   → backend verifies MCP initialize/tools/list before saving the target
 ```
 
-The backend-owned OAuth draft was replaced. Nautionette does not generate the
+The backend-owned OAuth draft was replaced. Denkzeug does not generate the
 provider PKCE verifier, exchange the code or manage provider refresh tokens.
 
 ### Boundaries

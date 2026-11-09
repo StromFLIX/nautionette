@@ -1,7 +1,7 @@
 # GitHub issue mentions
 
 An explicitly authorized GitHub user can mention the connected App bot in a **new
-issue comment** to create a visible Nautionette chat and run the normal default
+issue comment** to create a visible Denkzeug chat and run the normal default
 agent. Further authorized mentions on that issue continue the same chat, including
 while it is answering (the ordinary durable chat queue handles follow-ups).
 Unmentioned comments are not forwarded. Editing a comment does not trigger work.
@@ -15,7 +15,7 @@ work in this version.
 2. New Apps request **Issues: read and write** and subscribe to **Issue comment**
    automatically. For an existing App, open its GitHub App settings, enable that
    permission and webhook event, save, and approve the permission change on the
-   installation. This does not happen automatically when upgrading Nautionette.
+   installation. This does not happen automatically when upgrading Denkzeug.
 3. In each connection's **Authorized GitHub user IDs** field, enter comma-separated
    numeric GitHub user IDs and save. An empty list disables all mention triggers.
    Find a user's immutable numeric `id` using GitHub's `GET /users/{username}` API;
@@ -23,7 +23,7 @@ work in this version.
    membership alone do **not** authorize anyone.
 4. Keep **Reply on GitHub with the chat link** enabled for acknowledgements, or
    disable it if publishing the instance URL on an issue would be inappropriate.
-   Chat links still require the existing Nautionette authentication; they are not
+   Chat links still require the existing Denkzeug authentication; they are not
    share links or login tokens. Chats have the same instance-wide visibility as
    chats created in the UI, not per-GitHub-user visibility.
 
@@ -51,7 +51,7 @@ Deliveries**, check whether the comment generated a delivery and its response.
 The webhook URL must point to this instance's
 `/api/projects/github-app/webhook`. Redeliver a failed delivery after fixing setup,
 or post a new comment; editing an old comment does not trigger work. Upgrading
-Nautionette does not update existing GitHub App subscriptions.
+Denkzeug does not update existing GitHub App subscriptions.
 
 The App acknowledges each accepted request with a link to the same chat, then
 submits it through the regular chat pipeline. The agent receives the current issue
@@ -64,8 +64,8 @@ GitHub branch protection rule: protect your default branch separately.
 ## Security and operational behavior
 
 - This allowlist grants **agent execution**, including the configured tools and
-  repository write access. Add only people trusted to operate this Nautionette
-  instance. There is no automatic mapping to individual Nautionette admin accounts.
+  repository write access. Add only people trusted to operate this Denkzeug
+  instance. There is no automatic mapping to individual Denkzeug admin accounts.
 - Webhook signatures and installation IDs are verified before accepting anything.
   The commenter and sender must be the same human user. Repository access is
   checked against an added, ready project on that exact connection.
@@ -91,7 +91,7 @@ GitHub branch protection rule: protect your default branch separately.
   so a retry can reconcile a successful POST whose response was lost. As with any
   external API, strict exactly-once posting across network failures is not
   guaranteed; chat/turn identities remain deduplicated.
-- Completion is viewed in Nautionette. Agent results and transcripts are not
+- Completion is viewed in Denkzeug. Agent results and transcripts are not
   automatically published back to GitHub.
 - Incoming payloads are cleared once submitted or ignored; comment IDs remain as
   deduplication records. `github.mention_submitted` and `github.mention_failed`

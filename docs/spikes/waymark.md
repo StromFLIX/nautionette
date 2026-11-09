@@ -1,4 +1,4 @@
-# Spike: Waymark as a Temporal replacement for Nautionette
+# Spike: Waymark as a Temporal replacement for Denkzeug
 
 **Evaluation:** 2026-11-07. **Recommendation: keep Temporal in production.**
 
@@ -55,12 +55,12 @@ run **unmodified** on Temporal; `WaymarkUrlDigest` ran its equivalent on Waymark
 
 The experiment used:
 
-1. A real HTTP fetch of Waymark's public GitHub README, using Nautionette's
+1. A real HTTP fetch of Waymark's public GitHub README, using Denkzeug's
    existing `http_fetch` implementation on both engines.
 2. A deterministic `agent_call` fixture returning a known structured digest.
    **This is not a real agent invocation** and does not validate model access,
    internal backend authentication, MCP routing or agent crash recovery.
-3. Nautionette's existing `save_artifact` implementation on both engines.
+3. Denkzeug's existing `save_artifact` implementation on both engines.
 4. A controlled local HTTP 404 response for the early-return branch.
 
 **Both engines returned identical JSON and byte-identical Markdown artifacts.**
@@ -227,7 +227,7 @@ our test had an executor, two Python workers and a separate app-side bridge,
 **plus PostgreSQL**. The bridge is easy to omit from a simplistic diagram and has
 its own lifecycle/connection budget.
 
-Nautionette's application database is **SQLite**, not Postgres. Waymark's
+Denkzeug's application database is **SQLite**, not Postgres. Waymark's
 "Postgres you already run" pitch means reusing/replacing the existing **workflow
 Postgres service**, not eliminating it. Do not attempt to migrate Temporal's
 existing DB schema or histories in-place.
@@ -281,7 +281,7 @@ operational UI. It makes the smaller deployment credible, not just theoretical.
 | Capability | Our current Temporal integration | Waymark 0.30.1 |
 |---|---|---|
 | Launch and await result | Public Temporal SDK; stable backend start/result methods | Python SDK via local gRPC bridge; nonblocking ids and result wait work |
-| Operator HTTP API | Nautionette authenticated API wraps engine controls/history | Executor's HTTP API has **seven GET-only observability operations** |
+| Operator HTTP API | Denkzeug authenticated API wraps engine controls/history | Executor's HTTP API has **seven GET-only observability operations** |
 | Full run input/result/activity history | Current gateway decodes retained Temporal payloads | Dashboard/HTTP events do **not** record arguments, results or exception messages |
 | Attempts/failures | Actual attempt metadata and failure details | UI retries inferred from repeated calls; exception type only |
 | Cancel / force terminate | Existing backend endpoints | **No corresponding public SDK/gRPC/HTTP operation found** |
@@ -328,7 +328,7 @@ existing privacy/redaction boundary.
 
 ## 7. Scheduling is a direct functional mismatch
 
-Nautionette's schedule contract is a structured recurrence with an **explicit
+Denkzeug's schedule contract is a structured recurrence with an **explicit
 IANA timezone**. Waymark accepts cron or intervals, with cron evaluated in **UTC**.
 Its Python schedule API has **no timezone field**.
 

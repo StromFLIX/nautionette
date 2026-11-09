@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from nautionette.brand import NAME
 from nautionette.telemetry import instrument_app
 
 from . import (
@@ -80,7 +81,7 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Nautionette",
+    title=NAME,
     version=settings.version,
     lifespan=lifespan,
     docs_url="/api/docs",

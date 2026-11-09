@@ -11,6 +11,7 @@ import logging
 from typing import Any
 
 import httpx
+from nautionette.brand import NAME
 
 from . import backend, store
 from .validate import run_checks
@@ -18,7 +19,7 @@ from .validate import run_checks
 log = logging.getLogger("workflow-mcp")
 
 INSTRUCTIONS = (
-    "Author Nautionette workflows. Read before you write, validate before you write. "
+    f"Author {NAME} workflows. Read before you write, validate before you write. "
     "When a workflow misbehaves, read its runs first: list_runs finds it, read_run shows "
     "every step it took. write_workflow validates and deploys directly, without approval. "
     "Check ready and worker_restart, then use run_workflow and read_run to verify real results. "

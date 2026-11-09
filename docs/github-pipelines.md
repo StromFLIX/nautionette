@@ -1,9 +1,9 @@
 # GitHub owns deployments and staging refreshes
 
-Both operations run from **StromFLIX/nautionette → Actions**, not from a Nautionette
+Both operations run from **StromFLIX/nautionette → Actions**, not from a Denkzeug
 workflow. Replacing production cannot kill the GitHub runner. Neither pipeline
-creates Nautionette chats or sends result notifications. Skips/no-ops stay silent
-in Nautionette; failures remain visible in GitHub Actions.
+creates Denkzeug chats or sends result notifications. Skips/no-ops stay silent
+in Denkzeug; failures remain visible in GitHub Actions.
 
 The initial staging data clone is already live; see [the verified bootstrap
 record](staging-setup-status.md). The new repeatable refresh Action must still be
@@ -44,7 +44,7 @@ are already deliberate operations.
 | Variable | `COOLIFY_APPLICATION_UUID` | `tstmjujqyyl3zkvtwb0sx8nc` |
 | Variable | `APP_URL` | `https://app.nautionette.stage.stromflix.com` |
 | Secret | `COOLIFY_TOKEN` | Permanent Coolify API token with application read/update/deploy access |
-| Secret | `APP_TOKEN` | Existing staging Nautionette login/access token |
+| Secret | `APP_TOKEN` | Existing staging Denkzeug login/access token |
 
 ### Production environment
 
@@ -55,7 +55,7 @@ are already deliberate operations.
 | Variable | `COOLIFY_STAGING_APPLICATION_UUID` | `tstmjujqyyl3zkvtwb0sx8nc` |
 | Variable | `APP_URL` | `https://app.nautionette.stromflix.com` |
 | Secret | `COOLIFY_TOKEN` | Permanent Coolify API token with production read/update/deploy and staging read access |
-| Secret | `APP_TOKEN` | Existing production Nautionette login/access token |
+| Secret | `APP_TOKEN` | Existing production Denkzeug login/access token |
 
 The two APP_TOKEN values are currently the same because staging deliberately uses
 the same login. They are **not** Coolify tokens and are **not** INTERNAL_TOKEN.
@@ -125,7 +125,7 @@ COOLIFY_DEPLOY_ENABLED = true
 
 Set this only after staging/production environment secrets and variables are ready.
 Keep Coolify's built-in push and preview auto-deploy disabled on both apps. GitHub
-is the single deploy owner. No GitHub PAT, webhook secret, Nautionette webhook,
+is the single deploy owner. No GitHub PAT, webhook secret, Denkzeug webhook,
 Coolify CLI installation, or root Coolify token is required by these Actions.
 The temporary root setup token can be revoked; replace it with lasting tokens in
 the environment secrets above, not with another chat-pasted credential.

@@ -1,6 +1,6 @@
 # OpenTelemetry
 
-Nautionette exports standard OTLP/HTTP traces, metrics and correlated logs. There is
+Denkzeug exports standard OTLP/HTTP traces, metrics and correlated logs. There is
 **no bundled observability database or vendor-specific backend**. Use an existing
 SigNoz, Grafana/Tempo, Honeycomb or other compatible OTLP receiver.
 

@@ -15,6 +15,7 @@ from mcp import types
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.transport_security import TransportSecuritySettings
+from nautionette.brand import NAME
 from starlette.applications import Starlette
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
@@ -48,7 +49,7 @@ _EXACT = {
 }
 
 INSTRUCTIONS = (
-    "Operate and diagnose Nautionette directly. Do not ask for routine approval or permission. "
+    f"Operate and diagnose {NAME} directly. Do not ask for routine approval or permission. "
     "Deploy validated workflows, run them with relevant inputs, inspect run history and results, "
     "and repair and redeploy failures. Use system_status and events_recent to diagnose services; "
     "inspect settings and integration schemas before changing their configuration. "

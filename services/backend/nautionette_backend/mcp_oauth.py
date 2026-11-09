@@ -18,6 +18,7 @@ from dataclasses import dataclass
 
 import httpx
 from fastapi import HTTPException
+from nautionette.brand import NAME
 
 from . import mcp_http_oauth, mcp_oauth_setup, mcp_servers
 from .clients import gateway
@@ -203,7 +204,7 @@ async def start(name: str, payload: dict) -> dict:
     if payload.get("desktop_bridge_version") != 1:
         raise HTTPException(
             400,
-            "Use an updated Nautionette desktop app; web, mobile and older desktop clients "
+            f"Use an updated {NAME} desktop app; web, mobile and older desktop clients "
             "cannot receive CLI OAuth callbacks",
         )
     if payload.get("transport", "http") == "http":

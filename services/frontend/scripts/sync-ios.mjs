@@ -1,11 +1,19 @@
 import { readFileSync, writeFileSync, copyFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
+import { brand, xmlText } from './native-brand.mjs'
 
 export function configureInfo (plist) {
-  if (plist.includes('<key>NSMicrophoneUsageDescription</key>')) return plist
   if (!plist.includes('<dict>')) throw new Error('Missing iOS Info.plist dictionary')
-  return plist.replace('<dict>', '<dict>\n\t<key>NSMicrophoneUsageDescription</key>\n\t<string>Record dictation for your Nautionette instance.</string>')
+  for (const [key, value] of Object.entries({
+    CFBundleDisplayName: brand.name,
+    NSMicrophoneUsageDescription: `Record dictation for your ${brand.name} instance.`
+  })) {
+    const entry = `<key>${key}</key>\n\t<string>${xmlText(value)}</string>`
+    const pattern = new RegExp(`<key>${key}</key>\\s*<string>[\\s\\S]*?</string>`)
+    plist = pattern.test(plist) ? plist.replace(pattern, () => entry) : plist.replace('<dict>', `<dict>\n\t${entry}`)
+  }
+  return plist
 }
 
 export function configureProject (project) {
@@ -29,4 +37,5 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   writeFileSync(info, configureInfo(readFileSync(info, 'utf8')))
   writeFileSync(project, configureProject(readFileSync(project, 'utf8')))
   copyFileSync('native/ios/PrivacyInfo.xcprivacy', 'ios/App/App/PrivacyInfo.xcprivacy')
+  copyFileSync('native/icons/app-icon.png', 'ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png')
 }
