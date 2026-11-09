@@ -1,5 +1,5 @@
 <template>
-  <nav class="agents" :aria-label="appsMode ? 'Apps by agent' : 'Chats by agent'">
+  <nav class="agents" :class="{ 'agents--embedded': embedded }" :aria-label="appsMode ? 'Apps by agent' : 'Chats by agent'">
     <div class="agents__list">
       <button class="agents__item agents__all" type="button" :aria-label="appsMode ? 'Show all apps' : 'Show all chats'" :aria-describedby="appsMode ? undefined : 'agent-activity-all'" :aria-pressed="!selectedId" @click="select(null)">
         <AgentAvatar :icon="appsMode ? 'apps' : 'forum'" /><span class="sr-only">All</span>
@@ -36,6 +36,7 @@ import AgentAvatar from './AgentAvatar.vue'
 import AgentActivity from './AgentActivity.vue'
 import { agentActivity, activityLabel } from '../agent-activity'
 
+defineProps({ embedded: { type: Boolean, default: false } })
 const route = useRoute(), router = useRouter()
 const appsMode = computed(() => route.name === 'apps')
 const agents = computed(() => store.agentNavigation.agents)
@@ -92,6 +93,8 @@ watch([agents, () => store.agentNavigation.loaded, selectedId], () => {
 .agents__status:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (max-width: 900px) {
   .agents { flex-direction: row; width: 100%; padding: calc(4px + env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) 4px max(6px, env(safe-area-inset-left)); border-right: 0; border-bottom: 1px solid var(--border); }
+  /* The surrounding list header already owns the safe-area and side padding. */
+  .agents--embedded { padding: 4px 0 0; border-bottom: 0; background: transparent; }
   .agents__list { flex-direction: row; min-width: 0; }
   .agents__people { flex-direction: row; overflow-y: hidden; overflow-x: auto; min-width: 0; }
   .agents__placeholders { flex-direction: row; }

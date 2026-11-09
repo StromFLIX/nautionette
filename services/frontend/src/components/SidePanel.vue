@@ -51,6 +51,7 @@
           <span class="material-icons" style="font-size: 1rem">close</span>
         </button>
       </div>
+      <slot name="filters" />
       <PinnedApps v-if="showPinnedApps && ['chats', 'apps'].includes(section)" compact />
       <div v-if="section === 'chats'" v-show="showGroupControls" id="chat-group-controls" class="side__controls">
         <div class="side__control">

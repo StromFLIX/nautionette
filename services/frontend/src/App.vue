@@ -5,12 +5,14 @@
       {{ store.liveStatus === 'failed' ? 'Live updates are disconnected.' : 'Connection interrupted. Reconnecting automatically…' }}
       <button v-if="store.liveStatus === 'failed'" class="btn" @click="actions.connect()">Reconnect</button>
     </div>
-  <div class="shell" data-skin-part="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed, 'shell--agents': ['chats', 'apps'].includes(route.name) }">
+  <div class="shell" data-skin-part="shell" :class="{ 'shell--detail': hasSelection, 'shell--full': fullPage, 'shell--collapsed': sideCollapsed, 'shell--agents': showAgentRail }">
     <NavRail ref="navRail" class="shell__rail" :sidebar-collapsed="sideCollapsed" @open-sidebar="openSidebar" />
-    <AgentRail v-if="['chats', 'apps'].includes(route.name)" v-show="!sideCollapsed" class="shell__agents" />
+    <AgentRail v-if="showAgentRail" v-show="!sideCollapsed" class="shell__agents" />
     <template v-if="!fullPage">
       <aside v-show="!sideCollapsed" data-skin-part="sidebar" id="shell-sidebar" class="shell__side" :style="{ width: `${sideWidth}px` }">
-        <SidePanel ref="sidePanel" :show-collapse-button="!mobile" :show-pinned-apps="!detailPins" :is-chat-active="isChatActive" @collapse-sidebar="collapseSidebar" @open-search="openSearch" />
+        <SidePanel ref="sidePanel" :show-collapse-button="!mobile" :show-pinned-apps="!detailPins && !(mobile && route.name === 'apps')" :is-chat-active="isChatActive" @collapse-sidebar="collapseSidebar" @open-search="openSearch">
+          <template v-if="mobile && route.name === 'apps'" #filters><AgentRail embedded /></template>
+        </SidePanel>
         <div
           class="shell__grip"
           :class="{ 'shell__grip--active': dragging }"
@@ -99,12 +101,12 @@ const mobile = ref(mobileMedia.matches)
 const updateMobile = event => { mobile.value = event.matches }
 // Keep the desktop preference without hiding the list on narrow screens.
 const sideCollapsed = computed(() => !mobile.value && preferences.sideCollapsed)
-// Keep shortcuts beside search or in app details when the list is hidden.
-// Open chats own their header (and its mobile safe-area inset); never prepend
-// an app strip there, including new chats and collapsed desktop sidebars.
+// Mobile Apps keeps its filters below the heading/search, not above the page.
+const showAgentRail = computed(() => route.name === 'chats' || (route.name === 'apps' && !mobile.value))
+// Mobile detail headers own the safe-area inset. Shortcuts belong in the list,
+// never above an open chat/app; collapsed desktop lists still need shortcuts.
 const detailPins = computed(() => ['chats', 'apps'].includes(route.name) &&
-  !(route.name === 'chats' && hasSelection.value) &&
-  (sideCollapsed.value || (mobile.value && hasSelection.value)))
+  !(route.name === 'chats' && hasSelection.value) && sideCollapsed.value)
 
 function openSidebar () {
   if (!mobile.value) preferences.sideCollapsed = false
