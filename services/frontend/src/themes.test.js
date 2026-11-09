@@ -23,6 +23,10 @@ for (const theme of THEMES) {
     assert.ok(contrastRatio(resolved['accent-text'], resolved.accent) >= 4.5)
     assert.ok(contrastRatio(resolved['action-text'], resolved['action-bg']) >= 4.5)
     assert.ok(contrastRatio(resolved['bubble-text'], resolved['bubble-out']) >= 4.5)
+    for (const role of ['agent-color', 'session-color', 'workflow-color']) {
+      assert.ok(contrastRatio(resolved[role], `${resolved[role]}17`, resolved['surface-rail']) >= 4.5, `${role} navigation`)
+      assert.ok(contrastRatio(resolved[role], `${resolved[role]}21`, resolved['surface-panel']) >= 4.5, `${role} avatar`)
+    }
   })
 }
 

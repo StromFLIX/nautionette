@@ -27,7 +27,7 @@
   --action-hover: #3e4149;
   --action-text: #ffffff;
   --agent-color: #4b5fc0;
-  --session-color: #78649d;
+  --session-color: #6c578f;
   --workflow-color: #875b26;
   --success: #27704b;
   --success-soft: #27704b1f;
@@ -48,7 +48,7 @@
   --syntax-builtin: #7c6108;
   --syntax-meta: #a13660;
   --flow-activity: #4b5fc0;
-  --flow-signal: #78649d;
+  --flow-signal: #6c578f;
 
   --radius-xs: 0.25rem;
   --radius-sm: 0.5rem;

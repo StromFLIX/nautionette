@@ -7,6 +7,9 @@ contour. The SVG viewBox crops only presentation padding; its artwork is unchang
 Run `python scripts/sync_brand.py` after edits, and commit its generated copies.
 `--check` fails on drift without writing. Each Docker context remains independent;
 services do not reach outside their build contexts or fetch branding at runtime.
+Logo URLs and favicons carry a generated content hash. The app shell and small
+branding resources revalidate, so a later logo change cannot leave stale marks
+behind a long-lived asset cache.
 The website's editable HTML is `services/website/index.template.html`; its generated
 `index.html` remains usable without JavaScript.
 

@@ -30,7 +30,19 @@ def validate_brand(brand: dict) -> None:
     for key in ["tagline", "description", "interfaceFont", "defaultTheme", "repository"]:
         if not isinstance(brand.get(key), str) or not brand[key].strip():
             raise ValueError(f"Missing display brand field: {key}")
-    for key in ["paper", "white", "ink", "muted", "line", "agent", "agentStrong", "session", "workflow"]:
+    for key in [
+        "paper",
+        "white",
+        "ink",
+        "muted",
+        "line",
+        "agent",
+        "agentStrong",
+        "session",
+        "sessionStrong",
+        "workflow",
+        "workflowStrong",
+    ]:
         value = brand.get("colors", {}).get(key)
         if not isinstance(value, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", value):
             raise ValueError(f"Brand color {key} must be a six-digit hex color.")
@@ -40,8 +52,10 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
     source = root / "branding"
     brand = json.loads((source / "brand.json").read_text())
     validate_brand(brand)
-    manifest = (json.dumps(brand, ensure_ascii=False, indent=2) + "\n").encode()
     logo = (source / "logo.svg").read_bytes()
+    logo_version = hashlib.sha256(logo).hexdigest()[:12]
+    manifest_data = {**brand, "logoVersion": logo_version}
+    manifest = (json.dumps(manifest_data, ensure_ascii=False, indent=2) + "\n").encode()
     favicon = (
         logo.decode()
         .replace(
@@ -146,6 +160,8 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
         html = template.read_text()
         for key in ["name", "tagline", "description"]:
             html = html.replace("{{brand." + key + "}}", escape(brand[key], quote=True))
+        html = html.replace('"/assets/denkzeug-icon.svg"', f'"/assets/denkzeug-icon.svg?v={logo_version}"')
+        html = re.sub(r'href="/favicon\.svg(?:\?[^"]*)?"', f'href="/favicon.svg?v={logo_version}"', html)
         files[website / "index.html"] = html.encode()
     index = frontend / "index.html"
     html = index.read_text()
@@ -153,6 +169,7 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
     html = re.sub(
         r'(<meta name="theme-color" content=")[^"]*(" />)', rf"\g<1>{brand['colors']['paper']}\2", html
     )
+    html = re.sub(r'href="/favicon\.svg(?:\?[^"]*)?"', f'href="/favicon.svg?v={logo_version}"', html)
     files[index] = html.encode()
     # Display metadata only: preserve appId, package name, protocol schemes,
     # artifact names, desktopName, data paths and the existing updater identity.

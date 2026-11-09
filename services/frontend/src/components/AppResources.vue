@@ -1,9 +1,9 @@
 <template>
   <dl class="app-resources" aria-label="App resources">
-    <div><dt>Memory</dt><dd>{{ appBytes(runtime?.memory_bytes) }}<small v-if="runtime?.memory_limit_bytes"> / {{ appBytes(runtime.memory_limit_bytes) }}</small></dd><meter v-if="runtime?.memory_limit_bytes" :value="runtime.memory_bytes || 0" :max="runtime.memory_limit_bytes" aria-label="Memory usage" /></div>
-    <div><dt>CPU <small v-if="runtime?.cpu_limit">· {{ runtime.cpu_limit }} core limit</small></dt><dd>{{ runtime?.cpu_percent == null ? '—' : `${runtime.cpu_percent.toFixed(1)}%` }}</dd><small v-if="runtime?.pids != null">{{ runtime.pids }} / {{ runtime.pid_limit || 32 }} processes</small></div>
-    <div><dt>SQLite data</dt><dd>{{ appBytes(runtime?.data_bytes) }}<small v-if="runtime?.persistent_limit_bytes"> / {{ appBytes(runtime.persistent_limit_bytes) }}</small></dd><meter v-if="runtime?.persistent_limit_bytes" :value="runtime.data_bytes || 0" :max="runtime.persistent_limit_bytes" aria-label="Data usage" /></div>
-    <div><dt>Runtime image</dt><dd>{{ appBytes(runtime?.image_bytes) }}</dd><small v-if="runtime?.status === 'frontend-only'">No container needed</small><small v-else>Shared compiler excluded</small></div>
+    <div><dt>Memory</dt><dd>{{ appBytes(runtime?.memory_bytes) }}<small v-if="runtime?.memory_limit_bytes"> / {{ appBytes(runtime.memory_limit_bytes) }}</small><meter v-if="runtime?.memory_limit_bytes" :value="runtime.memory_bytes || 0" :max="runtime.memory_limit_bytes" aria-label="Memory usage" /></dd></div>
+    <div><dt>CPU <small v-if="runtime?.cpu_limit">· {{ runtime.cpu_limit }} core limit</small></dt><dd>{{ runtime?.cpu_percent == null ? '—' : `${runtime.cpu_percent.toFixed(1)}%` }}<small v-if="runtime?.pids != null" class="app-resources__note">{{ runtime.pids }} / {{ runtime.pid_limit || 32 }} processes</small></dd></div>
+    <div><dt>SQLite data</dt><dd>{{ appBytes(runtime?.data_bytes) }}<small v-if="runtime?.persistent_limit_bytes"> / {{ appBytes(runtime.persistent_limit_bytes) }}</small><meter v-if="runtime?.persistent_limit_bytes" :value="runtime.data_bytes || 0" :max="runtime.persistent_limit_bytes" aria-label="Data usage" /></dd></div>
+    <div><dt>Runtime image</dt><dd>{{ appBytes(runtime?.image_bytes) }}<small v-if="runtime?.status === 'frontend-only'" class="app-resources__note">No container needed</small><small v-else class="app-resources__note">Shared compiler excluded</small></dd></div>
   </dl>
 </template>
 
@@ -18,6 +18,7 @@ defineProps({ runtime: { type: Object, default: null } })
 .app-resources dt { color: var(--text-muted); font-size: .8125rem; line-height: 1.6; margin-bottom: 10px; }
 .app-resources dd { margin: 0; font-size: 1.125rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; line-height: 1.6; }
 .app-resources small { color: var(--text-dim); font-size: .75rem; font-weight: 400; line-height: 1.5; }
+.app-resources__note { display: block; margin-top: 8px; }
 .app-resources meter { display: block; width: 100%; height: 6px; margin-top: 8px; accent-color: var(--accent); }
 @media (max-width: 1100px) { .app-resources { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 380px) { .app-resources { gap: 6px; } .app-resources > div { padding: 10px; } }

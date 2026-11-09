@@ -8,10 +8,10 @@ export const THEMES = [
       'surface-app': brand.colors.paper, 'surface-rail': '#f0f2f8', 'surface-panel': brand.colors.white,
       'surface-raised': '#f0f2f8', 'surface-overlay': '#ffffff', 'surface-input': '#ffffff', 'surface-code': '#eff2f8',
       text: brand.colors.ink, 'text-muted': '#606776', 'text-dim': '#606b7c', accent: brand.colors.agentStrong,
-      success: '#27704b', warning: '#875b26', danger: '#b8324b',
+      success: '#27704b', warning: brand.colors.workflowStrong, danger: '#b8324b',
       'syntax-comment': '#5e6f84', 'syntax-keyword': '#7750a5', 'syntax-string': '#256d47',
       'syntax-number': '#955523', 'syntax-function': '#255da5', 'syntax-variable': '#2d3e53',
-      'syntax-builtin': '#7c6108', 'syntax-meta': '#a13660', 'flow-activity': brand.colors.agentStrong, 'flow-signal': '#78649d'
+      'syntax-builtin': '#7c6108', 'syntax-meta': '#a13660', 'flow-activity': brand.colors.agentStrong, 'flow-signal': brand.colors.sessionStrong
     }
   },
   {
@@ -180,8 +180,9 @@ export function resolveTheme (id, input = {}) {
     'accent-hover': mix(base.accent, base.text, 0.18), 'accent-press': mix(base.accent, '#101517', 0.12),
     'accent-soft': alpha(base.accent, dark ? 0.12 : 0.09), 'accent-text': onColor(base.accent, base['surface-app']),
     'action-bg': action, 'action-hover': mix(action, base['surface-app'], .14), 'action-text': onColor(action, base['surface-app']),
-    'agent-color': base.accent, 'session-color': base['flow-signal'],
-    'workflow-color': branded ? (dark ? '#e2b783' : '#875b26') : base.warning,
+    'agent-color': !dark && !branded ? mix(base.accent, base.text, .1) : base.accent,
+    'session-color': !dark && !branded ? mix(base['flow-signal'], base.text, .1) : base['flow-signal'],
+    'workflow-color': branded ? (dark ? '#e2b783' : brand.colors.workflowStrong) : dark ? base.warning : mix(base.warning, base.text, .1),
     'success-soft': alpha(base.success, 0.12), 'warning-soft': alpha(base.warning, 0.12),
     'warning-text': onColor(base.warning, base['surface-app']), 'danger-soft': alpha(base.danger, 0.12),
     'bubble-out': mix(base.accent, base['surface-app'], dark ? 0.85 : 0.92), 'bubble-text': base.text,
