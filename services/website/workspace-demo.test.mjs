@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { brand } from './brand.mjs';
 import { createDemoState, transitionDemo, selectStatistics, renderWorkspaceDemo, escapeDemoText, WORKFLOWS, mountWorkspaceDemo } from './workspace-demo.mjs';
 
 const act = (state, type, value) => transitionDemo(state, { type, value });
@@ -24,6 +25,7 @@ test('initial state has a useful sample conversation and one inline example outp
   assert.equal(state.research, true);
   assert.equal(state.preview, false);
   const html = renderWorkspaceDemo(state);
+  assert.ok(html.includes(`<strong>${escapeDemoText(brand.name)}</strong>`));
   assert.match(html, /Product brief &amp; slides/);
   assert.match(html, /3 tool calls/);
   assert.match(html, /aria-label="Demo sections"/);

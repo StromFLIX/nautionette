@@ -116,7 +116,13 @@ test('destroying during a load does not mount detached content', async () => {
 test('the shipped website contains the complete optional explorer runtime', () => {
   const dockerfile = readFileSync(new URL('./Dockerfile', import.meta.url), 'utf8')
   const html = readFileSync(new URL('./index.template.html', import.meta.url), 'utf8')
-  for (const name of ['product-preview.mjs', 'workspace-demo.mjs', 'workspace-demo.css']) assert.ok(dockerfile.includes(name), name)
+  const runtime = ['product-preview.mjs', 'workspace-demo.mjs', 'workspace-demo.css']
+  let bytes = 0
+  for (const name of runtime) {
+    assert.ok(dockerfile.includes(name), name)
+    bytes += readFileSync(new URL(`./${name}`, import.meta.url)).length
+  }
+  assert.ok(bytes < 64000, `${bytes} bytes exceeds the lightweight explorer budget`)
   assert.match(html, /data-explorer-toolbar hidden/)
   assert.match(html, /data-preview-demo hidden/)
   assert.match(html, /data-preview-screen>/)

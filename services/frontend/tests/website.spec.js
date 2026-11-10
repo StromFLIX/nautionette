@@ -129,6 +129,8 @@ for (const width of [1440, 390, 320]) {
     const demo = page.locator('[data-workspace-demo]')
     const navigation = demo.getByRole('navigation', { name: 'Demo sections' })
     await expect(navigation).toBeVisible()
+    const liveRegion = await demo.locator('.wd-live').elementHandle()
+    const pageBackground = await page.locator('body').evaluate(body => getComputedStyle(body).backgroundColor)
     await expect(page.locator('[data-preview-disclosure]')).toContainText('nothing is sent or saved')
 
     await navigation.getByRole('button', { name: 'Workflows', exact: true }).click()
@@ -156,7 +158,11 @@ for (const width of [1440, 390, 320]) {
     await expect(demo).toHaveAttribute('data-demo-theme', 'light')
     await demo.getByRole('tab', { name: 'Outputs', exact: true }).click()
     await demo.getByRole('button', { name: 'Preview product brief', exact: true }).click()
-    await expect(demo).toContainText(/sample preview/i)
+    await expect(demo.getByRole('article', { name: 'Sample product brief preview', exact: true })).toBeVisible()
+    await demo.getByRole('button', { name: 'Preview product brief', exact: true }).press('Escape')
+    await expect(demo.getByRole('article', { name: 'Sample product brief preview', exact: true })).toHaveCount(0)
+    expect(await liveRegion.evaluate(node => node.isConnected)).toBe(true)
+    expect(await page.locator('body').evaluate(body => getComputedStyle(body).backgroundColor)).toBe(pageBackground)
 
     const desktop = await page.locator('.product-view--desktop').boundingBox()
     const phone = await page.locator('.product-view--phone').boundingBox()
@@ -168,6 +174,22 @@ for (const width of [1440, 390, 320]) {
     expect(errors).toEqual([])
   })
 }
+
+test('the local workspace demo ignores blocked browser storage', async ({ page }) => {
+  await page.addInitScript(() => {
+    for (const key of ['localStorage', 'sessionStorage']) {
+      Object.defineProperty(window, key, { get () { throw new Error('Storage blocked') } })
+    }
+  })
+  await website(page)
+  await page.getByRole('tab', { name: 'Explore demo', exact: true }).click()
+  const demo = page.locator('[data-workspace-demo]')
+  await demo.getByRole('navigation', { name: 'Demo sections' }).getByRole('button', { name: 'Settings', exact: true }).click()
+  await demo.getByRole('button', { name: 'Night', exact: true }).click()
+  await expect(demo).toHaveAttribute('data-demo-theme', 'night')
+  await demo.getByRole('button', { name: 'Reset demo', exact: true }).click()
+  await expect(demo).toHaveAttribute('data-demo-theme', 'light')
+})
 
 test('demo tabs work from the keyboard and preserve a screenshot on module failure', async ({ page }) => {
   await website(page)

@@ -1,10 +1,10 @@
 /* Every rule is local to the opt-in wireframe. No document theme or page styles. */
 .workspace-demo {
-  --wd-paper: #f8f9fc;
-  --wd-white: #fff;
-  --wd-ink: #20232c;
+  --wd-paper: var(--paper, #f8f9fc);
+  --wd-white: var(--white, #fff);
+  --wd-ink: var(--ink, #20232c);
   --wd-muted: #596378;
-  --wd-line: #dce0e9;
+  --wd-line: var(--line, #dce0e9);
   --wd-blue: #424fc4;
   --wd-blue-bg: #edf0fc;
   --wd-lilac: #71558f;
@@ -157,6 +157,7 @@
   .workspace-demo .wd-avatar { width: 30px; height: 30px; font-size: 11px; }
   .workspace-demo .wd-tabs { padding: 0 8px; }
   .workspace-demo .wd-scroll { padding: 14px 12px; }
+  .workspace-demo .wd-field :is(input, select) { font-size: 16px; }
   .workspace-demo .wd-message.wd-user { margin-left: 8px; padding: 12px; }
   .workspace-demo .wd-preview, .workspace-demo .wd-output { padding: 12px; }
   .workspace-demo .wd-footer { padding: 7px 10px; line-height: 1.5; }

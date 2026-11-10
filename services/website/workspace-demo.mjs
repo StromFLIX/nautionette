@@ -1,4 +1,5 @@
-// Standalone, dependency-free sample. Importing this module never touches the DOM.
+// Standalone sample. Importing this module never touches the DOM.
+import { brand } from './brand.mjs';
 export const WORKFLOWS = Object.freeze([
   Object.freeze({ id: 'reading', title: 'Weekly reading brief', purpose: 'Turn a topic into a short reading plan with questions to explore.', topic: 'Calmer team workspaces', steps: Object.freeze(['Read the sample source notes', 'Group ideas around your topic', 'Draft a short reading brief']) }),
   Object.freeze({ id: 'release', title: 'Release checklist', purpose: 'Organize example release notes into a reviewable checklist.', topic: 'First public release', steps: Object.freeze(['Read the sample release notes', 'Identify checks and owners', 'Draft the release checklist']) }),
@@ -135,7 +136,7 @@ function settingsView(state, id) {
 export function renderWorkspaceDemo(state, instanceId = 'demo-preview') {
   // Keep caller-provided identifiers safe even in pure-render tests.
   const id = `demo-${String(instanceId).replace(/[^a-zA-Z0-9_-]/g, '')}`;
-  return `<div class="wd-shell"><header class="wd-top"><div><strong>Denkzeug</strong><span class="wd-sample">Interactive wireframe · sample data</span></div>${button('Reset demo', 'reset')}</header>
+  return `<div class="wd-shell"><header class="wd-top"><div><strong>${text(brand.name)}</strong><span class="wd-sample">Interactive wireframe · sample data</span></div>${button('Reset demo', 'reset')}</header>
     <div class="wd-body"><nav class="wd-nav" aria-label="Demo sections">${SECTIONS.map((section, index) => button(section, 'section', section, `aria-current="${state.section === section ? 'page' : 'false'}" class="wd-nav-${index}"`)).join('')}</nav>
     <div class="wd-content"><aside class="wd-list" aria-label="Workspace overview"><p class="wd-eyebrow">Sample workspace</p><h2>${state.section}</h2>${state.section === 'Chats' ? '<p class="wd-list-item">Product brief &amp; slides</p><p class="wd-note">A conversation and its example output, together.</p>' : state.section === 'Workflows' ? '<p class="wd-note">Choose a recipe, edit a topic, then walk through a local run.</p>' : state.section === 'Runs' ? `<p class="wd-list-item">${state.runs.length} sample runs</p><p class="wd-note">Inspect each step or compare outcomes.</p>` : '<p class="wd-note">Try a local theme and sample agent preferences.</p>'}<span class="wd-local-label">Nothing saved or sent</span></aside>
     <section class="wd-main" aria-label="Demo workspace">${state.section === 'Chats' ? chatView(state, id) : state.section === 'Workflows' ? workflowView(state, id) : state.section === 'Runs' ? runsView(state, id) : settingsView(state, id)}</section></div></div>
@@ -154,7 +155,15 @@ export function mountWorkspaceDemo(element) {
     const key = focusOverride || (hadFocus ? active.getAttribute('data-focus') : '');
     root.classList.add('workspace-demo');
     root.setAttribute('data-demo-theme', state.theme);
-    root.innerHTML = renderWorkspaceDemo(state, id);
+    const markup = renderWorkspaceDemo(state, id);
+    if (root.querySelector('.wd-shell')) {
+      // Preserve the live region and reset control so updates are announced
+      // rather than recreating an already-populated live region on every click.
+      const template = document.createElement('template');
+      template.innerHTML = markup;
+      root.querySelector('.wd-body').replaceWith(template.content.querySelector('.wd-body'));
+      root.querySelector('.wd-live').textContent = state.notice;
+    } else root.innerHTML = markup;
     if (restoreFocus && hadFocus) {
       const controls = [...root.querySelectorAll('[data-focus]')];
       const target = controls.find(control => control.getAttribute('data-focus') === key) || controls.find(control => control.getAttribute('data-focus') === 'reset-');
