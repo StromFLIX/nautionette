@@ -24,7 +24,7 @@ export function mountProductTour (root, tour = productTour) {
   if (!root) return null
   validateProductTour(tour)
   const document = root.ownerDocument
-  const image = root.querySelector('[data-tour-image]')
+  let image = root.querySelector('[data-tour-image]')
   const original = root.querySelector('[data-tour-original]')
   const large = root.querySelector('[data-tour-fullsize]')
   const overlay = root.querySelector('[data-tour-hotspots]')
@@ -47,16 +47,23 @@ export function mountProductTour (root, tour = productTour) {
     root.setAttribute('aria-busy', 'true')
     status.textContent = `Loading ${scene.title} screenshot…`
     const candidate = document.createElement('img')
+    candidate.setAttribute('data-tour-image', '')
+    candidate.width = Number(image.getAttribute('width'))
+    candidate.height = Number(image.getAttribute('height'))
+    candidate.decoding = 'async'
+    candidate.alt = scene.alt
     candidate.onload = () => {
       if (destroyed || pending !== request) return
       if (historyMode === 'push' && current && current !== id) history.push(current)
       else if (historyMode === 'back') history.pop()
       else if (historyMode === 'reset') history = []
       current = id
-      image.removeAttribute('srcset')
-      image.removeAttribute('sizes')
-      image.src = scene.src
-      image.alt = scene.alt
+      // Insert the already-loaded image atomically. Reusing the responsive
+      // fallback element can retain its previous srcset density in browsers.
+      candidate.onload = null
+      candidate.onerror = null
+      image.replaceWith(candidate)
+      image = candidate
       original.href = scene.src
       large.href = scene.src
       title.textContent = scene.title
