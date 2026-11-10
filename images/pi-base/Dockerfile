@@ -3,12 +3,13 @@ FROM node:24-bookworm-slim
 
 # Tooling shared by every agent set. Keep Python and browser installations outside
 # /root: the broker runs project agents as an unprivileged user with HOME=/workspace.
-COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /uvx /usr/local/bin/
+COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvx /usr/local/bin/
 ENV UV_PYTHON_INSTALL_DIR=/opt/python \
     UV_PYTHON_BIN_DIR=/usr/local/bin \
     PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 
 RUN apt-get update \
+  && apt-get upgrade -y --no-install-recommends \
   && apt-get install -y --no-install-recommends \
       bash ca-certificates curl git ripgrep build-essential pkg-config \
   && rm -rf /var/lib/apt/lists/*
@@ -19,7 +20,7 @@ RUN uv python install --default 3.13 \
 
 # Match services/frontend/package-lock.json. Preinstall both Chromium and its OS
 # libraries/fonts so browser tests need no privileged apt install at runtime.
-ARG PLAYWRIGHT_VERSION=1.64.1
+ARG PLAYWRIGHT_VERSION=1.65.0
 RUN npm install -g --ignore-scripts playwright@${PLAYWRIGHT_VERSION} \
   && playwright install --with-deps chromium \
   && chmod -R a+rX /opt/python /opt/playwright-browsers \
@@ -32,7 +33,7 @@ RUN npm install -g --ignore-scripts playwright@${PLAYWRIGHT_VERSION} \
 COPY artcraft/ /usr/local/lib/nautionette/artcraft/
 
 # Pi updates must not invalidate the much larger Chromium/OS dependency layer.
-RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.4.0 \
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent@1.5.2 \
   && npm cache clean --force
 # Verify Pi's public SDK and host dependencies without installing duplicate peers.
 # Third-party packages must support Pi 1.0's exports (see docs/pi-packages.md).

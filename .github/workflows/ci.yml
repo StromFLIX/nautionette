@@ -90,7 +90,7 @@ jobs:
           NAUTIONETTE_TEST_GATEWAY_BINARY="$RUNNER_TEMP/agentgateway" uv run pytest tests/backend/test_mcp_oauth_e2e.py tests/backend/test_mcp_http_oauth_e2e.py tests/agentgateway/test_stdio_runtime.py
 
       - name: Agent defaults, profiles and durable chat configuration
-        run: uv run pytest tests/backend/test_agent_profiles.py tests/backend/test_agent_grouping.py tests/backend/test_subagents.py tests/backend/test_delegated_chat_tree.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py
+        run: uv run pytest tests/backend/test_auth.py tests/backend/test_agent_profiles.py tests/backend/test_agent_grouping.py tests/backend/test_subagents.py tests/backend/test_delegated_chat_tree.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py
 
       - name: Database upgrades, API retirement and workflow transports
         run: uv run pytest tests/backend/test_db.py tests/backend/test_retired_features.py tests/backend/test_miniapps.py tests/backend/test_miniapp_development.py tests/broker/test_miniapps.py tests/broker/test_miniapp_networks.py tests/broker/test_image_context.py tests/workflow_mcp/test_tools.py tests/backend/test_gateway_mcp.py tests/backend/test_temporal_schedules.py
@@ -136,6 +136,9 @@ jobs:
       # ci, not install: it fails when package.json and the lockfile disagree.
       - name: Install
         run: npm ci
+
+      - name: Dependency security audit (including desktop build tools)
+        run: npm audit --audit-level=moderate
 
       - name: Frontend unit tests
         run: npm test
@@ -221,9 +224,33 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           push: false
+          pull: true
+          load: true
+          tags: nautionette/audit-${{ matrix.name }}:ci
           cache-from: type=gha,scope=${{ matrix.name }}
           # Cache availability must not turn a successful image build red.
           cache-to: type=gha,mode=max,scope=${{ matrix.name }},ignore-error=true
+
+      - name: Inventory every installed OS and language package
+        uses: anchore/sbom-action@v0.24.3
+        with:
+          image: nautionette/audit-${{ matrix.name }}:ci
+          artifact-name: sbom-${{ matrix.name }}.spdx.json
+          output-file: sbom.spdx.json
+          upload-release-assets: false
+
+      - name: Report container vulnerabilities (including upstream unfixed issues)
+        uses: anchore/scan-action@v7.4.2
+        with:
+          sbom: sbom.spdx.json
+          fail-build: false
+          output-format: json
+          output-file: vulnerabilities.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vulnerabilities-${{ matrix.name }}
+          path: vulnerabilities.json
 
   miniapps:
     name: Mini-app compiler and isolated runtime
@@ -250,6 +277,7 @@ jobs:
         with:
           context: .
           file: services/docker-broker/Dockerfile
+          pull: true
           load: true
           tags: nautionette/docker-broker:dev
           cache-from: type=gha,scope=miniapp-test-broker
@@ -280,6 +308,7 @@ jobs:
           files: images/agent-images.hcl
           load: true
           set: |
+            *.pull=true
             *.labels.org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
 
       - uses: astral-sh/setup-uv@v10.3.3
@@ -324,6 +353,56 @@ jobs:
           uv sync --locked --all-packages
           NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_git_credentials_docker.py tests/broker/test_chat_sessions_docker.py
 
+      - name: Inventory Pi base packages
+        uses: anchore/sbom-action@v0.24.3
+        with:
+          image: nautionette/pi-base:dev
+          artifact-name: sbom-pi-base.spdx.json
+          output-file: sbom-pi-base.spdx.json
+          upload-release-assets: false
+
+      - uses: anchore/scan-action@v7.4.2
+        with:
+          sbom: sbom-pi-base.spdx.json
+          fail-build: false
+          output-format: json
+          output-file: vulnerabilities-pi-base.json
+
+      - name: Inventory default agent packages
+        uses: anchore/sbom-action@v0.24.3
+        with:
+          image: nautionette/pi-agent-default:dev
+          artifact-name: sbom-pi-agent-default.spdx.json
+          output-file: sbom-pi-agent-default.spdx.json
+          upload-release-assets: false
+
+      - uses: anchore/scan-action@v7.4.2
+        with:
+          sbom: sbom-pi-agent-default.spdx.json
+          fail-build: false
+          output-format: json
+          output-file: vulnerabilities-pi-agent-default.json
+
+      - name: Inventory mini-app compiler and vendored Rust crates
+        uses: anchore/sbom-action@v0.24.3
+        with:
+          image: nautionette/miniapp-builder:dev
+          artifact-name: sbom-miniapp-builder.spdx.json
+          output-file: sbom-miniapp-builder.spdx.json
+          upload-release-assets: false
+
+      - uses: anchore/scan-action@v7.4.2
+        with:
+          sbom: sbom-miniapp-builder.spdx.json
+          fail-build: false
+          output-format: json
+          output-file: vulnerabilities-miniapp-builder.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vulnerabilities-agent-images
+          path: vulnerabilities-*.json
+
       # Publishing is part of CI, so Deploy cannot start before these images
       # exist. PR code never logs in or pushes (including same-repository PRs).
       - name: Log in to GHCR
@@ -346,6 +425,36 @@ jobs:
           DEFAULT_HASH: ${{ steps.images.outputs.default }}
           MINIAPP_HASH: ${{ steps.images.outputs.miniapp }}
         run: python3 scripts/publish_agent_images.py
+
+  dependency-images:
+    name: Inventory (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: postgres, image: 'postgres:17-alpine' }
+          - { name: maxio, image: 'ghcr.io/coollabsio/maxio:0.4.2' }
+          - { name: temporal-ui, image: 'temporalio/ui:2.58.1' }
+    steps:
+      - name: Pull current upstream image
+        run: docker pull '${{ matrix.image }}'
+      - uses: anchore/sbom-action@v0.24.3
+        with:
+          image: ${{ matrix.image }}
+          artifact-name: sbom-${{ matrix.name }}.spdx.json
+          output-file: sbom.spdx.json
+          upload-release-assets: false
+      - uses: anchore/scan-action@v7.4.2
+        with:
+          sbom: sbom.spdx.json
+          fail-build: false
+          output-format: json
+          output-file: vulnerabilities.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vulnerabilities-${{ matrix.name }}
+          path: vulnerabilities.json
 
   compose:
     name: Compose file

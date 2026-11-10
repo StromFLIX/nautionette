@@ -83,7 +83,7 @@ The app calls these through `ctx.mcp`, never through browser credentials. `input
 
 ## Build and runtime boundary
 
-The compiler is a source-fingerprinted, platform-owned Rust 1.91.1/Alpine image. Cargo dependencies are locked, vendored and prebuilt once. An app build has no network, credentials, Docker socket or persistent writable volume; it runs non-root with a read-only root, bounded tmpfs, one CPU, 1 GiB memory, PID limit and a 180-second compilation deadline. Only a bounded ELF artifact is copied into a platform-generated `FROM scratch` image. `scratch` is packaging, **not** the security boundary by itself.
+The compiler is a source-fingerprinted, platform-owned Rust 1.99.1/Alpine image. Cargo dependencies are locked, vendored and prebuilt once. An app build has no network, credentials, Docker socket or persistent writable volume; it runs non-root with a read-only root, bounded tmpfs, one CPU, 1 GiB memory, PID limit and a 180-second compilation deadline. Only a bounded ELF artifact is copied into a platform-generated `FROM scratch` image. `scratch` is packaging, **not** the security boundary by itself.
 
 Rust runtimes require **Docker Engine 28+**, because an ordinary `internal: true` Docker bridge still exposes services on the host's bridge address. Per-app networks require gateway mode `isolated`, disable IPv6 and connect only the app and broker. They have no published ports, external egress, gateway membership or other app members. Runtime bearer credentials authorize one fixed capability adapter, never broker administration. Missing internal authentication blocks backend publication. Older Docker engines fail closed for native apps without breaking chats/workflows/frontend-only apps.
 

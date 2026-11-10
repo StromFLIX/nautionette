@@ -11,6 +11,8 @@ def test_healthz_needs_no_token(anonymous):
     assert response.json() == {
         "status": "ok",
         "version": "test",
+        "build_commit": None,
+        "release_tag": None,
         "environment": "production",
         "chat_draining": False,
     }

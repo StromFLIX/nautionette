@@ -14,10 +14,10 @@ dependencies = [
   "nautionette",
   "mcp>=2.1",
   "pyjwt[crypto]>=2.10",
-  "pillow>=12.2",
+  "pillow>=13,<14",
   "boto3>=1.40,<2",
   "sqlite-vec>=0.1.6,<0.2",
-  "fastembed>=0.8,<0.9",
+  "fastembed>=0.9.1,<0.10",
   "huggingface-hub>=0.36,<2",
 ]
 

@@ -1,8 +1,8 @@
 {
   "schema": 1,
-  "base": "7fb6167bc2e4",
+  "base": "fd2009cce8c4",
   "agent_sets": {
-    "default": "c25efedd466a"
+    "default": "c066ad4ebc9a"
   },
-  "miniapp": "9a9e46708317"
+  "miniapp": "a7735433ffb1"
 }
