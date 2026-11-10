@@ -85,6 +85,36 @@ test('evolving patterns keep the title and definition clear on desktop and phone
   }
 })
 
+test('activity reading masks follow position-only layout changes without waiting for resize observers', async ({ page }) => {
+  // A fixed field puts an active cell where the title moves. ResizeObserver does
+  // not report transforms, and queued layout notifications can also lag a frame.
+  await page.addInitScript(() => { crypto.getRandomValues = values => { values[0] = 2; return values } })
+  await website(page)
+  await page.clock.install()
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.getByLabel('Definition language').selectOption('en')
+  await page.clock.runFor(100)
+  const before = await page.locator('.hero h1').boundingBox()
+  await page.locator('.hero-content').evaluate(node => { node.style.transform = 'translateY(-120px)' })
+  await page.clock.runFor(100)
+  const after = await page.locator('.hero h1').boundingBox()
+  expect(after.y).toBeCloseTo(before.y - 120)
+  expect(after.width).toBe(before.width)
+  expect(after.height).toBe(before.height)
+  const maximumAlpha = await page.locator('canvas').evaluate(canvas => {
+    const bounds = canvas.getBoundingClientRect(), box = document.querySelector('.hero h1').getBoundingClientRect()
+    const ratio = canvas.width / bounds.width
+    const pixels = canvas.getContext('2d').getImageData(
+      Math.ceil((box.left - bounds.left + 8) * ratio), Math.ceil((box.top - bounds.top + 8) * ratio),
+      Math.floor((box.width - 16) * ratio), Math.floor((box.height - 16) * ratio)
+    ).data
+    let maximum = 0
+    for (let i = 3; i < pixels.length; i += 4) maximum = Math.max(maximum, pixels[i])
+    return maximum
+  })
+  expect(maximumAlpha).toBe(0)
+})
+
 for (const width of [1440, 768, 390, 320]) {
   test(`product screenshots keep desktop-to-phone order and fit at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })

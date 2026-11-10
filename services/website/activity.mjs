@@ -37,10 +37,15 @@ export function mountActivity (canvas, button, storage) {
   function measureReadingArea () {
     const bounds = canvas.getBoundingClientRect()
     const copy = canvas.parentElement.querySelectorAll('.hero h1, .hero-icon, .pronunciation > span, .definition, .definition-meta, .hero-actions > a, .field-caption')
-    readingZones = [...copy].map(element => {
+    const zones = [...copy].map(element => {
       const box = element.getBoundingClientRect()
       return { left: box.left - bounds.left, right: box.right - bounds.left, top: box.top - bounds.top, bottom: box.bottom - bounds.top }
     })
+    if (zones.length === readingZones.length && zones.every((zone, index) => {
+      const previous = readingZones[index]
+      return zone.left === previous.left && zone.right === previous.right && zone.top === previous.top && zone.bottom === previous.bottom
+    })) return
+    readingZones = zones
     clarity.clear()
   }
   function tileClarity (index) {
@@ -59,6 +64,10 @@ export function mountActivity (canvas, button, storage) {
     return level
   }
   function draw (instant = false) {
+    // Locale/font reflow can move the copy before ResizeObserver is delivered;
+    // position-only changes do not trigger it at all. Paint from current geometry,
+    // retaining the per-tile cache when the reading zones have not moved.
+    measureReadingArea()
     for (const [index, kind] of cells) {
       if (!energies.has(index)) energies.set(index, { kind, level: instant ? 1 : 0 })
       energies.get(index).kind = kind
@@ -107,7 +116,7 @@ export function mountActivity (canvas, button, storage) {
     field = createField(Math.ceil(width / TILE_SIZE), Math.ceil(height / TILE_SIZE), seed)
     cells = visibleCells(field)
     energies.clear()
-    measureReadingArea()
+    clarity.clear() // A new grid can reuse indices at different tile coordinates.
     draw(true)
     sync()
   }
