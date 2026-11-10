@@ -96,11 +96,29 @@ h3 { letter-spacing: -.045em; }
 .product-screen__zoom { display: inline-flex; align-items: center; gap: 7px; }
 .product-screen img, .product-phone img { display: block; width: 100%; height: auto; }
 .product-phone { border: 7px solid var(--ink); border-radius: 26px; }
+.product-tour { container-type: inline-size; }
+.product-tour__stage { position: relative; }
+.product-tour__image-link { display: block; }
+.product-tour__hotspots { position: absolute; inset: 0; pointer-events: none; }
+.product-tour__hotspots[hidden], .product-tour__controls[hidden] { display: none; }
+.product-tour__hotspot { position: absolute; pointer-events: auto; padding: 0; border: 1.5px solid #4b5fc0; border-radius: 6px; background: rgb(75 95 192 / .08); cursor: pointer; }
+.product-tour__hotspot:hover, .product-tour__hotspot:focus-visible { background: rgb(75 95 192 / .2); outline: 2px solid #344aa7; outline-offset: 2px; }
+.product-tour__controls { padding: 12px; border-top: 1px solid var(--line); background: var(--white); }
+.product-tour__navigation { display: flex; flex-wrap: wrap; gap: 6px; }
+.product-tour__navigation button, .product-tour__history button { min-height: 44px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 6px; background: var(--white); font-size: 11px; line-height: 1.5; }
+.product-tour__navigation button[aria-pressed="true"] { color: #3349a9; border-color: #6878c4; background: #edf0fc; }
+.product-tour__history { display: flex; gap: 6px; margin-top: 8px; }
+.product-tour__history button { color: var(--muted); background: var(--paper); }
+.product-tour__controls p { margin-top: 10px; color: var(--muted); font-size: 10px; line-height: 1.7; }
+@container (max-width: 640px) {
+  .product-tour__hotspots { display: none; }
+  .product-tour__navigation { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 .product-view figcaption { display: flex; flex-direction: column; gap: 5px; margin-top: 20px; font-size: 12px; line-height: 1.65; }
 .product-view figcaption strong { font-weight: 500; }
 .product-view figcaption > span { color: var(--muted); font-size: 11px; }
 .product-section__note { max-width: 82ch; margin-top: 28px; color: var(--muted); font-size: 10px; line-height: 1.8; }
-@media (hover: hover) and (pointer: fine) { .product-screen:hover, .product-phone:hover { outline: 2px solid #6878c4; outline-offset: 4px; } }
+@media (hover: hover) and (pointer: fine) { .product-phone:hover { outline: 2px solid #6878c4; outline-offset: 4px; } }
 @media (max-width: 1000px) and (min-width: 701px) { .product-views { grid-template-columns: minmax(0, 1fr) 210px; gap: 20px; } }
 @media (max-width: 700px) {
   .product-section__heading { margin-bottom: 36px; }

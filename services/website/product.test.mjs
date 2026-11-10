@@ -10,7 +10,7 @@ test('the product explanation and device views sit immediately after the opening
   assert.ok(product < html.indexOf('id="idea"'))
   assert.match(html, /A workspace for<br \/>your AI agents\./)
   assert.match(html, /an open-source app you run on your own server/)
-  assert.match(html, /Actual interface shown with sample content/)
+  assert.match(html, /Real app screenshots, captured with demo data/)
   assert.match(html, /href="#workspace">See the workspace/)
 })
 

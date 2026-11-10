@@ -11,6 +11,11 @@ document.querySelector('.locale-control').hidden = false
 mountActivity(document.getElementById('activity-field'), document.getElementById('motion-toggle'), storage)
 loadDownloads(document)
 
+// Optional screenshot navigation must never break the rest of the landing page.
+import('./product-tour.mjs?v=screens-1')
+  .then(({ mountProductTour }) => mountProductTour(document.querySelector('[data-product-tour]')))
+  .catch(() => {})
+
 for (const button of document.querySelectorAll('[data-copy]')) {
   button.hidden = false
   button.addEventListener('click', async () => {

@@ -39,7 +39,12 @@ content, never production/user data, and labelled accordingly. Device framing is
 CSS outside the captures, not a redrawn interface. Desktop leads on every screen,
 followed by the remote phone view: make it, then pick it up. Visual and document
 order stay aligned on mobile. Full-size image links work with keyboard navigation
-and without JavaScript.
+and without JavaScript. The desktop image can be enhanced with a screenshot
+click-through: actual app captures only, with outlined rectangles recorded from
+real DOM controls. Clicking changes the image; no interface is recreated in HTML,
+no simulation runs, and no pictured control acts as a live app. A screen picker
+below the image provides usable touch/keyboard targets. Capture provenance and
+measured rectangles live beside the images under `assets/product-tour/`.
 The three later illustrations explain artifact types, workflows and miniapps.
 
 ## Brand assets

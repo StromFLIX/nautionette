@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
 import { definitions } from '../../website/definitions.mjs'
+import { productTour } from '../../website/product-tour-data.mjs'
 
 // Exercise the exact static site, with its production paths, without adding a
 // second development server or changing the app's branding/router.
@@ -90,8 +91,9 @@ for (const width of [1440, 768, 390, 320]) {
     await website(page)
     const product = page.getByRole('region', { name: 'A workspace for your AI agents.' })
     await product.scrollIntoViewIfNeeded()
+    await expect(product.getByRole('navigation', { name: 'Demo screenshots' })).toBeVisible()
     await expect(product).toContainText('open-source app you run on your own server')
-    await expect(product).toContainText('sample content')
+    await expect(product).toContainText('demo data')
     for (const image of await product.locator('img').all()) {
       await image.scrollIntoViewIfNeeded()
       await expect.poll(() => image.evaluate(node => node.complete && node.naturalWidth > 0)).toBe(true)
@@ -102,17 +104,77 @@ for (const width of [1440, 768, 390, 320]) {
     else expect(desktop.x + desktop.width).toBeLessThanOrEqual(phone.x)
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
     const link = product.getByRole('link', { name: /full-size desktop workspace/ })
-    await expect(link).toHaveAttribute('href', '/assets/product/desktop.webp')
+    const originalPath = await link.getAttribute('href')
+    expect(originalPath).toMatch(/^\/assets\/(product|product-tour)\/[a-z-]+\.webp$/)
     await link.focus()
     await expect(link).toBeFocused()
     const opened = page.waitForEvent('popup')
     await link.press('Enter')
     const original = await opened
-    await expect(original).toHaveURL('http://denkzeug.test/assets/product/desktop.webp')
+    await expect(original).toHaveURL(new URL(originalPath, 'http://denkzeug.test').href)
     await expect.poll(() => original.locator('img').evaluate(image => image.complete && image.naturalWidth === 1920)).toBe(true)
     await original.close()
   })
 }
+
+for (const width of [1440, 390, 320]) {
+  test(`actual screenshot targets switch images without recreating the app at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const requests = []; const errors = []
+    page.on('request', request => requests.push({ url: request.url(), method: request.method() }))
+    page.on('pageerror', error => errors.push(error.message))
+    await website(page)
+    const tour = page.locator('[data-product-tour]')
+    const navigation = tour.getByRole('navigation', { name: 'Demo screenshots' })
+    await expect(navigation).toBeVisible()
+    const image = tour.locator('[data-tour-image]')
+    await expect(image).toHaveAttribute('src', productTour.scenes.find(scene => scene.id === 'chat').src)
+    expect(new Set(requests.filter(request => request.url.includes('/assets/product-tour/')).map(request => request.url)).size).toBe(1)
+    await expect(tour.locator('input, textarea, select, canvas')).toHaveCount(0)
+
+    if (width === 1440) {
+      const hotspot = productTour.scenes.find(scene => scene.id === 'chat').hotspots.find(hotspot => hotspot.target === 'workflows')
+      const target = tour.getByRole('group', { name: 'Screenshot click targets' }).getByRole('button', { name: hotspot.label, exact: true })
+      await target.scrollIntoViewIfNeeded()
+      const box = await target.boundingBox(); const capture = await image.boundingBox()
+      expect(Math.abs((box.x - capture.x) / capture.width - hotspot.rect.x)).toBeLessThan(.003)
+      expect(Math.abs((box.y - capture.y) / capture.height - hotspot.rect.y)).toBeLessThan(.003)
+      await target.click()
+      await expect(image).toHaveAttribute('src', productTour.scenes.find(scene => scene.id === 'workflows').src)
+    } else await expect(tour.getByRole('group', { name: 'Screenshot click targets' })).toBeHidden()
+
+    for (const scene of productTour.scenes) {
+      await navigation.getByRole('button', { name: scene.title, exact: true }).click()
+      await expect(image).toHaveAttribute('src', scene.src)
+      await expect(image).toHaveAttribute('alt', scene.alt)
+      await expect(navigation.getByRole('button', { name: scene.title, exact: true })).toHaveAttribute('aria-pressed', 'true')
+      await expect.poll(() => image.evaluate(node => node.complete && node.naturalWidth === 1920)).toBe(true)
+    }
+    await tour.getByRole('button', { name: 'Back to chat', exact: true }).click()
+    await expect(image).toHaveAttribute('src', productTour.scenes.find(scene => scene.id === 'chat').src)
+    await expect(tour.getByRole('button', { name: 'Previous screen', exact: true })).toBeDisabled()
+    const desktop = await page.locator('.product-view--desktop').boundingBox()
+    const phone = await page.locator('.product-view--phone').boundingBox()
+    if (width <= 700) expect(desktop.y + desktop.height).toBeLessThanOrEqual(phone.y)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
+    expect(requests.filter(request => request.method !== 'GET' || /\/api\//.test(request.url))).toEqual([])
+    expect(errors).toEqual([])
+  })
+}
+
+test('a missing tour screenshot leaves the last real image and other page features intact', async ({ page }) => {
+  await website(page)
+  const tour = page.locator('[data-product-tour]')
+  const navigation = tour.getByRole('navigation', { name: 'Demo screenshots' })
+  await expect(navigation).toBeVisible()
+  const scene = productTour.scenes.find(scene => scene.id === 'settings')
+  await page.route(`**${scene.src}`, route => route.fulfill({ status: 404, body: '' }))
+  await navigation.getByRole('button', { name: scene.title, exact: true }).click()
+  await expect(tour.getByRole('status')).toContainText('previous screenshot is still available')
+  await expect(tour.locator('[data-tour-image]')).toHaveAttribute('src', productTour.scenes.find(scene => scene.id === 'chat').src)
+  await page.getByLabel('Definition language').selectOption('de')
+  await expect(page.locator('#definition')).toHaveText(definitions.de)
+})
 
 test('motion pauses, persists and defaults to a still field for reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
@@ -185,5 +247,7 @@ test('without JavaScript, the brand, definition, setup and releases are still av
   await expect(page.locator('#motion-toggle')).toBeHidden()
   await expect(page.getByLabel('Definition language')).toBeHidden()
   await expect(page.getByRole('button', { name: 'Copy command' })).toBeHidden()
+  await expect(page.getByRole('navigation', { name: 'Demo screenshots' })).toHaveCount(0)
+  await expect(page.locator('[data-tour-image]')).toBeVisible()
   await context.close()
 })
