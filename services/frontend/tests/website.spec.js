@@ -135,8 +135,14 @@ for (const width of [1440, 390, 320]) {
 
     await navigation.getByRole('button', { name: 'Workflows', exact: true }).click()
     await demo.getByLabel('Topic', { exact: true }).fill('<img src=x onerror=window.__demoXss=1>')
-    await demo.getByRole('button', { name: 'Simulate run', exact: true }).click()
-    for (let step = 0; step < 3; step++) await demo.getByRole('button', { name: 'Next sample step', exact: true }).click()
+    const simulate = demo.getByRole('button', { name: 'Simulate run', exact: true })
+    expect(await simulate.evaluate(button => button.getBoundingClientRect().bottom <= button.closest('.wd-shell').getBoundingClientRect().bottom)).toBe(true)
+    await simulate.click()
+    for (let step = 0; step < 3; step++) {
+      const next = demo.getByRole('button', { name: 'Next sample step', exact: true })
+      expect(await next.evaluate(button => button.getBoundingClientRect().bottom <= button.closest('.wd-shell').getBoundingClientRect().bottom)).toBe(true)
+      await next.click()
+    }
     await expect(demo.getByRole('button', { name: 'Next sample step', exact: true })).toHaveCount(0)
     expect(await page.evaluate(() => window.__demoXss)).toBeUndefined()
     await expect(demo.locator('img[src="x"]')).toHaveCount(0)

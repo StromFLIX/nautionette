@@ -101,8 +101,8 @@ function workflowView(state, id) {
     <div class="wd-scroll"><p>${workflow.purpose}</p><div class="wd-field"><label for="${id}-workflow">Workflow</label><select id="${id}-workflow" data-change="workflow" data-focus="workflow">${WORKFLOWS.map(item => `<option value="${item.id}" ${item.id === state.workflow ? 'selected' : ''}>${item.title}</option>`).join('')}</select></div>
     <label class="wd-field" for="${id}-topic">Topic<input id="${id}-topic" data-input="topic" data-focus="topic" maxlength="160" value="${text(state.topic)}" aria-describedby="${id}-topic-help"></label>
     <p class="wd-note" id="${id}-topic-help">Edit this sample input. It stays in memory and is never sent.</p>
-    <h3>Three sample steps</h3><ol class="wd-steps">${workflow.steps.map(step => `<li>${step}</li>`).join('')}</ol>
-    ${button('Simulate run', 'simulate', '', 'class="wd-primary"')}<p class="wd-note">No real execution. Use “Next sample step” three times in Runs to finish.</p></div>`;
+    <h3>Three sample steps</h3><ol class="wd-steps">${workflow.steps.map(step => `<li>${step}</li>`).join('')}</ol></div>
+    <div class="wd-actions">${button('Simulate run', 'simulate', '', 'class="wd-primary"')}<p class="wd-note">No real execution. Advance three sample steps in Runs.</p></div>`;
 }
 function statisticsView(state, id) {
   const stats = selectStatistics(state);
@@ -122,8 +122,9 @@ function runsView(state, id) {
       <div class="wd-run-title"><h3>${text(run.title)}</h3><span class="wd-status wd-status-${run.status.toLowerCase()}">${run.status}</span></div>
       <p class="wd-topic"><strong>Topic:</strong> ${text(run.topic) || '(empty sample topic)'}</p>
       <ol class="wd-timeline">${workflow.steps.map((step, index) => `<li><span class="wd-step-marker" aria-hidden="true">${index < run.progress ? '✓' : index + 1}</span><div><strong>${step}</strong><p>${index < run.progress ? 'Completed in this sample' : run.status === 'Failed' && index === run.progress ? 'Failed: example notes were unavailable.' : index === run.progress && run.status === 'Running' ? 'Ready for your next click' : 'Not started'}</p></div></li>`).join('')}</ol>
-      ${run.status === 'Running' ? button('Next sample step', 'next', '', 'class="wd-primary"') : run.status === 'Failed' ? `<div class="wd-error"><p>The sample source notes could not be read. In this example, a retry uses the restored sample notes.</p>${button('Retry sample run', 'retry')}</div>` : `<p class="wd-note">All three sample steps completed. To replay, choose a workflow and simulate another run.</p>${button('Choose a workflow', 'section', 'Workflows')}`}`}
-    </div>`;
+      ${run.status === 'Failed' ? '<p class="wd-error">The sample source notes could not be read. A retry uses the restored example notes.</p>' : ''}`}
+    </div>
+    ${state.runTab === 'Execution' ? `<div class="wd-actions">${run.status === 'Running' ? `${button('Next sample step', 'next', '', 'class="wd-primary"')}<p class="wd-note">You control the sample. No tools run.</p>` : run.status === 'Failed' ? `${button('Retry sample run', 'retry')}<p class="wd-note">Starts another local example.</p>` : `${button('Choose a workflow', 'section', 'Workflows')}<p class="wd-note">All three steps completed. Try another workflow.</p>`}</div>` : ''}`;
 }
 function settingsView(state, id) {
   return `<header class="wd-view-header"><span class="wd-avatar" aria-hidden="true">ST</span><div><h2>Settings</h2><p>Only this demo · in-memory preferences</p></div></header><div class="wd-scroll">

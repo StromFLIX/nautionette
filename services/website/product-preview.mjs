@@ -1,6 +1,6 @@
 // Progressive enhancement: real screenshots remain usable if this optional demo
 // cannot load. The example module is fetched only after a visitor chooses it.
-export function setupProductPreview (document, loadDemo = () => import('./workspace-demo.mjs?v=explorer-1')) {
+export function setupProductPreview (document, loadDemo = () => import('./workspace-demo.mjs?v=explorer-2')) {
   const root = document.querySelector('[data-product-explorer]')
   if (!root) return null
   const toolbar = root.querySelector('[data-explorer-toolbar]')

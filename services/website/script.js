@@ -2,7 +2,7 @@ import { loadDownloads } from './releases.mjs'
 import { setupDefinition } from './definitions.mjs'
 import { mountActivity } from './activity.mjs?v=living-3'
 import { appURL } from './urls.mjs'
-import { setupProductPreview } from './product-preview.mjs?v=explorer-1'
+import { setupProductPreview } from './product-preview.mjs?v=explorer-2'
 
 // Storage is optional: blocked cookies/storage must not break the page.
 let storage

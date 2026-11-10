@@ -94,6 +94,9 @@
 .workspace-demo .wd-tabs button[aria-selected="true"] { color: var(--wd-blue); border-bottom-color: var(--wd-blue); }
 .workspace-demo .wd-scroll { padding: 20px; overflow: auto; min-height: 0; flex: 1; overscroll-behavior: contain; overflow-wrap: anywhere; }
 .workspace-demo .wd-scroll > * + * { margin-top: 16px; }
+.workspace-demo .wd-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; padding: 12px 20px; border-top: 1px solid var(--wd-line); background: var(--wd-white); }
+.workspace-demo .wd-actions > button { flex-shrink: 0; }
+.workspace-demo .wd-actions > .wd-note { flex: 1; min-width: 0; font-size: 11px; }
 .workspace-demo .wd-message > * + *, .workspace-demo .wd-output > * + *, .workspace-demo .wd-preview > * + * { margin-top: 10px; }
 .workspace-demo .wd-message { padding: 2px 0; }
 .workspace-demo .wd-message.wd-user { background: var(--wd-lilac-bg); padding: 14px; border-radius: 10px 10px 3px 10px; margin-left: 22px; }
@@ -158,6 +161,8 @@
   .workspace-demo .wd-tabs { padding: 0 8px; }
   .workspace-demo .wd-scroll { padding: 14px 12px; }
   .workspace-demo .wd-field :is(input, select) { font-size: 16px; }
+  .workspace-demo .wd-actions { gap: 10px; padding: 10px 12px; }
+  .workspace-demo .wd-actions > button { max-width: 62%; }
   .workspace-demo .wd-message.wd-user { margin-left: 8px; padding: 12px; }
   .workspace-demo .wd-preview, .workspace-demo .wd-output { padding: 12px; }
   .workspace-demo .wd-footer { padding: 7px 10px; line-height: 1.5; }
