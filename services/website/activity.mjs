@@ -75,6 +75,13 @@ export function mountActivity (canvas, button, storage) {
       context.roundRect(x + 3, y + 3, TILE_SIZE - 6, TILE_SIZE - 6, 5)
       context.fill()
     }
+    // Tile-centre fading is approximate at fractional layout/device pixels.
+    // Keep the intended reading cutouts exact, including the 12px quiet margin.
+    for (const zone of readingZones) {
+      const left = Math.floor(zone.left - 12)
+      const top = Math.floor(zone.top - 12)
+      context.clearRect(left, top, Math.ceil(zone.right + 12) - left, Math.ceil(zone.bottom + 12) - top)
+    }
   }
 
   function animate (now) {
