@@ -39,7 +39,11 @@ content, never production/user data, and labelled accordingly. Device framing is
 CSS outside the captures, not a redrawn interface. Desktop leads on every screen,
 followed by the remote phone view: make it, then pick it up. Visual and document
 order stay aligned on mobile. Full-size image links work with keyboard navigation
-and without JavaScript.
+and without JavaScript. An opt-in Explore demo view sits beside the actual screen:
+a lightweight local wireframe for chats, workflows, execution timelines, sample
+statistics and settings. It never authenticates, calls tools or changes a server.
+A failed demo load must leave the photographs and other site features intact.
+Keep sample claims explicit; see `DEMO.md` for the shared design/safety contract.
 The three later illustrations explain artifact types, workflows and miniapps.
 
 ## Brand assets
