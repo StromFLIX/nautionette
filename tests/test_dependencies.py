@@ -40,6 +40,17 @@ def test_browser_and_pi_runtime_guards_match_their_actual_image_pins():
     assert f"manifest.version, '{pi}'" in (ROOT / "images/pi-base/verify-pi-runtime.mjs").read_text()
 
 
+def test_image_smokes_install_workspace_packages_and_dev_test_tools():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    smoke = next(
+        step
+        for step in workflow["jobs"]["images"]["steps"]
+        if step.get("name") == "Real patched MaxIO storage compatibility"
+    )
+    script = smoke["run"]
+    assert script.index("uv sync --locked --all-packages") < script.index("uv run --locked pytest")
+
+
 def test_patched_storage_images_keep_the_existing_volume_and_non_root_contracts():
     services = yaml.safe_load((ROOT / "docker-compose.yaml").read_text())["services"]
     postgres = services["postgres"]

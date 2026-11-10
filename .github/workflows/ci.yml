@@ -285,7 +285,8 @@ jobs:
             if curl -fsS http://127.0.0.1:19000/healthz >/dev/null; then break; fi
             sleep 2
           done
-          uv run --locked --package nautionette-backend pytest tests/backend/test_output_maxio.py
+          uv sync --locked --all-packages
+          uv run --locked pytest tests/backend/test_output_maxio.py
 
       - name: Inventory every installed OS and language package
         uses: anchore/sbom-action@v0.24.3
