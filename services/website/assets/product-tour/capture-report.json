@@ -1,0 +1,464 @@
+{
+  "commit": "31b874867f0c91d4ace6bdd68bfcee945c58224d",
+  "clock": "2026-06-15T10:30:00.000Z",
+  "viewport": {
+    "width": 1280,
+    "height": 840
+  },
+  "deviceScaleFactor": 1.5,
+  "pixels": {
+    "width": 1920,
+    "height": 1260
+  },
+  "errors": [],
+  "forbidden": [],
+  "captures": [
+    {
+      "id": "chat",
+      "route": "/chats/alpha",
+      "controls": [
+        {
+          "id": "tab-outputs",
+          "selector": "tab[name=/Outputs/]",
+          "pixels": {
+            "x": 568,
+            "y": 80,
+            "width": 126,
+            "height": 44
+          }
+        },
+        {
+          "id": "nav-workflows",
+          "selector": "navigation[Main navigation] link[Workflows]",
+          "pixels": {
+            "x": 8,
+            "y": 172,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-runs",
+          "selector": "navigation[Main navigation] link[Runs]",
+          "pixels": {
+            "x": 8,
+            "y": 244,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-settings",
+          "selector": "navigation[Main navigation] link[Settings]",
+          "pixels": {
+            "x": 8,
+            "y": 756,
+            "width": 73,
+            "height": 70
+          }
+        }
+      ],
+      "pngBytes": 172466
+    },
+    {
+      "id": "outputs",
+      "route": "/chats/alpha",
+      "controls": [
+        {
+          "id": "tab-chat",
+          "selector": "tab[name=Chat]",
+          "pixels": {
+            "x": 494,
+            "y": 80,
+            "width": 70,
+            "height": 44
+          }
+        },
+        {
+          "id": "nav-chat",
+          "selector": "navigation[Main navigation] link[Chats]",
+          "pixels": {
+            "x": 8,
+            "y": 100,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-workflows",
+          "selector": "navigation[Main navigation] link[Workflows]",
+          "pixels": {
+            "x": 8,
+            "y": 172,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-runs",
+          "selector": "navigation[Main navigation] link[Runs]",
+          "pixels": {
+            "x": 8,
+            "y": 244,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-settings",
+          "selector": "navigation[Main navigation] link[Settings]",
+          "pixels": {
+            "x": 8,
+            "y": 756,
+            "width": 73,
+            "height": 70
+          }
+        }
+      ],
+      "pngBytes": 161396
+    },
+    {
+      "id": "workflows",
+      "route": "/workflows/digest",
+      "controls": [
+        {
+          "id": "nav-chat",
+          "selector": "navigation[Main navigation] link[Chats]",
+          "pixels": {
+            "x": 8,
+            "y": 100,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-runs",
+          "selector": "navigation[Main navigation] link[Runs]",
+          "pixels": {
+            "x": 8,
+            "y": 244,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-settings",
+          "selector": "navigation[Main navigation] link[Settings]",
+          "pixels": {
+            "x": 8,
+            "y": 756,
+            "width": 73,
+            "height": 70
+          }
+        }
+      ],
+      "pngBytes": 105814
+    },
+    {
+      "id": "runs",
+      "route": "/runs/digest-record",
+      "controls": [
+        {
+          "id": "run-statistics",
+          "selector": "button[name=Statistics]",
+          "pixels": {
+            "x": 573,
+            "y": 80,
+            "width": 103,
+            "height": 44.375
+          }
+        },
+        {
+          "id": "nav-chat",
+          "selector": "navigation[Main navigation] link[Chats]",
+          "pixels": {
+            "x": 8,
+            "y": 100,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-workflows",
+          "selector": "navigation[Main navigation] link[Workflows]",
+          "pixels": {
+            "x": 8,
+            "y": 172,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-settings",
+          "selector": "navigation[Main navigation] link[Settings]",
+          "pixels": {
+            "x": 8,
+            "y": 756,
+            "width": 73,
+            "height": 70
+          }
+        }
+      ],
+      "pngBytes": 96168
+    },
+    {
+      "id": "statistics",
+      "route": "/runs/digest-record",
+      "controls": [
+        {
+          "id": "statistics-details",
+          "selector": "button[name=Details]",
+          "pixels": {
+            "x": 489,
+            "y": 80,
+            "width": 82,
+            "height": 44.375
+          }
+        },
+        {
+          "id": "nav-chat",
+          "selector": "navigation[Main navigation] link[Chats]",
+          "pixels": {
+            "x": 8,
+            "y": 100,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-workflows",
+          "selector": "navigation[Main navigation] link[Workflows]",
+          "pixels": {
+            "x": 8,
+            "y": 172,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-settings",
+          "selector": "navigation[Main navigation] link[Settings]",
+          "pixels": {
+            "x": 8,
+            "y": 756,
+            "width": 73,
+            "height": 70
+          }
+        }
+      ],
+      "pngBytes": 131373
+    },
+    {
+      "id": "settings",
+      "route": "/settings/general",
+      "controls": [
+        {
+          "id": "back-workspace",
+          "selector": "button[name=\"Back to workspace\"]",
+          "pixels": {
+            "x": 110,
+            "y": 18.25,
+            "width": 40,
+            "height": 42.5
+          }
+        },
+        {
+          "id": "nav-chat",
+          "selector": "navigation[Main navigation] link[Chats]",
+          "pixels": {
+            "x": 8,
+            "y": 100,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-workflows",
+          "selector": "navigation[Main navigation] link[Workflows]",
+          "pixels": {
+            "x": 8,
+            "y": 172,
+            "width": 73,
+            "height": 70
+          }
+        },
+        {
+          "id": "nav-runs",
+          "selector": "navigation[Main navigation] link[Runs]",
+          "pixels": {
+            "x": 8,
+            "y": 244,
+            "width": 73,
+            "height": 70
+          }
+        }
+      ],
+      "pngBytes": 171805
+    }
+  ],
+  "conversions": {
+    "libwebp": "1.6.0",
+    "files": [
+      {
+        "id": "chat",
+        "webpBytes": 59140,
+        "pngSha256": "0fa467ba2c6f862e18f2db749bca05436969086de5f6fa199c3abb9e1161fddb",
+        "webpSha256": "65a0f23636b4643b5e267fd8036be1dd92752c3b17acae3bb02f13d60b9a13c6",
+        "pixelIdentical": true
+      },
+      {
+        "id": "outputs",
+        "webpBytes": 54078,
+        "pngSha256": "fdccb306234c9157c68febeb9631777a475edc9f7dcea903a42d3f52f8ed6177",
+        "webpSha256": "9068c57072599458d4bd24318f6d21ab950eba47433e342f63776783e65b3cd1",
+        "pixelIdentical": true
+      },
+      {
+        "id": "runs",
+        "webpBytes": 35436,
+        "pngSha256": "2ed4db6fc3c50d4f3992182a403602594c16676005cdda9cc433cc846c9bfba5",
+        "webpSha256": "e605eb99dce7d2a686ef4ba7bc50459c17321fa9ca98ce69382fc5781692b220",
+        "pixelIdentical": true
+      },
+      {
+        "id": "settings",
+        "webpBytes": 53842,
+        "pngSha256": "d34e49c186028fc457d9b928af15bb13245f7f0dd666fb8b6b93d1a393a80f36",
+        "webpSha256": "25a50ff2ec16408fce553838f6a6d98e5a8891e6640b9adc1f98a236f8a62b06",
+        "pixelIdentical": true
+      },
+      {
+        "id": "statistics",
+        "webpBytes": 48064,
+        "pngSha256": "b1bb538c8f83f15df0c2eb0e2966abc8c9db57f7e059487b48676ef6943094fd",
+        "webpSha256": "0a6ea2d894c02bbacc4e706b6b2c13357726ab8aae361a826df26a10cfe146e7",
+        "pixelIdentical": true
+      },
+      {
+        "id": "workflows",
+        "webpBytes": 39252,
+        "pngSha256": "b46b350351809be3cfdaa8d7f63c73308a8e86271f9bdae1a0017c9301ee151e",
+        "webpSha256": "105546c70762a95c76d0a1e9aec2dba81298db91f3bdab06fc8bc9bd7721f0f0",
+        "pixelIdentical": true
+      }
+    ]
+  },
+  "requests": [
+    {
+      "path": "/api/chats/alpha",
+      "method": "GET"
+    },
+    {
+      "path": "/api/speech",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats/alpha",
+      "method": "GET"
+    },
+    {
+      "path": "/api/system",
+      "method": "GET"
+    },
+    {
+      "path": "/api/agents",
+      "method": "GET"
+    },
+    {
+      "path": "/api/catalog",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats",
+      "method": "GET"
+    },
+    {
+      "path": "/api/projects",
+      "method": "GET"
+    },
+    {
+      "path": "/api/miniapps",
+      "method": "GET"
+    },
+    {
+      "path": "/api/mcp-oauth/status",
+      "method": "GET"
+    },
+    {
+      "path": "/api/workflows",
+      "method": "GET"
+    },
+    {
+      "path": "/api/drafts",
+      "method": "GET"
+    },
+    {
+      "path": "/api/runs",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats/alpha/stream",
+      "method": "GET"
+    },
+    {
+      "path": "/api/events",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats/alpha/read-state",
+      "method": "PATCH"
+    },
+    {
+      "path": "/api/chats/alpha/draft",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats/sample-0",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats/sample-1",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats/sample-2",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats/sample-3",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats/sample-4",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats/sample-5",
+      "method": "GET"
+    },
+    {
+      "path": "/api/chats/alpha/draft",
+      "method": "GET"
+    },
+    {
+      "path": "/api/workflows/digest",
+      "method": "GET"
+    },
+    {
+      "path": "/api/runs/digest-record",
+      "method": "GET"
+    },
+    {
+      "path": "/api/runs/digest-record/graph",
+      "method": "GET"
+    },
+    {
+      "path": "/api/settings",
+      "method": "GET"
+    }
+  ]
+}

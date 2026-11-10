@@ -41,6 +41,15 @@ export async function mockWebsiteProduct (context) {
     const id = `sample-${index}`
     state.chats[id] = { chat: { ...state.data.chat, id, title, agent_id: index % 2 ? writing.id : research.id, agent_name: index % 2 ? 'Writing' : 'Research', created_at: now - 3600 * (index + 1), updated_at: now - 3600 * (index + 1), last_read_message_id: null }, messages: [], active_turn: null }
   }
+  const run = { workflow_id: 'digest-record', workflow: 'digest', status: 'completed', input: { topic: 'Product updates' }, result: { summary: 'Weekly product notes prepared', items: 6 }, created_at: now - 900, trigger: 'manual' }
+  Object.assign(state.workflow, { description: 'Collect product updates and prepare a focused morning summary.', runs: [run] })
+  const statistics = {
+    available: true, coverage: 'recorded', agent_calls: 3, model_requests: 7,
+    tool_calls: 5, mcp_calls: 4, direct_mcp_calls: 2, usage_reports: 7,
+    tokens: { input: 1000, output: 200, cacheRead: 30, cacheWrite: 4, total: 1234 }, usage_complete: true,
+    agents: [{ agent_set: 'research', model: 'demo/research-model', calls: 2, completed: 2 }, { agent_set: 'default', model: 'demo/writer-model', calls: 1, completed: 1 }],
+    tools: [{ name: 'github_search_repositories', source: 'workflow', calls: 2, completed: 2 }, { name: 'github_search_repositories', source: 'agent_mcp', calls: 2, completed: 2 }, { name: 'bash', source: 'local', calls: 1, completed: 1 }]
+  }
   // Register last, before the reusable fixture fallback. An empty but valid draft
   // avoids a misleading 'Draft sync unavailable' notice in the composer.
   const requests = []
@@ -48,11 +57,13 @@ export async function mockWebsiteProduct (context) {
     const { pathname } = new URL(route.request().url())
     const method = route.request().method()
     requests.push({ path: pathname, method })
+    if (method !== 'GET' && method !== 'HEAD' && !pathname.endsWith('/read-state')) throw new Error(`Unexpected capture mutation: ${method} ${pathname}`)
     if (pathname.endsWith('/draft')) return route.fulfill({ json: { text: '', attachments: [], revision: 0 } })
     if (pathname === '/api/drafts') return route.fulfill({ json: { drafts: [] } })
-    if (pathname === '/api/workflows') return route.fulfill({ json: { workflows: [] } })
-    if (pathname === '/api/runs') return route.fulfill({ json: { runs: [] } })
-    if (method !== 'GET' && method !== 'HEAD' && !pathname.endsWith('/read-state')) throw new Error(`Unexpected capture mutation: ${method} ${pathname}`)
+    if (pathname === '/api/workflows') return route.fulfill({ json: { workflows: [state.workflow] } })
+    if (pathname === '/api/runs') return route.fulfill({ json: { runs: [run] } })
+    if (pathname === '/api/runs/digest-record') return route.fulfill({ json: { run, statistics, temporal: { status: 'COMPLETED', close_time: '2026-06-15T10:16:00Z' } } })
+    if (pathname === '/api/runs/digest-record/graph') return route.fulfill({ json: { ...state.workflow.graph, mode: 'execution', status: 'completed' } })
     return route.fallback()
   })
   await context.addInitScript(() => {
