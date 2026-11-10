@@ -5,6 +5,7 @@ FROM cr.agentgateway.dev/agentgateway:${AGENTGATEWAY_VERSION} AS gateway
 # upstream binary's glibc build baseline; Node and Python cover npx and uvx MCPs.
 FROM node:24-trixie-slim
 COPY --from=ghcr.io/astral-sh/uv:0.13.7 /uv /uvx /usr/local/bin/
+RUN npm install -g --ignore-scripts npm@11.21.2 && npm cache clean --force
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends ca-certificates python3 \
     && rm -rf /var/lib/apt/lists/* \

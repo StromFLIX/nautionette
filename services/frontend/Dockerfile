@@ -2,6 +2,7 @@
 # Capacitor wraps the same dist/ as the app, outside compose.
 FROM node:24-bookworm-slim AS build
 RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
+RUN npm install -g --ignore-scripts npm@11.21.2 && npm cache clean --force
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund

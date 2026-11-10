@@ -306,7 +306,11 @@ services:
   # Sandboxes have only expiring, size/checksum-bound object URLs, not credentials.
   # MaxIO is early upstream software; pin it and back up this volume with SQLite.
   maxio:
-    image: ghcr.io/coollabsio/maxio:${MAXIO_VERSION:-0.4.2}
+    build:
+      context: ./infra/maxio
+      args:
+        MAXIO_VERSION: ${MAXIO_VERSION:-0.4.2}
+    image: ${STACK_NAMESPACE:-nautionette}/maxio:dev
     restart: unless-stopped
     environment:
       MAXIO_ACCESS_KEY: ${MAXIO_ACCESS_KEY:?Set MAXIO_ACCESS_KEY}
@@ -408,7 +412,9 @@ services:
     <<: *logging
 
   postgres:
-    image: postgres:17-alpine
+    build:
+      context: ./infra/postgres
+    image: ${STACK_NAMESPACE:-nautionette}/postgres:dev
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-temporal}

@@ -1,5 +1,9 @@
 ARG TEMPORAL_VERSION=1.29.7
 FROM temporalio/auto-setup:${TEMPORAL_VERSION}
+# Patch the existing Alpine branch without changing server/schema versions.
+USER root
+RUN apk upgrade --no-cache
+USER temporal
 
 # Same reason as the gateway: carry the config in the image, not on the host.
 COPY dynamicconfig/ /etc/temporal/config/dynamicconfig/

@@ -56,7 +56,7 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Deployment, snapshot, gateway buffers and agent image safety tests
-        run: uv run pytest tests/test_coolify_release.py tests/test_cli_oauth_deployment.py tests/test_dictation_deployment.py tests/worker/test_prepare_release.py tests/test_publish_agent_images.py tests/test_miniapp_smoke.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py tests/broker/test_chat_sessions.py tests/broker/test_chat_recovery.py tests/broker/test_sandbox_network.py
+        run: uv run pytest tests/test_dependencies.py tests/test_coolify_release.py tests/test_cli_oauth_deployment.py tests/test_dictation_deployment.py tests/worker/test_prepare_release.py tests/test_publish_agent_images.py tests/test_miniapp_smoke.py tests/test_staging_refresh.py tests/agentgateway tests/broker/test_broker.py tests/broker/test_chat_sessions.py tests/broker/test_chat_recovery.py tests/broker/test_sandbox_network.py
 
       - name: Native creative app release contracts, installer isolation and Settings
         run: uv run pytest tests/lib/test_artcraft.py tests/broker/test_artcraft.py tests/broker/test_artcraft_offline.py tests/backend/test_artcraft.py tests/test_artcraft_deployment.py
@@ -210,6 +210,8 @@ jobs:
           - { name: agentgateway, context: services/agentgateway, file: services/agentgateway/Dockerfile }
           - { name: stt, context: services/stt, file: services/stt/Dockerfile }
           - { name: temporal, context: infra/temporal, file: infra/temporal/Dockerfile }
+          - { name: maxio, context: infra/maxio, file: infra/maxio/Dockerfile }
+          - { name: postgres, context: infra/postgres, file: infra/postgres/Dockerfile }
           - { name: otel-collector, context: infra/otel-collector, file: infra/otel-collector/Dockerfile }
     steps:
       - uses: actions/checkout@v7
@@ -227,6 +229,60 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.name }}
           # Cache availability must not turn a successful image build red.
           cache-to: type=gha,mode=max,scope=${{ matrix.name }},ignore-error=true
+
+      - name: PostgreSQL 17 existing-volume and privilege-helper compatibility
+        if: matrix.name == 'postgres'
+        run: |
+          set -euo pipefail
+          cleanup() {
+            docker rm -f dependency-postgres >/dev/null 2>&1 || true
+            docker volume rm dependency-postgres-data >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker volume create dependency-postgres-data
+          start_database() {
+            docker run -d --name dependency-postgres --network none \
+              -e POSTGRES_PASSWORD=dependency-test-only \
+              -v dependency-postgres-data:/var/lib/postgresql/data "$1"
+            for i in $(seq 1 60); do
+              if docker exec dependency-postgres pg_isready -h 127.0.0.1 -U postgres; then return; fi
+              sleep 2
+            done
+            docker logs dependency-postgres
+            return 1
+          }
+          # Initialize with the upstream image first, then reuse exactly its PG17
+          # data with the patched image; never recreate/migrate the data directory.
+          start_database postgres:17-alpine
+          docker exec dependency-postgres psql -U postgres -c \
+            "CREATE TABLE upgrade_probe (value text); INSERT INTO upgrade_probe VALUES ('preserved');"
+          docker stop dependency-postgres
+          docker rm dependency-postgres
+          start_database nautionette/audit-postgres:ci
+          test "$(docker exec dependency-postgres psql -U postgres -Atc 'SELECT value FROM upgrade_probe')" = preserved
+          test "$(docker exec dependency-postgres stat -c %u /proc/1)" != 0
+
+      - uses: astral-sh/setup-uv@v10.3.3
+        if: matrix.name == 'maxio'
+      - name: Real patched MaxIO storage compatibility
+        if: matrix.name == 'maxio'
+        env:
+          MAXIO_TEST_ENDPOINT: http://127.0.0.1:19000
+          MAXIO_TEST_ACCESS_KEY: dependency-test-only
+          MAXIO_TEST_SECRET_KEY: dependency-test-secret-not-for-production
+          MAXIO_TEST_BUCKET: nautionette-test-outputs
+        run: |
+          set -euo pipefail
+          trap 'docker rm -f dependency-maxio >/dev/null 2>&1 || true' EXIT
+          docker run -d --name dependency-maxio -p 127.0.0.1:19000:9000 \
+            -e MAXIO_ACCESS_KEY="$MAXIO_TEST_ACCESS_KEY" \
+            -e MAXIO_SECRET_KEY="$MAXIO_TEST_SECRET_KEY" \
+            -e MAXIO_DEFAULT_BUCKETS="$MAXIO_TEST_BUCKET" nautionette/audit-maxio:ci
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:19000/healthz >/dev/null; then break; fi
+            sleep 2
+          done
+          uv run --locked --package nautionette-backend pytest tests/backend/test_output_maxio.py
 
       - name: Inventory every installed OS and language package
         uses: anchore/sbom-action@v0.24.3
@@ -430,8 +486,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: postgres, image: 'postgres:17-alpine' }
-          - { name: maxio, image: 'ghcr.io/coollabsio/maxio:0.4.2' }
           - { name: temporal-ui, image: 'temporalio/ui:2.58.1' }
     steps:
       - name: Pull current upstream image

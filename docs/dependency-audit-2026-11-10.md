@@ -14,7 +14,8 @@ refresh, not a claim that every ecosystem's newest major can safely be deployed.
 | Separate CPU speech appliance | `services/stt/requirements.in` and hash-locked `requirements.txt` |
 | Web, Electron, Android and iOS clients | `services/frontend/package.json` and `package-lock.json`, including optional/peer/transitive packages |
 | Rust compiler and statically bundled SQLite | `services/miniapp-sdk/Cargo.toml` and `Cargo.lock` |
-| Container runtimes and external executables | All 13 Dockerfiles, `docker-compose.yaml`, `images/agent-images.hcl` |
+| PostgreSQL privilege helper's Go modules | `infra/postgres/go.mod` and `go.sum`; checksum-pinned gosu source archive |
+| Container runtimes and external executables | All 15 Dockerfiles, `docker-compose.yaml`, `images/agent-images.hcl` |
 | Creative applications | `images/pi-base/artcraft/catalog.json`: exact versions and Linux x86_64/aarch64 SHA-256 digests |
 | Build/release tooling | `.github/workflows/*.yml`; floating major action tags already resolve to the current compatible action releases |
 | Experimental Waymark reproduction | `scripts/spikes/waymark/requirements.txt` and `compose.yaml`; intentionally separate from production |
@@ -117,11 +118,14 @@ package/model/transport/session RPC contracts are tested against Pi 1.5.2.
 | rusqlite | 0.37.0 | 0.41.1 |
 | Bundled libsqlite3-sys | 0.35.0 | 0.39.1 (SQLite 3.54.0) |
 | Node | 24 | Retain supported LTS line; refresh floating image (24.22.2 observed) |
-| Python | 3.13 | Retain supported application ABI; refresh floating image (3.13.18 observed) |
+| Python | 3.13 (3.13.11 in the old uv image) | Explicitly use 3.13.18-slim-bookworm plus copied uv 0.13.7 |
 | nginx | 1.31.8-alpine | Already current; refresh distribution packages |
 | PostgreSQL | 17-alpine | Retain data-compatible major; refreshed tag supplies current 17.x patch |
-| MaxIO | 0.4.2 | Already latest |
+| MaxIO | 0.4.2 | Already latest; derived image patches its Debian packages, retaining maxio:maxio |
 | agentgateway | v1.7.0 | Already latest; CI binary and container stay synchronized |
+| Container npm | 11.19.1 | 11.21.2 (supported npm 11 line, not npm 12) |
+| PostgreSQL gosu | 1.19, built with Go 1.24.6 | Checksum-pinned 1.20 source rebuilt with Go 1.27.3 |
+| gosu modules | moby/sys/user 0.1.0; x/sys 0.1.0 | Locked 0.5.0 and 0.50.0 respectively |
 
 Cargo's entire graph was updated, including cc, foldhash, hashbrown, hashlink,
 itoa, smallvec and syn. The builder still vendors and tests the lock **offline**;
@@ -129,8 +133,14 @@ compiler/runtime isolation is unchanged. Rebuilding the compiler does not rewrit
 already-published mini-app executables: existing apps retain their embedded
 SQLite until republished/restored as a new release through the supported API.
 
-Every Debian-based build stage now upgrades installed distribution packages
+Every repository-controlled Debian-based build stage now upgrades installed distribution packages
 before installation; Alpine application/compiler stages run `apk upgrade`.
+The Temporal wrapper also upgrades its existing Alpine branch, restoring `USER
+temporal` without changing server/schema versions. PostgreSQL and MaxIO use
+namespace-separated local build tags but retain the same data mounts, entrypoints,
+commands and users. CI tests real S3 uploads/restoration against the patched MaxIO
+image, and initializes a volume with upstream PostgreSQL 17 before verifying its
+data and non-root process survive startup with the patched PostgreSQL image.
 CI service builds and agent Bake builds pull base images. Static copied binaries,
 Rust SQLite and ArtCraft require their own explicit updates and are not patched
 by apt/apk. An unchanged cached RUN layer does **not** refresh package indexes:
@@ -165,6 +175,39 @@ Immutable old selections are not overwritten. New defaults use new content-addre
 volumes; explicitly pinned user selections and queued turns keep their exact release.
 aarch64 checksums were verified against release metadata, not executed locally.
 
+## Findings from scanning the actual images
+
+The first scan found problems that manifest-only outdated checks missed:
+
+- The floating `uv:python3.13-bookworm-slim` image still contained **Python
+  3.13.11**, despite pulling it fresh. All four Python services now use the
+  official **3.13.18** runtime with an independently pinned uv executable.
+- Node 24 bundled **npm 11.19.1**, which contained vulnerable brace-expansion
+  5.0.9 and undici 6.28.0. npm **11.21.2** contains 5.0.12/6.29.1 and patches
+  those findings without a major CLI upgrade. The upstream npm bundle still
+  includes minimatch 10; do not confuse that upstream tooling report with the
+  separately overridden, zero-audit-finding frontend application graph.
+- Upstream **MaxIO** and **Temporal auto-setup** images contained older
+  distribution packages. Build-time wrappers upgrade them in their existing
+  Debian/Alpine distributions and restore the original non-root users.
+- PostgreSQL itself was current **17.11**, but its unowned, downloaded **gosu**
+  executable embedded **Go 1.24.6**. Even the new gosu 1.20 release binary uses
+  that compiler. Rebuilding checksum-pinned 1.20 source and locking updated Go
+  modules fixes the underlying helper packages without changing PostgreSQL's
+  major version or substituting a different privilege-dropping program.
+
+Scanners also report upstream findings with no newer compatible image/package,
+and generic CPE/embedded-stdlib matches do not establish exploitability. In
+particular, the old Temporal server/tools have embedded Go modules that apk cannot
+patch; upgrading that server is the separate migration below. Temporal UI's latest
+2.58.1 image also embeds an older x/net than its advisory's fix. Collector 0.165.0
+and current Debian packages have additional upstream/unfixed findings. These
+reports are deliberately retained in CI artifacts rather than suppressed or
+misrepresented as a vulnerability-free stack. Private networks and existing
+authentication/isolation remain unchanged. Review the exact latest artifact for
+package versions, advisory IDs and fix availability; counts can duplicate one
+vulnerability across several binaries.
+
 ## Deliberate holds and follow-up work
 
 - **Temporal server:** `temporalio/auto-setup:1.29.7` is current in its deprecated
@@ -182,8 +225,8 @@ aarch64 checksums were verified against release metadata, not executed locally.
 - **python-dateutil 4.0.0:** botocore requires `<3`; retain 2.9.0.post0.
 - **Node 26 / Python 3.15 / Alpine distribution jumps:** supported existing runtime
   lines are not obsolete packages. Major runtime/ABI upgrades need their own
-  platform matrix. npm is supplied by the Node image, not independently upgraded
-  to a new major in application containers.
+  platform matrix. npm is patched independently within major 11; major 12 is not
+  needed to obtain the fixed brace-expansion/undici versions.
 - **Waymark spike:** its pins reproduce the dated experimental report and are not
   installed by any production build. Preserve those evidence pins rather than
   silently invalidating the published benchmark; rerun the experiment separately

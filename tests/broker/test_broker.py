@@ -501,7 +501,15 @@ def test_maxio_compose_is_private_pinned_persistent_and_not_an_agent_credential_
     compose = yaml.safe_load((repo_root / "docker-compose.yaml").read_text())
     services = compose["services"]
     maxio, backend = services["maxio"], services["backend"]
-    assert maxio["image"] == "ghcr.io/coollabsio/maxio:${MAXIO_VERSION:-0.4.2}"
+    assert maxio["image"] == "${STACK_NAMESPACE:-nautionette}/maxio:dev"
+    assert maxio["build"] == {
+        "context": "./infra/maxio",
+        "args": {"MAXIO_VERSION": "${MAXIO_VERSION:-0.4.2}"},
+    }
+    dockerfile = (repo_root / "infra/maxio/Dockerfile").read_text()
+    assert "ARG MAXIO_VERSION=0.4.2" in dockerfile
+    assert "FROM ghcr.io/coollabsio/maxio:${MAXIO_VERSION}" in dockerfile
+    assert dockerfile.rstrip().endswith("USER maxio:maxio")
     assert not maxio.get("ports")
     assert set(maxio["networks"]) == {"outputs", "agents"}
     assert compose["networks"]["outputs"]["internal"] is True
