@@ -1,4 +1,5 @@
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \

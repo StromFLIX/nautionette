@@ -1,7 +1,7 @@
 # Build-only toolchain; never runs application services. Cargo/build scripts have
 # no network, credentials, Docker socket or persistent writable mounts at publish.
-FROM rust:1.91.1-alpine3.22
-RUN apk add --no-cache musl-dev gcc && mkdir -p /sdk /tmp/build
+FROM rust:1.99.1-alpine3.22
+RUN apk upgrade --no-cache && apk add --no-cache musl-dev gcc && mkdir -p /sdk /tmp/build
 COPY Cargo.toml Cargo.lock /tmp/build/
 COPY src /tmp/build/src
 ENV CARGO_TARGET_DIR=/tmp/target CARGO_HOME=/usr/local/cargo

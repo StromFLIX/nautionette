@@ -1,54 +1,54 @@
 {
   "photocraft": {
-    "name": "PhotoCraft", "description": "Layered image editing, painting and raster graphics", "version": "0.17.0",
-    "sha256": {"x86_64": "5259f9c428c8ee3478c35500ece98713561cafc050e4c9eb354a5050f36eb2b8", "aarch64": "a9478dee2b34f270a1f845a7d7f4da501c529d443680ee23c2c8b588867d61b8"}
+    "name": "PhotoCraft", "description": "Layered image editing, painting and raster graphics", "version": "0.22.0",
+    "sha256": {"x86_64": "eedeafa4675dfbd1f2351e6bfa4b82f54453694eb36da1bbd5ca8bbf5f54f202", "aarch64": "117d5ba6d4a52cbe2d284c78a682da420063a7b4600dab332545b2bb7239a36a"}
   },
   "vectorcraft": {
-    "name": "VectorCraft", "description": "Vector illustration, paths, typography and SVG/PDF export", "version": "0.18.0", "mcp_args": ["--headless"],
-    "sha256": {"x86_64": "76948b50ef78dd482a6ece06f10b7047937bbc0c05f5cf6bc43d88b07f74d826", "aarch64": "191358b946897249f4a51dd8171060eb2867eda07f7d2eaf1b63c5c099c0e87e"}
+    "name": "VectorCraft", "description": "Vector illustration, paths, typography and SVG/PDF export", "version": "0.23.0", "mcp_args": ["--headless"],
+    "sha256": {"x86_64": "07c24a6094fb457c665b95848d55bfbd05460354bc0eac9b4ec9f9467a8b1e31", "aarch64": "6cd54b76ac0ac05fc8842b6fb13a2b3992faec499dc497b090279da0afea25e6"}
   },
   "filmcraft": {
-    "name": "FilmCraft", "description": "Video editing, timelines, grading and media export", "version": "0.14.0",
-    "sha256": {"x86_64": "d2aa213cc08abd21e05ab511a78cc38f157caf2226992f3fc8a5e0496a3f7e7d", "aarch64": "b887277df634854968e9bb20b42a5bf34c35103040a1cae03a6c14dc406e60fe"}
+    "name": "FilmCraft", "description": "Video editing, timelines, grading and media export", "version": "0.19.0",
+    "sha256": {"x86_64": "76149343c19700ba6ac905fde8a019e0917d06507f426a5938396d97a1ca2124", "aarch64": "7e9e857325be2b6197b57e2a21fcf8faf45fa42644c79eebed1fb734c3f8bed7"}
   },
   "lightcraft": {
-    "name": "LightCraft", "description": "Photography, raw development, image libraries and contact sheets", "version": "0.15.0",
-    "sha256": {"x86_64": "0b1acdefc085babb334b9add290dd1a69b50e96efbdad2ec15d44bd6d64bfd3d", "aarch64": "3821538bfd8a23b2a5e824c4762d46b23a5f8f06f6e0a6c6dbd329accb49cd62"}
+    "name": "LightCraft", "description": "Photography, raw development, image libraries and contact sheets", "version": "0.20.0",
+    "sha256": {"x86_64": "8cb5eed825b2dd9e0fa42680129d3e5aa718f07196d67cc5d05741f0e6a9cc25", "aarch64": "92d39ff4eb207e41dafe4bb1edc5708a048672b2a92500a840bee7869d504f85"}
   },
   "pdfcraft": {
-    "name": "PdfCraft", "description": "PDF reading, rendering, organization, forms and document processing", "version": "0.15.0", "cli_archive": true,
-    "sha256": {"x86_64": "a5705977e616852929eb08e7ba6de1e0781289fcc52dab1356215ae644d5973d", "aarch64": "c29f5fc4e8fec0e806cae330dd634089b5aaae2328beeac94db42aa3583834e8"}
+    "name": "PdfCraft", "description": "PDF reading, rendering, organization, forms and document processing", "version": "0.20.0", "cli_archive": true,
+    "sha256": {"x86_64": "a5b2967d057a12091f8ddaf5e247a608b16628ee0c9752c9c1fac286107dc238", "aarch64": "8ae1196679f8da60c6bec7c61caf92904e6da2fd0a159147dd53f74805993d36"}
   },
   "effectcraft": {
-    "name": "EffectCraft", "description": "Motion graphics, compositions, animation and visual effects", "version": "0.18.0",
-    "sha256": {"x86_64": "94d1d85691d54ba57fa86e04872fbcc426c33d1bd364f1fc976b1f607344880b", "aarch64": "16afef1cf2e8ff1e48712f462f7f9732696d81f7f81978c0a7ac0f7c092aa5a8"}
+    "name": "EffectCraft", "description": "Motion graphics, compositions, animation and visual effects", "version": "0.23.1",
+    "sha256": {"x86_64": "a330d1406fde71d07ac55ad37fe81f5de37ec7ea7ca7c3b9fa02aacd04502db1", "aarch64": "fff8ed752b90d63c1e491f6cc6d2700fc7122fc15e1fab674000065052bef3fe"}
   },
   "designcraft": {
-    "name": "DesignCraft", "description": "Page layout, publishing, text frames and print documents", "version": "0.14.0",
-    "sha256": {"x86_64": "25c87be759d35a81ca44e1f625ed4304b16e5aab6a03a1051bca498a81bfc547", "aarch64": "81bfc265d5e353ca5fe6be3dc18db0383526c3cdbc7328f4c85a44f2c3d0d046"}
+    "name": "DesignCraft", "description": "Page layout, publishing, text frames and print documents", "version": "0.19.0",
+    "sha256": {"x86_64": "5055531fe9f60e4da6113770fecf27dfb03984f831fa4ed70730be156a316866", "aarch64": "c9831a8a6f8b87e1c439a8552db269fbd6b38bf92c292669218e02e6122f4cbc"}
   },
   "figcraft": {
-    "name": "FigCraft", "description": "Interface design, layouts, components and prototyping", "version": "0.12.1",
-    "sha256": {"x86_64": "00a29f4cc382807d840f5d3e9b59f4c8829356789afbb956a0964918295e49dd", "aarch64": "72269287aafcfd681100a30e0ec80619a383c75f8e1b845ff73973754d5d1e59"}
+    "name": "FigCraft", "description": "Interface design, layouts, components and prototyping", "version": "0.17.0",
+    "sha256": {"x86_64": "ebc8bfa4da026860cff821d2024d6f51704ac69478969f5b29611dbb96a6e464", "aarch64": "e7255368c8f89f8e32da6383500161a0bd3ebd79fc528b64dd59fd415a945a75"}
   },
   "wordcraft": {
-    "name": "WordCraft", "description": "Word processing and DOCX/PDF/ODT document generation", "version": "0.12.0",
-    "sha256": {"x86_64": "cd9abd0ee7a11b985af1c1571653332c96077e5dcc48b5e187b55c82f475a33e", "aarch64": "8fcc2644acef7b43c3e46626e47e92e5542a43288e8e0bebf4b9f79c22a66d0b"}
+    "name": "WordCraft", "description": "Word processing and DOCX/PDF/ODT document generation", "version": "0.17.0",
+    "sha256": {"x86_64": "9c744c0c31a3ce25df82680fc75e645d682846faccbe103f4f91a758b19f3687", "aarch64": "c172dc50ce4d8b262e49f9f0ef4ba4f988c3bda1669c37b9dd6964e46c9e56db"}
   },
   "soundcraft": {
-    "name": "SoundCraft", "description": "Audio editing, recording sessions, mixing and offline bounce", "version": "0.14.0",
-    "sha256": {"x86_64": "2f83503feda6aa2c8d4bc12c44f571422c4389fc664a92bbed092d2bf1d500ad", "aarch64": "912ef157833753c5ec87c79fe76ef42a7f68c746fd117882cbc2c8d6e1eb357d"}
+    "name": "SoundCraft", "description": "Audio editing, recording sessions, mixing and offline bounce", "version": "0.19.0",
+    "sha256": {"x86_64": "89a29bf48c299eee593d7cd684b21c8483ca287abc196657ae3f959a1ebc18ad", "aarch64": "488ec7ebc0be4f3f274fb058e4d3fefd648c3e984d2b9adfcdc969eebdaf7f3c"}
   },
   "deckcraft": {
-    "name": "DeckCraft", "description": "Slide presentations, PPTX/PDF export and slide previews", "version": "0.12.0",
-    "sha256": {"x86_64": "4a410d3caa423e873d0dcab51c98e06588f55bdfcf03e9c1e91409a86c08de3e", "aarch64": "2312f1c0e0bf131faa525d71d265ba07734227fd2d174afbea00e95bcf93d353"}
+    "name": "DeckCraft", "description": "Slide presentations, PPTX/PDF export and slide previews", "version": "0.17.0",
+    "sha256": {"x86_64": "a61a05095a52a80990aa8990b447100553e99c8fa6edc8754aa52740a1a6f9b0", "aarch64": "23ca94384bd08a9742eba17b162b3cb48d520eac80628fc23b79a551a15c3706"}
   },
   "cadcraft": {
-    "name": "CADCraft", "description": "Computer-aided design, drafting, dimensions and DXF drawings", "version": "0.14.0",
-    "sha256": {"x86_64": "95067c849f82305648249299bb86e645b730275aa8c5f19965d81990f83aea9b", "aarch64": "7b0d181105da6f14f13ef1098fabb7b9317c1e97a2e8c0a9075c4c743c42d63a"}
+    "name": "CADCraft", "description": "Computer-aided design, drafting, dimensions and DXF drawings", "version": "0.19.0",
+    "sha256": {"x86_64": "a654df8c3e447c62c490c0a8aad8c42a9fafab010ca4d25bc3504ed45b3c8f51", "aarch64": "67eacfb243e91a69dfc7b3f74ea60f1e67e5fbcb4894159143776498e524bfb3"}
   },
   "gridcraft": {
-    "name": "GridCraft", "description": "Spreadsheets, formulas, charts, data analysis and XLSX/CSV export", "version": "0.13.0",
-    "sha256": {"x86_64": "20c6c56ec1ffd6bbcffee6cdee58cf6b5cadd2f4a04a4360dd7cc64d53ad97e5", "aarch64": "ecbef0d833caea65f6879714e037753578344bbc3ad7ad71da0f59449fc2aa6d"}
+    "name": "GridCraft", "description": "Spreadsheets, formulas, charts, data analysis and XLSX/CSV export", "version": "0.18.0",
+    "sha256": {"x86_64": "69205fd72e48e83e763c53c8f6ca3edc01d38ba8ba0d16e2b184a9c858a4cd5f", "aarch64": "94554b3a3d4aa87acd5bfec36957ecc3d49cf317000d2f8c28bf9fa644c62d4d"}
   }
 }

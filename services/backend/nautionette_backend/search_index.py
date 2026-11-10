@@ -14,7 +14,7 @@ MODEL = "BAAI/bge-small-en-v1.5"
 MODEL_REVISION = "aa8f8b060edb00e03bfdd08813a2949946c8ba55"
 DIMENSIONS = 384
 # Bump when changing model weights, dimensions, preprocessing or chunking.
-INDEX_VERSION = f"{MODEL}:{MODEL_REVISION}:fastembed-0.8:chunks-1"
+INDEX_VERSION = f"{MODEL}:{MODEL_REVISION}:fastembed-0.9:chunks-1"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS search_documents (

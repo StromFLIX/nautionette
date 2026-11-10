@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 const root = process.argv[2] || '/usr/local/lib/node_modules/@earendil-works/pi-coding-agent';
 const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 assert.equal(manifest.name, '@earendil-works/pi-coding-agent');
-assert.equal(manifest.version, '1.4.0', 'Unexpected Pi runtime version');
+assert.equal(manifest.version, '1.5.2', 'Unexpected Pi runtime version');
 // Pi 1.4 no longer ships chord. Check the current host dependencies, not obsolete
 // extension peers (Pi 1.0 also removed pi-agent-core/node).
 // This checks the host SDK, not compatibility with every third-party package.

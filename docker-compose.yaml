@@ -508,7 +508,7 @@ services:
   # docker compose --profile debug up -d
 
   temporal-ui:
-    image: temporalio/ui:${TEMPORAL_UI_VERSION:-2.57.0}
+    image: temporalio/ui:${TEMPORAL_UI_VERSION:-2.58.1}
     profiles: [debug]
     restart: unless-stopped
     environment:

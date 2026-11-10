@@ -105,7 +105,7 @@ selection/authorization. Native per-call session seeding preserves text/image
 history but does **not** persist extension session entries, auth sessions, caches,
 custom messages or extension state between turns.
 
-The Pi image pins **1.4.0** as a full npm installation. The image build verifies
+The Pi image pins **1.5.2** as a full npm installation. The image build verifies
 the exact version, public SDK exports, and host dependency imports. Do not graft
 older or duplicate Pi dependencies onto this SDK to satisfy an extension.
 

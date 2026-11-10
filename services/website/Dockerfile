@@ -1,4 +1,5 @@
 FROM nginx:1.31.8-alpine
+RUN apk upgrade --no-cache
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY index.html styles.css brand.css brand.mjs script.js releases.mjs definitions.mjs activity.mjs activity-simulation.mjs urls.mjs favicon.svg /usr/share/nginx/html/
