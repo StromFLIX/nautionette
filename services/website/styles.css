@@ -96,6 +96,18 @@ h3 { letter-spacing: -.045em; }
 .product-screen__zoom { display: inline-flex; align-items: center; gap: 7px; }
 .product-screen img, .product-phone img { display: block; width: 100%; height: auto; }
 .product-phone { border: 7px solid var(--ink); border-radius: 26px; }
+.product-explorer.is-enhanced { overflow: hidden; border: 1px solid #cfd4e0; border-radius: 12px; background: var(--white); box-shadow: 0 12px 32px -20px rgb(32 35 44 / .3); }
+.product-explorer.is-enhanced .product-screen { border: 0; border-radius: 0; box-shadow: none; }
+.product-explorer.is-enhanced .product-screen__bar { display: none; }
+.product-explorer__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--paper); }
+.product-explorer__toolbar[hidden], .product-explorer [role="tabpanel"][hidden] { display: none; }
+.product-explorer__tabs { display: flex; gap: 4px; }
+.product-explorer__tabs button { min-height: 44px; padding: 8px 12px; border: 1px solid transparent; border-radius: 7px; background: transparent; font-size: 11px; line-height: 1.4; }
+.product-explorer__tabs button[aria-selected="true"] { border-color: #cfd4e0; background: var(--white); color: #3349a9; }
+.product-explorer__tabs button[aria-busy="true"] { opacity: .65; }
+.product-explorer__original { display: inline-flex; gap: 7px; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; color: var(--muted); font-size: 10px; }
+.product-explorer__disclosure, .product-explorer__feedback { padding: 10px 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 10px; line-height: 1.7; }
+.product-explorer__feedback { background: var(--paper); }
 .product-view figcaption { display: flex; flex-direction: column; gap: 5px; margin-top: 20px; font-size: 12px; line-height: 1.65; }
 .product-view figcaption strong { font-weight: 500; }
 .product-view figcaption > span { color: var(--muted); font-size: 11px; }
@@ -109,6 +121,9 @@ h3 { letter-spacing: -.045em; }
   .product-view--phone figcaption { text-align: center; }
   .product-view figcaption { margin-top: 16px; }
   .product-screen__bar { font-size: 9px; }
+  .product-explorer__toolbar { gap: 4px; padding-inline: 6px; }
+  .product-explorer__tabs button { padding-inline: 9px; }
+  .product-explorer__original > span { display: none; }
   .product-section__note { margin-top: 24px; }
 }
 

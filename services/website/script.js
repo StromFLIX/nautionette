@@ -2,6 +2,7 @@ import { loadDownloads } from './releases.mjs'
 import { setupDefinition } from './definitions.mjs'
 import { mountActivity } from './activity.mjs?v=living-3'
 import { appURL } from './urls.mjs'
+import { setupProductPreview } from './product-preview.mjs?v=explorer-1'
 
 // Storage is optional: blocked cookies/storage must not break the page.
 let storage
@@ -10,6 +11,7 @@ setupDefinition(document, storage)
 document.querySelector('.locale-control').hidden = false
 mountActivity(document.getElementById('activity-field'), document.getElementById('motion-toggle'), storage)
 loadDownloads(document)
+setupProductPreview(document)
 
 for (const button of document.querySelectorAll('[data-copy]')) {
   button.hidden = false
