@@ -1,0 +1,14 @@
+This image retains PostgreSQL 17 and replaces only its gosu privilege helper.
+
+Gosu 1.20: https://github.com/tianon/gosu/tree/1.20 (Apache-2.0).
+Source archive SHA-256: 207a2045e890d3ca3326027c5f585733085960b401a49dbc00e3bb628c054cf8.
+Local build changes: go.mod/go.sum update github.com/moby/sys/user to v0.5.0
+and golang.org/x/sys to v0.50.0; compiled using Go 1.27.3 with CGO disabled.
+No upstream gosu program source files were changed.
+
+Module sources: https://github.com/moby/sys/tree/user/v0.5.0/user and
+https://go.googlesource.com/sys/+/refs/tags/v0.50.0.
+Go compiler/runtime source: https://go.dev/dl/ (go1.27.3).
+
+The upstream gosu, Go, moby user and x/sys licenses accompany this notice.
+Build metadata in the executable also records module versions and checksums.

@@ -15,4 +15,9 @@ RUN go mod download && go test -mod=readonly ./... \
 FROM postgres:17-alpine
 RUN apk upgrade --no-cache
 COPY --from=gosu /out/gosu /usr/local/bin/gosu
+COPY --from=gosu /src/LICENSE /usr/local/share/licenses/gosu/LICENSE
+COPY --from=gosu /usr/local/go/LICENSE /usr/local/share/licenses/gosu/Go-LICENSE
+COPY --from=gosu /go/pkg/mod/github.com/moby/sys/user@v0.5.0/LICENSE /usr/local/share/licenses/gosu/moby-user-LICENSE
+COPY --from=gosu /go/pkg/mod/golang.org/x/sys@v0.50.0/LICENSE /usr/local/share/licenses/gosu/x-sys-LICENSE
+COPY NOTICE /usr/local/share/licenses/gosu/NOTICE
 RUN gosu --version && gosu nobody true && gosu postgres id
