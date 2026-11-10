@@ -168,9 +168,6 @@ jobs:
       - name: MCP sign-in, reminder layout and snoozing (WebKit)
         run: npx playwright test tests/mcp-http-oauth.spec.js --browser=webkit --workers=1 --reporter=dot,github
 
-      - name: Public workspace explorer (WebKit)
-        run: npx playwright test tests/website.spec.js --browser=webkit --grep 'local workspace demo|demo tabs|product screenshots' --workers=1 --reporter=dot,github
-
       - name: Live stream recovery and navigation (WebKit)
         run: npx playwright test tests/live-connection.spec.js tests/navigation.spec.js tests/back-navigation.spec.js tests/miniapps.spec.js --browser=webkit --workers=1 --reporter=dot,github
 

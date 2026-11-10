@@ -10,8 +10,7 @@
   <link rel="icon" href="/favicon.svg?v=denkzeug-3" type="image/svg+xml" />
   <link rel="preload" href="/assets/fonts/Sora.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/assets/fonts/SourceSerif4.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="stylesheet" href="/styles.css?v=explorer-2" />
-  <link rel="stylesheet" href="/workspace-demo.css?v=explorer-2" />
+  <link rel="stylesheet" href="/styles.css?v=product-preview-2" />
   <meta property="og:title" content="{{brand.name}} — a tool for thought" />
   <meta property="og:description" content="Your agents, workflows and miniapps. Free, remote and extensible. A little more room for what your mind can do." />
   <meta property="og:type" content="website" />
@@ -97,25 +96,11 @@
       </div>
       <div class="product-views">
         <figure class="product-view product-view--desktop">
-          <div class="product-explorer" data-product-explorer>
-            <div class="product-explorer__toolbar" data-explorer-toolbar hidden>
-              <div class="product-explorer__tabs" role="tablist" aria-label="Workspace preview">
-                <button type="button" role="tab" id="preview-demo-tab" aria-controls="preview-demo-panel" aria-selected="false" tabindex="-1" data-preview-mode="demo">Explore demo</button>
-                <button type="button" role="tab" id="preview-screen-tab" aria-controls="preview-screen-panel" aria-selected="true" tabindex="0" data-preview-mode="screen">Actual screen</button>
-              </div>
-              <a class="product-explorer__original" href="/assets/product/desktop.webp" target="_blank" rel="noopener noreferrer" aria-label="Open original desktop image in a new tab"><span>Full size</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M10 4H4v16h16v-6"/></svg></a>
-            </div>
-            <p class="product-explorer__feedback" data-preview-feedback role="status" hidden></p>
-            <div id="preview-demo-panel" role="tabpanel" aria-labelledby="preview-demo-tab" data-preview-demo hidden><div data-workspace-demo></div></div>
-            <div id="preview-screen-panel" role="tabpanel" aria-labelledby="preview-screen-tab" data-preview-screen>
           <a class="product-screen" href="/assets/product/desktop.webp" target="_blank" rel="noopener noreferrer" aria-label="Open the full-size desktop workspace screenshot in a new tab">
             <span class="product-screen__bar"><span>Your workspace</span><span class="product-screen__zoom">Open full size <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M10 4H4v16h16v-6"/></svg></span></span>
             <img src="/assets/product/desktop-small.webp" srcset="/assets/product/desktop-small.webp 1280w, /assets/product/desktop.webp 1920w" sizes="(max-width: 700px) calc(100vw - 40px), (max-width: 1000px) calc(100vw - 310px), 880px" width="1280" height="840" loading="lazy" decoding="async" alt="Denkzeug on a computer: saved agents and chats beside a conversation with tool calls and an editable product brief and slide deck." />
           </a>
-            </div>
-            <p class="product-explorer__disclosure" data-preview-disclosure hidden>Actual app interface, shown with sample content.</p>
-          </div>
-          <figcaption><strong>Make it on your computer.</strong><span>Explore a sample workspace, or open the actual screen full size.</span></figcaption>
+          <figcaption><strong>Make it on your computer.</strong><span>Agents, tools and the files you create, in one place.</span></figcaption>
         </figure>
         <figure class="product-view product-view--phone">
           <a class="product-phone" href="/assets/product/phone.webp" target="_blank" rel="noopener noreferrer" aria-label="Open the full-size phone workspace screenshot in a new tab">
@@ -124,7 +109,7 @@
           <figcaption><strong>Pick it up on your phone.</strong><span>The same work, wherever you are.</span></figcaption>
         </figure>
       </div>
-      <p class="product-section__note">Actual interface shown with sample content. The interactive demo is a local wireframe: no account, real agent runs or backend connection. In the app, both clients connect to the same self-hosted instance.</p>
+      <p class="product-section__note">Actual interface shown with sample content. Both clients connect to the same self-hosted instance. Select a screenshot to see it full size.</p>
     </section>
 
     <section class="principles wrap section-space" id="idea" aria-labelledby="idea-title">
@@ -265,6 +250,6 @@
       <p>{{brand.tagline}}</p>
       <nav aria-label="Footer"><a href="https://github.com/StromFLIX/nautionette">Source</a><a href="https://pi.dev/">Pi</a><a href="https://getartcraft.com/">ArtCraft</a><a href="/assets/denkzeug-icon.svg" download="denkzeug-icon.svg">Brand icon</a></nav>
     </footer>
-  <script type="module" src="/script.js?v=explorer-2"></script>
+  <script type="module" src="/script.js?v=denkzeug-3"></script>
 </body>
 </html>
