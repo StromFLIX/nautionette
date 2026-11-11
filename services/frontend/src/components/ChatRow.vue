@@ -237,7 +237,7 @@ function remove () {
   align-items: center;
   justify-items: center;
   flex: none;
-  width: max(var(--chat-menu-width), 7.5ch);
+  width: max(var(--chat-menu-width), 7ch);
   min-width: 0;
   font-size: .6875rem;
 }
