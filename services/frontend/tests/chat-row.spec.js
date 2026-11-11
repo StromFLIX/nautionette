@@ -141,8 +141,114 @@ test('standalone filled squares pulse for activity and unread uses independent t
   await expect(row.locator('.chat-status')).not.toHaveCSS('fill', 'none')
 })
 
+async function alignmentFixture (page, context, preferences = {}) {
+  await fixture(context, preferences)
+  await page.clock.setFixedTime(new Date('2026-11-11T15:00:00Z'))
+  const times = ['2026-11-11T13:11:00Z', '2026-11-11T12:27:00Z', '2026-11-11T11:29:00Z',
+    '2026-11-11T10:42:00Z', '2026-11-08T10:19:00Z', '2026-10-01T10:19:00Z']
+  const chats = []
+  for (const [i, count] of [0, 1, 7, 10, 99, 103].entries()) {
+    const timestamp = Date.parse(times[i]) / 1000
+    const root = { id: `aligned-${i}`, title: i === 1 ? longTitle : `Aligned chat ${i}`,
+      created_at: timestamp, updated_at: timestamp, last_activity_at: timestamp, unread: i === 1 }
+    chats.push(root)
+    for (let child = 0; child < count; child++) chats.push({
+      ...root, id: `${root.id}-child-${child}`, title: `Agent ${child}`, delegated_parent_chat_id: root.id,
+      unread: false, answering: i === 1 && child === 0
+    })
+  }
+  await context.route('**/api/chats', route => route.fulfill({ json: { chats } }))
+  return chats
+}
+
+async function expectAlignedMetadata (page) {
+  await expect(page.locator('.side__list .chat-list-item').first()).toBeVisible()
+  const rows = await page.locator('.side__list .chat-list-item').evaluateAll(elements => elements.map(el => {
+    const bounds = selector => {
+      const { x, y, width, height } = el.querySelector(selector).getBoundingClientRect()
+      return { x, y, width, height }
+    }
+    return { square: bounds('.chat-status'), slot: bounds('.chat-list-item__status'),
+      trailing: bounds('.chat-list-item__trailing'), title: bounds('.row-item__title'),
+      badge: el.querySelector('.chat-list-item__count') ? bounds('.chat-list-item__count') : null }
+  }))
+  expect(rows.length).toBeGreaterThan(1)
+  for (const row of rows) {
+    expect(row.square.x).toBeCloseTo(rows[0].square.x)
+    expect(row.square.width).toBeCloseTo(rows[0].square.width)
+    expect(row.trailing.x).toBeCloseTo(rows[0].trailing.x)
+    expect(row.trailing.width).toBeCloseTo(rows[0].trailing.width)
+    expect(row.title.width).toBeGreaterThan(0)
+    expect(row.title.x + row.title.width).toBeLessThan(row.slot.x)
+    if (row.badge) {
+      expect(row.badge.x).toBeGreaterThanOrEqual(row.slot.x)
+      expect(row.badge.x + row.badge.width).toBeLessThanOrEqual(row.slot.x + row.slot.width + .1)
+      expect(row.badge.x + row.badge.width).toBeLessThan(row.trailing.x)
+    }
+  }
+  expect(await page.locator('.side__list').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+}
+
+for (const [width, theme, interfaceSize] of [[1440, 'orbit', 100], [1440, 'daylight', 150], [320, 'orbit', 100], [320, 'daylight', 150]]) {
+  test(`squares align across counts and timestamp widths at ${width}px in ${theme} at ${interfaceSize}%`, async ({ page, context }) => {
+    await alignmentFixture(page, context, { theme, interfaceSize })
+    await page.setViewportSize({ width, height: 1000 })
+    await page.goto('/chats')
+    await expect(page.locator('.chat-list-item')).toHaveCount(6)
+    await expectAlignedMetadata(page)
+    const badges = page.locator('.chat-list-item__count')
+    await expect(badges).toHaveText(['1', '7', '10', '99', '99+'])
+    const large = page.locator('a[href="/chats/aligned-5"]').locator('..')
+    await expect(large.getByRole('button', { name: 'Expand agent chats for Aligned chat 5 (103)', exact: true })).toHaveAttribute('title', /^103 agent chats/)
+    await expect(badges.first()).toHaveCSS('animation-name', 'none')
+    const root = page.locator('a[href="/chats/aligned-1"]').locator('..')
+    const before = await root.locator('.row-item__title').boundingBox()
+    await root.hover()
+    await expectAlignedMetadata(page)
+    expect((await root.locator('.row-item__title').boundingBox()).width).toBeCloseTo(before.width)
+    await root.getByRole('button', { name: `Expand agent chats for ${longTitle} (1)`, exact: true }).click()
+    await expect(page.locator('.chat-list-item')).toHaveCount(7)
+    await expectAlignedMetadata(page)
+    await expect(page).toHaveURL(/\/chats$/)
+    await page.screenshot({ path: `/tmp/chat-row-alignment-${width}-${theme}.png` })
+    for (const time of await page.locator('.row-item__time').all()) {
+      await expect(time).toHaveCSS('font-variant-numeric', 'tabular-nums')
+      expect(await time.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    }
+  })
+}
+
+test('changing a tree count or removing its last agent never shifts the tile or title', async ({ page, context }) => {
+  const chats = await alignmentFixture(page, context)
+  await page.goto('/chats')
+  const row = page.locator('a[href="/chats/aligned-1"]').locator('..')
+  const before = await row.locator('.row-item__title').boundingBox()
+  const child = chats.find(chat => chat.delegated_parent_chat_id === 'aligned-1')
+  for (let i = 1; i < 10; i++) chats.push({ ...child, id: `new-agent-${i}` })
+  await page.evaluate(async () => (await import('/src/store.js')).actions.loadChats())
+  await expect(row.locator('.chat-list-item__count')).toHaveText('10')
+  await expectAlignedMetadata(page)
+  expect((await row.locator('.row-item__title').boundingBox()).width).toBeCloseTo(before.width)
+  for (let i = chats.length - 1; i >= 0; i--) if (chats[i].delegated_parent_chat_id === 'aligned-1') chats.splice(i, 1)
+  await page.evaluate(async () => (await import('/src/store.js')).actions.loadChats())
+  await expect(row.locator('.chat-list-item__count, .chat-status__lines, .chat-list-item__tree')).toHaveCount(0)
+  await expectAlignedMetadata(page)
+  expect((await row.locator('.row-item__title').boundingBox()).width).toBeCloseTo(before.width)
+})
+
 test.describe('touch actions', () => {
   test.use({ hasTouch: true })
+  test('tree badges share the standalone tile column on touch at 150%', async ({ page, context }) => {
+    await alignmentFixture(page, context, { interfaceSize: 150 })
+    await page.setViewportSize({ width: 320, height: 1000 })
+    await page.goto('/chats')
+    await expectAlignedMetadata(page)
+    for (const toggle of await page.locator('.chat-list-item__tree').all()) {
+      const box = await toggle.boundingBox()
+      expect(box.width).toBeGreaterThanOrEqual(44)
+      expect(box.height).toBeGreaterThanOrEqual(44)
+    }
+  })
   for (const width of [390, 1440]) {
     test(`options remain visible and tappable without hover at ${width}px`, async ({ page, context }) => {
       await fixture(context, { interfaceSize: 150 })
