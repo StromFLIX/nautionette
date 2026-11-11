@@ -20,6 +20,9 @@ for (const width of [1440, 320]) {
       await expect(page.getByRole('button', { name: 'Remove notes.txt' })).toBeVisible()
 
       await picker(page).click()
+      await expect(page.getByRole('menuitemradio', { name: writer.name, exact: true })).toBeVisible()
+      // Center the menu so an off-center toolbar trigger cannot squeeze it to the viewport edge.
+      if (width === 320) await expect.poll(async () => (await page.locator('.agent-picker').boundingBox()).width).toBeGreaterThanOrEqual(280)
       await page.getByRole('menuitemradio', { name: writer.name, exact: true }).click()
       await expect(picker(page)).toContainText(writer.name)
       await expect(settings(page)).toHaveAttribute('aria-expanded', 'false')

@@ -1,5 +1,5 @@
 <template>
-  <q-menu ref="menu" anchor="top left" self="bottom left" class="agent-picker" @show="query = ''" @keydown.esc.stop.prevent="menu?.hide($event)">
+  <q-menu ref="menu" anchor="top middle" self="bottom middle" class="agent-picker" @show="query = ''" @keydown.esc.stop.prevent="menu?.hide($event)">
     <div class="agent-picker__head"><input v-model="query" class="field" aria-label="Search agents" placeholder="Search agents" /></div>
     <div class="agent-picker__list scroll-y" role="menu" aria-label="Saved agents">
       <button v-for="agent in choices" :key="agent.id || 'global'" v-close-popup class="agent-picker__choice" type="button" role="menuitemradio"
