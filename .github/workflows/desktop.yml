@@ -50,12 +50,11 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run desktop:build:ci -- --${{ matrix.platform }} --${{ matrix.arch }}
-      - name: Install Linux renderer dependencies
-        if: matrix.platform == 'linux'
-        timeout-minutes: 15
-        run: bash ../../scripts/install_playwright_ci.sh install-deps chromium
       - name: Test packaged Linux renderer
         if: matrix.platform == 'linux'
+        # ubuntu-24.04 already supplies Xvfb and Electron's shared libraries.
+        # Electron bundles its own Chromium; Playwright's browser/font installer
+        # is unnecessary here. Missing runtime libraries still fail this smoke.
         run: xvfb-run -a node scripts/smoke-desktop.mjs
       - uses: actions/upload-artifact@v7
         with:

@@ -120,7 +120,13 @@ jobs:
 
   frontend:
     name: Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    # Keep browsers, fonts and system libraries together instead of installing
+    # hundreds of packages from a live Ubuntu mirror on every test run.
+    # tests/test_playwright_ci.py guards this pin against package-lock.json.
+    container:
+      image: mcr.microsoft.com/playwright:v1.65.0-noble
+      options: --ipc=host
     defaults:
       run:
         working-directory: services/frontend
@@ -148,12 +154,6 @@ jobs:
 
       - name: Build
         run: npm run build
-
-      - name: Install test browsers
-        # Ubuntu mirrors and browser downloads can fail transiently. Bound the
-        # install retries without retrying (or masking) application test failures.
-        timeout-minutes: 15
-        run: bash ../../scripts/install_playwright_ci.sh install --with-deps chromium webkit
 
       - name: Chat, settings, extensions and theme controls
         run: >-
