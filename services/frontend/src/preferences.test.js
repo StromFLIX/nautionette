@@ -31,6 +31,23 @@ test('new-chat mode defaults to last settings and migrates away from persistent 
   assert.ok(searchSettings('new chat settings').some(entry => entry.id === 'newChatSettings'))
 })
 
+test('output display defaults to inline rows, validates, resets and is searchable', () => {
+  assert.equal(preferenceDefaults().outputDisplay, 'inline')
+  assert.equal(workspaceDefaults().outputDisplay, 'inline')
+  assert.equal(sanitizePreferences({ theme: 'sand' }).outputDisplay, 'inline')
+  for (const mode of ['inline', 'thumbnails']) {
+    assert.equal(validPreference('outputDisplay', mode), true)
+    assert.equal(sanitizePreferences({ outputDisplay: mode }).outputDisplay, mode)
+  }
+  for (const mode of [true, null, 'cards', 1, [], {}]) {
+    assert.equal(validPreference('outputDisplay', mode), false)
+    assert.equal(sanitizePreferences({ outputDisplay: mode }).outputDisplay, 'inline')
+  }
+  for (const query of ['output display', 'thumbnail', 'file outputs', 'inline rows']) {
+    assert.ok(searchSettings(query).some(entry => entry.id === 'outputDisplay'))
+  }
+})
+
 test('interface size migrates old preferences and accepts only supported sizes', () => {
   assert.equal(sanitizePreferences({ theme: 'sand', sideWidth: 400 }).interfaceSize, 125)
   for (const size of [100, 110, 125, 150]) {

@@ -29,7 +29,7 @@
         </div>
         <div v-else-if="part.kind === 'text' && part.text.trim()" class="bubble__body" @click="copyCode" v-html="renderMarkdown(part.text)" />
       </template>
-      <OutputCard v-for="output in meta.outputs || []" :key="`${output.id}:${output.revision}`" :chat-id="chatId" :output="output" compact @open="$emit('open-output', $event)" />
+      <OutputRow v-for="output in meta.outputs || []" :key="`${output.id}:${output.revision}`" :chat-id="chatId" :output="output" @open="$emit('open-output', $event)" />
       <div v-if="status" class="bubble__status caption">
         <span class="material-icons bubble__spinner">autorenew</span>{{ status }}
       </div>
@@ -65,7 +65,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import ToolCall from './ToolCall.vue'
 import ToolCallGroup from './ToolCallGroup.vue'
 import ChatAttachment from './ChatAttachment.vue'
-import OutputCard from './OutputCard.vue'
+import OutputRow from './OutputRow.vue'
 import AgentAvatar from './AgentAvatar.vue'
 import { store } from '../store'
 import { groupToolCalls } from '../timeline'

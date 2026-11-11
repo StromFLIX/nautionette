@@ -1,17 +1,23 @@
 <template>
-  <div ref="element" class="output-image">
-    <button v-if="url && !error" type="button" class="output-image__open" :aria-label="`View ${file.name}`" @click="expanded = true">
-      <img :src="url" :alt="file.name" @error="error = 'Could not display preview'" />
-    </button>
-    <p v-else class="caption dim" role="status">{{ error || 'Loading preview…' }}</p>
-    <button v-if="error" type="button" class="btn btn--sm" @click="load">Retry preview</button>
-    <q-dialog v-model="expanded">
-      <div class="output-image__dialog">
-        <button v-close-popup type="button" class="btn btn--icon" aria-label="Close preview"><span class="material-icons" aria-hidden="true">close</span></button>
-        <img :src="url" :alt="file.name" />
-        <p class="caption">{{ file.name }}</p>
-      </div>
-    </q-dialog>
+  <div ref="element" class="output-image" :class="{ 'output-image--thumbnail': thumbnail }">
+    <template v-if="thumbnail">
+      <img v-if="url && !error" :src="url" alt="" @error="error = 'Could not display preview'" />
+      <span v-else class="material-icons" aria-hidden="true">description</span>
+    </template>
+    <template v-else>
+      <button v-if="url && !error" type="button" class="output-image__open" :aria-label="`View ${file.name}`" @click="expanded = true">
+        <img :src="url" :alt="file.name" @error="error = 'Could not display preview'" />
+      </button>
+      <p v-else class="caption dim" role="status">{{ error || 'Loading preview…' }}</p>
+      <button v-if="error" type="button" class="btn btn--sm" @click="load">Retry preview</button>
+      <q-dialog v-model="expanded">
+        <div class="output-image__dialog">
+          <button v-close-popup type="button" class="btn btn--icon" aria-label="Close preview"><span class="material-icons" aria-hidden="true">close</span></button>
+          <img :src="url" :alt="file.name" />
+          <p class="caption">{{ file.name }}</p>
+        </div>
+      </q-dialog>
+    </template>
   </div>
 </template>
 
@@ -23,7 +29,8 @@ const props = defineProps({
   chatId: { type: String, required: true },
   outputId: { type: String, required: true },
   revision: { type: Number, required: true },
-  file: { type: Object, required: true }
+  file: { type: Object, required: true },
+  thumbnail: { type: Boolean, default: false }
 })
 const element = ref(null)
 const url = ref('')
@@ -71,6 +78,9 @@ onUnmounted(() => { observer?.disconnect(); cleanup() })
 
 <style scoped>
 .output-image { min-width: 0; }
+.output-image--thumbnail { display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: var(--radius-xs); background: var(--surface-input); color: var(--text-muted); }
+.output-image--thumbnail > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.output-image--thumbnail > .material-icons { font-size: 1.125rem; }
 .output-image__open { display: block; width: 100%; border: 0; padding: 0; border-radius: var(--radius-md); background: var(--surface-input); overflow: hidden; cursor: zoom-in; }
 .output-image__open img { display: block; width: 100%; max-height: 480px; object-fit: contain; }
 .output-image__dialog { padding: 12px; background: var(--surface); border-radius: var(--radius-lg); max-width: 95vw !important; overflow-wrap: anywhere; }

@@ -59,8 +59,18 @@ with `{"output_id": null, "revision": null, "file_id": null}` without inventing 
 Optional file
 `name` and `mime_type` override basename and extension-based detection. Originals
 are preserved exactly. Success returns committed output/file IDs, revision numbers
-and SHA-256 digests, not bytes or public links. The chat receives a compact result
-card and its Outputs tab receives the latest complete snapshot.
+and SHA-256 digests, not bytes or public links. The chat receives a compact output
+row and its Outputs tab receives the latest complete snapshot.
+
+**Settings → Workspace → Chat → Output display** switches between **Inline file
+rows** (the default, with no preview requests) and **Small thumbnail rows** (one
+54 × 44 px preview per output, loaded lazily). This device-local choice is saved
+and applied immediately, including to existing replies and other open tabs.
+Both modes use a single keyboard-accessible row to open the publication's exact
+revision in Outputs. Titles truncate rather than expanding the message; the full
+title remains in the accessible label and native tooltip. Thumbnail mode falls back
+to a file icon when a preview is missing or fails. Full-size previews, summaries,
+source-app metadata, revision history and file downloads remain in Outputs.
 
 To continue in another turn:
 

@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { createSSEFixture, snapshotFrame } from './sse-fixture.js'
 import { readFile } from 'node:fs/promises'
+import { PREFERENCES_KEY } from '../src/preferences-schema.js'
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==', 'base64')
 const pdf = Buffer.concat([Buffer.from('%PDF-generated-output'), Buffer.from([0, 128, 255])])
@@ -140,6 +141,130 @@ for (const width of [1440, 390]) {
     expect(errors).toEqual([])
   })
 }
+
+for (const width of [1440, 390, 320]) {
+  for (const mode of ['inline', 'thumbnails']) {
+    test(`${mode} output rows stay compact and open exact revisions at ${width}px`, async ({ page, context }) => {
+      const state = await fixture(context, { inline: true })
+      state.chats.alpha.outputs = [output(2)]
+      state.history.unshift(output(2))
+      await page.setViewportSize({ width, height: 900 })
+      await page.goto('/settings/workspace')
+      const setting = page.getByRole('combobox', { name: 'Output display', exact: true })
+      await expect(setting).toHaveValue('inline')
+      await setting.selectOption(mode)
+      await page.reload()
+      await expect(setting).toHaveValue(mode)
+      await page.goto('/chats/alpha')
+      const row = page.getByRole('button', { name: 'View output: Mounting bracket', exact: true })
+      await expect(row).toBeVisible()
+      await expect(row).not.toContainText('Ready')
+      await expect(row).not.toContainText('CADCraft')
+      await expect(page.getByText('View files in Outputs')).toHaveCount(0)
+      await expect(row.locator('button')).toHaveCount(0)
+      if (mode === 'thumbnails') {
+        await expect(row.locator('img')).toBeVisible()
+        const image = await row.locator('img').boundingBox()
+        expect(image.height).toBeLessThanOrEqual(44)
+        expect(image.width).toBeLessThanOrEqual(54)
+        expect(state.files).toHaveLength(1)
+        expect(state.files[0].authorization).toBe('Bearer output-test-token')
+        expect(state.files[0].preview).toBe(true)
+      } else {
+        await expect(row.locator('img')).toHaveCount(0)
+        expect(state.files).toHaveLength(0)
+      }
+      expect((await row.boundingBox()).height).toBeLessThan(90)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+      await page.screenshot({ path: `test-results/output-rows-${mode}-${width}.png` })
+      await row.focus()
+      await page.keyboard.press('Enter')
+      await expect(outputPanel(page).getByText('Ready · Revision 1 · CADCraft')).toBeVisible()
+      await expect(page.getByRole('dialog')).toHaveCount(0)
+    })
+  }
+}
+
+for (const mode of ['inline', 'thumbnails']) {
+  test(`${mode} rows truncate long titles at 150% interface size on a narrow phone`, async ({ page, context }) => {
+    const state = await fixture(context, { inline: true })
+    const title = 'Actual app screenshots — ' + 'very-long-unbroken-filename'.repeat(12)
+    state.chats.alpha.messages[0].meta.outputs[0].title = title
+    await context.addInitScript(({ key, mode }) => localStorage.setItem(key, JSON.stringify({ outputDisplay: mode, interfaceSize: 150 })), { key: PREFERENCES_KEY, mode })
+    await page.setViewportSize({ width: 320, height: 900 })
+    await page.goto('/chats/alpha')
+    const row = page.getByRole('button', { name: `View output: ${title}`, exact: true })
+    await expect(row).toBeVisible()
+    await expect(row).toHaveAttribute('title', `${title} · Revision 1`)
+    expect(await row.locator('.output-row__title').evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true)
+    expect((await row.boundingBox()).height).toBeLessThan(90)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  })
+}
+
+test('output display switches existing rows live across tabs and resets to inline', async ({ page, context }) => {
+  const state = await fixture(context, { inline: true })
+  await page.goto('/chats/alpha')
+  const row = page.locator('.output-row')
+  await expect(row).toBeVisible()
+  expect(state.files).toHaveLength(0)
+  const settings = await context.newPage()
+  await settings.goto('/settings/workspace')
+  const select = settings.getByRole('combobox', { name: 'Output display', exact: true })
+  await select.selectOption('thumbnails')
+  await expect(row.locator('img')).toBeVisible()
+  await select.selectOption('inline')
+  await expect(row.locator('.output-image')).toHaveCount(0)
+  await select.selectOption('thumbnails')
+  await expect(row.locator('img')).toBeVisible()
+  await settings.getByRole('button', { name: 'Reset workspace', exact: true }).click()
+  await expect(select).toHaveValue('inline')
+  await expect(row.locator('.output-image')).toHaveCount(0)
+  await settings.close()
+})
+
+test('thumbnail rows fall back quietly for missing or failed previews without blocking output access', async ({ page, context }) => {
+  const state = await fixture(context, { inline: true })
+  state.failPreview = true
+  state.chats.alpha.messages[0].meta.outputs.push(output(1, { id: 'b'.repeat(32), title: 'Source only', files: [output().files[2]] }))
+  await context.addInitScript(key => localStorage.setItem(key, JSON.stringify({ outputDisplay: 'thumbnails' })), PREFERENCES_KEY)
+  await page.goto('/chats/alpha')
+  const rows = page.locator('.output-row')
+  await expect(rows).toHaveCount(2)
+  await expect.poll(() => state.files.length).toBe(1)
+  await expect(rows.locator('img')).toHaveCount(0)
+  await expect(rows.getByRole('status')).toHaveCount(0)
+  await expect(rows.getByRole('button')).toHaveCount(0)
+  await expect(rows.nth(1).locator('.output-row__icon')).toBeVisible()
+  await page.getByRole('button', { name: 'View output: Mounting bracket', exact: true }).click()
+  await expect(outputPanel(page).getByText(/Could not load preview/)).toBeVisible()
+  state.failPreview = false
+  await outputPanel(page).getByRole('button', { name: 'Retry preview', exact: true }).click()
+  await expect(outputPanel(page).locator('img')).toBeVisible()
+})
+
+test('switching off thumbnails cancels in-flight preview work without a late object URL', async ({ page, context }) => {
+  const state = await fixture(context, { inline: true })
+  let release
+  state.waitFile = new Promise(resolve => { release = resolve })
+  await context.addInitScript(() => {
+    const create = URL.createObjectURL.bind(URL)
+    window.outputBlobs = 0
+    URL.createObjectURL = (...args) => { window.outputBlobs++; return create(...args) }
+  })
+  await page.goto('/settings/workspace')
+  await page.getByRole('combobox', { name: 'Output display', exact: true }).selectOption('thumbnails')
+  await page.goto('/chats/alpha')
+  await expect.poll(() => state.files.length).toBe(1)
+  const settings = await context.newPage()
+  await settings.goto('/settings/workspace')
+  await settings.getByRole('combobox', { name: 'Output display', exact: true }).selectOption('inline')
+  await expect(page.locator('.output-row .output-image')).toHaveCount(0)
+  release()
+  await expect.poll(() => state.completedFiles).toBe(1)
+  expect(await page.evaluate(() => window.outputBlobs)).toBe(0)
+  await settings.close()
+})
 
 test('Android saves authenticated output bytes with the native picker and waits for completion', async ({ page, context }) => {
   const state = await fixture(context)
@@ -372,8 +497,8 @@ test('steered answers do not repeat already-saved outputs in the live response',
   await expect(cards).toHaveCount(1)
   state.chats.alpha.outputs = [output(2)]
   await expect(cards).toHaveCount(2)
-  await expect(page.getByText('Ready · Revision 1 · CADCraft')).toBeVisible()
-  await expect(page.getByText('Ready · Revision 2 · CADCraft')).toBeVisible()
+  await expect(cards.nth(0)).toContainText('rev 1')
+  await expect(cards.nth(1)).toContainText('rev 2')
 })
 
 test('older reply cards open their exact revision and preserve it across tab switches', async ({ page, context }) => {

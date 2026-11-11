@@ -1,19 +1,17 @@
 <template>
-  <article class="output-card" :class="{ 'output-card--compact': compact }" :aria-label="output.title">
+  <article class="output-card" :aria-label="output.title">
     <header class="output-card__head">
       <span class="material-icons" aria-hidden="true">inventory_2</span>
       <div class="grow">
-        <button v-if="compact" type="button" class="output-card__jump" :aria-label="`View output: ${output.title}`" @click="$emit('open', output)">{{ output.title }}</button>
-        <h2 v-else>{{ output.title }}</h2>
+        <h2>{{ output.title }}</h2>
         <p class="caption dim">Ready · Revision {{ output.revision }}<template v-if="output.source_app"> · {{ output.source_app }}</template></p>
       </div>
     </header>
-    <p v-if="!compact && output.summary" class="output-card__summary">{{ output.summary }}</p>
+    <p v-if="output.summary" class="output-card__summary">{{ output.summary }}</p>
     <div v-if="previews.length" class="output-card__previews">
       <OutputImage v-for="file in previews" :key="file.id" :chat-id="chatId" :output-id="output.id" :revision="output.revision" :file="file" />
     </div>
-    <button v-if="compact" type="button" class="btn btn--sm btn--outline" @click="$emit('open', output)">View files in Outputs</button>
-    <ul v-else class="output-card__files" aria-label="Output files">
+    <ul class="output-card__files" aria-label="Output files">
       <li v-for="file in output.files" :key="file.id">
         <button type="button" class="output-card__download" :disabled="Boolean(loadingFile)" :aria-label="`Download ${file.name}`" @click="download(file)">
           <span class="material-icons" aria-hidden="true">{{ file.role === 'source' ? 'edit_document' : 'download' }}</span>
@@ -34,14 +32,12 @@ import { saveDownload } from '../file-download'
 
 const props = defineProps({
   chatId: { type: String, required: true },
-  output: { type: Object, required: true },
-  compact: { type: Boolean, default: false }
+  output: { type: Object, required: true }
 })
-defineEmits(['open'])
 const previews = computed(() => {
   const explicit = props.output.files.filter(file => file.role === 'preview' && file.previewable)
   const files = explicit.length ? explicit : props.output.files.filter(file => file.previewable)
-  return props.compact ? files.slice(0, 1) : files
+  return files
 })
 const formatSize = size => size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MiB` : `${Math.max(1, Math.ceil(size / 1024))} KiB`
 const loadingFile = ref('')
@@ -98,11 +94,8 @@ onUnmounted(cleanup)
 .output-card__download:disabled { opacity: 0.6; cursor: wait; }
 .output-card__file-details { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 .output-card__file-details strong { font-size: 0.875rem; }
-.output-card__jump { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
-.output-card--compact { max-width: 360px; margin-top: 12px; padding: 12px; }
-.output-card--compact :deep(.output-image__open img) { max-height: 160px; }
-.output-card__download:focus-visible, .output-card__jump:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.output-card__download:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .output-card__download:active:not(:disabled) { background: var(--surface-hover); }
 @media (hover: hover) and (pointer: fine) { .output-card__download:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-hover); } }
-@media (max-width: 560px) { .output-card { padding: 16px; } .output-card--compact { padding: 12px; } }
+@media (max-width: 560px) { .output-card { padding: 16px; } }
 </style>
