@@ -41,6 +41,7 @@ WORKIQ_URL = "https://workiq.svc.cloud.microsoft/mcp"
 WORKIQ_CLIENT = "ba081686-5d24-4bc6-a0d6-d034ecffed87"
 WORKIQ_REDIRECT = "http://localhost:12798"
 TTL = 600
+READINESS_SECONDS = 60
 LIMIT = 65536
 NAMESPACE = "mcp-oauth"
 _TOKEN = re.compile(r"[A-Za-z0-9._~+/-]+=*")
@@ -524,8 +525,11 @@ def public_profile(profile: dict) -> dict:
 def store(login: Login, tool_names: list[str], status="gateway_pending"):
     prior = db.one("SELECT * FROM mcp_http_oauth WHERE name=?", (login.name,))
     backup = prior
+    readiness_deadline = time.time() + READINESS_SECONDS
     if prior and prior["revision"] == login.revision:
-        backup = unseal(prior["secret"], namespace=NAMESPACE).get("backup")
+        saved = unseal(prior["secret"], namespace=NAMESPACE)
+        backup = saved.get("backup")
+        readiness_deadline = saved.get("readiness_deadline", readiness_deadline)
     value = {
         "profile": login.profile,
         "tokens": login.tokens,
@@ -533,6 +537,7 @@ def store(login: Login, tool_names: list[str], status="gateway_pending"):
         "operation": "connect",
         "backup": backup,
         "tool_names": tool_names,
+        "readiness_deadline": readiness_deadline,
     }
     db.execute(
         "INSERT INTO mcp_http_oauth VALUES (?,?,?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET "
@@ -560,6 +565,14 @@ def target(name, value):
 
 
 async def activate(row, value) -> bool:
+    try:
+        async with asyncio.timeout(10):
+            return await _activate(row, value)
+    except TimeoutError:
+        return False
+
+
+async def _activate(row, value) -> bool:
     # Config-store acknowledgement/readback is not data-plane readiness. A
     # fresh federated MCP session must initialize and list this target's tools
     # before held calls are released. Never call a business tool here or retry
@@ -577,8 +590,17 @@ async def activate(row, value) -> bool:
             if not verdict["ok"]:
                 return False
             names = value["tool_names"] = verdict["tool_names"]
+        # The isolated probe has ONE target, so agentgateway lists raw upstream
+        # names. Federation namespaces names only when it has multiple targets.
+        # Do not accept either spelling indiscriminately: a raw name could
+        # belong to a different server in a multi-target federation.
+        config = await gateway.config()
+        targets = config.get("targets") or []
+        if row["name"] not in {item["name"] for item in targets}:
+            return False
+        expected_names = {f"{row['name']}_{name}" for name in names} if len(targets) > 1 else set(names)
         tools = await gateway.mcp_tools(timeout=10)
-        if not names or not set(names).issubset(tool["name"] for tool in tools):
+        if not names or not expected_names.issubset(tool["name"] for tool in tools):
             return False
     except (HTTPException, httpx.HTTPError, ValueError, TimeoutError):
         return False  # Leave gateway_pending; poll/recovery may check again.
@@ -650,14 +672,18 @@ async def poll(identifier: str) -> dict:
     current = await current_target(login.name)
     if current != login.previous and current != expected:
         raise HTTPException(409, "MCP configuration changed during login; nothing was overwritten")
-    # A read-only MCP handshake before exposing the connection to all chats.
-    await public_url(login.profile["url"])
-    verdict = await mcp_servers.probe_http_gateway(
-        login.name, login.profile["url"], login.tokens["access_token"]
-    )
-    if not verdict["ok"]:
-        raise HTTPException(400, verdict["message"])
-    store(login, verdict["tool_names"])
+    row = db.one("SELECT * FROM mcp_http_oauth WHERE name=? AND revision=?", (login.name, login.revision))
+    if not row:
+        # Validate once before publishing. Subsequent readiness polls reuse the
+        # saved names/token/deadline instead of creating another probe session.
+        await public_url(login.profile["url"])
+        verdict = await mcp_servers.probe_http_gateway(
+            login.name, login.profile["url"], login.tokens["access_token"]
+        )
+        if not verdict["ok"]:
+            raise HTTPException(400, verdict["message"])
+        store(login, verdict["tool_names"])
+        row = db.one("SELECT * FROM mcp_http_oauth WHERE name=? AND revision=?", (login.name, login.revision))
     try:
         if current != expected:
             await gateway.put_config_resources("mcp.target", [expected])
@@ -665,8 +691,21 @@ async def poll(identifier: str) -> dict:
         raise HTTPException(
             502, "Gateway update is uncertain; retry connection checking, not the OAuth code"
         ) from exc
-    row = db.one("SELECT * FROM mcp_http_oauth WHERE name=? AND revision=?", (login.name, login.revision))
-    if not await activate(row, unseal(row["secret"], namespace=NAMESPACE)):
+    value = unseal(row["secret"], namespace=NAMESPACE)
+    if "readiness_deadline" not in value:  # Pending login saved by an older backend.
+        value["readiness_deadline"] = time.time() + READINESS_SECONDS
+        db.execute(
+            "UPDATE mcp_http_oauth SET secret=? WHERE name=? AND revision=?",
+            (seal(value, namespace=NAMESPACE), login.name, login.revision),
+        )
+    if not await activate(row, value):
+        if time.time() >= value["readiness_deadline"]:
+            login.failed = True
+            return {
+                "status": "failed",
+                "message": "Sign-in succeeded, but the gateway did not expose this server's authenticated "
+                "tools within 60 seconds. Check MCP server connectivity before trying again.",
+            }
         return {"status": "gateway_pending", "message": "Waiting for authenticated MCP federation readiness."}
     db.execute("DELETE FROM mcp_cli_oauth WHERE name=?", (login.name,))
     forget_catalog()

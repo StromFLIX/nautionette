@@ -181,7 +181,9 @@ def tls(tmp_path, monkeypatch):
                         "expires_in": 3600,
                     },
                 )
-            if self.headers.get("Authorization") != "Bearer " + tokens.get("access_token", ""):
+            if self.path != "/baseline" and self.headers.get("Authorization") != "Bearer " + tokens.get(
+                "access_token", ""
+            ):
                 return self.reply(401, {"error": "not_authenticated"})
             body = json.loads(data)
             if "id" not in body:
@@ -366,6 +368,12 @@ def test_agent_started_before_sign_in_dispatches_once_on_fresh_federation(
         assert selector.select(timeout=15), "Pre-login MCP handshake timed out"
         assert agent.stdout.readline().strip() == "ready", agent.stderr.read()[-2000:]
         identifier, auth, _ = begin(client, url=origin + "/mcp")
+        # Production has several federated targets, not only the OAuth target.
+        asyncio.run(
+            native.put_config_resources(
+                "mcp.target", [mcp_servers.target_value("baseline", origin + "/baseline", "")]
+            )
+        )
         challenge = parse_qs(urlsplit(auth["authorization_url"]).query)["code_challenge"][0]
         assert forward(client, identifier, auth, code=challenge).status_code == 200
         original = live.gateway.mcp_tools
@@ -386,7 +394,12 @@ def test_agent_started_before_sign_in_dispatches_once_on_fresh_federation(
                 break
             time.sleep(0.1)
         else:
-            pytest.fail("Authenticated federation never became ready")
+            from nautionette_backend.db import db
+
+            row = db.one("SELECT * FROM mcp_http_oauth WHERE name='example'")
+            value = unseal(row["secret"], namespace=oauth.NAMESPACE)
+            names = [tool["name"] for tool in asyncio.run(native.mcp_tools())]
+            pytest.fail(f"Federation never ready: isolated={value['tool_names']}, federated={names}")
         stdout, stderr = agent.communicate("dispatch\n", timeout=20)
         assert agent.returncode == 0, stderr[-2000:]
         assert json.loads(stdout)["content"][0]["text"] == "authenticated"
