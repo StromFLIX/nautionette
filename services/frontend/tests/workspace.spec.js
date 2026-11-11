@@ -79,6 +79,8 @@ for (const { name, width, hasTouch } of [
           await page.goto(path)
           await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled()
           await expectMatchingSize('Send message')
+          await expect(page.getByRole('button', { name: 'Select agent', exact: true })).toBeInViewport({ ratio: 1 })
+          expect(await page.locator('.composer__bar').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
           await input.fill('Draft message')
           await settings.click()
           await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeHidden()

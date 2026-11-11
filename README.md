@@ -110,9 +110,13 @@ The interface defaults to **125%**, including on phones; choose 100%, 110%, 125%
 150% without browser zoom. These preferences save on this device; instance settings
 and per-workflow configuration stay separate.
 
-Model selection, agents, reasoning, tools and projects remain available behind
-**Chat configuration** beside the attachment **plus**. Its controls start closed
-in each chat; opening one chat's controls never expands the next chat's composer.
+The agent dropdown beside **Chat configuration** switches agents directly without
+opening preferences. It can **Reapply agent defaults** to discard per-chat overrides
+or **Reset to default agent** (global defaults when no default agent is configured).
+Both preserve draft text and attachments. Model selection, reasoning, tools and
+projects remain behind **Chat configuration** beside the attachment **plus**.
+Its controls start closed in each chat; opening one chat's controls never expands
+the next chat's composer.
 Provider-reported context usage appears as a circle in the chat header.
 
 To explore a different idea without changing the original, choose **Chat options

@@ -13,7 +13,14 @@
       </button>
       <p v-if="!choices.length" class="caption dim agent-picker__note">No matching agents.</p>
     </div>
-    <div class="agent-picker__foot"><p class="caption dim">Applies the agent's settings to this chat.</p>
+    <div class="agent-picker__foot">
+      <button v-if="customized && currentAgentAvailable" v-close-popup class="pick-menu__item" type="button" @click="$emit('update:modelValue', modelValue)">
+        <span class="material-icons agent-picker__icon" aria-hidden="true">restart_alt</span>Reapply agent defaults
+      </button>
+      <button v-close-popup class="pick-menu__item" type="button" @click="$emit('update:modelValue', defaultAgentId)">
+        <span class="material-icons agent-picker__icon" aria-hidden="true">settings_backup_restore</span>Reset to default agent
+      </button>
+      <p class="caption dim">Applies the agent's settings to this chat.</p>
       <RouterLink v-close-popup class="btn btn--sm" to="/settings/agents#agent-profiles">Manage agents<span class="material-icons" aria-hidden="true">arrow_outward</span></RouterLink>
     </div>
   </q-menu>
@@ -24,10 +31,12 @@ import { computed, ref } from 'vue'
 import { store } from '../store'
 import AgentAvatar from './AgentAvatar.vue'
 import { globalChatConfig, resolveAgentConfig, toolLabel, projectLabel } from '../agent-config'
-defineProps({ modelValue: { type: String, default: null } })
+const props = defineProps({ modelValue: { type: String, default: null }, customized: Boolean })
 defineEmits(['update:modelValue'])
 const menu = ref(null)
 const query = ref('')
+const currentAgentAvailable = computed(() => !props.modelValue || store.catalog.agents?.some(agent => agent.id === props.modelValue))
+const defaultAgentId = computed(() => store.catalog.agents?.find(agent => agent.id === store.catalog.default_agent_id)?.id ?? null)
 const choices = computed(() => {
   const defaults = globalChatConfig(store.catalog)
   return [{ id: null, name: 'Global defaults', resolved: defaults }, ...(store.catalog.agents || []).map(agent => ({
