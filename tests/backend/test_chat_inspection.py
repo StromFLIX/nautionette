@@ -77,6 +77,21 @@ def test_chat_search_and_session_filters_compose(client, sessions):
     )
 
 
+def test_sessions_expose_runtime_ownership_without_job_data(client, sessions, monkeypatch):
+    from nautionette_backend.routers import chat_inspection
+
+    chat = db.create_chat("Abandoned", "default")["id"]
+    db.accept_chat_message(chat, "Private prompt", "orphan")
+    page = client.get(BASE + "/sessions", params={"chat_id": chat}).json()["sessions"]
+    assert page[0]["runtime_owner"] is False
+    monkeypatch.setattr(chat_inspection, "turn_has_owner", lambda turn: turn == "orphan")
+    page = client.get(BASE + "/sessions", params={"chat_id": chat}).json()["sessions"]
+    assert page[0]["runtime_owner"] is True
+    assert "Private prompt" not in json.dumps(page)
+    completed = client.get(BASE + "/sessions", params={"state": "completed"}).json()["sessions"]
+    assert all(row["runtime_owner"] is None for row in completed)
+
+
 def test_events_are_filtered_bounded_and_cursor_paginated(client, sessions):
     path = BASE + "/sessions/failed-turn/events"
     page = client.get(path, params={"limit": 1}).json()

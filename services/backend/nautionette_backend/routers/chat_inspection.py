@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ..conversations import turn_has_owner
 from ..db import db
 from ..security import require_user
 
@@ -163,7 +164,9 @@ def list_chat_sessions(
     """List all durable chat sessions (turns), globally or by chat ID, state, error or tool.
 
     Includes session IDs usable with inspect_chat_session_events, timestamps,
-    tool-call counts and tools used. Never includes prompts or private job data.
+    tool-call counts and tools used. runtime_owner distinguishes a live owner
+    from orphaned SQL state; it is null for non-running sessions.
+    Never includes prompts or private job data.
     """
     clauses, params = [], []
     if chat_id:
@@ -204,6 +207,7 @@ def list_chat_sessions(
     )
     page = _page(rows, offset, limit, "sessions")
     for row in page["sessions"]:
+        row["runtime_owner"] = turn_has_owner(row["id"]) if row["state"] == "running" else None
         row.update(_tool_stats("t.id = ?", [row["id"]]))
         failure = db.one(
             f"SELECT seq FROM chat_turn_events e WHERE e.turn_id = ? AND {_ERROR} ORDER BY seq DESC LIMIT 1",
