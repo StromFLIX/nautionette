@@ -165,6 +165,9 @@ jobs:
           tests/workflow-inputs.spec.js tests/run-retention.spec.js tests/run-statistics.spec.js tests/outputs.spec.js tests/creative-apps.spec.js tests/storage.spec.js tests/navigation.spec.js tests/back-navigation.spec.js tests/miniapps.spec.js
           --workers=1 --reporter=dot,github
 
+      - name: Chat list tiles, tree controls and stable action slots (WebKit)
+        run: npx playwright test tests/chat-row.spec.js tests/chat-tree.spec.js --browser=webkit --workers=1 --reporter=dot,github
+
       - name: MCP sign-in, reminder layout and snoozing (WebKit)
         run: npx playwright test tests/mcp-http-oauth.spec.js --browser=webkit --workers=1 --reporter=dot,github
 
