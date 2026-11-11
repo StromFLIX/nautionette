@@ -20,7 +20,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
@@ -186,6 +186,16 @@ def tls(tmp_path, monkeypatch):
             body = json.loads(data)
             if "id" not in body:
                 return self.reply(202, {})
+            if body["method"] == "tools/call":
+                tokens["tool_calls"] = tokens.get("tool_calls", 0) + 1
+                return self.reply(
+                    200,
+                    {
+                        "jsonrpc": "2.0",
+                        "id": body["id"],
+                        "result": {"content": [{"type": "text", "text": "authenticated"}]},
+                    },
+                )
             result = (
                 {
                     "protocolVersion": "2025-06-18",
@@ -299,3 +309,91 @@ def test_real_https_oauth_backend_gateway_and_refresh_without_cli(client, stack,
         if node.poll() is None:
             node.kill()
         node.communicate(timeout=5)
+
+
+def test_agent_started_before_sign_in_dispatches_once_on_fresh_federation(
+    client,
+    stack,  # noqa: F811
+    tls,
+    live,
+    monkeypatch,
+):
+    from nautionette_backend.config import settings
+
+    from .test_mcp_http_oauth import begin, forward
+
+    origin, tokens, requests = tls
+    native, _, _ = stack
+    tokens["access_token"] = "pre-login-credential"
+    asyncio.run(
+        native.put_config_resources(
+            "mcp.target", [mcp_servers.target_value("example", origin + "/mcp", tokens["access_token"])]
+        )
+    )
+    for _ in range(50):
+        try:
+            if asyncio.run(native.mcp_tools()):
+                break
+        except (httpx.HTTPError, ValueError):
+            pass
+        time.sleep(0.1)
+    else:
+        pytest.fail("Pre-login federation did not become ready")
+    module = (ROOT / "images/agent-sets/default/extensions/nautionette/mcp-transport.ts").as_uri()
+    script = f"""
+      import {{ createMcpTransport }} from {json.dumps(module)};
+      const transport = createMcpTransport({json.dumps(settings.mcp_url)});
+      await transport.connect();
+      console.log('ready');
+      await new Promise(resolve => process.stdin.once('data', resolve));
+      const result = await transport.rpcFresh('tools/call', {{
+        name: 'example_hosted_read', arguments: {{}}
+      }});
+      console.log(JSON.stringify(result));
+      await transport.close();
+      process.stdin.destroy();
+    """
+    agent = subprocess.Popen(  # noqa: S603 - real production transport with synthetic credentials only
+        [shutil.which("node"), "--input-type=module", "-e", script],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    selector = selectors.DefaultSelector()
+    selector.register(agent.stdout, selectors.EVENT_READ)
+    try:
+        assert selector.select(timeout=15), "Pre-login MCP handshake timed out"
+        assert agent.stdout.readline().strip() == "ready", agent.stderr.read()[-2000:]
+        identifier, auth, _ = begin(client, url=origin + "/mcp")
+        challenge = parse_qs(urlsplit(auth["authorization_url"]).query)["code_challenge"][0]
+        assert forward(client, identifier, auth, code=challenge).status_code == 200
+        original = live.gateway.mcp_tools
+        checks = []
+
+        async def warming(url=None, *args, **kwargs):
+            if url is None:
+                checks.append(True)
+                if len(checks) == 1:
+                    return []  # Config acknowledged; federation watch not yet caught up.
+            return await original(url, *args, **kwargs)
+
+        monkeypatch.setattr(live.gateway, "mcp_tools", warming)
+        assert client.get("/api/mcp-oauth/login/" + identifier).json()["status"] == "gateway_pending"
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            if client.get("/api/mcp-oauth/login/" + identifier).json()["status"] == "complete":
+                break
+            time.sleep(0.1)
+        else:
+            pytest.fail("Authenticated federation never became ready")
+        stdout, stderr = agent.communicate("dispatch\n", timeout=20)
+        assert agent.returncode == 0, stderr[-2000:]
+        assert json.loads(stdout)["content"][0]["text"] == "authenticated"
+        assert tokens["tool_calls"] == 1
+        assert len(requests) == 1  # Readiness checking never exchanges the code again.
+    finally:
+        selector.close()
+        if agent.poll() is None:
+            agent.kill()
+        agent.communicate(timeout=5)

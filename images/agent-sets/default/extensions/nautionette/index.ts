@@ -125,7 +125,8 @@ export default async function (pi: ExtensionAPI) {
           if (oauthTools.has(tool.name)) {
             await waitForMcpAuth(rpc, grant || {}, tool.name, _toolCallId, signal);
           }
-          const result = await rpc("tools/call", { name: tool.name, arguments: params ?? {} }, signal);
+          const dispatch = oauthTools.has(tool.name) ? transport.rpcFresh : rpc;
+          const result = await dispatch("tools/call", { name: tool.name, arguments: params ?? {} }, signal);
           const text = renderToolResult(result);
           if (result?.isError) throw new Error(text);
           return { content: [{ type: "text", text }], details: result ?? {} };

@@ -234,7 +234,12 @@ async def probe_target(target: dict[str, Any]) -> dict[str, Any]:
                             continue
                         raise
             label = "Process" if "stdio" in target else "HTTPS server"
-            return {"ok": True, "status": None, "message": f"{label} answered with {len(tools)} tools."}
+            return {
+                "ok": True,
+                "status": None,
+                "message": f"{label} answered with {len(tools)} tools.",
+                "tool_names": [tool["name"] for tool in tools],
+            }
         except (httpx.HTTPError, ValueError, TimeoutError) as error:
             status = error.response.status_code if isinstance(error, httpx.HTTPStatusError) else None
             # Never log exception text: transport/protocol errors can contain

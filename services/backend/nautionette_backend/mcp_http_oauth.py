@@ -521,7 +521,7 @@ def public_profile(profile: dict) -> dict:
     }
 
 
-def store(login: Login, status="gateway_pending"):
+def store(login: Login, tool_names: list[str], status="gateway_pending"):
     prior = db.one("SELECT * FROM mcp_http_oauth WHERE name=?", (login.name,))
     backup = prior
     if prior and prior["revision"] == login.revision:
@@ -532,6 +532,7 @@ def store(login: Login, status="gateway_pending"):
         "previous": login.previous,
         "operation": "connect",
         "backup": backup,
+        "tool_names": tool_names,
     }
     db.execute(
         "INSERT INTO mcp_http_oauth VALUES (?,?,?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET "
@@ -558,7 +559,29 @@ def target(name, value):
     return mcp_servers.target_value(name, value["profile"]["url"], value["tokens"]["access_token"])
 
 
-def activate(row, value):
+async def activate(row, value) -> bool:
+    # Config-store acknowledgement/readback is not data-plane readiness. A
+    # fresh federated MCP session must initialize and list this target's tools
+    # before held calls are released. Never call a business tool here or retry
+    # an OAuth exchange to check readiness.
+    if value["tokens"]["expires_at"] <= time.time():
+        return False
+    try:
+        if await current_target(row["name"]) != target(row["name"], value):
+            return False
+        names = value.get("tool_names")
+        if names is None:  # Pending credentials written by an older backend.
+            verdict = await mcp_servers.probe_http_gateway(
+                row["name"], value["profile"]["url"], value["tokens"]["access_token"]
+            )
+            if not verdict["ok"]:
+                return False
+            names = value["tool_names"] = verdict["tool_names"]
+        tools = await gateway.mcp_tools(timeout=10)
+        if not names or not set(names).issubset(tool["name"] for tool in tools):
+            return False
+    except (HTTPException, httpx.HTTPError, ValueError, TimeoutError):
+        return False  # Leave gateway_pending; poll/recovery may check again.
     value.pop("backup", None)
     value["previous"] = None
     db.execute(
@@ -568,6 +591,7 @@ def activate(row, value):
     for login in _sessions.values():
         if login.name == row["name"] and login.revision == row["revision"]:
             login.complete, login.tokens, login.previous = True, None, None
+    return True
 
 
 def updated_target(name, previous, expected):
@@ -633,7 +657,7 @@ async def poll(identifier: str) -> dict:
     )
     if not verdict["ok"]:
         raise HTTPException(400, verdict["message"])
-    store(login)
+    store(login, verdict["tool_names"])
     try:
         if current != expected:
             await gateway.put_config_resources("mcp.target", [expected])
@@ -642,7 +666,8 @@ async def poll(identifier: str) -> dict:
             502, "Gateway update is uncertain; retry connection checking, not the OAuth code"
         ) from exc
     row = db.one("SELECT * FROM mcp_http_oauth WHERE name=? AND revision=?", (login.name, login.revision))
-    activate(row, unseal(row["secret"], namespace=NAMESPACE))
+    if not await activate(row, unseal(row["secret"], namespace=NAMESPACE)):
+        return {"status": "gateway_pending", "message": "Waiting for authenticated MCP federation readiness."}
     db.execute("DELETE FROM mcp_cli_oauth WHERE name=?", (login.name,))
     forget_catalog()
     bus.publish("mcp.server.changed", {"server": login.name, "configured": True})
@@ -664,7 +689,7 @@ async def cancel(identifier: str):
         )
         if await current_target(login.name) == target(login.name, value):
             # A lost gateway reply may have actually completed the connection.
-            activate(row, value)
+            await activate(row, value)
     login.tokens, login.verifier, login.previous = None, "", None
 
 
@@ -753,7 +778,7 @@ async def refresh_once():
             if row["status"] == "gateway_pending":
                 if current == expected:
                     updated_target(name, value.get("previous"), expected)
-                    activate(row, value)
+                    await activate(row, value)
                 elif current != value.get("previous"):
                     discard(row)  # External edit owns the target now; never overwrite it.
                 elif value["operation"] == "refresh":
@@ -762,7 +787,7 @@ async def refresh_once():
                     else:
                         await gateway.put_config_resources("mcp.target", [expected])
                         updated_target(name, current, expected)
-                        activate(row, value)
+                        await activate(row, value)
                 continue  # New connections are not published without an explicit poll.
             if current != expected:
                 discard(row)
@@ -804,7 +829,7 @@ async def refresh_once():
             desired = target(name, value)
             await gateway.put_config_resources("mcp.target", [desired])
             updated_target(name, current, desired)
-            activate(row, value)
+            await activate(row, value)
         except (HTTPException, httpx.HTTPError):
             # Never log exception/provider bodies; they may include credentials.
             if not decoded:

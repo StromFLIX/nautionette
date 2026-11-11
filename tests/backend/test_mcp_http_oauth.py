@@ -71,6 +71,8 @@ def hosted(backend, live, monkeypatch):
             assert "stdio" not in target
             assert target["policies"]["backendAuth"]["key"]["value"].startswith("access-token-")
             return [{"name": "read", "inputSchema": {"type": "object"}}]
+        if url is None and "example" in backend.gateway.resources.get("mcp.target", {}):
+            return [{"name": "read", "inputSchema": {"type": "object"}}]
         return await original_tools(url, extra, timeout=timeout)
 
     monkeypatch.setattr(live.gateway, "mcp_tools", tools)
@@ -145,6 +147,47 @@ def test_hosted_pkce_exchange_and_mcp_install_never_expose_credentials(client, b
     assert forward(client, identifier, auth).json() == {"status": "forwarded"}
     assert len(hosted.calls) == 1
     assert oauth._sessions[identifier].verifier == ""
+
+
+@pytest.mark.parametrize("not_ready", ["missing_tools", "handshake_failed"])
+@pytest.mark.asyncio
+async def test_token_and_config_ack_do_not_release_gate_until_federation_ready(
+    client, backend, live, hosted, monkeypatch, not_ready
+):
+    from nautionette_backend import chat_outputs, mcp_auth_wait
+
+    monkeypatch.setattr(mcp_auth_wait, "time", oauth.time)
+    chat = backend.db.create_chat("Waiting for OAuth", "default")
+    message, _ = backend.db.accept_chat_message(chat["id"], "Use read", "oauth-ready-turn")
+    identifier, auth, _ = begin(client)
+    assert forward(client, identifier, auth).status_code == 200
+    # Token exchange alone must not publish the connection or release demand.
+    assert not backend.db.query("SELECT * FROM mcp_http_oauth")
+    original = live.gateway.mcp_tools
+    ready = False
+
+    async def federated(url=None, *args, **kwargs):
+        if url is None and not ready:
+            if not_ready == "handshake_failed":
+                raise httpx.ConnectError("Synthetic data-plane not ready")
+            return [{"name": "unrelated_tool"}]
+        return await original(url, *args, **kwargs)
+
+    monkeypatch.setattr(live.gateway, "mcp_tools", federated)
+    assert client.get(BASE + "/login/" + identifier).json()["status"] == "gateway_pending"
+    assert backend.db.one("SELECT status FROM mcp_http_oauth")["status"] == "gateway_pending"
+    assert not oauth._sessions[identifier].complete
+    mcp_auth_wait.remember_tools([{"name": "read", "server": "example"}])
+    with chat_outputs.publication_grant(chat["id"], message["id"]) as grant:
+        demand = {**grant, "tool": "read", "tool_call_id": "read-1"}
+        assert mcp_auth_wait.gate(demand)["status"] == "waiting"
+        await oauth.refresh_once()  # Readback of saved config must not bypass readiness.
+        assert mcp_auth_wait.gate(demand)["status"] == "waiting"
+        assert not oauth._sessions[identifier].complete
+        ready = True
+        assert client.get(BASE + "/login/" + identifier).json()["status"] == "complete"
+        assert mcp_auth_wait.gate(demand)["status"] == "ready"
+    assert len(hosted.calls) == 1  # No authorization-code replay.
 
 
 def test_discovery_rejects_resource_issuer_confidential_and_weak_pkce(client, hosted):
@@ -251,6 +294,35 @@ async def test_refresh_rotation_is_sealed_before_gateway_and_survives_lost_updat
 
 
 @pytest.mark.asyncio
+async def test_rotated_token_remains_pending_until_federated_handshake_succeeds(
+    client, backend, live, hosted, monkeypatch
+):
+    connect(client)
+    hosted.clock[0] += 260
+    hosted.token.update(access_token="access-token-2", refresh_token="refresh-token-2")
+    original = live.gateway.mcp_tools
+    ready = False
+
+    async def warming(url=None, *args, **kwargs):
+        if url is None and not ready:
+            raise httpx.ConnectError("Federation is still connecting")
+        return await original(url, *args, **kwargs)
+
+    monkeypatch.setattr(live.gateway, "mcp_tools", warming)
+    await oauth.refresh_once()
+    row = backend.db.one("SELECT * FROM mcp_http_oauth")
+    assert row["status"] == "gateway_pending"
+    assert unseal(row["secret"], namespace=oauth.NAMESPACE)["tokens"]["refresh_token"] == "refresh-token-2"
+    await oauth.refresh_once()
+    assert backend.db.one("SELECT status FROM mcp_http_oauth")["status"] == "gateway_pending"
+    assert len(hosted.calls) == 2
+    ready = True
+    await oauth.refresh_once()
+    assert backend.db.one("SELECT status FROM mcp_http_oauth")["status"] == "connected"
+    assert len(hosted.calls) == 2  # Rotating refresh token was consumed only once.
+
+
+@pytest.mark.asyncio
 async def test_failed_or_crashed_refresh_requires_login_and_removes_only_owned_target(
     client, backend, hosted
 ):
@@ -296,7 +368,9 @@ def test_transient_gateway_initialize_reuses_route_and_exchanged_token(
     original = live.gateway.mcp_tools
     attempts = []
 
-    async def transient(url, *args, **kwargs):
+    async def transient(url=None, *args, **kwargs):
+        if url is None:
+            return await original(url, *args, **kwargs)
         route = next(iter(backend.gateway.resources["traffic.route"].values()))
         target = route["backends"][0]["mcp"]["targets"][0]
         attempts.append((url, target["policies"]["backendAuth"]["key"]["value"]))
