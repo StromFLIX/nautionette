@@ -20,10 +20,13 @@ Re-export the 512-point artboard at scale 2 after changing the logo.
 ## Desktop (Windows, Linux and macOS)
 
 `desktop-icon.svg` / `desktop-icon.png` are separate VectorCraft exports for the
-small OS icon slots. The original black mark is scaled **156.5% around (256, 256)**
-on the same 512-point white artboard, occupying about **90%**, rather than iOS's
-58%. The logo geometry, white negative space and mobile exports are unchanged.
-Export at scale 2 for the 1024 × 1024 PNG. Do not copy iOS's padded icon back here.
+small OS icon slots. The mark is scaled **156.5% around (256, 256)** on a
+512-point **transparent** artboard, occupying about **90%**, rather than iOS's
+58%. The black tile has transparent outer margins/corners and an opaque white
+glyph, like Android; there is no white canvas, border or matte. The glyph's open
+tail ends flush with the tile's bottom edge. Mobile exports are unchanged.
+Export at scale 2 for the 1024 × 1024 RGBA PNG. Preserve alpha when exporting and
+do not copy iOS's opaque padded icon back here.
 
 - `../../build/icon.png`: desktop export in electron-builder's default build
   resources directory; it derives multi-resolution Windows ICO and other OS icons.
@@ -31,7 +34,8 @@ Export at scale 2 for the 1024 × 1024 PNG. Do not copy iOS's padded icon back h
   for Electron's runtime BrowserWindow/taskbar icon, not just the installer.
 
 Both copies are synchronized from `branding/native/desktop-icon.png`. Pixel
-regressions measure the actual mark at 16/24/32/48/256/1024px to catch excess padding.
+regressions measure the actual mark at 16/24/32/48/256/1024px to catch excess
+padding, lost transparency, exterior white fringes and a transparent inner glyph.
 
 ## Android
 

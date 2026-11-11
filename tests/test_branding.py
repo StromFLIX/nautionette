@@ -84,14 +84,24 @@ def test_legacy_and_adaptive_android_icons_use_the_same_visible_scale():
 def test_desktop_icon_fills_os_icon_slots_without_changing_mobile_artwork(size):
     with Image.open(ROOT / "branding/native/desktop-icon.png") as source:
         assert source.size == (1024, 1024)
-        icon = source.convert("RGB").resize((size, size), Image.Resampling.LANCZOS)
-    # Measure the actual black mark, not the opaque-white canvas. Keep about
-    # 5% padding per side even at Windows taskbar/title-bar sizes.
-    dark = icon.convert("L").point(lambda value: 255 if value < 128 else 0)
-    left, top, right, bottom = dark.getbbox()
+        icon = source.convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
+    # Measure the actual tile, not an opaque canvas. Its outer margin and
+    # corners must be transparent; the Android-style white glyph stays opaque.
+    alpha = icon.getchannel("A")
+    left, top, right, bottom = alpha.point(lambda value: 255 if value >= 128 else 0).getbbox()
     assert 0.85 <= (right - left) / size <= 0.96
     assert 0.85 <= (bottom - top) / size <= 0.96
     assert left > 0 and top > 0 and right < size and bottom < size
+    for point in [(0, 0), (size - 1, 0), (0, size - 1), (size - 1, size - 1)]:
+        assert icon.getpixel(point)[3] == 0
+    glyph_pixel = icon.getpixel((size // 2, size * 2 // 5))
+    assert min(glyph_pixel[:3]) >= 250 and glyph_pixel[3] == 255  # Allow tiny-slot resampling.
+    tile_pixel = icon.getpixel((size // 5, size // 2))
+    assert max(tile_pixel[:3]) <= 3 and tile_pixel[3] == 255
+    # No white matte/fringe along the outside of the black upper tile. White
+    # is restricted to the glyph, even when composited on a dark taskbar.
+    upper = icon.crop((0, 0, size, size // 2))
+    assert all(max(r, g, b) <= 3 for r, g, b, a in upper.get_flattened_data() if 0 < a < 255)
     with Image.open(ROOT / "branding/native/app-icon.png") as source:
         mobile_dark = source.convert("L").point(lambda value: 255 if value < 128 else 0)
         x1, _, x2, _ = mobile_dark.getbbox()

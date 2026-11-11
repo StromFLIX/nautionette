@@ -28,8 +28,10 @@ recovery start with Denkzeug. The 125% interface-size default is retained.
 ## Native artwork
 
 `native/` holds the VectorCraft-exported artwork and 1024/432/192px PNGs.
-iOS uses the padded square; desktop uses a separate 90%-occupancy export so the
-mark stays legible in small Windows taskbar and other OS icon slots. Android uses a separate transparent white
+iOS uses the opaque padded square; desktop uses a separate 90%-occupancy export
+with transparent outer margins/corners and an opaque white glyph on the black
+tile (no white matte), so the mark stays legible in small Windows taskbar and
+other OS icon slots. Android uses a separate transparent white
 negative-space glyph on a full-bleed black adaptive background, with no baked-in
 outer corners. Its open tail intentionally extends to the launcher's mask.
 After changing the canonical logo, re-export all platform variants with the
