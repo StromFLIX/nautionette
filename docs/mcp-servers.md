@@ -109,8 +109,12 @@ MCP tools. Expiry alone never interrupts the user. Saved tool schemas remain
 available so an agent can request a disconnected server's tools. Only an actual
 tool call creates a compact, provider-neutral **Login** dialog in the workspace.
 The call is held **before dispatch**, for up to **3 minutes**, while the user signs
-in with the saved settings. Once credentials are active in the gateway, the tool
-runs normally and returns its result to the agent. **Skip**, dismiss, **Cancel** or
+in with the saved settings. Receiving tokens or acknowledging the gateway config
+write does not release the call. The connection remains `gateway_pending` until
+a fresh session on the federated MCP endpoint completes initialization and lists
+the target's authenticated tools. This also applies to refresh and lost-write
+recovery. The agent then dispatches through a separate fresh MCP session, never
+the pre-login session's cached upstream connection, and closes it afterwards. **Skip**, dismiss, **Cancel** or
 **Snooze** fails the held call without executing it; timeout and stopped turns
 cannot resume it either. No possibly-executed mutation is automatically replayed.
 Cards still provide manual **Sign in again** without opening the setup form.
@@ -140,7 +144,9 @@ Removing a live server also stops refresh and removes its gateway credential.
 Revoke provider consent separately if needed. External gateway edits detach
 OAuth management and are not overwritten by a background refresh.
 
-Deploy the updated **backend, frontend and desktop build**; use the existing
+Deploy the updated **backend and default agent image** for the readiness gate;
+existing running agents retain their old transport until their turn ends. The
+OAuth UI also needs the updated **frontend and desktop build**; use the existing
 compatible agentgateway. Unlike CLI OAuth, HTTPS OAuth does not depend on the
 private CLI helper. The staging check verifies both runtime modes and live
 WorkIQ metadata discovery without signing into an account. Your actual tenant's

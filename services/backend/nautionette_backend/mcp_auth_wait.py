@@ -80,7 +80,8 @@ def gate(payload: dict) -> dict:
     if not connection:
         return {"status": "failed", "message": "MCP connection removed; tool was not called."}
     if connection["status"] == "connected" and connection["expires_at"] > time.time():
-        # A connected status is published only after credentials reach the gateway.
+        # Connected is published only after a fresh federated MCP handshake and
+        # tool discovery succeed, not merely when token/config storage succeeds.
         if wait and wait["state"] == "waiting":
             db.execute("UPDATE mcp_oauth_waits SET state='ready' WHERE id=?", (wait["id"],))
             bus.publish("mcp.oauth.resolved", {"server": server})

@@ -88,6 +88,45 @@ test('cancellation prevents both initial handshake and tool execution', async ()
   assert.equal(requests.length, 0)
 })
 
+test('authenticated dispatch uses a fresh session without disturbing the pre-login session', async () => {
+  const calls = [], deleted = []
+  let sessions = 0
+  const transport = createMcpTransport('http://gateway/mcp', async (_url, options) => {
+    if (options.method === 'DELETE') {
+      deleted.push(options.headers['mcp-session-id'])
+      return new Response(null, { status: 204 })
+    }
+    const request = JSON.parse(options.body)
+    if (request.method === 'initialize') {
+      sessions++
+      return Response.json({ result: {} }, { headers: { 'mcp-session-id': `session-${sessions}` } })
+    }
+    if (request.method === 'notifications/initialized') return new Response(null, { status: 202 })
+    calls.push([request.method, options.headers['mcp-session-id']])
+    return Response.json({ result: {} })
+  })
+  await transport.connect() // Established before the OAuth token reached federation.
+  await transport.rpcFresh('tools/call', { name: 'write_once' })
+  await transport.rpc('tools/list')
+  assert.deepEqual(calls, [['tools/call', 'session-2'], ['tools/list', 'session-1']])
+  assert.deepEqual(deleted, ['session-2'])
+})
+
+for (const status of [400, 500]) test(`fresh authenticated dispatch HTTP ${status} is never replayed`, async () => {
+  let calls = 0, deleted = 0
+  const transport = createMcpTransport('http://gateway/mcp', async (_url, options) => {
+    if (options.method === 'DELETE') { deleted++; throw new Error('cleanup failed') }
+    const request = JSON.parse(options.body)
+    if (request.method === 'initialize') return Response.json({ result: {} }, { headers: { 'mcp-session-id': 'fresh' } })
+    if (request.method === 'notifications/initialized') return new Response(null, { status: 202 })
+    calls++
+    return new Response('', { status })
+  })
+  await assert.rejects(transport.rpcFresh('tools/call', { name: 'write_once' }), new RegExp(`HTTP ${status}`))
+  assert.equal(calls, 1)
+  assert.equal(deleted, 1)
+})
+
 const gateResult = status => ({ content: [{ type: 'text', text: JSON.stringify({ status }) }] })
 test('OAuth gate holds dispatch until sign-in, then permits exactly one tool call', async () => {
   const requests = [], statuses = ['waiting', 'ready']

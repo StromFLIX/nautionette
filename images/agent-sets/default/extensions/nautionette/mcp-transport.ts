@@ -87,8 +87,28 @@ export function createMcpTransport(url: string, fetcher: typeof fetch = fetch) {
     }
   }
 
+  async function close() {
+    if (!sessionId) return;
+    try {
+      const response = await fetcher(url, { method: "DELETE", headers: {
+        accept: "application/json, text/event-stream",
+        "mcp-session-id": sessionId, "mcp-protocol-version": "2025-06-18",
+      }, signal: AbortSignal.timeout(5000) });
+      await response.body?.cancel();
+    } catch { /* Best effort; cleanup must not hide an operation's outcome. */ }
+  }
+
+  async function rpcFresh(method: string, params: Record<string, any>, signal?: AbortSignal) {
+    // Federation sessions may retain the upstream connection/credentials from
+    // before OAuth finished. Never dispatch an authenticated call through that
+    // old snapshot or reset a shared session underneath concurrent tool calls.
+    const fresh = createMcpTransport(url, fetcher);
+    try { return await fresh.rpc(method, params, signal); }
+    finally { await fresh.close(); }
+  }
+
   return {
-    rpc, connect,
+    rpc, rpcFresh, connect, close,
     setReadOnlyTools(names: string[]) { readonlyTools = new Set(names); },
   };
 }
