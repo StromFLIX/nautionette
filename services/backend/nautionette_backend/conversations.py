@@ -12,7 +12,7 @@ from typing import Any
 
 from . import chat_attachments, chat_sessions, git_authorship, projects, subagents
 from .agent import Timeline, stream_agent
-from .background import is_draining, spawn
+from .background import is_draining, run_blocking, spawn
 from .chat_titles import refine_chat_title
 from .clients import broker
 from .db import db
@@ -291,7 +291,7 @@ async def _run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                 "Co-authored-by trailers with git log -1 --format=full before pushing. "
                 "Do not amend or rewrite existing commits merely to apply authorship settings.\n"
             )
-        job.update(projects.prepare_worktrees(chat_id, job.get("project_ids", [])))
+        job.update(await run_blocking(projects.prepare_worktrees, chat_id, job.get("project_ids", [])))
         job["project_credentials"] = await credentials.start()
         # Owned by this turn (not the global background task set). Cancel and
         # join it before container cleanup and revocation, including on shutdown.

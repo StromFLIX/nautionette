@@ -26,6 +26,7 @@ from . import (
     output_maintenance,
     pi_packages,
     runs,
+    worktree_maintenance,
 )
 from .backend_mcp import BackendMCP
 from .background import drain, spawn
@@ -62,6 +63,7 @@ async def lifespan(_: FastAPI):
     spawn(recover_chat_agents(), name="chat-agent-recovery")
     spawn(github_mentions.consume(), name="github-mention-inbox")
     spawn(output_maintenance.run(), name="output-storage-maintenance")
+    spawn(worktree_maintenance.run(), name="worktree-retention")
     spawn(mcp_oauth.maintenance(), name="mcp-oauth-maintenance")
     spawn(miniapps.maintenance(), name="miniapp-maintenance")
     spawn(search.run(), name="conversation-search-indexer")

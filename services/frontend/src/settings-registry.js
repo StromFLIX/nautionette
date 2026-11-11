@@ -78,6 +78,7 @@ export const SETTINGS_SECTIONS = [
     entries: [
       entry('github-app', 'GitHub connection', 'Connect an account and manage repository access.', 'app installation permissions organization'),
       entry('repositories', 'Repositories', 'Manage local projects and retry downloads.', 'git clone source code files'),
+      entry('worktree-retention', 'Worktree retention', 'Configure automatic cleanup of clean pushed and changed worktrees after inactivity.', 'disk storage cleanup days retention project workspace unpushed delete'),
       entry('available-repositories', 'Available repositories', 'Add a repository from your GitHub installation.', 'search GitHub download')
     ]
   },

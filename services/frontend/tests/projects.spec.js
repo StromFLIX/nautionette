@@ -16,6 +16,8 @@ async function mockProjects (context) {
     repositories: { [teamConnection.id]: [repository], [personalConnection.id]: [privateRepository] },
     repositoryRequests: [], added: [],
     projects: [], sent: [], saved: null, downloaded: false,
+    retention: { worktree_cleanup_enabled: true, worktree_cleanup_clean_enabled: true, worktree_cleanup_clean_days: 3, worktree_cleanup_changed_enabled: true, worktree_cleanup_changed_days: 30, worktree_cleanup_interval_hours: 1, worktree_cleanup_batch_size: 50 },
+    retentionSaves: [],
     chat: { id: 'alpha', title: 'Project work', agent_set: 'default', model: 'test/model', project_ids: [] },
     messages: [],
   }
@@ -30,6 +32,16 @@ async function mockProjects (context) {
     if (path === '/api/workflows') return reply({ workflows: [] })
     if (path === '/api/drafts') return reply({ drafts: [] })
     if (path === '/api/runs') return reply({ runs: [] })
+    if (path === '/api/settings/worktrees') return reply({ policy: state.retention, last_run: null })
+    if (path === '/api/settings/worktrees/cleanup') {
+      expect(data()).toEqual({ dry_run: true })
+      return reply({ checked: 5, eligible: 2, active: 1, errors: 0 })
+    }
+    if (path === '/api/settings' && method === 'PUT') {
+      state.retentionSaves.push(data())
+      Object.assign(state.retention, data())
+      return reply({ settings: state.retention })
+    }
     if (path === '/api/projects/github-app') {
       return reply(state.app)
     }
@@ -138,6 +150,28 @@ for (const width of [1440, 320]) {
     await expect(personal.getByRole('textbox')).toHaveValue('')
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     expect(errors).toEqual([])
+  })
+}
+
+for (const width of [1440, 320]) {
+  test(`worktree retention switches, days and saved-policy preview at ${width}px`, async ({ page, context }) => {
+    const state = await mockProjects(context)
+    await page.setViewportSize({ width, height: 1000 })
+    await page.goto('/settings/projects#worktree-retention')
+    const pane = page.locator('#worktree-retention')
+    await expect(pane.getByLabel('Clean, pushed retention (days)')).toHaveValue('3')
+    await expect(pane.getByLabel('Changed or unpushed retention (days)')).toHaveValue('30')
+    await expect(pane.getByText('permanently discards local edits', { exact: false })).toBeVisible()
+    await pane.getByLabel('Clean, pushed retention (days)').fill('7')
+    await pane.getByLabel('Changed or unpushed retention (days)').fill('45')
+    await pane.getByLabel('Check interval (hours)').fill('2')
+    await pane.getByLabel('Delete worktrees with uncommitted or unpushed changes').uncheck()
+    await pane.getByRole('button', { name: 'Save worktree retention' }).click()
+    await expect(pane.getByRole('status').filter({ hasText: 'retention saved' })).toBeVisible()
+    expect(state.retentionSaves).toEqual([{ ...state.retention, worktree_cleanup_clean_days: 7, worktree_cleanup_changed_days: 45, worktree_cleanup_changed_enabled: false, worktree_cleanup_interval_hours: 2 }])
+    await pane.getByRole('button', { name: 'Preview saved policy' }).click()
+    await expect(pane.getByRole('status').filter({ hasText: 'Preview: 5 checked, 2 eligible' })).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   })
 }
 

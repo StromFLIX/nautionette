@@ -113,6 +113,7 @@
       <button class="btn btn--icon btn--sm" aria-label="Next repositories" :disabled="page * 50 >= total || repositoryLoading" @click="loadRepositories(page + 1)"><span class="material-icons">chevron_right</span></button>
     </div>
   </div>
+  <WorktreeRetention />
 </template>
 
 <script setup>
@@ -120,6 +121,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useQuasar } from 'quasar'
 import { useRoute } from 'vue-router'
 import { api, server } from '../../api'
+import WorktreeRetention from './WorktreeRetention.vue'
 
 const $q = useQuasar()
 const route = useRoute()

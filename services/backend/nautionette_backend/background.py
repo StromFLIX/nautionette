@@ -34,6 +34,21 @@ def spawn(coro: Coroutine[Any, Any, Any], name: str, *, chat_turn: bool = False)
     return task
 
 
+async def run_blocking(function, *args):
+    """Finish filesystem work before cancellation can release its reservations."""
+    task = asyncio.create_task(asyncio.to_thread(function, *args))
+    cancelled = False
+    while True:
+        try:
+            result = await asyncio.shield(task)
+            break
+        except asyncio.CancelledError:
+            cancelled = True
+    if cancelled:
+        raise asyncio.CancelledError
+    return result
+
+
 def begin_draining() -> None:
     """Fence chat admission/queue advancement before waiting for active turns."""
     global _draining

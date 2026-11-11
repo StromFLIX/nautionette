@@ -818,6 +818,44 @@ picker beside the model and tool selectors chooses which projects a message expo
 Selections are captured in the durable outbox and saved with the accepted message;
 retries cannot silently change that selection.
 
+### Worktree retention
+
+**Settings > Projects > Worktree retention** controls whole-worktree cleanup. Defaults:
+
+| Setting | Default |
+| --- | --- |
+| Automatic cleanup | Enabled |
+| Delete clean, pushed worktrees | Enabled, after 3 inactive days |
+| Delete changed or unpublished worktrees | Enabled, after 30 inactive days |
+| Check interval | 1 hour |
+| Maximum worktrees checked per pass | 50 |
+
+Each switch and number is editable without a redeploy. The changed-worktree rule
+**permanently discards local edits and unpublished work**. A clean worktree has no
+staged, unstaged or nonignored untracked changes, and its HEAD must be reachable
+from local `origin` tracking refs. These refs are cached evidence of a push, not a
+fresh remote audit; the initial chat revision alone is never proof of publication.
+Clean-worktree deletion also removes ignored files, not only build dependencies.
+
+Age follows last worktree use, including preparation and branch snapshots, rather
+than creation. Legacy worktrees use existing chat activity and shallow Git/root
+timestamps conservatively. Active agents, surviving containers, queued turns and
+branch snapshots are protected with shared cross-process locks and broker checks.
+Git failures, timeouts, unsafe paths and unavailable broker inventory fail closed.
+Each pass considers up to the configured batch size (default 50 worktrees) and
+rotates through larger collections.
+No dependency inventory, recursive content scan, repository-wide GC or broad Git
+prune is involved. Recursive removal only happens after a worktree is selected.
+
+Deletion keeps the shared clone, chat history, attachments and outputs. A later
+turn recreates a fresh worktree; it does not restore discarded edits. Files are
+atomically retired before removal, and interrupted file removal resumes on a later
+pass. The Settings panel includes a saved-policy preview and last-check counters.
+Authenticated APIs: `GET /api/settings/worktrees` and
+`POST /api/settings/worktrees/cleanup` (`{"dry_run":true}` by default; deletion
+requires `{"dry_run":false,"confirm":true}`). Retention keys are saved through the
+normal `PUT /api/settings` API with the `worktree_cleanup_` prefix.
+
 ### App Setup
 
 1. Open Settings > Projects and choose **Connect GitHub**. The public HTTPS instance

@@ -22,6 +22,13 @@ DEFAULTS = {
     "git_human_email": "",
     "git_automation_name": NAME,
     "git_automation_email": "nautionette@users.noreply.github.com",
+    "worktree_cleanup_enabled": True,
+    "worktree_cleanup_clean_enabled": True,
+    "worktree_cleanup_clean_days": 3,
+    "worktree_cleanup_changed_enabled": True,
+    "worktree_cleanup_changed_days": 30,
+    "worktree_cleanup_interval_hours": 1,
+    "worktree_cleanup_batch_size": 50,
 }
 
 

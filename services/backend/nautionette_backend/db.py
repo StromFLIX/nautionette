@@ -319,6 +319,12 @@ CREATE TABLE IF NOT EXISTS projects (
     status TEXT NOT NULL,
     error TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS project_worktree_activity (
+    project_id TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    last_used_at REAL NOT NULL,
+    PRIMARY KEY (project_id, chat_id)
+);
 CREATE TABLE IF NOT EXISTS project_leases (
     project_id TEXT NOT NULL REFERENCES projects(id),
     turn_id TEXT NOT NULL REFERENCES chat_turns(id) ON DELETE CASCADE,

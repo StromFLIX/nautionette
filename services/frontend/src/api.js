@@ -83,6 +83,8 @@ export const api = {
   events: () => request('/api/events/recent'),
   settings: () => request('/api/settings'),
   saveSettings: (payload) => request('/api/settings', { method: 'PUT', ...json(payload) }),
+  worktreeRetention: () => request('/api/settings/worktrees'),
+  previewWorktreeCleanup: () => request('/api/settings/worktrees/cleanup', { method: 'POST', ...json({ dry_run: true }) }),
   outputStorage: (signal) => request('/api/settings/storage', { signal }),
   saveOutputStorage: (payload) => request('/api/settings/storage', { method: 'PUT', ...json(payload) }),
   storedOutputs: (params = {}, signal) => request(`/api/settings/storage/outputs?${new URLSearchParams(params)}`, { signal }),

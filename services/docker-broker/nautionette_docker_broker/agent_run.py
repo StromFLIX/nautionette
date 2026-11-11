@@ -294,9 +294,13 @@ def _run(
         project_ids = job.get("project_ids", [])
         if project_ids and tuple(map(int, daemon.client().api._version.split("."))) < (1, 45):
             raise RuntimeError("Project isolation requires Docker Engine 26+ with API 1.45+")
-        project_mounts = projects.mounts(project_ids, job.get("chat_id", ""))
+        if project_ids:
+            from nautionette.chat_sessions import worktree_lock
+
+            session_claim.enter_context(worktree_lock(job["chat_id"], wait_seconds=30))
         projects.claim(project_ids, job.get("chat_id", ""))
         claimed_projects = project_ids
+        project_mounts = projects.mounts(project_ids, job.get("chat_id", ""))
         package_runtime = job.get("package_runtime", [])
         if not isinstance(package_runtime, list) or len(package_runtime) > 20:
             raise ValueError("Invalid package runtime configuration")

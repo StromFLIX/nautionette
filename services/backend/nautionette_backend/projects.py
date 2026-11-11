@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 import jwt
 from fastapi import HTTPException
+from nautionette.chat_sessions import worktree_lock
 
 from .background import spawn
 from .clients.http import shared
@@ -368,12 +369,22 @@ def prepare_worktrees(chat_id: str, project_ids: list[str]) -> dict[str, Any]:
         raise ValueError("Invalid chat ID")
     baselines = {}
     remotes = {}
-    for project_id in selection(project_ids):
-        directory = PROJECTS_DIR / ".sessions" / project_id / chat_id
-        if any(parent.is_symlink() for parent in (directory, directory.parent, directory.parent.parent)):
-            raise ValueError("Project worktrees cannot be symlinks")
-        directory.mkdir(parents=True, exist_ok=True)
-        project = db.one("SELECT default_branch, full_name FROM projects WHERE id = ?", (project_id,))
-        baselines[project_id] = project["default_branch"]
-        remotes[project_id] = project["full_name"]
+    with worktree_lock(chat_id, wait_seconds=30):
+        for project_id in selection(project_ids):
+            directory = PROJECTS_DIR / ".sessions" / project_id / chat_id
+            if any(parent.is_symlink() for parent in (directory, directory.parent, directory.parent.parent)):
+                raise ValueError("Project worktrees cannot be symlinks")
+            directory.mkdir(parents=True, exist_ok=True)
+            touch_worktree(project_id, chat_id)
+            project = db.one("SELECT default_branch, full_name FROM projects WHERE id = ?", (project_id,))
+            baselines[project_id] = project["default_branch"]
+            remotes[project_id] = project["full_name"]
     return {"project_baselines": baselines, "project_remotes": remotes}
+
+
+def touch_worktree(project_id: str, chat_id: str, *, connection=None) -> None:
+    (connection if connection is not None else db).execute(
+        "INSERT INTO project_worktree_activity (project_id, chat_id, last_used_at) VALUES (?,?,?) "
+        "ON CONFLICT(project_id, chat_id) DO UPDATE SET last_used_at = excluded.last_used_at",
+        (project_id, chat_id, time.time()),
+    )

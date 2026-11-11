@@ -126,6 +126,7 @@ def branch(chat_id: str) -> dict:
                 if resolved is None:
                     continue
                 working, metadata = resolved
+                projects.touch_worktree(project_id, chat_id, connection=connection)
                 common = projects.checkout(project_id) / ".git"
                 destination = working.parent / target_id
                 if destination.exists() or destination.is_symlink():

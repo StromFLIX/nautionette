@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from .. import agent_profiles
+from .. import agent_profiles, worktree_maintenance, worktree_policy
 from .. import catalog as catalog_service
 from ..db import db
 from ..events import bus
@@ -37,6 +37,10 @@ async def put_settings(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
     values = {
         key: None if value in (None, "") else value for key, value in payload.items() if key in baseline
     }
+    try:
+        worktree_policy.validate(values)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     git_keys = GIT_AUTHORSHIP_DEFAULTS.keys() & values.keys()
     if git_keys:
         merged = {key: runtime(key) for key in GIT_AUTHORSHIP_DEFAULTS}
@@ -94,6 +98,22 @@ async def put_settings(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:
     forget_catalog()
     bus.publish("settings.changed", {})
     return _current()
+
+
+@router.get("/api/settings/worktrees")
+async def worktree_status() -> dict:
+    return worktree_maintenance.status()
+
+
+@router.post("/api/settings/worktrees/cleanup")
+async def cleanup_worktrees(payload: dict = Body(...)) -> dict:
+    dry_run = payload.get("dry_run", True)
+    if type(dry_run) is not bool or (not dry_run and payload.get("confirm") is not True):
+        raise HTTPException(422, "Use a boolean dry_run and confirm=true to delete eligible worktrees")
+    try:
+        return await worktree_maintenance.sweep(dry_run=dry_run)
+    except Exception as exc:
+        raise HTTPException(503, "Worktree cleanup unavailable; no idle state was assumed") from exc
 
 
 @router.get("/api/catalog")
