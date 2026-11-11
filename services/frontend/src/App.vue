@@ -1,5 +1,6 @@
 <template>
-  <div class="app-frame">
+  <div class="app-frame" :class="{ 'app-frame--desktop-overlay': desktopOverlay }">
+    <div v-if="desktopOverlay" class="desktop-titlebar" aria-hidden="true" />
     <EnvironmentBanner />
     <div v-if="['reconnecting', 'failed'].includes(store.liveStatus) && !store.needsToken" class="connection-notice" role="status" aria-label="Live connection">
       {{ store.liveStatus === 'failed' ? 'Live updates are disconnected.' : 'Connection interrupted. Reconnecting automatically…' }}
@@ -78,6 +79,7 @@ import { currentTokens, preferences } from './preferences'
 import { syncSystemBars } from './system-bars'
 import { useChatActivity } from './chat-activity'
 
+const desktopOverlay = globalThis.nautionetteDesktop?.windowControlsOverlay === true
 const DEFAULT_WIDTH = 320
 const route = useRoute()
 const router = useRouter()
@@ -213,6 +215,23 @@ onUnmounted(() => {
   height: 100%;
   min-height: 0;
 }
+
+/* This strip is outside scrollable/interactive content, including modal
+   backdrops. Electron draws the native caption buttons above its right edge.
+   Physical CSS pixels intentionally do not follow the app's font-size setting. */
+.app-frame--desktop-overlay { padding-top: 32px; }
+.desktop-titlebar {
+  position: fixed;
+  inset: 0 0 auto;
+  height: 32px;
+  z-index: 10000;
+  background: #202020;
+  -webkit-app-region: drag;
+  app-region: drag;
+  user-select: none;
+}
+:global(.desktop-fullscreen) .app-frame--desktop-overlay { padding-top: 0; }
+:global(.desktop-fullscreen) .desktop-titlebar { display: none; }
 
 .shell {
   flex: 1;

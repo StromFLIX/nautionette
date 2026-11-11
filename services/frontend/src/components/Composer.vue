@@ -36,7 +36,15 @@
         :disabled="voiceActive" @click="openConfiguration">
         <span class="material-icons" aria-hidden="true">tune</span>
         <span v-if="customConfiguration && !configurationOpen" class="composer__configured" aria-label="Custom configuration" />
-        <q-tooltip>Model, agent, reasoning, tools, projects & extensions{{ customConfiguration ? ' · customized' : '' }}</q-tooltip>
+        <q-tooltip>Chat settings · model, reasoning, tools, projects & extensions{{ customConfiguration ? ' · customized' : '' }}</q-tooltip>
+      </button>
+      <button v-if="!configurationOpen" class="pick composer__quick-agent" type="button" aria-label="Select agent"
+        :disabled="configurationBusy || configurationSaving || voiceActive || !configurationReady" aria-haspopup="menu">
+        <AgentAvatar :agent="selectedAgent" class="composer__agent-avatar" />
+        <span class="truncate">{{ profileLabel }}</span>
+        <span class="material-icons pick__caret" aria-hidden="true">expand_more</span>
+        <AgentPicker :model-value="agentId" :customized="customConfiguration" @update:model-value="$emit('update:agentId', $event)" />
+        <q-tooltip>{{ profileLabel }} · change agent or reset defaults</q-tooltip>
       </button>
       <span class="grow" />
       <div class="composer__actions" :class="{ 'composer__actions--recording': voiceActive }">
@@ -317,6 +325,8 @@ defineExpose({
 .composer__input::placeholder { color: var(--text-dim); }
 .composer--welcome .composer__input { padding: 22px 22px 12px; }
 .composer__bar { display: flex; flex: none; align-items: center; gap: 6px; min-width: 0; padding: 8px 12px 12px; }
+.composer__quick-agent { flex: 0 1 200px; }
+.composer__quick-agent .composer__agent-avatar { flex: none; }
 .pick { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 250px; min-height: 2rem; padding: 0.25rem 0.5rem; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); font: inherit; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: background var(--transition), color var(--transition); }
 .pick:disabled { opacity: 0.5; cursor: not-allowed; }
 .pick:hover:not(:disabled) { background: var(--surface-active); color: var(--text); }
@@ -360,6 +370,7 @@ defineExpose({
 @media (max-width: 640px) {
   .composer__bar { padding: 6px 8px 10px; gap: 3px; }
   .composer__bar:has(.composer__actions--recording) > .pick { display: none; }
+  .composer__quick-agent .composer__agent-avatar { display: none; }
   .composer__input, .composer--welcome .composer__input { padding: 14px 14px 8px; }
   .composer__configuration-head { padding: 14px; }
   .composer__configuration-body { padding: 14px 14px 0; }

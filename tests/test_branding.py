@@ -74,10 +74,28 @@ def test_legacy_and_adaptive_android_icons_use_the_same_visible_scale():
     legacy, adaptive = android_launcher_images()
     assert legacy.size == adaptive.size == (192, 192)
     assert max(ImageStat.Stat(ImageChops.difference(legacy, adaptive)).mean) < 1
-    # The iOS/desktop square is deliberately still separate, with white padding.
+    # The iOS square is deliberately still separate, with white padding.
     with Image.open(ROOT / "branding/native/app-icon.png") as universal:
         assert universal.size == (1024, 1024)
         assert universal.convert("RGB").getpixel((0, 0)) == (255, 255, 255)
+
+
+@pytest.mark.parametrize("size", [16, 24, 32, 48, 256, 1024])
+def test_desktop_icon_fills_os_icon_slots_without_changing_mobile_artwork(size):
+    with Image.open(ROOT / "branding/native/desktop-icon.png") as source:
+        assert source.size == (1024, 1024)
+        icon = source.convert("RGB").resize((size, size), Image.Resampling.LANCZOS)
+    # Measure the actual black mark, not the opaque-white canvas. Keep about
+    # 5% padding per side even at Windows taskbar/title-bar sizes.
+    dark = icon.convert("L").point(lambda value: 255 if value < 128 else 0)
+    left, top, right, bottom = dark.getbbox()
+    assert 0.85 <= (right - left) / size <= 0.96
+    assert 0.85 <= (bottom - top) / size <= 0.96
+    assert left > 0 and top > 0 and right < size and bottom < size
+    with Image.open(ROOT / "branding/native/app-icon.png") as source:
+        mobile_dark = source.convert("L").point(lambda value: 255 if value < 128 else 0)
+        x1, _, x2, _ = mobile_dark.getbbox()
+        assert 0.55 < (x2 - x1) / source.width < 0.60
 
 
 @pytest.mark.parametrize("shape", ["circle", "squircle", "rounded-square"])

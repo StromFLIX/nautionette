@@ -28,10 +28,11 @@ recovery start with Denkzeug. The 125% interface-size default is retained.
 ## Native artwork
 
 `native/` holds the VectorCraft-exported artwork and 1024/432/192px PNGs.
-iOS/desktop use the padded square; Android uses a separate transparent white
+iOS uses the padded square; desktop uses a separate 90%-occupancy export so the
+mark stays legible in small Windows taskbar and other OS icon slots. Android uses a separate transparent white
 negative-space glyph on a full-bleed black adaptive background, with no baked-in
 outer corners. Its open tail intentionally extends to the launcher's mask.
-After changing the canonical logo, re-export both platform variants with the
+After changing the canonical logo, re-export all platform variants with the
 documented proportions and update `native/source.sha256` to the canonical SVG's SHA-256.
 The sync script refuses stale source provenance, then copies the exports into
 Android/iOS sync resources, the Electron installer resources, and the window icon.
