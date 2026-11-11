@@ -653,34 +653,32 @@ pre.code {
   font-weight: 500;
 }
 
-.row-item__unread {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--session-color);
-}
-
 .chat-status {
   display: block;
   flex: none;
   width: 0.8rem;
   height: 0.8rem;
   color: var(--text-dim);
-  /* Small filled dots indicate presence, not unchecked tasks. */
+  /* Filled tiles echo the brand and never resemble unchecked boxes. */
   fill: currentColor;
   stroke: none;
 }
 
+.chat-status__lines {
+  fill: none;
+  stroke: var(--surface-panel);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+
 .chat-status--active {
   color: var(--agent-color);
-  fill: currentColor;
-  animation: chat-status-pulse 1.8s ease-in-out infinite;
+  animation: chat-status-pulse 2.8s ease-in-out infinite;
 }
 
 @keyframes chat-status-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  50% { opacity: 0.65; }
 }
 
 .row-item__title {

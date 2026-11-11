@@ -1,41 +1,47 @@
 <template>
-  <div class="chat-list-item" :class="{ 'chat-list-item--menu-open': menuOpen }" :data-tree-depth="treeDepth">
+  <div class="chat-list-item" :class="{ 'chat-list-item--menu-open': menuOpen, 'chat-list-item--unread': unread }" :data-tree-depth="treeDepth">
     <RouterLink
-      :to="chatLocation(chat.id)"
+      :to="chatLocation(chat.id)" :aria-describedby="statusId"
       class="row-item" :class="{
         'row-item--active': activeRouteId === chat.id,
-        'row-item--running': chat.answering || treeAnswering,
-        'row-item--unread': chat.unread || treeUnread
+        'row-item--running': active,
+        'row-item--unread': unread
       }"
     >
-      <svg
-        class="chat-status" :class="{ 'chat-status--active': chat.answering || treeAnswering }"
-        viewBox="0 0 20 20" role="img" :aria-label="statusLabel" focusable="false"
-      >
-        <title>{{ statusLabel }}</title>
-        <circle cx="10" cy="10" r="4" />
-      </svg>
-      <span class="row-item__title grow truncate" :title="chat.title">{{ chat.title }}</span>
-      <span v-if="chat.unread || treeUnread" class="row-item__unread" role="img" :aria-label="chat.unread ? 'Unread messages' : 'Unread agent replies'" :title="chat.unread ? 'Unread messages' : 'Unread agent replies'" />
-      <span class="row-item__time" :title="activityAt ? `Last activity ${fullTime(activityAt)}` : undefined">{{ shortTime(activityAt) }}</span>
+      <span class="row-item__title truncate" :title="chat.title">{{ chat.title }}</span>
     </RouterLink>
-    <button
-      type="button" class="btn btn--icon btn--sm chat-list-item__menu"
-      :aria-label="`Options for ${chat.title}`" aria-haspopup="true" :aria-expanded="menuOpen"
-    >
-      <span class="material-icons" aria-hidden="true">more_vert</span>
-      <q-menu v-model="menuOpen" anchor="bottom right" self="top right" class="pick-menu">
-        <ChatMenuItems :chat="chat" :unread="chat.unread" :read-busy="readBusy === chat.id"
-          :title-busy="titleBusy" :has-messages="Boolean(chat.message_count)" :settings-busy="settingsBusy" :branch-busy="branchBusy" @branch="branch"
-          @toggle-unread="$emit('toggle-unread', chat, $event)" @rename="rename" @regenerate-title="regenerateTitle"
-          @toggle-timeout="save({ timeout_exempt: $event })" @delete="remove" />
-      </q-menu>
-    </button>
+    <div class="chat-list-item__meta">
+      <button v-if="treeCount" type="button" class="chat-list-item__tree"
+        :aria-label="`${treeOpen ? 'Collapse' : 'Expand'} agent chats for ${chat.title} (${treeCount})`"
+        :aria-expanded="treeOpen" :aria-controls="treeOpen ? treeChildrenId : undefined"
+        :aria-describedby="statusId" :title="`${treeCount} agent ${treeCount === 1 ? 'chat' : 'chats'} · ${statusLabel}`"
+        @click="$emit('toggle-tree', chat.id)">
+        <ChatStatus :id="statusId" :active="active" lined :label="statusLabel" />
+        <span class="chat-list-item__count" aria-hidden="true">{{ treeCount }}</span>
+      </button>
+      <ChatStatus v-else :id="statusId" :active="active" :label="statusLabel" />
+      <div class="chat-list-item__trailing">
+        <span class="row-item__time" :title="activityAt ? `Last activity ${fullTime(activityAt)}` : undefined">{{ shortTime(activityAt) }}</span>
+        <button
+          type="button" class="btn btn--icon btn--sm chat-list-item__menu"
+          :aria-label="`Options for ${chat.title}`" aria-haspopup="true" :aria-expanded="menuOpen"
+          :title="activityAt ? `Last activity ${fullTime(activityAt)}` : undefined"
+        >
+          <span class="material-icons" aria-hidden="true">more_vert</span>
+          <q-menu v-model="menuOpen" anchor="bottom right" self="top right" class="pick-menu">
+            <ChatMenuItems :chat="chat" :unread="chat.unread" :read-busy="readBusy === chat.id"
+              :title-busy="titleBusy" :has-messages="Boolean(chat.message_count)" :settings-busy="settingsBusy" :branch-busy="branchBusy" @branch="branch"
+              @toggle-unread="$emit('toggle-unread', chat, $event)" @rename="rename" @regenerate-title="regenerateTitle"
+              @toggle-timeout="save({ timeout_exempt: $event })" @delete="remove" />
+          </q-menu>
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { useQuasar } from 'quasar'
 import { useRoute, useRouter } from 'vue-router'
 import { fullTime, shortTime } from '../format'
@@ -46,6 +52,7 @@ import { actions } from '../store'
 import { chatCache } from '../chat-cache'
 import { chatDrafts } from '../chat-drafts'
 import ChatMenuItems from './ChatMenuItems.vue'
+import ChatStatus from './ChatStatus.vue'
 import { useChatBranch } from '../chat-branch'
 
 const props = defineProps({
@@ -55,9 +62,12 @@ const props = defineProps({
   treeDepth: { type: Number, default: 0 },
   treeAnswering: { type: Boolean, default: false },
   treeUnread: { type: Boolean, default: false },
-  treeActivityAt: { type: Number, default: 0 }
+  treeActivityAt: { type: Number, default: 0 },
+  treeCount: { type: Number, default: 0 },
+  treeOpen: { type: Boolean, default: false },
+  treeChildrenId: { type: String, default: '' }
 })
-defineEmits(['toggle-unread'])
+defineEmits(['toggle-unread', 'toggle-tree'])
 
 const $q = useQuasar()
 const route = useRoute()
@@ -66,7 +76,13 @@ const menuOpen = ref(false)
 const titleBusy = ref(false)
 const settingsBusy = ref(false)
 const { branch, branchBusy } = useChatBranch(() => props.chat)
-const statusLabel = computed(() => props.chat.answering ? 'Active' : props.treeAnswering ? 'Agent chats active' : 'Inactive')
+const statusId = useId()
+const active = computed(() => props.chat.answering || props.treeAnswering)
+const unread = computed(() => props.chat.unread || props.treeUnread)
+const statusLabel = computed(() => [
+  props.chat.answering ? 'Active' : props.treeAnswering ? 'Agent chats active' : 'Inactive',
+  props.chat.unread ? 'Unread messages' : props.treeUnread ? 'Unread agent replies' : ''
+].filter(Boolean).join(' · '))
 const activityAt = computed(() => props.treeActivityAt || chatActivityAt(props.chat))
 
 // List actions must not open the conversation or act on whichever chat is open.
@@ -135,48 +151,89 @@ function remove () {
 </script>
 
 <style scoped>
-/* The row must be sized by the sidebar's width, never by its own text. */
+/* Overlay sibling controls on a full-row link without nesting buttons inside it.
+   Subgrid reserves their intrinsic width, including multi-digit tree counts. */
 .chat-list-item {
   --chat-menu-width: 2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   position: relative;
   width: 100%;
   min-width: 0;
 }
 
 .chat-list-item > .row-item {
+  grid-area: 1 / 1 / 2 / 3;
+  display: grid;
+  grid-template-columns: subgrid;
+  gap: 0;
   min-width: 0;
   max-width: 100%;
   min-height: 2rem;
   padding-block: calc(var(--list-padding) * 0.6);
-  padding-inline-end: calc(var(--chat-menu-width) + 8px);
 }
+.chat-list-item:hover > .row-item { background: var(--surface-hover); }
+.row-item__title { margin-inline-end: 10px; }
 
+.chat-list-item__meta {
+  grid-area: 1 / 2;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-end: 6px;
+  pointer-events: none;
+}
+.chat-list-item--unread :deep(.chat-status:not(.chat-status--active)) { color: var(--text-muted); }
+
+.chat-list-item__tree {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 2rem;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.chat-list-item__tree:hover { background: var(--accent-soft); color: var(--text); }
+.chat-list-item__tree:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.chat-list-item__count { font-size: .6875rem; font-variant-numeric: tabular-nums; }
+
+/* Time and options share one stable slot; revealing options never moves text. */
+.chat-list-item__trailing {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  min-width: var(--chat-menu-width);
+}
+.chat-list-item__trailing > * { grid-area: 1 / 1; }
+.row-item__time { padding-inline: 3px; white-space: nowrap; }
 .chat-list-item__menu {
-  position: absolute;
-  inset-inline-end: 4px;
-  top: 50%;
-  transform: translateY(-50%);
   width: var(--chat-menu-width);
   color: var(--text-muted);
+  pointer-events: auto;
 }
 
+/* Touch retains a 44px target and visible options; last activity is available
+   in the options tooltip rather than occupying another column. */
 @media (max-width: 900px), (pointer: coarse) {
   .chat-list-item { --chat-menu-width: 44px; }
   .chat-list-item > .row-item,
   .chat-list-item__menu { min-height: 44px; }
+  .chat-list-item__tree { min-width: 44px; min-height: 44px; }
 }
+.row-item__time { visibility: hidden; }
 
-/* Touch keeps an always-visible action. Mouse/keyboard users get the full row
-   until they interact; only the available text width changes, not its size. */
 @media (hover: hover) and (pointer: fine) {
-  .chat-list-item > .row-item { padding-inline-end: 10px; }
-  .chat-list-item__menu {
-    opacity: 0;
-    pointer-events: none;
-  }
-  .chat-list-item:is(:hover, :focus-within, .chat-list-item--menu-open) > .row-item {
-    padding-inline-end: calc(var(--chat-menu-width) + 8px);
-  }
+  .row-item__time { visibility: visible; }
+  .chat-list-item__menu { opacity: 0; pointer-events: none; }
+  .chat-list-item:is(:hover, :focus-within, .chat-list-item--menu-open) .row-item__time { visibility: hidden; }
   .chat-list-item:is(:hover, :focus-within, .chat-list-item--menu-open) .chat-list-item__menu {
     opacity: 1;
     pointer-events: auto;

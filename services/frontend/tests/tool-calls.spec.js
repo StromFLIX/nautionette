@@ -313,7 +313,7 @@ for (const width of [1440, 320]) {
     await page.setViewportSize({ width, height: 900 })
     await page.emulateMedia({ reducedMotion: 'no-preference' })
     await page.goto('/chats/tools')
-    const hexagon = page.locator('a[href="/chats/tools"] .chat-status')
+    const square = page.locator('a[href="/chats/tools"]').locator('..').locator('.chat-status')
     const composer = page.locator('.composer')
     const indicator = page.getByLabel('Tool calls in progress')
     const arc = indicator.locator('.tool-group__indicator-arc')
@@ -333,8 +333,8 @@ for (const width of [1440, 320]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
 
     const expectAnimations = async ([chatList, messageWindow, toolIndicator]) => {
-      await expect(hexagon).toHaveCSS('animation-name', chatList ? 'chat-status-pulse' : 'none')
-      await expect(hexagon).not.toHaveCSS('fill', 'none')
+      await expect(square).toHaveCSS('animation-name', chatList ? 'chat-status-pulse' : 'none')
+      await expect(square).not.toHaveCSS('fill', 'none')
       await expect.poll(() => composer.evaluate(el => getComputedStyle(el, '::before').animationName !== 'none')).toBe(messageWindow)
       await expect(arc).toHaveCSS('animation-name', toolIndicator ? /tool-group-orbit/ : 'none')
       await expect(dot).toHaveCSS('animation-name', toolIndicator ? /tool-group-pulse/ : 'none')

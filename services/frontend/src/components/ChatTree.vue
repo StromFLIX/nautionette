@@ -2,16 +2,8 @@
   <div class="chat-tree" :class="{ 'chat-tree--root': depth === 0, 'chat-tree--expanded': open, 'chat-tree--deep': depth >= 4 }">
     <ChatRow :chat="node.chat" :active-route-id="activeRouteId" :read-busy="readBusy" :tree-depth="depth"
       :tree-answering="node.summary.answering" :tree-unread="node.summary.unread" :tree-activity-at="node.summary.last_activity_at"
-      @toggle-unread="(chat, unread) => $emit('toggle-unread', chat, unread)" />
-    <button v-if="node.count" type="button" class="chat-tree__disclosure"
-      :aria-label="`${open ? 'Collapse' : 'Expand'} agent chats for ${node.chat.title} (${node.count})`"
-      :aria-expanded="open" :aria-controls="open ? childrenId : undefined"
-      @click="$emit('toggle-tree', node.chat.id)">
-      <span class="material-icons chat-tree__icon" aria-hidden="true">account_tree</span>
-      <span>{{ node.count }} agent {{ node.count === 1 ? 'chat' : 'chats' }}</span>
-      <span v-if="activeCount" class="chat-tree__activity">· {{ activeCount }} active</span>
-      <span class="material-icons chat-tree__chevron" aria-hidden="true">{{ open ? 'expand_less' : 'expand_more' }}</span>
-    </button>
+      :tree-count="node.count" :tree-open="open" :tree-children-id="childrenId"
+      @toggle-tree="$emit('toggle-tree', $event)" @toggle-unread="(chat, unread) => $emit('toggle-unread', chat, unread)" />
     <div v-if="open" :id="childrenId" class="chat-tree__children" role="group" :aria-label="`Agent chats for ${node.chat.title}`">
       <ChatTree v-for="child in node.children" :key="child.chat.id" :node="child" :depth="depth + 1"
         :expanded="expanded" :active-route-id="activeRouteId" :read-busy="readBusy"
@@ -23,7 +15,6 @@
 <script setup>
 import { computed, useId } from 'vue'
 import ChatRow from './ChatRow.vue'
-import { chatTreeRows } from '../chat-tree'
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -35,7 +26,6 @@ const props = defineProps({
 defineEmits(['toggle-tree', 'toggle-unread'])
 const childrenId = useId()
 const open = computed(() => props.node.children.length > 0 && props.expanded.has(props.node.chat.id))
-const activeCount = computed(() => chatTreeRows(props.node, new Set(), true).slice(1).filter(node => node.chat.answering).length)
 </script>
 
 <style scoped>
@@ -52,28 +42,6 @@ const activeCount = computed(() => chatTreeRows(props.node, new Set(), true).sli
   margin-block-end: 8px;
   padding-block-end: 6px;
 }
-.chat-tree__disclosure {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  max-width: calc(100% - 25px);
-  margin: -2px 6px 3px 25px;
-  padding: 3px 7px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: .6875rem;
-  cursor: pointer;
-  text-align: start;
-}
-.chat-tree__disclosure:hover { color: var(--text); background: var(--surface-hover); }
-.chat-tree__disclosure:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.chat-tree__icon { font-size: 13px; }
-.chat-tree__chevron { font-size: 16px; }
-.chat-tree__activity { color: var(--agent-color); }
 .chat-tree__children {
   margin-inline-start: var(--tree-indent);
 }
@@ -106,6 +74,5 @@ const activeCount = computed(() => chatTreeRows(props.node, new Set(), true).sli
 .chat-tree--deep > .chat-tree__children { margin-inline-start: 4px; }
 @media (max-width: 900px), (pointer: coarse) {
   .chat-tree { --tree-row-mid: 22px; }
-  .chat-tree__disclosure { min-height: 44px; margin-block: 0 2px; }
 }
 </style>

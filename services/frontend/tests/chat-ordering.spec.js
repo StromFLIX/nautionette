@@ -59,7 +59,7 @@ for (const group of ['All', 'Date', 'Project']) {
     await expect(titles(page)).toHaveText(expected)
     if (group === 'Project') await expect(page.locator('.side__group .truncate')).toHaveText(['Project reply', 'Project user', 'Project tools'])
     const working = chats[0]
-    const row = page.locator('a[href="/chats/working"]')
+    const row = page.locator('a[href="/chats/working"]').locator('..')
     const time = await page.evaluate(async timestamp => (await import('/src/format.js')).shortTime(timestamp), working.last_activity_at)
     await expect(row.locator('.row-item__time')).toHaveText(time)
     await expect(row.locator('.row-item__time')).toHaveAttribute('title', /^Last activity /)
@@ -76,8 +76,8 @@ for (const group of ['All', 'Date', 'Project']) {
     expected = ['Agent using tools', 'Agent replied', 'User just asked']
     const completedTime = await page.evaluate(async timestamp => (await import('/src/format.js')).shortTime(timestamp), working.last_activity_at)
     await expect(row.locator('.row-item__time')).toHaveText(completedTime)
-    await expect(row.getByRole('img', { name: 'Inactive', exact: true })).toBeVisible()
-    await expect(row.getByLabel('Unread messages')).toBeVisible()
+    await expect(row.getByRole('img', { name: 'Inactive · Unread messages', exact: true })).toBeVisible()
+    await expect(row.locator('a')).toHaveAccessibleDescription('Inactive · Unread messages')
     await expect(titles(page)).toHaveText(expected)
     await expect(page).toHaveURL(/\/chats\/alpha$/)
     await expect(page.locator('.row-item--active .row-item__title')).toHaveText('User just asked')
@@ -88,7 +88,7 @@ for (const group of ['All', 'Date', 'Project']) {
     expected = ['User just asked', 'Agent using tools', 'Agent replied']
     await expect(titles(page)).toHaveText(expected)
     const sentTime = await page.evaluate(async timestamp => (await import('/src/format.js')).shortTime(timestamp), asked.last_activity_at)
-    await expect(page.locator('a[href="/chats/alpha"] .row-item__time')).toHaveText(sentTime)
+    await expect(page.locator('a[href="/chats/alpha"]').locator('..').locator('.row-item__time')).toHaveText(sentTime)
     await page.reload()
     await expect(titles(page)).toHaveText(expected)
     const settings = await context.newPage()

@@ -75,11 +75,27 @@ not reset the selected theme. There is no cross-device account synchronization.
 
 ### Chat rows, grouping and order
 
-Chat rows are a single line: a small rounded activity tile, title, unread marker when applicable,
-and last completed activity time. Active responses use a filled, gently pulsing tile;
-inactive chats use an empty outline. Avatars, latest-message previews and the
-separate **In progress** badge are not shown in the chat list. Workflow and run
-rows retain their existing layouts.
+Chat rows are a single line: title, a compact filled-square status/tree control,
+and last completed activity time. Standalone chats have a plain filled square;
+chats with delegated descendants have contrasting lines inside the same square
+and a muted descendant count. The lined square/count is a separate expand/collapse
+button, not a second row or a link to the conversation. Expanded families retain
+their hierarchy rails. Activity and unread descendants roll up to their ancestors.
+
+Active responses gently pulse the whole square in the theme's agent color over
+2.8 seconds; inactive squares stay filled in a muted neutral color, never an empty
+checkbox outline. Unread uses stronger title weight and a brighter idle square,
+not another dot. Activity and unread remain independent and both are included in
+the link's accessible description. Global/system reduced motion and **Chat list
+animation** off retain a steady colored square.
+
+Time and options share one reserved trailing slot. On mouse hover, keyboard focus,
+or while the menu is open, options replace time without moving the title or square.
+Touch keeps options visible and provides 44px action targets; the full last-activity
+time remains on the options tooltip. The conversation link covers the whole row
+behind the separate controls, without nesting buttons inside a link. Avatars,
+latest-message previews and the separate **In progress** badge are not shown in
+the chat list. Workflow and run rows retain their existing layouts.
 
 **Group → All / Date / Activity / Project** and **Settings → Workspace → Chat list →
 Group chats by** share the same choices. Date groups use the last completed activity's
