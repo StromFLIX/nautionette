@@ -101,6 +101,9 @@ async def test_real_gateway_keeps_healthy_tools_and_never_bypasses_failed_auth(t
         }
         for name in ("healthy", "broken")
     ]
+    # Production adds integrations through hybrid storage, not the baseline.
+    # Its merge must preserve the baseline's isolation policy too.
+    runtime_target = config["mcp"]["targets"].pop()
     path = tmp_path / "gateway.yaml"
     path.write_text(yaml.safe_dump(config))
     process = None
@@ -120,7 +123,17 @@ async def test_real_gateway_keeps_healthy_tools_and_never_bypasses_failed_auth(t
                     await asyncio.sleep(0.1)
                 else:
                     pytest.fail("gateway did not start")
-                tools = await GatewayClient(base).mcp_tools(f"{base}/mcp", timeout=5)
+                saved = await client.put(
+                    "/api/config/resources/mcp.target", json={"resources": [{"value": runtime_target}]}
+                )
+                saved.raise_for_status()
+                # Config acknowledgement precedes the asynchronous data-plane
+                # update. Poll only read-only discovery, never repeat the PUT.
+                for _ in range(50):
+                    tools = await GatewayClient(base).mcp_tools(f"{base}/mcp", timeout=5)
+                    if [tool["name"] for tool in tools] == ["healthy_read"]:
+                        break
+                    await asyncio.sleep(0.1)
                 assert [tool["name"] for tool in tools] == ["healthy_read"]
                 assert ("/broken", stage) in upstream.requests
                 handshake = await client.post(
