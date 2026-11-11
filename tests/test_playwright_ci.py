@@ -41,6 +41,7 @@ def test_installation_retries_are_bounded_and_preserve_arguments(
             "CALLS": str(calls),
             "SLEEPS": str(sleeps),
             "FAILURES": str(failures),
+            "GITHUB_ACTIONS": "false",
         },
         capture_output=True,
         text=True,
@@ -58,6 +59,43 @@ def test_wrapper_cannot_retry_application_tests(arguments):
     )
     assert result.returncode == 2
     assert "Usage:" in result.stderr
+
+
+@pytest.mark.parametrize("github_actions", ["true", "false"])
+@pytest.mark.parametrize("mirror_exists", [True, False])
+def test_official_mirrors_are_configured_only_on_hosted_ci(tmp_path, github_actions, mirror_exists):
+    mirror = tmp_path / "apt-mirrors.txt"
+    original = "http://azure.archive.ubuntu.com/ubuntu/\n"
+    if mirror_exists:
+        mirror.write_text(original)
+    sudo = tmp_path / "sudo"
+    sudo.write_text('#!/bin/bash\nexec "$@"\n')
+    sudo.chmod(0o755)
+    npx = tmp_path / "npx"
+    npx.write_text("#!/bin/bash\nexit 0\n")
+    npx.chmod(0o755)
+    result = subprocess.run(  # noqa: S603 — repository script and test-owned paths
+        ["/bin/bash", str(SCRIPT), "install-deps", "chromium"],
+        env={
+            **os.environ,
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "GITHUB_ACTIONS": github_actions,
+            "APT_MIRROR_LIST": str(mirror),
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    if not mirror_exists:
+        assert not mirror.exists()
+    elif github_actions == "true":
+        assert mirror.read_text().splitlines() == [
+            "https://archive.ubuntu.com/ubuntu/",
+            "https://security.ubuntu.com/ubuntu/",
+        ]
+    else:
+        assert mirror.read_text() == original
 
 
 def test_workflows_bound_setup_time_and_run_tests_outside_the_retry_wrapper():
