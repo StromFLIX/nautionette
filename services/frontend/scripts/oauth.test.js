@@ -74,8 +74,9 @@ test('a fixed port conflict fails before opening the browser', async t => {
   assert.equal(opened, false)
 })
 
-test('provider errors, cancellation, timeout and owner isolation release listeners', async t => {
-  const bridge = createReceivers({ openExternal: () => {}, timeout: 100 })
+test('provider errors, cancellation and owner isolation release listeners', async t => {
+  // Real loopback HTTP must not race a 100ms wall-clock deadline on busy runners.
+  const bridge = createReceivers({ openExternal: () => {} })
   t.after(() => bridge.close())
   let receiver = await bridge.prepare(1, 'http://127.0.0.1:0/callback')
   await assert.rejects(bridge.authorize(2, { id: receiver.id }), /No matching/)
@@ -87,9 +88,23 @@ test('provider errors, cancellation, timeout and owner isolation release listene
   const rejected = assert.rejects(pending, /cancelled or timed out/)
   bridge.cancel(1)
   await rejected
-  receiver = await bridge.prepare(1, 'http://127.0.0.1:0/callback')
-  pending = bridge.authorize(1, { id: receiver.id, authorization_url: authorization(receiver.redirect_uri), state })
-  await assert.rejects(pending, /cancelled or timed out/)
+  await assert.rejects(callback(receiver, { state, code: 'after-cancel' }))
+})
+
+test('timeout expires at its deadline and releases the listener and owner', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const bridge = createReceivers({ openExternal: () => {}, timeout: 100 })
+  t.after(() => bridge.close())
+  const receiver = await bridge.prepare(1, 'http://127.0.0.1:0/callback')
+  const pending = bridge.authorize(1, { id: receiver.id, authorization_url: authorization(receiver.redirect_uri), state })
+  const rejected = assert.rejects(pending, /cancelled or timed out/)
+  t.mock.timers.tick(99)
+  await assert.rejects(bridge.prepare(1, 'http://127.0.0.1:0/callback'), /already active/)
+  t.mock.timers.tick(1)
+  await rejected
+  await assert.rejects(callback(receiver, { state, code: 'after-timeout' }))
+  const replacement = await bridge.prepare(1, 'http://127.0.0.1:0/callback')
+  assert.ok(replacement.port > 1023)
 })
 
 test('authorization URL cannot redirect to another receiver or weaken PKCE', async t => {
