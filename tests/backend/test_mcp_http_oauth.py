@@ -190,6 +190,59 @@ async def test_token_and_config_ack_do_not_release_gate_until_federation_ready(
     assert len(hosted.calls) == 1  # No authorization-code replay.
 
 
+def test_multiserver_readiness_requires_this_servers_namespaced_tools(
+    client, backend, live, hosted, monkeypatch
+):
+    identifier, auth, _ = begin(client)
+    assert forward(client, identifier, auth).status_code == 200
+    backend.gateway.resources["mcp.target"] = {
+        "other": {"name": "other", "mcp": {"host": "https://other.test/mcp"}}
+    }
+    original = live.gateway.mcp_tools
+    catalog = [{"name": "read"}]
+
+    async def federated(url=None, *args, **kwargs):
+        if url is None:
+            return list(catalog)
+        return await original(url, *args, **kwargs)
+
+    monkeypatch.setattr(live.gateway, "mcp_tools", federated)
+    # A raw name or another server's prefixed name is not proof of readiness.
+    for names in [["read"], ["other_read"], ["read", "other_read"]]:
+        catalog[:] = [{"name": name} for name in names]
+        assert client.get(BASE + "/login/" + identifier).json()["status"] == "gateway_pending"
+    catalog.append({"name": "example_read"})
+    assert client.get(BASE + "/login/" + identifier).json()["status"] == "complete"
+    assert len(hosted.calls) == 1
+
+
+def test_readiness_wait_has_a_fixed_deadline_and_actionable_failure(
+    client, backend, live, hosted, monkeypatch
+):
+    identifier, auth, _ = begin(client)
+    assert forward(client, identifier, auth).status_code == 200
+    original = live.gateway.mcp_tools
+    probes = []
+
+    async def warming(url=None, *args, **kwargs):
+        if url is None:
+            return []
+        probes.append(url)
+        return await original(url, *args, **kwargs)
+
+    monkeypatch.setattr(live.gateway, "mcp_tools", warming)
+    assert client.get(BASE + "/login/" + identifier).json()["status"] == "gateway_pending"
+    hosted.clock[0] += oauth.READINESS_SECONDS - 1
+    assert client.get(BASE + "/login/" + identifier).json()["status"] == "gateway_pending"
+    hosted.clock[0] += 2
+    result = client.get(BASE + "/login/" + identifier).json()
+    assert result["status"] == "failed"
+    assert "Sign-in succeeded" in result["message"] and "60 seconds" in result["message"]
+    assert len(probes) == 1  # Polling does not recreate isolated sessions.
+    assert len(hosted.calls) == 1
+    assert not oauth._sessions[identifier].complete
+
+
 def test_discovery_rejects_resource_issuer_confidential_and_weak_pkce(client, hosted):
     for mapping, key, value in [
         (hosted.resource, "resource", "https://other.test/mcp"),

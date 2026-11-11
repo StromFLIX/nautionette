@@ -112,8 +112,13 @@ The call is held **before dispatch**, for up to **3 minutes**, while the user si
 in with the saved settings. Receiving tokens or acknowledging the gateway config
 write does not release the call. The connection remains `gateway_pending` until
 a fresh session on the federated MCP endpoint completes initialization and lists
-the target's authenticated tools. This also applies to refresh and lost-write
-recovery. The agent then dispatches through a separate fresh MCP session, never
+the target's authenticated tools. The comparison accounts for agentgateway's
+raw single-target names versus `<server>_<tool>` names in multi-target federation;
+an unrelated server's tools cannot satisfy the check. Individual readiness checks
+are bounded to 10 seconds, and interactive activation stops with an actionable
+error after a fixed 60-second readiness budget rather than spinning indefinitely.
+Readiness polls reuse the validated token and saved probe catalog. This also
+applies to refresh and lost-write recovery. The agent then dispatches through a separate fresh MCP session, never
 the pre-login session's cached upstream connection, and closes it afterwards. **Skip**, dismiss, **Cancel** or
 **Snooze** fails the held call without executing it; timeout and stopped turns
 cannot resume it either. No possibly-executed mutation is automatically replayed.
