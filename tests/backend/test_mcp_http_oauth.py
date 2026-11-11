@@ -375,6 +375,81 @@ async def test_rotated_token_remains_pending_until_federated_handshake_succeeds(
     assert len(hosted.calls) == 2  # Rotating refresh token was consumed only once.
 
 
+@pytest.mark.parametrize("operation", ["connect", "refresh"])
+@pytest.mark.parametrize("installed", ["published", "previous", "external"])
+@pytest.mark.asyncio
+async def test_expired_pending_credentials_are_removed_even_when_gateway_readiness_never_passes(
+    client, backend, live, hosted, monkeypatch, operation, installed
+):
+    if operation == "refresh":
+        connect(client)
+        hosted.clock[0] += 260
+        hosted.token.update(access_token="access-token-2", refresh_token="refresh-token-2")
+    original = live.gateway.mcp_tools
+
+    async def unavailable(url=None, *args, **kwargs):
+        if url is None:
+            raise httpx.ConnectError("Another upstream prevents federation readiness")
+        return await original(url, *args, **kwargs)
+
+    monkeypatch.setattr(live.gateway, "mcp_tools", unavailable)
+    if operation == "connect":
+        identifier, auth, _ = begin(client)
+        forward(client, identifier, auth)
+        assert client.get(BASE + "/login/" + identifier).json()["status"] == "gateway_pending"
+    else:
+        await oauth.refresh_once()
+    row = backend.db.one("SELECT * FROM mcp_http_oauth")
+    assert row["status"] == "gateway_pending"
+    external = {"name": "example", "mcp": {"host": "https://external-edit.test/mcp"}}
+    if installed == "previous":
+        previous = unseal(row["secret"], namespace=oauth.NAMESPACE)["previous"]
+        backend.gateway.resources["mcp.target"].pop("example")
+        if previous is not None:
+            backend.gateway.resources["mcp.target"]["example"] = previous
+    elif installed == "external":
+        backend.gateway.resources["mcp.target"]["example"] = external
+    calls = len(hosted.calls)
+    hosted.clock[0] += 301
+    await oauth.refresh_once()
+    row = backend.db.one("SELECT * FROM mcp_http_oauth")
+    assert row["status"] == "reauth_required" and not row["secret"]
+    if installed == "external":
+        assert backend.gateway.resources["mcp.target"]["example"] == external
+    else:
+        assert "example" not in backend.gateway.resources["mcp.target"]
+    # Keep one-click setup, but never replay the authorization code/rotating refresh token.
+    assert oauth.public_connections()["example"]["url"] == URL
+    await oauth.refresh_once()
+    assert len(hosted.calls) == calls
+
+
+@pytest.mark.asyncio
+async def test_expired_cleanup_recovers_a_lost_delete_without_replaying_tokens(
+    client, backend, live, hosted, monkeypatch
+):
+    hosted.token.pop("refresh_token")
+    connect(client)
+    hosted.clock[0] += 301
+    original = live.gateway.delete_config_resource
+    deletes = []
+
+    async def lost(kind, name):
+        deletes.append(name)
+        await original(kind, name)
+        raise httpx.ReadTimeout("DELETE succeeded but its response was lost")
+
+    monkeypatch.setattr(live.gateway, "delete_config_resource", lost)
+    await oauth.refresh_once()
+    assert backend.db.one("SELECT secret FROM mcp_http_oauth")["secret"]
+    assert "example" not in backend.gateway.resources["mcp.target"]
+    hosted.clock[0] += 31
+    await oauth.refresh_once()
+    row = backend.db.one("SELECT * FROM mcp_http_oauth")
+    assert row["status"] == "reauth_required" and not row["secret"]
+    assert deletes == ["example"] and len(hosted.calls) == 1
+
+
 @pytest.mark.asyncio
 async def test_failed_or_crashed_refresh_requires_login_and_removes_only_owned_target(
     client, backend, hosted

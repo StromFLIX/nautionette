@@ -764,11 +764,21 @@ def public_connections():
 
 
 async def disable(row, value):
+    # Fence cleanup before gateway I/O. If DELETE succeeds but its reply is lost,
+    # maintenance must finish this cleanup, not mistake the missing target for
+    # an external edit and discard the saved sign-in profile. Retain the sealed
+    # ownership snapshot until deletion/readback succeeds; never reuse tokens.
+    claimed = db.execute(
+        "UPDATE mcp_http_oauth SET status='reauth_required',retry_at=0 WHERE name=? AND revision=?",
+        (row["name"], row["revision"]),
+    ).rowcount
+    if not claimed:
+        return
     current = await current_target(row["name"])
     if current == target(row["name"], value) or current is not None and current == value.get("previous"):
         await gateway.delete_config_resource("mcp.target", row["name"])
     db.execute(
-        "UPDATE mcp_http_oauth SET secret='',status='reauth_required',retry_at=0 WHERE name=? AND revision=?",
+        "UPDATE mcp_http_oauth SET secret='' WHERE name=? AND revision=?",
         (row["name"], row["revision"]),
     )
     forget_catalog()
@@ -815,18 +825,21 @@ async def refresh_once():
                 await disable(row, value)
                 continue
             if row["status"] == "gateway_pending":
-                if current == expected:
+                # A published token can expire before federation ever becomes
+                # ready. Config equality does not make it usable, and activate()
+                # deliberately refuses expired credentials. Remove our target
+                # instead of leaving it stuck here forever poisoning discovery.
+                if tokens["expires_at"] <= now:
+                    await disable(row, value)
+                elif current == expected:
                     updated_target(name, value.get("previous"), expected)
                     await activate(row, value)
                 elif current != value.get("previous"):
                     discard(row)  # External edit owns the target now; never overwrite it.
                 elif value["operation"] == "refresh":
-                    if tokens["expires_at"] <= now:
-                        await disable(row, value)
-                    else:
-                        await gateway.put_config_resources("mcp.target", [expected])
-                        updated_target(name, current, expected)
-                        await activate(row, value)
+                    await gateway.put_config_resources("mcp.target", [expected])
+                    updated_target(name, current, expected)
+                    await activate(row, value)
                 continue  # New connections are not published without an explicit poll.
             if current != expected:
                 discard(row)

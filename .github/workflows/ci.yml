@@ -87,7 +87,7 @@ jobs:
           fi
           echo "1b2fc01a2de29ca113bbb6258b5cae7b1eb3c724071c09d687a449132f2f42f8  $RUNNER_TEMP/agentgateway" | sha256sum --check
           chmod +x "$RUNNER_TEMP/agentgateway"
-          NAUTIONETTE_TEST_GATEWAY_BINARY="$RUNNER_TEMP/agentgateway" uv run pytest tests/backend/test_mcp_oauth_e2e.py tests/backend/test_mcp_http_oauth_e2e.py tests/agentgateway/test_stdio_runtime.py
+          NAUTIONETTE_TEST_GATEWAY_BINARY="$RUNNER_TEMP/agentgateway" uv run pytest tests/backend/test_mcp_oauth_e2e.py tests/backend/test_mcp_http_oauth_e2e.py tests/agentgateway/test_stdio_runtime.py tests/agentgateway/test_failure_isolation.py
 
       - name: Agent defaults, profiles and durable chat configuration
         run: uv run pytest tests/backend/test_auth.py tests/backend/test_agent_profiles.py tests/backend/test_agent_grouping.py tests/backend/test_subagents.py tests/backend/test_delegated_chat_tree.py tests/backend/test_reasoning.py tests/backend/test_settings.py tests/backend/test_chats.py tests/backend/test_backend_mcp.py tests/backend/test_chat_inspection.py tests/backend/test_activity_timing.py

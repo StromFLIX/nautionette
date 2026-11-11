@@ -1,5 +1,6 @@
 """The real gateway client redacts config and closes discovery sessions."""
 
+import asyncio
 import json
 
 import httpx
@@ -80,6 +81,54 @@ async def test_mcp_sessions_are_closed_after_success_or_failure(http, failure):
     else:
         assert await client.mcp_tools("http://gateway.test/mcp") == [{"name": "search", "description": ""}]
     assert requests == ["initialize", "notifications/initialized", "tools/list", "DELETE"]
+
+
+@pytest.mark.parametrize("failure", ["", "http", "rpc", "timeout"])
+async def test_gateway_health_checks_tools_not_just_model_routes(http, monkeypatch, failure):
+    http["http://gateway.test/v1/models"] = lambda _: httpx.Response(200, json={"data": []})
+    client = GatewayClient("http://gateway.test")
+
+    async def tools(url, *, timeout):
+        assert url == "http://gateway.test/mcp"
+        assert timeout <= 5
+        if failure == "http":
+            raise MCPHTTPError(
+                httpx.Response(
+                    401,
+                    text="private expired credential details",
+                    request=httpx.Request("POST", "http://gateway.test/mcp"),
+                ),
+                "initialize",
+            )
+        if failure == "rpc":
+            raise ValueError("private upstream RPC failure")
+        if failure == "timeout":
+            raise TimeoutError("private upstream timeout")
+        return [{"name": "healthy_read"}]
+
+    monkeypatch.setattr(client, "mcp_tools", tools)
+    result = await client.health()
+    assert result["status"] == ("degraded" if failure else "ok")
+    assert result["code"] == 200
+    assert result["mcp"] == ({"status": "unavailable"} if failure else {"status": "ok", "tool_count": 1})
+    assert "private" not in json.dumps(result)
+
+
+async def test_gateway_health_bounds_the_entire_tool_handshake(http, monkeypatch):
+    http["http://gateway.test/v1/models"] = lambda _: httpx.Response(200, json={"data": []})
+    client = GatewayClient("http://gateway.test")
+    real_timeout = asyncio.timeout
+
+    def bounded(seconds):
+        assert seconds == 5
+        return real_timeout(0.01)
+
+    async def stalled(*_args, **_kwargs):
+        await asyncio.sleep(10)
+
+    monkeypatch.setattr(client, "mcp_tools", stalled)
+    monkeypatch.setattr("nautionette_backend.clients.agentgateway.asyncio.timeout", bounded)
+    assert (await client.health())["status"] == "degraded"
 
 
 async def test_mcp_tool_listing_follows_pagination(http):

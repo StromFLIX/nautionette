@@ -50,6 +50,16 @@ def test_broker_resource_degradation_is_not_hidden_by_http_success(client, live,
     assert payload["agent_sets"]
 
 
+def test_gateway_tool_degradation_is_not_hidden_by_working_models(client, live, monkeypatch):
+    async def degraded():
+        return {"status": "degraded", "code": 200, "mcp": {"status": "unavailable"}}
+
+    monkeypatch.setattr(live.gateway, "health", degraded)
+    component = _component(client.get("/api/system").json(), "agentgateway")
+    assert component["status"] == "degraded"
+    assert component["detail"]["mcp"]["status"] == "unavailable"
+
+
 def test_temporal_being_down_carries_its_last_error(client, live, temporal, monkeypatch):
     temporal.up = False
     monkeypatch.setattr(live.temporal, "last_error", "temporal:7233 unreachable")

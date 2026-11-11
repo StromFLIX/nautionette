@@ -33,6 +33,10 @@ llm:
 
 # MCP traffic: one federated endpoint on /mcp for both workers and Pi agents.
 mcp:
+  # Isolate failed upstreams, not authentication: expired/rejected credentials
+  # still fail for that target, while healthy servers remain discoverable.
+  # If every upstream fails, the gateway still returns an error.
+  failureMode: failOpen
   targets:
     # Deterministic workflow authoring. This is how a promoted chat becomes a
     # workflow file, so scope it with mcpAuthorization before exposing it widely.

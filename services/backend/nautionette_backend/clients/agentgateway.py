@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 from typing import Any
@@ -130,12 +131,23 @@ class GatewayClient:
         self.base_url = (base_url or settings.gateway_url).rstrip("/")
 
     async def health(self) -> dict[str, Any]:
-        # agentgateway answers on /v1/models once a provider is configured.
+        # Models can be healthy while the shared MCP handshake is completely
+        # broken. Probe discovery too, without invoking any business tool.
         response = await shared().get(f"{self.base_url}/v1/models", timeout=5)
-        return {
-            "status": "ok" if response.status_code < 500 else "degraded",
+        result = {
+            "status": "ok" if response.status_code < 400 else "degraded",
             "code": response.status_code,
         }
+        try:
+            async with asyncio.timeout(5):
+                tools = await self.mcp_tools(f"{self.base_url}/mcp", timeout=5)
+            result["mcp"] = {"status": "ok", "tool_count": len(tools)}
+        except (httpx.HTTPError, ValueError, TimeoutError):
+            # Provider/transport errors can contain credentials. Health exposes
+            # only availability; never exception text, URLs or response bodies.
+            result["status"] = "degraded"
+            result["mcp"] = {"status": "unavailable"}
+        return result
 
     async def config(self) -> dict[str, Any]:
         """The gateway's own view of itself: which upstream, which MCP targets.

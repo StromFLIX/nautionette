@@ -35,6 +35,32 @@ entered for that target. Removing those two default rows resets them to their
 runtime defaults; overriding them explicitly is supported. The working directory
 is `/data`; use absolute paths for scripts. No Docker socket is mounted.
 
+## Failure isolation and health
+
+The shared `/mcp` endpoint uses agentgateway's `failureMode: failOpen`: failed
+upstreams are skipped during initialization and discovery, while healthy servers
+keep their normal namespaced tools. This is **upstream availability isolation**,
+not permissive authentication. Rejected credentials still reject that target's
+calls; failures are not rerouted to another server, and business calls are never
+replayed. If every upstream fails, discovery still returns an error. Isolated
+save/OAuth probes still fail when their sole target is unavailable.
+
+OAuth maintenance also removes owned tokens that expire while still
+`gateway_pending`, including a new login or rotated token that never passed
+federated readiness. Saved connection settings/tool schemas remain available for
+sign-in again; tokens and single-use exchanges are not replayed. External edits
+to the gateway target are not overwritten or deleted by this cleanup.
+
+`/api/system` checks both model routes and bounded MCP initialization/tool
+listing. A working `/v1/models` no longer hides a broken shared tools endpoint:
+that gateway component is reported as degraded, without exposing upstream error
+bodies or credentials. The native gateway readiness endpoint is only process
+readiness, not proof that every configured upstream is authenticated.
+
+Deploy both **agentgateway and backend** for these protections; restart/recreate
+the gateway to load the baseline failure policy. Existing agent turns that
+started without MCP tools need a new turn to rediscover them.
+
 ## Brave Search example
 
 In **Settings > MCP servers > Add server**:

@@ -39,7 +39,7 @@ async def system_status() -> dict[str, Any]:
         try:
             detail = await coro
             status = "ok"
-            if name == "broker" and isinstance(detail, dict) and detail.get("status", "ok") != "ok":
+            if isinstance(detail, dict) and detail.get("status", "ok") != "ok":
                 status = "degraded"
             return {"name": name, "status": status, "detail": detail}
         except Exception as exc:  # noqa: BLE001 - status page must never 500
