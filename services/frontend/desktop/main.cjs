@@ -1,10 +1,11 @@
-const { app, BrowserWindow, protocol, net, session, shell, ipcMain } = require('electron')
+const { app, BrowserWindow, Menu, protocol, net, session, shell, ipcMain } = require('electron')
 const path = require('node:path')
 const brand = require('./brand.json')
 const { existsSync, mkdirSync } = require('node:fs')
 const { pathToFileURL } = require('node:url')
 const { APP_ORIGIN, trustedRenderer, externalURL, assetPath } = require('./security.cjs')
 const { existingDataPath } = require('./data-path.cjs')
+const { windowChrome } = require('./window-chrome.cjs')
 
 // Pin identity before acquiring the single-instance lock or opening a session.
 const dataPath = existingDataPath(app.getPath('appData'), app.getPath('userData'))
@@ -57,12 +58,26 @@ function createWindow () {
     width: 1280, height: 850, minWidth: 360, minHeight: 500,
     title: brand.name, backgroundColor: brand.colors.paper,
     icon: path.join(__dirname, 'icon.png'),
+    ...windowChrome(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false, contextIsolation: true, sandbox: true,
       webSecurity: true
     }
   })
+  for (const [event, fullscreen] of [['enter-full-screen', true], ['leave-full-screen', false]]) {
+    window.on(event, () => window.webContents.send('window:fullscreen', fullscreen))
+  }
+  // Keep the standard desktop fullscreen shortcut without a menu accelerator.
+  window.webContents.on('before-input-event', (event, input) => {
+    if (process.platform !== 'darwin' && input.type === 'keyDown' && input.key === 'F11' &&
+        !input.control && !input.alt && !input.meta && !input.shift && !input.isAutoRepeat) {
+      event.preventDefault()
+      window.setFullScreen(!window.isFullScreen())
+    }
+  })
+  // Also restore fullscreen chrome state when the renderer reloads.
+  window.webContents.on('did-finish-load', () => window.webContents.send('window:fullscreen', window.isFullScreen()))
   const owner = window.webContents.id
   window.webContents.once('destroyed', () => { oauth.cancel(owner); appReturns.clear(owner) })
   window.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => {
@@ -84,6 +99,9 @@ function createWindow () {
 }
 
 if (primaryInstance) app.whenReady().then(() => {
+  // Remove the menu, rather than auto-hiding it (which lets Alt bring it back).
+  // macOS keeps its normal system menu and native title bar/traffic lights.
+  if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
   // Development must not replace an installed app's OS handler. Packaged
   // installers declare this protocol too; the URL can only focus an owner.
   if (app.isPackaged) returnProtocol = app.setAsDefaultProtocolClient('nautionette') || app.isDefaultProtocolClient('nautionette')

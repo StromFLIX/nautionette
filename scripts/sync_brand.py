@@ -102,14 +102,17 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
         for name in [
             "app-icon.svg",
             "app-icon.png",
+            "desktop-icon.svg",
+            "desktop-icon.png",
             "android-icon.svg",
             "android-foreground.svg",
             "ic_launcher.png",
             "ic_launcher_foreground.png",
         ]:
             files[frontend / "native/icons" / name] = (native / name).read_bytes()
-        for destination in ["build/icon.png", "desktop/icon.png", "public/brand/app-icon.png"]:
-            files[frontend / destination] = (native / "app-icon.png").read_bytes()
+        files[frontend / "public/brand/app-icon.png"] = (native / "app-icon.png").read_bytes()
+        for destination in ["build/icon.png", "desktop/icon.png"]:
+            files[frontend / destination] = (native / "desktop-icon.png").read_bytes()
     for design in sorted((frontend / "src/skin-examples").glob("*.skin.json")):
         text = re.sub(
             r'("author"\s*:\s*)"[^"]*"',

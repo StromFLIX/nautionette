@@ -27,6 +27,26 @@ try {
     node: typeof globalThis.require,
     origin: location.origin
   }))).toEqual({ desktop: 1, node: 'undefined', origin: 'capacitor://localhost' })
+  // No menu can reappear with Alt. A small draggable strip replaces both old
+  // rows; native caption buttons remain OS-owned, outside renderer hit-testing.
+  expect(await application.evaluate(({ Menu }) => Menu.getApplicationMenu())).toBeNull()
+  await page.keyboard.press('Alt')
+  expect(await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isMenuBarVisible())).toBe(false)
+  const titlebar = page.locator('.desktop-titlebar')
+  await expect(titlebar).toBeVisible()
+  expect(await titlebar.evaluate(element => ({
+    height: element.getBoundingClientRect().height,
+    drag: getComputedStyle(element).getPropertyValue('app-region') || getComputedStyle(element).getPropertyValue('-webkit-app-region'),
+    top: document.querySelector('.shell').getBoundingClientRect().top,
+    modalDragTarget: document.elementFromPoint(10, 10) === element
+  }))).toEqual({ height: 32, drag: 'drag', top: 32, modalDragTarget: true })
+  // Xvfb has no window manager, so emit the native events to exercise the real
+  // main -> isolated preload -> renderer path without depending on WM support.
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit('enter-full-screen'))
+  await expect(titlebar).toBeHidden()
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].emit('leave-full-screen'))
+  await expect(titlebar).toBeVisible()
+  console.log('Desktop chrome: menu removed, native-control drag strip and fullscreen state OK')
   // Exercise the actual isolated preload -> IPC -> loopback socket path.
   // Suppress the external browser; Microsoft remains a manual acceptance test.
   await application.evaluate(({ shell }) => { shell.openExternal = async () => {} })

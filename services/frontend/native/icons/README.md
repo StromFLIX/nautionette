@@ -5,7 +5,7 @@ in `services/frontend/build/`, `services/frontend/desktop/` and `public/brand/`
 are synchronized by `python scripts/sync_brand.py`. Do not edit the canonical
 `branding/logo.svg` as a side effect of export.
 
-## iOS and desktop
+## iOS
 
 `app-icon.svg` is the approved `branding/logo.svg` artwork, centered unchanged on
 a square white canvas. It was opened/exported with native VectorCraft 0.23.0;
@@ -13,14 +13,25 @@ only the artboard padding and white background were added. The mark occupies
 about 58% of the square. No corners are baked into the canvas.
 
 - `app-icon.png`: 1024 × 1024 opaque-white iOS App Store icon.
-- `../../build/icon.png`: the same export, in electron-builder's default build
-  resources directory. Electron-builder derives platform icons without changing
-  application IDs, signing identities or installer names.
-- `../../desktop/icon.png`: the same export, bundled via `desktop/**/*` for
-  Electron's runtime BrowserWindow icon (not just the installer/application icon).
 
 The iOS sync uses the current Capacitor template's single universal AppIcon slot.
 Re-export the 512-point artboard at scale 2 after changing the logo.
+
+## Desktop (Windows, Linux and macOS)
+
+`desktop-icon.svg` / `desktop-icon.png` are separate VectorCraft exports for the
+small OS icon slots. The original black mark is scaled **156.5% around (256, 256)**
+on the same 512-point white artboard, occupying about **90%**, rather than iOS's
+58%. The logo geometry, white negative space and mobile exports are unchanged.
+Export at scale 2 for the 1024 × 1024 PNG. Do not copy iOS's padded icon back here.
+
+- `../../build/icon.png`: desktop export in electron-builder's default build
+  resources directory; it derives multi-resolution Windows ICO and other OS icons.
+- `../../desktop/icon.png`: identical desktop export, bundled via `desktop/**/*`
+  for Electron's runtime BrowserWindow/taskbar icon, not just the installer.
+
+Both copies are synchronized from `branding/native/desktop-icon.png`. Pixel
+regressions measure the actual mark at 16/24/32/48/256/1024px to catch excess padding.
 
 ## Android
 
