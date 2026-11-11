@@ -78,7 +78,11 @@ not reset the selected theme. There is no cross-device account synchronization.
 Chat rows are a single line: title, a compact filled-square status/tree control,
 and last completed activity time. Standalone chats have a plain filled square;
 chats with delegated descendants have contrasting lines inside the same square
-and a muted descendant count. The lined square/count is a separate expand/collapse
+and a muted upper-right count badge. Every square occupies the same fixed-width
+slot, including standalone chats. The badge is positioned within that slot, not
+inline, so a count never displaces the square or title. Counts above 99 display
+**99+**; the accessible button name and tooltip retain the exact total. Only the
+square pulses, not the badge. The lined square/badge is a separate expand/collapse
 button, not a second row or a link to the conversation. Expanded families retain
 their hierarchy rails. Activity and unread descendants roll up to their ancestors.
 
@@ -89,8 +93,11 @@ not another dot. Activity and unread remain independent and both are included in
 the link's accessible description. Global/system reduced motion and **Chat list
 animation** off retain a steady colored square.
 
-Time and options share one reserved trailing slot. On mouse hover, keyboard focus,
-or while the menu is open, options replace time without moving the title or square.
+Time and options share one fixed-width trailing slot across rows; timestamps use
+tabular numerals and end alignment. Long localized timestamps truncate within
+that slot, with the full timestamp available in the tooltip. On mouse hover,
+keyboard focus, or while the menu is open, options replace time without moving
+the title or square.
 Touch keeps options visible and provides 44px action targets; the full last-activity
 time remains on the options tooltip. The conversation link covers the whole row
 behind the separate controls, without nesting buttons inside a link. Avatars,

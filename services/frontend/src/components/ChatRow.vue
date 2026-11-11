@@ -11,15 +11,17 @@
       <span class="row-item__title truncate" :title="chat.title">{{ chat.title }}</span>
     </RouterLink>
     <div class="chat-list-item__meta">
-      <button v-if="treeCount" type="button" class="chat-list-item__tree"
-        :aria-label="`${treeOpen ? 'Collapse' : 'Expand'} agent chats for ${chat.title} (${treeCount})`"
-        :aria-expanded="treeOpen" :aria-controls="treeOpen ? treeChildrenId : undefined"
-        :aria-describedby="statusId" :title="`${treeCount} agent ${treeCount === 1 ? 'chat' : 'chats'} · ${statusLabel}`"
-        @click="$emit('toggle-tree', chat.id)">
-        <ChatStatus :id="statusId" :active="active" lined :label="statusLabel" />
-        <span class="chat-list-item__count" aria-hidden="true">{{ treeCount }}</span>
-      </button>
-      <ChatStatus v-else :id="statusId" :active="active" :label="statusLabel" />
+      <div class="chat-list-item__status">
+        <button v-if="treeCount" type="button" class="chat-list-item__tree"
+          :aria-label="`${treeOpen ? 'Collapse' : 'Expand'} agent chats for ${chat.title} (${treeCount})`"
+          :aria-expanded="treeOpen" :aria-controls="treeOpen ? treeChildrenId : undefined"
+          :aria-describedby="statusId" :title="`${treeCount} agent ${treeCount === 1 ? 'chat' : 'chats'} · ${statusLabel}`"
+          @click="$emit('toggle-tree', chat.id)">
+          <ChatStatus :id="statusId" :active="active" lined :label="statusLabel" />
+          <span class="chat-list-item__count" aria-hidden="true">{{ treeCount > 99 ? '99+' : treeCount }}</span>
+        </button>
+        <ChatStatus v-else :id="statusId" :active="active" :label="statusLabel" />
+      </div>
       <div class="chat-list-item__trailing">
         <span class="row-item__time" :title="activityAt ? `Last activity ${fullTime(activityAt)}` : undefined">{{ shortTime(activityAt) }}</span>
         <button
@@ -152,9 +154,10 @@ function remove () {
 
 <style scoped>
 /* Overlay sibling controls on a full-row link without nesting buttons inside it.
-   Subgrid reserves their intrinsic width, including multi-digit tree counts. */
+   Fixed metadata slots align tiles across rows, regardless of count or timestamp. */
 .chat-list-item {
   --chat-menu-width: 2rem;
+  --chat-status-width: 2.25rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   position: relative;
@@ -186,13 +189,19 @@ function remove () {
 }
 .chat-list-item--unread :deep(.chat-status:not(.chat-status--active)) { color: var(--text-muted); }
 
+.chat-list-item__status {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--chat-status-width);
+}
 .chat-list-item__tree {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
   min-height: 2rem;
-  padding: 0 4px;
+  padding: 0;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -203,27 +212,62 @@ function remove () {
 }
 .chat-list-item__tree:hover { background: var(--accent-soft); color: var(--text); }
 .chat-list-item__tree:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.chat-list-item__count { font-size: .6875rem; font-variant-numeric: tabular-nums; }
+/* A flat corner badge is outside the tile's pulse and never changes its width.
+   Large families show 99+; accessible names and tooltips retain the exact count. */
+.chat-list-item__count {
+  position: absolute;
+  inset-inline-start: 50%;
+  inset-block-start: calc(50% - .9rem);
+  min-width: .75rem;
+  max-width: 50%;
+  box-sizing: border-box;
+  padding-inline: 1px;
+  border-radius: .2rem;
+  background: var(--surface-panel);
+  color: var(--text-muted);
+  font-size: .5625rem;
+  line-height: 1.25;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
 
 /* Time and options share one stable slot; revealing options never moves text. */
 .chat-list-item__trailing {
   display: grid;
   align-items: center;
   justify-items: center;
-  min-width: var(--chat-menu-width);
+  flex: none;
+  width: max(var(--chat-menu-width), 8ch);
+  min-width: 0;
+  font-size: .6875rem;
 }
 .chat-list-item__trailing > * { grid-area: 1 / 1; }
-.row-item__time { padding-inline: 3px; white-space: nowrap; }
+.row-item__time {
+  width: 100%;
+  min-width: 0;
+  padding-inline: 3px;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: end;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 .chat-list-item__menu {
   width: var(--chat-menu-width);
   color: var(--text-muted);
+  justify-self: end;
   pointer-events: auto;
 }
 
 /* Touch retains a 44px target and visible options; last activity is available
    in the options tooltip rather than occupying another column. */
 @media (max-width: 900px), (pointer: coarse) {
-  .chat-list-item { --chat-menu-width: 44px; }
+  .chat-list-item {
+    --chat-menu-width: 44px;
+    --chat-status-width: max(2.25rem, 44px);
+  }
   .chat-list-item > .row-item,
   .chat-list-item__menu { min-height: 44px; }
   .chat-list-item__tree { min-width: 44px; min-height: 44px; }
