@@ -34,6 +34,8 @@
 - [Development and integration tests](reference.md#python-development-and-integration-tests).
 - [Frontend design](frontend-design.md) and [canonical branding](../branding/README.md).
 - [Telemetry](telemetry.md) — optional OTLP configuration and payload/privacy limits.
+- [Project-chat latency investigation](spikes/project-chat-ttft.md) — measured startup
+  timings, limitations and the authenticated HTTP/SSE benchmark.
 - [Deployment pipelines](github-pipelines.md) — CI, releases, images and deployment checks.
 - [Isolated staging](staging.md) — provisioning, production-data snapshots and
   quarantine precautions. This is an operator procedure, not the normal quick start.

@@ -1,0 +1,149 @@
+{
+  "measured_at": "2026-11-11",
+  "source_commit": "ddc120a48b1d7d8a45574065b65d59d82ecddb2f",
+  "scope": "Fresh Pi child inside existing container, project already mounted; no backend, broker, Docker creation or browser timing",
+  "runtime": {
+    "pi": "1.5.2",
+    "node": "24.22.2",
+    "model": "copilot/gpt-6.1-sol",
+    "api": "openai-responses",
+    "reasoning_effort": "xhigh",
+    "input_tokens": 574,
+    "cache_read_tokens": 0,
+    "selected_local_tools": [
+      "read"
+    ],
+    "selected_mcp_tools": []
+  },
+  "conditions": {
+    "failing_gateway_mcp": [
+      {
+        "first_event_ms": 1489.998,
+        "first_text_ms": 3277.729,
+        "model_turn_start_ms": 1495.059,
+        "model_turn_to_text_ms": 1782.67,
+        "total_ms": 3417.067,
+        "extension_factory_ms": 997,
+        "agent_session_runtime_ms": 1088,
+        "ok": true
+      },
+      {
+        "first_event_ms": 1570.744,
+        "first_text_ms": 3063.257,
+        "model_turn_start_ms": 1574.476,
+        "model_turn_to_text_ms": 1488.781,
+        "total_ms": 3234.229,
+        "extension_factory_ms": 1070,
+        "agent_session_runtime_ms": 1156,
+        "ok": true
+      },
+      {
+        "first_event_ms": 1541.442,
+        "first_text_ms": 3269.245,
+        "model_turn_start_ms": 1545.373,
+        "model_turn_to_text_ms": 1723.872,
+        "total_ms": 3424.699,
+        "extension_factory_ms": 1019,
+        "agent_session_runtime_ms": 1110,
+        "ok": true
+      },
+      {
+        "first_event_ms": 1573.03,
+        "first_text_ms": 2836.235,
+        "model_turn_start_ms": 1576.674,
+        "model_turn_to_text_ms": 1259.561,
+        "total_ms": 2969.661,
+        "extension_factory_ms": 1050,
+        "agent_session_runtime_ms": 1138,
+        "ok": true
+      },
+      {
+        "first_event_ms": 1549.02,
+        "first_text_ms": 2911.035,
+        "model_turn_start_ms": 1552.744,
+        "model_turn_to_text_ms": 1358.291,
+        "total_ms": 3083.84,
+        "extension_factory_ms": 1027,
+        "agent_session_runtime_ms": 1121,
+        "ok": true
+      }
+    ],
+    "immediate_empty_catalog_control": [
+      {
+        "first_event_ms": 580.539,
+        "first_text_ms": 2183.989,
+        "model_turn_start_ms": 584.229,
+        "model_turn_to_text_ms": 1599.76,
+        "total_ms": 2397.202,
+        "extension_factory_ms": 50,
+        "agent_session_runtime_ms": 139,
+        "ok": true
+      },
+      {
+        "first_event_ms": 599.288,
+        "first_text_ms": 2198.57,
+        "model_turn_start_ms": 605.407,
+        "model_turn_to_text_ms": 1593.163,
+        "total_ms": 2591.951,
+        "extension_factory_ms": 63,
+        "agent_session_runtime_ms": 170,
+        "ok": true
+      },
+      {
+        "first_event_ms": 563.022,
+        "first_text_ms": 1761.056,
+        "model_turn_start_ms": 567.89,
+        "model_turn_to_text_ms": 1193.166,
+        "total_ms": 1857.936,
+        "extension_factory_ms": 47,
+        "agent_session_runtime_ms": 150,
+        "ok": true
+      },
+      {
+        "first_event_ms": 595.839,
+        "first_text_ms": 2094.919,
+        "model_turn_start_ms": 601.105,
+        "model_turn_to_text_ms": 1493.814,
+        "total_ms": 2235.205,
+        "extension_factory_ms": 58,
+        "agent_session_runtime_ms": 169,
+        "ok": true
+      },
+      {
+        "first_event_ms": 592.316,
+        "first_text_ms": 2205.332,
+        "model_turn_start_ms": 596.519,
+        "model_turn_to_text_ms": 1608.813,
+        "total_ms": 2358.743,
+        "extension_factory_ms": 55,
+        "agent_session_runtime_ms": 160,
+        "ok": true
+      }
+    ]
+  },
+  "worktree_preparation": {
+    "scope": "prepareProjects only on isolated local shared bare clone; clone time excluded; warm filesystem caches; 2513 tracked files",
+    "samples": [
+      {
+        "first_ms": 37.778,
+        "existing_ms": 4.814
+      },
+      {
+        "first_ms": 36.303,
+        "existing_ms": 6.184
+      },
+      {
+        "first_ms": 38.912,
+        "existing_ms": 5.696
+      },
+      {
+        "first_ms": 37.212,
+        "existing_ms": 6.629
+      },
+      {
+        "first_ms": 40.789,
+        "existing_ms": 6.863
+      }
+    ]
+  }
+}
