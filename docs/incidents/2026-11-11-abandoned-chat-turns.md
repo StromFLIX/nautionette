@@ -14,7 +14,7 @@ Two production turns remained `running` after their owners had exited:
 Read-only production broker inventory showed no container for either turn. A
 read-only snapshot of the backend's live task registry, followed by its Python
 Task objects, showed neither owner nor controller. Other chats were working;
-backend/broker containers had not restarted. Running normal interrupted-turn
+the broker container had not restarted. Running normal interrupted-turn
 recovery against an **in-memory copy** of the production database succeeded.
 
 This rules out a currently blocked shell command, a still-running model request,
@@ -46,12 +46,20 @@ that flag, which cannot work after the owner has disappeared.
   transcript/tools/timing checkpoint, and settle the turn as unsuccessful.
   Cleanup failure remains explicit and blocks queue advancement; new work still
   goes through existing exact-agent reconciliation.
+- Session inspection exposes `runtime_owner` (true/false for running turns,
+  null otherwise), so future incidents can distinguish orphaned SQL state from
+  a live owner without attaching a debugger to the backend.
 - Track live turn ownership. Stop settles an ownerless turn instead of waiting
   for a nonexistent controller. A live but silent owner is not classified as
   abandoned; there is no new age/idle timeout or automatic tool replay.
 - Regression tests inject failures during clock settlement, revocation and
   terminal persistence; cover cleanup failure, second cancellation, idempotency,
   Stop without an owner, and Stop with a live silent owner.
+
+Both affected production turns were explicitly stopped and finalized from their
+saved checkpoints. Their queues remain paused and their tool/transcript steps
+were retained. No tools were replayed and no project worktrees were reset.
+Temporary diagnostic tasks and files were removed after verification.
 
 The original triggering exception is not recoverable from the retained evidence.
 The repair closes the reproducible lifecycle gap and makes any future occurrence
