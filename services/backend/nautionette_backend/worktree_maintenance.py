@@ -161,16 +161,24 @@ def _retire(project_id: str, chat_id: str, settings: dict, now: float) -> tuple[
     return result | {"reason": "deleted"}, retired
 
 
-def _collect_retired() -> None:
+def _collect_retired() -> int:
     root = projects.PROJECTS_DIR
     quarantine = project_changes._inside(root / ".retired-worktrees", root)
     if not quarantine.exists():
-        return
+        return 0
+    errors = 0
     for directory in quarantine.iterdir():
         if re.fullmatch(r"[a-f0-9]{32}", directory.name):
-            project_changes._inside(directory, root)
-            if directory.is_dir():
-                shutil.rmtree(directory)
+            try:
+                project_changes._inside(directory, root)
+                if directory.is_dir():
+                    shutil.rmtree(directory)
+            except FileNotFoundError:
+                pass  # Another backend may have finished collecting it.
+            except (OSError, ValueError):
+                errors += 1
+                log.warning("Retired worktree collection failed: %s", directory.name)
+    return errors
 
 
 async def sweep(*, dry_run: bool = True) -> dict:
@@ -192,7 +200,7 @@ async def sweep(*, dry_run: bool = True) -> dict:
         # containers that survived a broker restart and no longer hold a flock.
         await broker.chat_agents()
         if not dry_run:
-            await asyncio.to_thread(_collect_retired)
+            report["errors"] += await asyncio.to_thread(_collect_retired)
         rows = candidates()
         previous = db.get_setting(STATUS_KEY, {}) or {}
         cursor = tuple(previous.get("cursor", []))

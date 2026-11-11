@@ -227,6 +227,23 @@ async def test_interrupted_recursive_removal_resumes_from_quarantine(retained, m
     assert list((projects.PROJECTS_DIR / ".retired-worktrees").iterdir()) == []
 
 
+async def test_failed_quarantine_does_not_block_other_worktrees(retained, monkeypatch):
+    _, _, path, *_ = retained()
+    blocked = projects.PROJECTS_DIR / ".retired-worktrees" / ("a" * 32)
+    blocked.mkdir(parents=True)
+    original = maintenance.shutil.rmtree
+
+    def fail_one(directory, *args, **kwargs):
+        if directory == blocked:
+            raise PermissionError("retry later")
+        return original(directory, *args, **kwargs)
+
+    monkeypatch.setattr(maintenance.shutil, "rmtree", fail_one)
+    result = await maintenance.sweep(dry_run=False)
+    assert result["errors"] == 1 and result["deleted"] == 1
+    assert list(path.iterdir()) == [] and blocked.exists()
+
+
 async def test_cancellation_keeps_reservation_until_thread_finishes():
     entered, finish = threading.Event(), threading.Event()
 
