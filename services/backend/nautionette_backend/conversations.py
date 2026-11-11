@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import traceback
+from pathlib import Path
 from time import monotonic
 from typing import Any
 
@@ -21,6 +23,12 @@ from .runtime import remember_agent_result, runtime
 CHAT_PROGRESS_NOTICE_INTERVAL = 1.0
 
 CLEANUP_FAILURE = "The old chat agent could not be cleaned up. Retry your message to retry cleanup."
+_turn_owners: dict[str, asyncio.Task] = {}
+
+
+def turn_has_owner(turn_id: str) -> bool:
+    owner = _turn_owners.get(turn_id)
+    return owner is not None and not owner.done()
 
 
 async def reconcile_chat_agents(chat_id: str = "") -> None:
@@ -71,7 +79,7 @@ def launch_next(chat_id: str) -> None:
     turn = db.next_chat_turn(chat_id)
     if turn:
         bus.publish("chat.queue.changed", {"chat_id": chat_id})
-        spawn(
+        _turn_owners[turn["id"]] = spawn(
             run_turn(turn["id"], chat_id, json.loads(turn["job"])),
             name=f"chat-{turn['id']}",
             chat_turn=True,
@@ -154,7 +162,82 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
             pass
 
 
+async def recover_failed_turn(turn_id: str, chat_id: str, error: BaseException) -> None:
+    """Settle a turn whose owner failed, including failures inside its finalizer.
+
+    This is ownership-based recovery, never an age/idle timeout. Do not retry
+    tools or advance the queue: the last durable checkpoint is the only evidence
+    available after an unexpected task exit.
+    """
+    turn = db.one(
+        "SELECT * FROM chat_turns WHERE id = ? AND chat_id = ? AND state = 'running'",
+        (turn_id, chat_id),
+    )
+    if not turn:
+        return
+    db.execute("UPDATE chats SET queue_paused = 1 WHERE id = ?", (chat_id,))
+    diagnostic = {
+        "type": "error",
+        "reason": "turn_finalization_failed",
+        "error_type": type(error).__name__,
+        # Never persist exception messages, locals or source lines: they can
+        # contain credentials and request/response payloads.
+        "frames": [
+            {"file": Path(frame.filename).name, "function": frame.name, "line": frame.lineno}
+            for frame in traceback.extract_tb(error.__traceback__)[-12:]
+        ],
+        "message": (
+            "The chat task exited before completion was saved. Partial work was retained "
+            "and the queue is paused. Verify unfinished tools before continuing."
+        ),
+    }
+    # Save the cause before any further await/fallible cleanup, not only to an
+    # optional telemetry exporter or an unobserved background-task exception.
+    steps = json.loads(turn["steps"])
+    timing = {**json.loads(turn["timing"] or "{}"), "active": None, "partial": True}
+    db.record_chat_progress(turn_id, diagnostic, steps, "", timing)
+    failure = diagnostic["message"]
+    try:
+        await broker.cleanup_chat_agent(chat_id, turn_id)
+    except Exception:
+        failure = CLEANUP_FAILURE
+    for step in steps:
+        if step.get("kind") == "tool" and step.get("ok") is None:
+            step["interrupted"] = True
+    content = "".join(step.get("text", "") for step in steps if step.get("kind") == "text").strip()
+    db.finish_chat_turn(
+        turn_id,
+        content or failure,
+        {
+            "steps": steps,
+            "tools": [step["name"] for step in steps if step.get("kind") == "tool"],
+            "error": failure,
+            "interrupted": bool(turn["stop_requested"]),
+            "timing": timing,
+            "failure": {key: diagnostic[key] for key in ("reason", "error_type", "frames")},
+        },
+    )
+    bus.publish("chat.answered", {"chat_id": chat_id, "ok": False})
+
+
 async def run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
+    owner = asyncio.current_task()
+    _turn_owners[turn_id] = owner
+    try:
+        await _run_turn(turn_id, chat_id, job)
+    except BaseException as error:
+        # The regular finalizer itself can fail (or be cancelled a second time).
+        # Keep recovery independently owned so cancellation of this task cannot
+        # strand SQL state or release a worktree while its agent is still alive.
+        recovery = spawn(recover_failed_turn(turn_id, chat_id, error), name=f"chat-recovery-{turn_id}")
+        await asyncio.shield(recovery)
+        raise
+    finally:
+        if _turn_owners.get(turn_id) is owner:
+            _turn_owners.pop(turn_id, None)
+
+
+async def _run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
     timeline = Timeline()
     received_text = False
     received_result = False

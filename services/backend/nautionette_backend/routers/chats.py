@@ -32,7 +32,15 @@ from ..agent import (
 from ..background import is_draining, spawn
 from ..chat_titles import rewrite_chat_title, title_context, title_messages
 from ..config import settings
-from ..conversations import chat_snapshots, launch_next, reconcile_chat_agents, run_turn, turn_events
+from ..conversations import (
+    chat_snapshots,
+    launch_next,
+    reconcile_chat_agents,
+    recover_failed_turn,
+    run_turn,
+    turn_events,
+    turn_has_owner,
+)
 from ..db import db
 from ..events import bus
 from ..reasoning import validate_effort
@@ -519,6 +527,11 @@ async def stop_chat(chat_id: str, payload: dict[str, Any] = Body(...)) -> dict[s
         raise HTTPException(status_code=422, detail="turn_id is required")
     if not db.stop_chat_turn(chat_id, turn_id):
         raise HTTPException(status_code=409, detail="This turn is no longer running")
+    if not turn_has_owner(turn_id):
+        # A previous owner may have died inside finalization. There is no live
+        # controller to consume stop_requested in that case. Confirm exact-agent
+        # cleanup and settle the durable checkpoint instead of waiting forever.
+        await recover_failed_turn(turn_id, chat_id, RuntimeError("Chat turn has no live owner"))
     return db.chat_snapshot(chat_id)
 
 
