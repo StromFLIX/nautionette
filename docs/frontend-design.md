@@ -86,14 +86,19 @@ square pulses, not the badge. The lined square/badge is a separate expand/collap
 button, not a second row or a link to the conversation. Expanded families retain
 their hierarchy rails. Activity and unread descendants roll up to their ancestors.
 
-Active responses gently pulse the whole square in the theme's agent color over
-2.8 seconds; inactive squares stay filled in a muted neutral color, never an empty
-checkbox outline. Unread uses stronger title weight and a brighter idle square,
-not another dot. Activity and unread remain independent and both are included in
-the link's accessible description. Global/system reduced motion and **Chat list
-animation** off retain a steady colored square.
+Active responses pulse the square's fill over 1.8 seconds, between a strong
+agent color (mixed toward the theme's text for contrast) and a subdued fill.
+Inactive, read squares stay filled in a muted neutral color, never an empty
+checkbox outline. Unread adds a steady ring in the session color around the
+filled square and uses 600-weight titles rather than relying on a subtle weight
+change alone. Idle unread squares also use the session color. The fill pulses
+without animating opacity, so the unread ring and count badge never fade. Activity
+and unread remain independent and both are included in the link's accessible
+description. Global/system reduced motion and **Chat list animation** off retain
+the strong active color and the unread ring without animation.
 
-Time and options share one fixed-width trailing slot across rows; timestamps use
+Metadata uses a compact 1.75rem status slot, 4px gap and a 7.5ch time/options slot
+on desktop, reclaiming title space while keeping squares aligned. Timestamps use
 tabular numerals and end alignment. Long localized timestamps truncate within
 that slot, with the full timestamp available in the tooltip. On mouse hover,
 keyboard focus, or while the menu is open, options replace time without moving

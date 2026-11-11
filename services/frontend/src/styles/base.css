@@ -650,14 +650,14 @@ pre.code {
 }
 
 .row-item--unread .row-item__title {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .chat-status {
   display: block;
   flex: none;
-  width: 0.8rem;
-  height: 0.8rem;
+  width: 0.875rem;
+  height: 0.875rem;
   color: var(--text-dim);
   /* Filled tiles echo the brand and never resemble unchecked boxes. */
   fill: currentColor;
@@ -671,14 +671,25 @@ pre.code {
   stroke-linecap: round;
 }
 
-.chat-status--active {
-  color: var(--agent-color);
-  animation: chat-status-pulse 2.8s ease-in-out infinite;
+/* A steady ring makes unread recognizable by shape as well as color, including
+   while the filled center is running. It never relies on title weight alone. */
+.chat-status--unread {
+  color: var(--session-color);
+  outline: .1rem solid var(--session-color);
+  outline-offset: .1rem;
+  border-radius: .2rem;
 }
 
+.chat-status--active {
+  color: color-mix(in srgb, var(--agent-color) 80%, var(--text));
+  animation: chat-status-pulse 1.8s ease-in-out infinite;
+}
+
+/* Animate the fill, not opacity: the unread ring and count remain steady.
+   Reduced motion leaves the stronger active color fully visible. */
 @keyframes chat-status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.65; }
+  0%, 100% { fill: currentColor; }
+  50% { fill: color-mix(in srgb, currentColor 25%, var(--surface-panel)); }
 }
 
 .row-item__title {

@@ -1,5 +1,5 @@
 <template>
-  <svg class="chat-status" :class="{ 'chat-status--active': active }"
+  <svg class="chat-status" :class="{ 'chat-status--active': active, 'chat-status--unread': unread }"
     viewBox="0 0 20 20" role="img" :aria-label="label" focusable="false">
     <title>{{ label }}</title>
     <rect x="1" y="1" width="18" height="18" rx="3" />
@@ -10,6 +10,7 @@
 <script setup>
 defineProps({
   active: { type: Boolean, default: false },
+  unread: { type: Boolean, default: false },
   lined: { type: Boolean, default: false },
   label: { type: String, required: true }
 })

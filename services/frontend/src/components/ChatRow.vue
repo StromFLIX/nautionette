@@ -17,10 +17,10 @@
           :aria-expanded="treeOpen" :aria-controls="treeOpen ? treeChildrenId : undefined"
           :aria-describedby="statusId" :title="`${treeCount} agent ${treeCount === 1 ? 'chat' : 'chats'} · ${statusLabel}`"
           @click="$emit('toggle-tree', chat.id)">
-          <ChatStatus :id="statusId" :active="active" lined :label="statusLabel" />
+          <ChatStatus :id="statusId" :active="active" :unread="unread" lined :label="statusLabel" />
           <span class="chat-list-item__count" aria-hidden="true">{{ treeCount > 99 ? '99+' : treeCount }}</span>
         </button>
-        <ChatStatus v-else :id="statusId" :active="active" :label="statusLabel" />
+        <ChatStatus v-else :id="statusId" :active="active" :unread="unread" :label="statusLabel" />
       </div>
       <div class="chat-list-item__trailing">
         <span class="row-item__time" :title="activityAt ? `Last activity ${fullTime(activityAt)}` : undefined">{{ shortTime(activityAt) }}</span>
@@ -157,7 +157,7 @@ function remove () {
    Fixed metadata slots align tiles across rows, regardless of count or timestamp. */
 .chat-list-item {
   --chat-menu-width: 2rem;
-  --chat-status-width: 2.25rem;
+  --chat-status-width: 1.75rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   position: relative;
@@ -176,18 +176,17 @@ function remove () {
   padding-block: calc(var(--list-padding) * 0.6);
 }
 .chat-list-item:hover > .row-item { background: var(--surface-hover); }
-.row-item__title { margin-inline-end: 10px; }
+.row-item__title { margin-inline-end: 6px; }
 
 .chat-list-item__meta {
   grid-area: 1 / 2;
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-inline-end: 6px;
+  gap: 4px;
+  margin-inline-end: 4px;
   pointer-events: none;
 }
-.chat-list-item--unread :deep(.chat-status:not(.chat-status--active)) { color: var(--text-muted); }
 
 .chat-list-item__status {
   display: grid;
@@ -216,10 +215,10 @@ function remove () {
    Large families show 99+; accessible names and tooltips retain the exact count. */
 .chat-list-item__count {
   position: absolute;
-  inset-inline-start: 50%;
+  inset-inline-end: 0;
   inset-block-start: calc(50% - .9rem);
   min-width: .75rem;
-  max-width: 50%;
+  max-width: 100%;
   box-sizing: border-box;
   padding-inline: 1px;
   border-radius: .2rem;
@@ -238,7 +237,7 @@ function remove () {
   align-items: center;
   justify-items: center;
   flex: none;
-  width: max(var(--chat-menu-width), 8ch);
+  width: max(var(--chat-menu-width), 7.5ch);
   min-width: 0;
   font-size: .6875rem;
 }
@@ -246,7 +245,7 @@ function remove () {
 .row-item__time {
   width: 100%;
   min-width: 0;
-  padding-inline: 3px;
+  padding-inline: 0;
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -266,7 +265,7 @@ function remove () {
 @media (max-width: 900px), (pointer: coarse) {
   .chat-list-item {
     --chat-menu-width: 44px;
-    --chat-status-width: max(2.25rem, 44px);
+    --chat-status-width: max(1.75rem, 44px);
   }
   .chat-list-item > .row-item,
   .chat-list-item__menu { min-height: 44px; }

@@ -60,6 +60,17 @@ for (const theme of ['orbit', 'daylight']) {
       const link = await row.locator('a').boundingBox()
       expect(slot.x + slot.width).toBeLessThanOrEqual(link.x + link.width)
       expect(before.x + before.width).toBeLessThan(status.x)
+      const spacing = await row.evaluate(el => {
+        const time = el.querySelector('.row-item__time')
+        const range = document.createRange()
+        range.selectNodeContents(time)
+        const square = el.querySelector('.chat-status').getBoundingClientRect()
+        return { width: el.querySelector('.chat-list-item__meta').getBoundingClientRect().width,
+          gap: range.getBoundingClientRect().left - square.right,
+          rem: parseFloat(getComputedStyle(document.documentElement).fontSize) }
+      })
+      expect(spacing.width).toBeLessThan(6 * spacing.rem)
+      expect(spacing.gap).toBeLessThan(1.5 * spacing.rem)
       if (interfaceSize === 150) await page.screenshot({ path: `/tmp/nautionette-chat-row-${theme}-idle.png` })
 
       await row.hover()
@@ -111,35 +122,66 @@ test('keyboard focus reveals options and an open popover keeps its trigger visib
   await expect(menu).toHaveCSS('opacity', '0')
 })
 
-test('standalone filled squares pulse for activity and unread uses independent title emphasis', async ({ page, context }) => {
-  const state = await fixture(context)
-  state.data.chat.unread = true
-  await page.goto('/chats')
-  const row = chatRow(page)
-  await expect(row.locator('.row-item__title')).toHaveCSS('font-weight', '500')
-  await expect(row.getByRole('img', { name: 'Inactive · Unread messages', exact: true })).toBeVisible()
-  await expect(row.locator('a')).toHaveAccessibleDescription('Inactive · Unread messages')
-  await expect(row.locator('.row-item__unread, circle, .chat-status__lines, .chat-list-item__tree, .chat-list-item__count')).toHaveCount(0)
-  await expect(row.locator('.chat-status rect')).toHaveAttribute('width', '18')
-  await expect(row.locator('.chat-status')).not.toHaveCSS('fill', 'none')
-  state.data.chat.unread = false
-  state.data.chat.answering = true
-  await page.evaluate(async () => (await import('/src/store.js')).actions.loadChats())
-  await expect(row.locator('a')).toHaveClass(/row-item--running/)
-  await expect(row.locator('.row-item__title')).toHaveCSS('font-weight', '400')
-  const status = row.getByRole('img', { name: 'Active', exact: true })
-  await expect(status).toBeVisible()
-  await expect(status).toHaveCSS('animation-name', 'chat-status-pulse')
-  await expect(status).toHaveCSS('animation-duration', '2.8s')
-  state.data.chat.unread = true
-  await page.evaluate(async () => (await import('/src/store.js')).actions.loadChats())
-  await expect(row.locator('a')).toHaveAccessibleDescription('Active · Unread messages')
-  await expect(row.locator('.row-item__title')).toHaveCSS('font-weight', '500')
-  await expect(row.locator('.chat-status')).toHaveCSS('animation-name', 'chat-status-pulse')
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  await expect(row.locator('.chat-status')).toHaveCSS('animation-name', 'none')
-  await expect(row.locator('.chat-status')).not.toHaveCSS('fill', 'none')
-})
+for (const theme of ['orbit', 'daylight', 'denkzeug', 'denkzeug-night']) {
+  test(`unread has a steady colored ring independent of the stronger active pulse in ${theme}`, async ({ page, context }) => {
+    const state = await fixture(context, { theme })
+    state.data.chat.unread = true
+    await page.goto('/chats')
+    const row = chatRow(page)
+    const square = row.locator('.chat-status')
+    await expect(row.locator('.row-item__title')).toHaveCSS('font-weight', '600')
+    await expect(row.locator('a')).toHaveAccessibleDescription('Inactive · Unread messages')
+    await expect(square).toHaveClass(/chat-status--unread/)
+    await expect(square).toHaveCSS('outline-style', 'solid')
+    await expect(square).not.toHaveCSS('fill', 'none')
+    await expect(row.locator('.row-item__unread, circle, .chat-status__lines, .chat-list-item__tree, .chat-list-item__count')).toHaveCount(0)
+    await expect(square.locator('rect')).toHaveAttribute('width', '18')
+    const unreadColor = await square.evaluate(el => getComputedStyle(el).color)
+    state.data.chat.unread = false
+    state.data.chat.answering = true
+    await page.evaluate(async () => (await import('/src/store.js')).actions.loadChats())
+    await expect(row.locator('a')).toHaveAccessibleDescription('Active')
+    await expect(row.locator('.row-item__title')).toHaveCSS('font-weight', '400')
+    await expect(square).toHaveCSS('outline-style', 'none')
+    await expect(square).toHaveCSS('animation-name', 'chat-status-pulse')
+    await expect(square).toHaveCSS('animation-duration', '1.8s')
+    expect(await square.evaluate(el => getComputedStyle(el).color)).not.toBe(unreadColor)
+    state.data.chat.unread = true
+    await page.evaluate(async () => (await import('/src/store.js')).actions.loadChats())
+    await expect(row.locator('a')).toHaveAccessibleDescription('Active · Unread messages')
+    await expect(square).toHaveClass(/chat-status--unread/)
+    // Sample both pulse phases deterministically. Only the fill may change: the
+    // unread ring, opacity and geometry must remain constant and readable.
+    const [bright, dim] = await square.evaluate(el => {
+      const animation = el.getAnimations()[0]
+      animation.pause()
+      const context = document.createElement('canvas').getContext('2d')
+      return [0, 900].map(time => {
+        animation.currentTime = time
+        const style = getComputedStyle(el)
+        context.clearRect(0, 0, 1, 1)
+        context.fillStyle = style.fill
+        context.fillRect(0, 0, 1, 1)
+        return { color: [...context.getImageData(0, 0, 1, 1).data].slice(0, 3),
+          outline: style.outline, opacity: style.opacity, width: el.getBoundingClientRect().width }
+      })
+    })
+    expect(Math.hypot(...bright.color.map((v, i) => v - dim.color[i]))).toBeGreaterThan(80)
+    expect(bright.outline).toBe(dim.outline)
+    expect(bright.opacity).toBe('1')
+    expect(dim.opacity).toBe('1')
+    expect(bright.width).toBe(dim.width)
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await expect(square).toHaveCSS('animation-name', 'none')
+    await expect(square).toHaveCSS('outline-style', 'solid')
+    await expect(square).not.toHaveCSS('fill', 'none')
+    state.data.chat.unread = false
+    await page.evaluate(async () => (await import('/src/store.js')).actions.loadChats())
+    await expect(square).toHaveCSS('outline-style', 'none')
+    await expect(square).toHaveClass(/chat-status--active/)
+    await expect(row.locator('.row-item__title')).toHaveCSS('font-weight', '400')
+  })
+}
 
 async function alignmentFixture (page, context, preferences = {}) {
   await fixture(context, preferences)
@@ -150,11 +192,11 @@ async function alignmentFixture (page, context, preferences = {}) {
   for (const [i, count] of [0, 1, 7, 10, 99, 103].entries()) {
     const timestamp = Date.parse(times[i]) / 1000
     const root = { id: `aligned-${i}`, title: i === 1 ? longTitle : `Aligned chat ${i}`,
-      created_at: timestamp, updated_at: timestamp, last_activity_at: timestamp, unread: i === 1 }
+      created_at: timestamp, updated_at: timestamp, last_activity_at: timestamp, unread: [1, 2, 4].includes(i) }
     chats.push(root)
     for (let child = 0; child < count; child++) chats.push({
       ...root, id: `${root.id}-child-${child}`, title: `Agent ${child}`, delegated_parent_chat_id: root.id,
-      unread: false, answering: i === 1 && child === 0
+      unread: false, answering: [1, 3].includes(i) && child === 0
     })
   }
   await context.route('**/api/chats', route => route.fulfill({ json: { chats } }))

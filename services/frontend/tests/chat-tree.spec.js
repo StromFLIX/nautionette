@@ -134,7 +134,8 @@ for (const preferences of [{}, { chatListAnimation: false }, { motion: 'reduced'
     await expect(square).toHaveCSS('animation-name', animation)
     await expect(square).not.toHaveCSS('fill', 'none')
     await expect(row.locator('a')).toHaveAccessibleDescription('Agent chats active · Unread agent replies')
-    await expect(row.locator('.row-item__title')).toHaveCSS('font-weight', '500')
+    await expect(row.locator('.row-item__title')).toHaveCSS('font-weight', '600')
+    await expect(square).toHaveCSS('outline-style', 'solid')
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await expect(square).toHaveCSS('animation-name', 'none')
     await expect(square).toHaveClass(/chat-status--active/)
@@ -142,12 +143,14 @@ for (const preferences of [{}, { chatListAnimation: false }, { motion: 'reduced'
     await page.evaluate(async () => (await import('/src/store.js')).actions.loadChats())
     await expect(square).not.toHaveClass(/chat-status--active/)
     await expect(row.locator('a')).toHaveAccessibleDescription('Inactive · Unread agent replies')
-    await expect(row.locator('.row-item__title')).toHaveCSS('font-weight', '500')
+    await expect(row.locator('.row-item__title')).toHaveCSS('font-weight', '600')
+    await expect(square).toHaveCSS('outline-style', 'solid')
     chats.splice(1, 3) // Removing the final children changes the same tile to a plain square.
     await page.evaluate(async () => (await import('/src/store.js')).actions.loadChats())
     await expect(row.locator('.chat-list-item__tree, .chat-status__lines, .chat-list-item__count')).toHaveCount(0)
     await expect(row.locator('.chat-status rect')).toHaveCount(1)
     await expect(row.locator('a')).toHaveAccessibleDescription('Inactive')
+    await expect(square).toHaveCSS('outline-style', 'none')
   })
 }
 
