@@ -1,0 +1,1511 @@
+# Technical reference
+
+Detailed runtime, API and implementation notes, moved out of the root README.
+Start with the [setup guide](self-hosting.md) or [documentation index](README.md).
+Commands below run from the repository root unless stated otherwise. For a
+specific feature, prefer its focused guide linked from the documentation index.
+
+## Architecture
+
+```mermaid
+flowchart TB
+    clients["Frontend (App + Web)"]
+    ext["External systems<br/>triggers in, webhooks out"]
+    be["Backend<br/>only entrypoint<br/>memory, search, metadata<br/>owns every agent call"]
+
+    subgraph net["Internal network - nothing published"]
+        broker["Docker broker<br/>owns the docker socket"]
+        gw["agentgateway<br/>MCP tools + models"]
+        wfmcp["workflow-mcp<br/>authoring tools"]
+        orch(["Temporal orchestrator"])
+        pg[("PostgreSQL")]
+        maxio[("MaxIO<br/>private output binaries")]
+        wk["Temporal workers 1..n<br/>at least one always running"]
+        pi["Pi run<br/>one container per call<br/>exits when the call ends"]
+    end
+
+    vol[("Shared workflow volume")]
+
+    clients <--> be
+    ext <--> be
+    be --> gw
+    be <-->|"authorized output downloads"| maxio
+    pi <-->|"signed binary transfers"| maxio
+    be <-->|"start runs, stats"| orch
+    be -->|"run_agent, restart_worker"| broker
+    broker -.->|"docker run --rm"| pi
+    broker -.->|"docker socket"| wk
+    be <-->|"history in, JSON out"| pi
+    wk <-->|"agent call: JSON object"| be
+    wk --> orch
+    orch --> pg
+    wk <-->|"tools and models"| gw
+    pi --> gw
+    gw --> wfmcp
+    gw -->|"Backend MCP tools"| be
+    wfmcp --> vol
+    wfmcp -->|"restart request"| be
+    be --- vol
+    wk --- vol
+    pi --- vol
+```
+
+Five rules the diagram encodes:
+
+- The backend is the app’s single published entrypoint. The promotional website has a separate published port; internal services stay private (apart from the optional debug profile).
+- Only the broker has the Docker socket. It offers fixed commands (`run_agent`, `restart_worker`), never a general "run this container".
+- Every agent call goes through the backend, whether a user or a workflow asked for it. Broker administration answers only to the backend. Mini-app runtimes have a separate, app-scoped capability adapter, never access to those administration verbs.
+- One shared volume holds the workflow files. Backend, workers and Pi runs all mount it.
+- Triggers come in and results go out through the backend only.
+
+## Components
+
+| Component | What it does |
+| --- | --- |
+| **Frontend** | One Quasar (Vue 3) codebase built with Vite. `npm run build` produces the web bundle served here; Capacitor wraps the same `dist/` as the app. Navigation separates Chats, Workflows, Runs and Apps. |
+| **Website** | The promotional site: an independently built static container with its own loopback port and optional public domain. The default Compose stack includes both app and website. |
+| **Backend** | The only entrypoint: auth, triggers, webhooks, streaming to clients. Also memory, search and metadata in a SQLite store. Calls the broker, but does not hold the Docker socket. |
+| **Docker broker** | Holds `/var/run/docker.sock`. Runs one Pi container per agent call (`docker run --rm`), builds missing agent images, and reconciles worker containers using fixed configuration and an image allowlist. |
+| **agentgateway** | Upstream binary with Node/npm/npx and Python/uvx runtimes for trusted stdio MCP targets. One data plane for tools and models: federates MCP servers on `/mcp`, fronts every configured model provider on `/v1`, adds per-tool authorization and an audit trail. Its checked-in config is the baseline; the model integrations and MCP servers added in the app persist as runtime resources in its own SQLite volume. Config in [services/agentgateway/config/config.yaml](../services/agentgateway/config/config.yaml). |
+| **workflow-mcp** | Our own MCP server, registered behind the gateway. Provides validated workflow authoring, immediate deployment, run controls and history, plus the REST side the backend uses to publish files. |
+| **Pi runs** | The agent runtime ([Pi](https://pi.dev), `@earendil-works/pi-coding-agent`). Pi is a CLI, so a call is a container run: start, work, exit. The base image is Node plus the Pi CLI plus `agent-run`, the wrapper that turns a job into NDJSON. An agent set extends it with Pi extensions and packages. |
+| **Temporal** | Orchestrator and workers. Durable runs, retries, schedules and history, stored in PostgreSQL. A workflow step can call MCP tools, invoke Pi, or run plain Python. |
+| **MaxIO** | Private S3-compatible storage for generated chat originals, editable sources and sanitized previews. SQLite keeps manifests/ownership; agents stream through scoped signed URLs. No host ports are published. |
+| **Shared volume** | Where workflow files live. What an agent writes is what a worker loads. Workflow run artifacts and project worktrees remain on their own volumes, separate from output object storage. |
+
+## Mini-apps
+
+Ask an agent to build an interactive app. Agents publish self-contained HTML/CSS/JavaScript with an optional lightweight Rust backend and bundled SQLite; ordinary buttons call the app directly, not a workflow. The **Apps** section supports ownership, pins, retained releases, archiving, rebuilding and restoring code. Pinned app avatars appear below chat/app search for their owning agent, or across agents in **All chats** and **All apps**. When the list is hidden on mobile or the sidebar is collapsed, shortcuts remain above the open chat/app.
+
+Generated frontends run in opaque-origin iframes without the instance token or browser storage. Platform-owned offline builds produce `scratch` runtimes; exact MCP/resource and public-HTTPS grants are enforced server-side. Runtime state has bounded persistent files on the broker’s `miniapps` volume. Rust runtimes require **Docker Engine 28+** for isolated gateway networks. No extra domains or manually configured per-app containers are required.
+
+See [the publishing contract, limits, security and operations guide](mini-apps.md).
+
+## Workspace customization
+
+The workspace uses a rounded-square design system and searchable, grouped
+settings. **Settings > Appearance** defaults to Denkzeug and offers Denkzeug night
+as well as the retained Orbit, Nebula, Daylight and Sand themes, with editable
+colors, fonts, spacing and layout tokens. Import
+complete **skin packs** with custom CSS, responsive layouts and bundled artwork or
+fonts; **Winamp Classic** and **Windows XP** are included as downloadable examples.
+The skin library preserves legacy theme imports and offers a recovery shortcut
+(**Ctrl/Command + Alt + 0**). See [Custom skin packs](skin-packs.md) for the
+format, styling hooks and safe mode. **Settings > Workspace** controls interface size,
+density, sidebar width, composer behavior, code wrapping and graph orientation.
+The interface defaults to **125%**, including on phones; choose 100%, 110%, 125% or
+150% without browser zoom. These preferences save on this device; instance settings
+and per-workflow configuration stay separate.
+
+The agent dropdown beside **Chat configuration** switches agents directly without
+opening preferences. It can **Reapply agent defaults** to discard per-chat overrides
+or **Reset to default agent** (global defaults when no default agent is configured).
+Both preserve draft text and attachments. Model selection, reasoning, tools and
+projects remain behind **Chat configuration** beside the attachment **plus**.
+Its controls start closed in each chat; opening one chat's controls never expands
+the next chat's composer.
+Provider-reported context usage appears as a circle in the chat header.
+
+To explore a different idea without changing the original, choose **Chat options
+> Branch chat** (also available in a chat's sidebar menu). The new chat keeps the
+conversation, native agent context, settings and original attachments, with its
+own Git HEAD, index and working files, including uncommitted and untracked work.
+Subsequent messages and edits are independent; branching does not create or push
+a Git branch. A note links back to the original conversation. Published outputs
+stay in the original chat rather than sharing mutable ownership. Wait for active
+and queued responses to finish before branching. Copies are limited to 1 GiB and
+100,000 files; large workspaces should be trimmed first. Nested Git repositories
+and initialized submodules cannot currently be branched.
+
+The joined **microphone / send** control supports live dictation through a private
+CPU-only Moonshine streaming service included in Compose. English/German models
+recognize audio as it arrives; Stop flushes only the remaining audio and finalizes
+an editable draft, never an automatically sent message. No cloud STT, model cleanup
+calls, provider keys or dictation feature flags. See [Chat dictation](dictation.md)
+for privacy, language selection, limits and verification.
+Open Settings with **Ctrl/Command + ,** and focus its search with **/**.
+See [Frontend design system](frontend-design.md) for the extension points,
+persistence model and testing guidance.
+
+## Conversation search
+
+On desktop, **Ctrl/Command + K** opens chat and settings search. Chats use **SQLite
+FTS5 + sqlite-vec** to search titles and full saved conversations by words and
+meaning. Results include matching passages and jump to the relevant message.
+Embeddings run locally on CPU with a pinned model bundled in the backend image;
+no provider key or separate search server is needed. Keyword search remains
+available during background semantic indexing. See [Conversation search](conversation-search.md)
+for scope, privacy, configuration and indexing behavior.
+
+## Defaults and reusable agents
+
+Configuration follows **global defaults → agent overrides → chat changes**.
+**Settings > General** sets the starting model, container environment, reasoning,
+MCP tools and writable projects. Choose **Global defaults** or a saved agent as the
+default for new chats. **Settings > Agents & models** creates, edits, duplicates and
+deletes reusable agents. Give each person an image and a system prompt, along with
+their model, tools, projects and extensions. Configurable defaults show **Inherited**
+or offer **Use global**.
+
+The chat workspace's agent column always starts with **All**, which shows every
+chat. Select a person to see only their chats and start new chats with that agent,
+regardless of remembered settings. On mobile this becomes a horizontally scrollable
+strip with All pinned first. Customizing a chat moves it to All without closing it;
+selecting/reapplying an agent explicitly restores membership. Only the latest agent
+selection counts. Agent/profile edits never reshuffle historical conversations.
+
+Pick an agent under **Chat configuration**, customize individual fields, or use
+**Reapply agent defaults**. Applying an agent to an existing chat is explicit:
+profile edits never rewrite existing chat settings or already accepted/queued turns.
+**Settings > Workspace > Chat > New chat settings** chooses how both the welcome
+composer and sidebar **New chat** start:
+- **Always use last settings** (the default): reuse the last model, agent, environment,
+  reasoning, tools, projects and extension revisions selected or used on this device.
+- **Always use defaults**: use the current global defaults and configured default agent.
+
+With no remembered settings, defaults apply. Last settings persist across reloads,
+separately for each backend. Opening an old chat does not replace them; choosing
+settings, creating a chat or sending a message does. Messages are never copied.
+These device preferences do not alter instance-wide defaults,
+saved agents or existing chats.
+
+**All tools**, **No tools**, and a selected list are distinct. A selected list stays
+pinned even if every current tool is selected; only **All** opts into future MCP
+tools. Built-in file and shell tools remain available. Projects are writable and
+must be ready; unavailable project defaults cause an actionable error rather than
+being silently dropped. Reasoning stays tied to its model.
+
+Saved agents are configuration presets, not container images: existing **agent
+sets** remain selectable environments. Workflow activities retain their explicit
+configuration; profiles do not automatically change deployed workflows.
+See [Agent configuration](agent-configuration.md) for API semantics, migration
+and deployment requirements.
+
+### Agent-to-agent delegation
+
+The tool picker has a separate **Agents** group (`list_subagents`, `call_subagent`,
+`wait_for_subagent`), selectable independently from backend administration tools.
+**All tools** includes it; **No tools** and pinned selections without those names do
+not. Each saved agent also has an **Allowed subagents** list, empty by default.
+An enabled tool group alone grants no targets.
+
+**Settings > General > Agent delegation limits** controls maximum depth (default 3),
+total child calls per turn (5), and unfinished calls across a whole tree (4).
+Root depth is 0; parallelism excludes the root but includes waiting subagent parents.
+Admission fails at capacity instead of queueing into a possible nested deadlock;
+wait for an existing call before retrying. Zero disables calls. Trees retain their
+initial ceilings; lowering a global limit also applies to existing trees.
+
+Calls are asynchronous and return durable IDs. Agents can wait/poll for completion,
+create a new target-agent chat, or continue an unmodified delegated chat previously
+opened by the same initiating chat. They cannot inject tasks into arbitrary human
+chats or ancestors. Requests and answers carry saved agent attribution in the UI;
+the target is explicitly told the sender is an agent, not the human. Child runs use
+the target's own configuration and separate chat worktrees. Stop/failure propagates
+to descendants; ordinary parent completion leaves asynchronous children running.
+Interrupted/uncertain calls are never automatically replayed. Allowlist revocations
+apply immediately, unlike copied model/persona defaults. See
+[Agent configuration](agent-configuration.md#agent-to-agent-delegation) for APIs
+and exact limit semantics.
+
+## Desktop and iOS builds
+
+All clients reuse the frontend and connect to an existing instance with its URL
+and access token; they do **not** bundle the Python/Docker server.
+
+The **Desktop** workflow (`.github/workflows/desktop.yml`) builds on pushes to
+`main`, pull requests and manual runs:
+
+| Platform | Artifact | Architecture |
+| --- | --- | --- |
+| macOS | DMG | Apple silicon (arm64) and Intel (x64) |
+| Linux | AppImage | x64 |
+| Windows | NSIS installer (EXE) | x64 |
+
+A `v<semver>` tag (for example `v1.2.3`) sets the desktop version and attaches
+`nautionette-v1.2.3-<mac|linux|win>-<arch>.<dmg|AppImage|exe>` to the same GitHub
+Release as Android. Branch/PR builds are available as Actions artifacts only.
+Packaging retries transient HTTP 429/5xx and network failures up to three attempts
+with 30/60-second backoff; checksum, compilation and signing errors fail normally.
+Installers upload independently, so a failed platform can leave a partial release.
+To recover an existing release, open its tag's **Desktop** Actions run and choose
+**Re-run failed jobs** (requires Actions write permission); rerunning a branch
+build does not attach installers to a release. Do not move an existing release tag.
+These desktop installers are **unsigned**, not notarized: macOS Gatekeeper and
+Windows SmartScreen can block or warn about them. Production signing/notarization
+requires the respective certificates and a separate signing setup. Only install
+trusted artifacts. On Linux, make the AppImage executable; some distributions
+need FUSE support. ARM Linux and Windows ARM are not currently built.
+
+For a local desktop build, run `npm ci` then `npm run desktop:build` from
+`services/frontend`; `npm run desktop:dev` opens the packaged web UI. The
+Electron renderer is sandboxed with context isolation, no Node integration and
+no privileged IPC. External web links open in your browser. Authenticated file
+downloads use the browser save dialog; audio recording requires OS permission.
+
+The **iOS** workflow (`.github/workflows/ios.yml`) builds a simulator app and an
+**unsigned device archive** on macOS/Xcode. Both are Actions artifacts, including
+on tags; neither is advertised as a public installable IPA. It uses Capacitor
+8's Swift Package Manager project. Native permissions and the Filesystem privacy
+manifest are applied on every sync from `services/frontend/native/ios`.
+
+To develop on a Mac:
+
+```bash
+cd services/frontend
+npm ci
+npm run build
+npm run ios:add       # once; generated ios/ is intentionally ignored
+# After frontend/native changes: npm run build && npm run ios:sync
+npx cap open ios
+```
+
+Choose your Apple Developer team in Xcode's **Signing & Capabilities**, set the
+version/build number, use **Product → Archive**, and distribute through Organizer
+to App Store Connect/TestFlight (or a provisioned ad-hoc device). Public iOS
+installation requires Apple Developer membership, signing/provisioning and
+Apple's distribution/review steps; a GitHub download cannot replace that.
+Downloads use the iOS share sheet's **Save to Files**, with bounded private-cache
+staging and cleanup. Microphone usage is declared for dictation.
+
+### Website release downloads
+
+The landing page's **Downloads** section fetches GitHub's latest stable release,
+shows its exact tag and links directly to each **uploaded asset**. Missing,
+failed or still-building platforms get no dead download buttons. Prereleases and
+unsigned iOS archives are not advertised. If GitHub is unreachable/rate-limited,
+visitors still have the permanent **All releases & release notes** link.
+
+Once Apple distribution exists, set the website's `IOS_DOWNLOAD_URL` environment
+variable to its public `https://testflight.apple.com/join/...` or
+`https://apps.apple.com/.../id...` link. The page then adds an iOS install button;
+it never links an unsigned archive as an iPhone download. This setting is a
+public URL, not a signing credential.
+
+## Signed Android releases
+
+The **Android** workflow (`.github/workflows/android.yml`) builds debug APKs for
+pushes to `main`, pull requests and manual branch runs. Pushing a `v*` tag builds
+a release APK, aligns it, signs it, verifies the signature and attaches
+`nautionette-<tag>-release.apk` to the GitHub Release. Both paths also upload the
+`nautionette-apk` Actions artifact. Tag builds fail if signing secrets are missing;
+they never fall back to a debug or unsigned APK.
+
+### One-time signing setup
+
+Generate a private signing key **on your own computer**, with a JDK installed:
+
+```bash
+keytool -genkeypair -v -keystore nautionette-release.jks \
+  -alias nautionette -keyalg RSA -keysize 2048 -validity 10000
+```
+
+Back up the keystore and passwords securely. Never commit them, upload them as
+release assets, or paste them in a chat. Future updates must use the same key.
+In **GitHub repository → Settings → Secrets and variables → Actions**, add:
+
+| Secret | Value |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | Base64-encoded keystore, as a single line |
+| `ANDROID_KEYSTORE_PASSWORD` | Keystore password |
+| `ANDROID_KEY_ALIAS` | `nautionette` (or the alias you chose) |
+| `ANDROID_KEY_PASSWORD` | Key password (often the same as the keystore password) |
+
+To encode the keystore on Linux or macOS (treat the output as a secret):
+
+```bash
+base64 < nautionette-release.jks | tr -d '\\n'
+```
+
+### Publish a release
+
+After the workflow changes are on `main`, tag the commit you want to release
+(use a new, unused version each time):
+
+```bash
+git switch main
+git pull --ff-only
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Wait for the **Android** workflow to succeed, then download the APK from
+**Releases → Assets**. Workflow logs print the public signing-certificate
+fingerprint for verification, never the private key or passwords.
+
+A release-signed APK cannot update an installed debug-signed APK with the same
+application ID. Uninstall the debug app first (this clears its local app data),
+then install the release APK. Subsequent release APKs must retain the signing key.
+This is APK signing for sideloading, not a Google Play upload or Play App Signing setup.
+
+## Saving chat files on Android
+
+**Download** in Outputs (and file attachments) opens Android's **Save to** picker.
+Choose Downloads or another document provider and confirm **Save**. The app reports
+success only after the bytes are written; cancelling or a storage error stays
+visible and lets you retry. Files are fetched with your existing authentication,
+not opened in the app's WebView or handed to an unauthenticated download URL.
+No broad storage permission is needed. Browser downloads work as before.
+
+This requires the updated APK, not just a server deployment. The **Android** GitHub
+Actions run publishes the `nautionette-apk` artifact for every push to `main`.
+Install that APK to get the native save bridge. For a manual device check, save a
+PDF, an editable source and a preview from Outputs; verify their bytes and names
+in the selected destination, then check cancellation and retry.
+
+## Chat delivery and recovery
+
+Interactive chats resume their **durable native Pi session**, including tool
+commands/results, compaction checkpoints and extension session entries. Containers
+still exit after each call; only the chat-scoped session and original attachments
+persist. Pi owns context and automatic compaction, not the UI's visible/collapsed
+history. Use `/compact` manually or the agent's read-only `chat_history` tool to
+retrieve older exact evidence. Existing chats import the stored transcript once,
+explicitly marking legacy evidence as incomplete.
+
+This requires **Docker Engine 26+** for per-chat volume-subpath isolation. Back up
+**chat-sessions together with backend-data**. Stop an active response before
+deleting its chat; deletion removes that chat's persisted state after cleanup.
+See [Durable native Pi sessions](chat-sessions.md) for storage limits,
+input/crash safety, migration, native session inspection and deployment tests.
+
+Web and Android use the same thin client. The backend owns accepted messages,
+active turns, partial text/tool timelines, and completed answers in SQLite.
+Closing a tab, navigating away, or suspending Android does not stop an answer.
+Each conversation has an authenticated reconnecting snapshot stream; opening it
+on another device immediately recovers its current progress. Separate conversations
+run concurrently, and the chat list shows which ones are answering.
+
+The client keeps up to 100 full chat snapshots in IndexedDB, scoped to the instance
+URL, plus the chat list. The latest 100 chats are downloaded in the background
+with two concurrent requests while connected. Opening a conversation displays its
+cached history and last known progress while reconnecting; fresh server snapshots
+replace the cached view. Uncached conversations show a connection state instead of
+a blank transcript. Cached active turns do not block queueing replies offline.
+The backend remains authoritative for projects, models, tools, and other settings.
+Local history depends on available device storage; storage failures show a warning.
+
+A separate durable outbox holds messages not yet acknowledged by the server,
+scoped to the instance URL. Cache eviction never removes queued messages. Messages appear immediately
+as **Sending** with a clock; network errors, timeouts, busy chats, and server errors
+retry with capped exponential backoff while the app is open. Reloading or resuming
+the app resumes delivery. A stable `message_id` prevents a lost acknowledgement
+from creating a duplicate turn. Acceptance briefly shows a checkmark; permanent
+rejections remain visible with retry and discard controls. An unsent message cannot
+appear on another device until a client successfully delivers it. Clearing app or
+browser storage removes unsent messages. Creating a new chat requires connectivity.
+
+`POST /api/chats/{id}/messages` accepts `{text, message_id, project_ids?, attachment_ids?, queue?}`. With
+`Accept: application/json`, it returns `202` after durable acceptance; otherwise it
+replays the turn's SSE events for compatibility. `GET /api/chats/{id}` and
+`GET /api/chats/{id}/stream` expose the same recoverable snapshot, including
+`active_turn`. The app sends `queue: true`: messages sent during a response are
+persisted in the backend and shown under **Queued**, including after reconnecting
+on another device. Pi receives compatible messages in order after its current
+assistant turn's tool calls finish, before the next model request. Messages with
+different model, tools, agent set, or project selections wait for a fresh container.
+When a queued message is consumed, the preceding assistant text and tool steps are
+saved before it as a separate reply. Live snapshots, reloads, and later turns keep
+the conversation in that order rather than merging replies across queued inputs.
+Unconsumed messages automatically start subsequent turns with updated history.
+Only one container processes a chat at a time. Legacy clients omitting `queue`
+still receive a retryable `409` for a busy chat. Queue requests return JSON `202`.
+
+**Stop response** requests `POST /api/chats/{id}/stop` with `{turn_id}`. The broker
+terminates that exact chat container (including running shell commands), or cancels
+its pending startup. Partial output is retained, and queued messages are paused,
+not discarded. Stop cannot undo tools' already-completed external side effects.
+Use **Resume queued messages** (`POST /api/chats/{id}/queue/resume`) to continue;
+idle queued messages can be removed with `DELETE /api/chats/{id}/queue/{message_id}`.
+These controls require user authentication and are not exposed as MCP tools.
+
+### Safe automatic continuation
+
+Recoverable model failures no longer require a manual “continue” message. The Pi
+runner waits for native retries and context compaction to finish, then permits at
+most **two automatic continuations per chat container**, with **2s and 5s backoff**.
+It stays in the **same live session and workspace**, retaining tool calls/results,
+images, edits, credentials and the original tool/project/model restrictions. The
+continuation asks the agent to review the latest instructions and completed work,
+verify uncertain external outcomes read-only, and do only the unfinished work.
+It never replays the original job or directly reruns a tool. This is not an
+exactly-once guarantee for external systems: uncertain actions must be verified,
+not repeated blindly.
+
+The live response shows **Recovering automatically**; recovery attempts remain in
+the saved timeline after reload, without adding fake user messages. **Stop response**
+works during backoff, native retry and continuation. The existing overall container
+time limit still applies; recovery never extends it. New user messages remain queued
+while the internal continuation is being submitted and are acknowledged only when
+Pi actually consumes them.
+
+Only recognized transient model failures (rate limits, temporary server/network
+errors and unknown-model-error responses) get this continuation budget. Authentication,
+permissions, billing/quota, invalid requests, exhausted context compaction, extension
+errors, user cancellation, and tools with missing results do not. A process crash,
+broker disconnect or missing final result is **not success**, even if partial prose
+was already streamed. When continuation is unsafe or exhausted, the partial answer
+and error are retained and the queue is paused instead of cascading into more work.
+Use **Resume queued messages** after resolving the blocker. These changes require
+rebuilding the **Pi base/agent images, backend and frontend**; existing live containers
+continue using their original runner.
+
+Interactive generation is independent of client connections, but is not a Temporal
+workflow. The packaged backend uses `python -m nautionette_backend.server` to
+**drain active turns on SIGTERM/SIGINT before closing HTTP/MCP**. Active agents
+keep their streams, tool access, controls and credential renewal until completion;
+new chat submissions and queue-resume requests get `503` with `Retry-After: 5`.
+No new queued turn or steering delivery starts during draining (already-delivered
+steering may still be consumed). The read-only `/healthz` stays healthy and exposes
+`chat_draining: true`. After the active turn and its agent cleanup finish, untouched
+queued messages stay durable and resume automatically after the new backend's
+listener opens. Successful output is saved once, not generated again.
+
+`BACKEND_CHAT_DRAIN_SECONDS` bounds the wait (default `3600`; `0` skips waiting).
+`BACKEND_STOP_GRACE_PERIOD` defaults to `3720s` in Compose to leave cleanup headroom;
+keep it **longer than the drain window**, including time to close SSE connections
+and remove agents. A second termination signal skips the remaining wait, not cleanup.
+Rebuild the backend image and recreate the service to use this entrypoint. Running
+plain `uvicorn nautionette_backend.main:app` bypasses pre-listener-shutdown draining
+and automatic queue startup. Keep the broker, gateway, MCP services and networks
+available throughout the drain; when replacing the whole stack, drain/stop the
+backend before replacing its dependencies. Deployment-platform stop deadlines
+must also honor the configured grace period.
+
+If the deadline expires, or the process crashes/is killed, unfinished turns retain
+partial output and become explicitly interrupted answers with instructions to
+verify unfinished tools. Their queues stay paused until explicitly resumed. Tools
+are **not automatically replayed**: external side effects may already have happened,
+and graceful draining does not provide crash-safe reattachment or exactly-once
+execution for arbitrary tools. Manually paused queues remain paused. Run one backend
+process per SQLite database; startup recovery assumes ownership of unfinished turns.
+
+Shutdown still waits for each active chat agent to be removed and its worktree
+claim released. After a crash, startup recovery reconciles surviving chat agents
+against their exact database turn state, including agents whose turns were already
+finished. Recovery retries if the broker is still starting. Each new turn also
+requires successful cleanup before preparing its project worktrees. Cleanup failures
+pause the affected queue and report a retryable error; retrying the message retries
+cleanup. Existing edits, local commits, and worktree locks are preserved—never delete
+or bypass the locks.
+
+Restart regressions run without Docker or a provider:
+`uv run pytest tests/backend/test_chat_draining.py tests/backend/test_chat_restart_process.py`.
+The process tests use the real server/lifespan/SQLite/turn pipeline, a real read-only
+child tool and an open SSE stream, with model and Docker infrastructure faked. They
+exercise SIGTERM plus restart and queued follow-up (one tool launch per turn, no
+duplicated output), and SIGKILL recovery without unsafe replay.
+
+Broker inventory and cleanup are internal authenticated verbs, scoped by the
+actual deployment workflows-volume mount plus chat/turn IDs. This includes legacy
+containers without a deployment label, excludes staging copies on other volumes,
+and leaves running turns and workflow agents alone. Each deployment must have its
+own workflows volume. Late run requests for a cleaned-up turn are fenced for the
+maximum agent-call and image-build duration.
+
+Deploy recovery changes to **both** services: rebuild/recreate `docker-broker`
+first, then `backend` (or deploy them together). An old broker without the cleanup
+verbs causes new chats to fail closed until it is upgraded. Validate real Docker
+cleanup and Git preservation with
+`NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_chat_recovery_docker.py`
+(on a Docker host with `nautionette/pi-base:dev` built).
+
+Deploy chat controls by rebuilding/recreating the backend, Docker broker, frontend,
+and Pi agent images. Chat containers use Pi RPC mode for live steering; workflow
+agent calls retain their existing one-shot JSON mode. Validate the real runtime with
+`NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_chat_control_docker.py`.
+
+### File attachments
+
+Use **Attach files**, paste, or drop files onto the composer. Any file type is accepted,
+including PDFs, CSVs, source files, archives, and files without a known MIME type.
+Attach at most **four files per message**, **5 MiB per file**; files must be nonempty.
+Text is optional. Remove draft attachments before sending, or download files from
+message and queue cards. Downloads are authenticated; non-image files are never
+embedded as executable HTML/SVG or other active content.
+
+PNG, JPEG, GIF, and WebP retain image previews and model vision input, with a
+**25 megapixel** limit. The backend validates these images against their MIME type.
+Known text-only models and incompatible API routes reject vision images, including
+paste/drop and direct API sends before the catalog is cached. Other attachments
+remain usable with every model. Switching models preserves the draft but blocks
+sending incompatible images until removed. Unknown support is labelled
+**Image support unverified** and remains usable—not mislabelled as text-only.
+
+Original attachments arrive **unchanged** in the chat's durable mounted storage under
+`/chat-session/attachments/<id>.<extension>`. The prompt maps original filenames to
+safe, unique paths. Uploading does not parse, extract text, perform OCR, unpack,
+or execute files. The agent chooses how to inspect them using its tools; usable
+formats depend on the tooling available in the selected agent environment.
+Scanned and encrypted PDFs are not rejected simply for lacking extractable text.
+
+The model picker reports **Images**, **No images**, or **Images unverified**.
+`/api/catalog` exposes `api`, `api_source`, tri-state `supports_images`, and
+`image_support_reason` for the winning integration/model/API route. Capabilities
+from another integration serving the same model cannot certify that route.
+Copilot vision metadata without advertised endpoints is unverified. A provider
+capability declaration is not an end-to-end image test: HTTP 200 can still hide
+image loss, so no automatic or billable vision probes run during discovery.
+
+Composer drafts are saved per chat in IndexedDB as you edit, including original file
+bytes, separately from the bounded history cache. Switching chats, leaving the chat view,
+or reloading restores unsent text and files. Drafts in existing chats also sync to the
+server in the background, and are retrieved when opening that chat on another device or
+returning to a visible window. The welcome/new-chat placeholder is device-local until a
+chat is created. Offline edits stay local and retry on reconnect; storage/sync failures
+are shown beside the composer. Concurrent edits use revision checks: a stale device
+keeps its local copy and shows a conflict rather than silently replacing either draft.
+Drafts are private composer state, never messages, search results, or agent context.
+Sending hands the message to the durable outbox before clearing that chat's draft.
+Browser storage can still be removed by clearing site data or device/browser eviction;
+only successfully synced drafts are recoverable from another device.
+
+Attachments upload during draft sync or before a message enters the durable outbox.
+Upload failures keep the current draft for retry; successful uploads are reused. Once
+uploaded, only attachment IDs and metadata enter the outbox and transcript cache—not
+file bytes. Historical or remotely restored files are fetched through authenticated
+endpoints and require connectivity unless their original bytes are already saved locally.
+
+`POST /api/chats/{id}/attachments?name=...` accepts raw bytes with their `Content-Type`
+(or `application/octet-stream` if unknown) and returns `{id, name, mime_type, size}`.
+Send the returned IDs as `attachment_ids` with a message.
+`GET /api/chats/{id}/attachments/{attachment_id}` retrieves the original bytes;
+`DELETE` discards an upload only while it is unattached and not referenced by a saved draft. The legacy `/images` routes
+remain aliases. Bytes live in the existing SQLite `chat_images` table separately
+from messages/events and are deleted with the message or chat. Unattached uploads
+older than 24 hours are cleaned up on subsequent uploads unless referenced by a saved draft;
+at most 20 unsent uploads per chat. Saved draft attachments do not expire.
+`GET /api/chats/{id}/draft` reads `{revision, mutation_id, text, attachments}`;
+`PUT` takes `{revision, mutation_id, text, attachment_ids?}`. Writes are revision-checked
+(409 on conflict), retries of the same mutation are idempotent, and clearing retains a
+revision tombstone so delayed writes cannot resurrect a sent draft.
+
+Queued attachment messages wait for their own turn so steering cannot drop files.
+Pi receives supported images through RPC; all originals are written privately to
+chat-scoped durable storage with generated filenames, never overwriting workspace
+instructions. Later turns resume native messages and attachment references, rather
+than replaying a character-trimmed transcript. All originals stay accessible to tools;
+switching to a text-only model omits historical vision blocks from that request only.
+File references, not binary contents, are charged to text context. All file-bearing jobs and other large jobs use a private
+file copied into the container, never environment variables. Raw bytes are not written
+to `JOB.json`, persisted jobs, snapshots, or events.
+Deploy by rebuilding the backend, Docker broker, frontend, and Pi images together.
+
+File regression checks: `uv run pytest tests/backend/test_chat_files.py tests/backend/test_chat_images.py
+ tests/broker/test_broker.py`, `node --test tests/agent/test_chat_files.mjs tests/agent/test_images.mjs`,
+and `npm --prefix services/frontend run test:e2e -- tests/chat.spec.js --grep 'PDF|files|images'`.
+
+For Copilot, the catalog reads the model's `supported_endpoints` through agentgateway
+before choosing its wire format. Chat jobs pin that choice as `model_api`; the Pi
+wrapper passes it as `NAUTIONETTE_MODEL_API`, so execution uses the exact API whose
+capabilities were reported. Workflows and older jobs still discover the API in the
+agent. Claude and Gemini use Chat Completions; models advertising Responses (including newer GPT models) use Responses. Sending Claude
+images through the Responses compatibility path can produce a successful HTTP
+response while silently losing the images. If catalog discovery is unavailable,
+GPT-5+ falls back to Responses and other models to Chat Completions. Model/API
+selection is logged without image bytes or credentials.
+
+Regression checks: `node --test tests/agent/test_images.mjs tests/agent/test_provider.ts
+ tests/agent/test_model_api.ts tests/agent/test_image_transport.mjs` (Node 24).
+The transport check needs `pi` installed and runs real Pi RPC against a local fake
+gateway, without internet or model credentials; CI runs it inside the agent image.
+For a live smoke test, send a small solid-color PNG to Copilot Claude and a newer
+GPT model, and verify both identify the color, including on a follow-up turn.
+Deploy these capability and routing fixes together by rebuilding the backend,
+frontend, and Docker broker; the broker rebuilds the changed Pi base and
+agent-set images automatically. Existing agent containers retain their old routing
+until the next turn.
+
+### Generated outputs
+
+Each chat has **Chat / Outputs** tabs. The default agent's `publish_output` tool
+publishes local files, raster previews and editable source documents to durable,
+chat-owned storage; `read_output` restores them in a later sandbox. Output cards
+link from replies, downloads are authenticated, and immutable revisions update the
+latest snapshot without stealing focus or marking hidden chat replies as read.
+The browser can disconnect while the agent works.
+
+PNG/JPEG/GIF/WebP have safe, enlarged image previews. PDFs and other file formats
+are downloads; publish generated page images alongside a PDF for mobile previews.
+Original bytes and saved source survive disposable agent containers. Publication
+uses the existing sandbox; it adds no editor/WASM viewer or dedicated Rust workers.
+
+Originals, editable sources and safe previews live in **MaxIO**, not SQLite BLOBs.
+The binary path bypasses MCP/base64 payload limits. **Settings > Storage** shows
+all revisions, usage, configurable quotas, verified legacy migration, selected/age
+cleanup, opt-in retention and the actual backing filesystem's available space.
+Quota errors return a working settings link. Back up `maxio-data` together with
+`backend-data`; database-only backups no longer include all output binaries.
+MaxIO is pinned to 0.4.2 and upstream warns it is not yet production-ready.
+
+See [Durable chat outputs](chat-outputs.md) for tool examples, revision and
+restore semantics, quotas, authorization, migration and deployment checks. Set
+separate MaxIO credentials, then rebuild backend, frontend and the default agent
+image together; Compose provisions the private MaxIO service/bucket.
+
+### Native creative apps
+
+Deployment prepares all 13 ArtCraft native CLIs in verified, read-only tool
+volumes, keeping their binaries out of the Pi image: PhotoCraft,
+VectorCraft, FilmCraft, LightCraft, PdfCraft, EffectCraft, DesignCraft, FigCraft,
+WordCraft, SoundCraft, DeckCraft, CADCraft and GridCraft. Agents discover and use
+headless tools through `craft_apps`, `craft_tools` and `craft_call`; no browser
+connection or manual MCP setup is required. Ask for a deliverable, then find its
+published source, exports and preview under **Outputs**. Later turns can restore
+and revise the source.
+
+**Settings → Creative apps** immediately shows cached latest-version/update
+badges, checks releases, updates one app or **Update all**, and offers opt-in
+hourly **Automatically update all apps**. Exact pins/default restore remain under
+**Version options**. Updates queue persistently with two checksum/MCP-verifying
+installers at a time; failures keep the working version. Automatic updates include
+disabled apps and replace manual pins, but never downgrade a newer selected
+version. New turns receive the updated selection; running containers retain
+their pinned binaries. Engines start on
+demand and share the existing sandbox's resource/security boundary; desktop-only
+commands and embedded interactive editors are not included.
+
+See [Native creative applications](creative-apps.md) for lifecycle, update
+isolation, limits, tests and deployment details.
+
+### Reasoning effort
+
+The reasoning control under **Chat configuration** shows only the selected model's
+advertised levels. **Provider default** sends no effort override; it does not
+disable reasoning. It remains the factory default, but new chats can inherit an
+explicit effort from global defaults or their selected agent. Copilot advertises levels
+in `capabilities.supports.reasoning_effort`; OpenRouter advertises them in
+`reasoning.supported_efforts`. A reasoning boolean, mandatory reasoning, or a
+`reasoning` entry in `supported_parameters` alone is not enough to invent levels.
+Models without an advertised list, or without a compatible API route, have no
+selectable levels. Higher levels may increase latency and cost.
+
+`/api/catalog` exposes `supports_reasoning`, `reasoning_efforts`, and
+`reasoning_format` for the winning integration. Create/patch a chat with
+`reasoning_effort: null` for provider default, or one of that model's exact values
+(`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, as advertised).
+The selection persists per chat. Switching models resets it to provider default
+unless the API caller supplies a new valid selection. Invalid or stale selections
+return HTTP 422 before a message is accepted.
+
+Each accepted turn pins its effort, model and capability list in the durable job.
+Queued messages with a different effort wait for a new agent instead of steering
+an already-running request. Pi receives `NAUTIONETTE_MODEL_REASONING` and
+`NAUTIONETTE_REASONING_EFFORT`; the extension enables reasoning capabilities and
+applies the exact effort immediately before the provider request. Responses and
+OpenRouter use `reasoning.effort`; other Chat Completions routes use
+`reasoning_effort`. This avoids Pi clamping `max`/`xhigh` or treating provider
+default as `none`. Default jobs and workflows without a selection send no override.
+
+Rebuild the backend, frontend, and Docker broker together; the broker rebuilds the
+changed Pi base and agent-set images. New turns use the updated runtime.
+Regression checks include `tests/backend/test_reasoning.py`,
+`node --test tests/agent/test_reasoning.ts tests/agent/test_image_transport.mjs`,
+and `npm run test:e2e -- tests/chat.spec.js --grep reasoning` in `services/frontend`.
+The transport tests run real Pi against a local fake gateway, not billable models.
+
+### Request buffers and agent capacity
+
+The gateway's global `frontendPolicies.http.maxBufferSize` in
+[`services/agentgateway/config/config.yaml`](../services/agentgateway/config/config.yaml)
+is **256 MiB (268,435,456 bytes)** for buffered requests and responses across LLM
+and MCP routes, up from upstream's **2 MiB** default. This is a serialized-byte
+limit, not a model token limit: it includes instructions, tool schemas/results,
+history and base64 images (which add roughly one third to the image size).
+Requests over the ceiling still fail with HTTP 413 / `request_body_too_large`.
+
+Agent containers default to **4 GiB** of memory (`AGENT_MEMORY_LIMIT=4g`, previously
+1 GiB) and a **1 GiB** ephemeral `/workspace` (`AGENT_WORKSPACE_SIZE=1g`, previously
+256 MiB), for larger payloads, attachments and working files. These are per-agent
+ceilings, not reservations; workspace tmpfs usage counts toward the memory limit.
+Size the host for concurrent agents and gateway buffering/JSON parsing, which can
+use several times the payload size per in-flight request.
+
+These limits do **not** enlarge a provider's context window, output-token limit,
+or its own HTTP/image limits. Model-aware history budgeting, upload/image safety
+checks, tool-preview truncation, authentication and timeouts are unchanged.
+
+Deploy the buffer and capacity changes by rebuilding/recreating the gateway and
+broker: `docker compose up -d --build agentgateway docker-broker`. The gateway
+config is baked into its image; restarting the old image is not enough. Explicit
+`AGENT_MEMORY_LIMIT` environment values still win over the new default, so update
+an existing `1g` override if you want 4 GiB. New agent containers use the new caps;
+existing turns keep their original container limits. Do not automatically replay
+failed tool calls; continue affected chats after the new gateway is running.
+
+### Agent runtime limits
+
+Chat turns default to a one-hour wall-clock limit (`AGENT_RUN_TIMEOUT_SECONDS=3600`),
+including tool execution. The same setting
+is passed to **both backend and Docker broker**: the backend requests this budget,
+and the broker enforces it even when the agent produces no output. Recreate both
+services after changing it. Existing deployments explicitly configured with `900`
+retain their 15-minute limit until that environment value is updated; an already
+running turn keeps its original budget.
+
+For a specific long-running session, open **Chat options → Disable agent timeout**.
+This saved, per-chat exemption removes both the container's wall-clock watchdog and
+the backend's agent-stream read timeout. The header shows **No agent timeout** while
+it is enabled. It applies to messages accepted after the change; already running
+or queued turns keep their original settings. Uncheck it to restore the default
+for future messages. It is never inherited by other chats or agent profiles.
+API clients can set the boolean `timeout_exempt` when creating or patching a chat.
+
+Exempt chats can keep consuming resources and model usage until they finish or you
+press **Stop**. Tool/provider-specific timeouts, image-build limits, memory limits,
+and shutdown/recovery behavior are unchanged. This is not protection against
+service restarts. Deploy the backend, Docker broker, and frontend together to
+make this option available.
+
+Workflow agent calls still default to 900 seconds. For longer calls, set the
+activity's `timeout_seconds`, increase its Temporal `start_to_close_timeout` and
+workflow timeout as needed, and ensure the broker ceiling is at least as large.
+
+A watchdog expiry is reported as a **time limit**, Docker-confirmed OOM as **out of
+memory** (with `AGENT_MEMORY_LIMIT`, default `4g`), and other exit-137 failures as
+**SIGKILL with an unconfirmed cause**. Exit 137 alone is not evidence of OOM.
+Failed turns retain their partial transcript and persistent project worktrees;
+continue with a new message rather than automatically replaying tools that may
+already have produced external side effects.
+
+### Sandbox networking
+
+Sandboxes have outbound internet access from startup, including Git fetch/pull/push,
+HTTP/API requests and package downloads. There is no network permission tool,
+per-chat decision or approval UI. The model/tool gateway remains unchanged.
+
+Chat containers use the outbound-enabled `nautionette-agent-sandboxes` network,
+shared with agentgateway but not the backend or Docker broker. Workflow containers
+continue to use the service network, which also supports outbound access. Chat
+containers still receive no internal service credential, drop all capabilities,
+and use `no-new-privileges`. Configure distinct `APP_TOKEN` and `INTERNAL_TOKEN`
+values for shared deployments.
+
+After updating, rebuild/recreate backend, docker-broker, frontend-web and
+agentgateway with `docker compose up -d --build backend docker-broker frontend-web agentgateway`.
+The broker rebuilds the changed Pi base and agent images automatically. The new
+sandbox network name avoids reusing the old internal-only Docker network on upgrade.
+Custom broker deployments must set `AGENT_NETWORK` to an outbound-enabled network
+with agentgateway attached. Existing agent containers must finish or be stopped;
+new turns use the new image and network. Backend startup removes legacy permission
+columns and stale instructions from saved jobs while preserving messages and worktrees.
+Old unused Docker networks can be removed after their containers have stopped.
+
+Focused checks: `uv run pytest tests/backend/test_sandbox_network.py tests/broker/test_sandbox_network.py`.
+The opt-in Docker check uses a local `node:24-bookworm-slim` image, temporary
+containers/networks and outbound HTTPS to example.com:
+`NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_sandbox_network_docker.py`.
+
+## GitHub Projects
+
+Settings > Projects connects multiple GitHub App installations, including personal
+and organization accounts side by side, and downloads selected repositories into the
+persistent `nautionette-projects` Docker volume. The folder
+picker beside the model and tool selectors chooses which projects a message exposes.
+Selections are captured in the durable outbox and saved with the accepted message;
+retries cannot silently change that selection.
+
+### Worktree retention
+
+**Settings > Projects > Worktree retention** controls whole-worktree cleanup. Defaults:
+
+| Setting | Default |
+| --- | --- |
+| Automatic cleanup | Enabled |
+| Delete clean, pushed worktrees | Enabled, after 3 inactive days |
+| Delete changed or unpublished worktrees | Enabled, after 30 inactive days |
+| Check interval | 1 hour |
+| Maximum worktrees checked per pass | 50 |
+
+Each switch and number is editable without a redeploy. The changed-worktree rule
+**permanently discards local edits and unpublished work**. A clean worktree has no
+staged, unstaged or nonignored untracked changes, and its HEAD must be reachable
+from local `origin` tracking refs. These refs are cached evidence of a push, not a
+fresh remote audit; the initial chat revision alone is never proof of publication.
+Clean-worktree deletion also removes ignored files, not only build dependencies.
+
+Age follows last worktree use, including preparation and branch snapshots, rather
+than creation. Legacy worktrees use existing chat activity and shallow Git/root
+timestamps conservatively. Active agents, surviving containers, queued turns and
+branch snapshots are protected with shared cross-process locks and broker checks.
+Git failures, timeouts, unsafe paths and unavailable broker inventory fail closed.
+Each pass considers up to the configured batch size (default 50 worktrees) and
+rotates through larger collections.
+No dependency inventory, recursive content scan, repository-wide GC or broad Git
+prune is involved. Recursive removal only happens after a worktree is selected.
+
+Deletion keeps the shared clone, chat history, attachments and outputs. A later
+turn recreates a fresh worktree; it does not restore discarded edits. Files are
+atomically retired before removal, and interrupted file removal resumes on a later
+pass. The Settings panel includes a saved-policy preview and last-check counters.
+Authenticated APIs: `GET /api/settings/worktrees` and
+`POST /api/settings/worktrees/cleanup` (`{"dry_run":true}` by default; deletion
+requires `{"dry_run":false,"confirm":true}`). Retention keys are saved through the
+normal `PUT /api/settings` API with the `worktree_cleanup_` prefix.
+
+### App Setup
+
+1. Open Settings > Projects and choose **Connect GitHub**. The public HTTPS instance
+  URL is prefilled when possible. Select a personal account or enter an organization.
+2. Confirm the App registration on GitHub, then select the repositories it can access.
+3. GitHub returns to Projects automatically. Select a **GitHub connection** above the
+   available repository list, then add repositories from that account.
+4. Choose **Add GitHub connection** to connect another personal or organization account.
+   Each connection has its own registration, credentials, status, and **Repository access**
+   button. A pending installation can be resumed or bypassed with **Connect another account**.
+
+Each project keeps the connection it was added through, including download retries and
+repository-scoped credentials for chat agents. Switching the repository browser does not
+change existing project bindings. A repository already added through another connection
+cannot silently be reassigned. Existing single-connection installations and all their
+project bindings migrate automatically on backend startup, without changing checkouts,
+chat selections, or unpushed work. The manual App configuration API also adds or updates
+only the matching App/installation rather than replacing other accounts.
+
+The App manifest registers the webhook and callback URLs, Contents/Workflows/Issues write
+permissions, Metadata read access, and push/repository/issue-comment events. GitHub generates the private key and webhook
+secret; Denkzeug exchanges the registration code server-side. No IDs or PEM uploads
+are needed. An unfinished registration can resume with **Complete installation**;
+organization approval may be required. **Repository access** reopens GitHub's chooser.
+
+GitHub must reach the instance over HTTPS. For local development, use a public HTTPS
+tunnel to the web frontend (including its `/api` proxy); localhost alone cannot receive
+webhooks. Set `GITHUB_APP_PUBLIC_URL=https://nautionette.example.com` in Compose to
+preconfigure the URL, or enter it in Projects. Use the same stable public origin for
+the frontend and backend callbacks. Behind an extra authentication proxy, allow the
+`/api/projects/github-app/start`, `/callback`, `/installed`, and `/webhook` paths:
+callbacks validate single-use setup state and a Secure HttpOnly browser cookie;
+webhooks validate GitHub's HMAC-SHA256 signature. The `/connect` endpoint remains
+user-authenticated. Setup links expire after one hour. Returning on another device or
+browser requires starting setup again; existing registration credentials are retained.
+
+Signed lifecycle webhooks invalidate cached access only for the matching connection after
+repository or installation changes. Repository rename/default-branch events update metadata; push
+events never reset, pull, or overwrite chat worktrees. Duplicate deliveries are ignored
+for seven days and request bodies are limited to 2 MiB. The connection status shows the
+last accepted webhook for that connection. Existing manually configured Apps remain usable
+alongside automatically registered Apps.
+
+Private keys are stored in the backend's SQLite database, never returned by the API
+or placed in an agent. The webhook secret is also backend-only. Protect the
+backend-data volume and its backups, configure `APP_TOKEN` and `INTERNAL_TOKEN`, and
+use HTTPS outside local development. The App belongs to your GitHub account or
+organization; this is App registration, not a third-party OAuth service.
+
+### Issue mentions
+
+Authorize numeric GitHub user IDs per connection under **Settings > Projects**, then
+comment `@your-app-slug[bot] <request>` on an issue in an added, ready repository.
+Denkzeug creates a visible chat, acknowledges with its authenticated chat link,
+and runs the default agent. Follow-up mentions on the same issue continue that chat,
+including through the normal queue while it is busy. Unlisted users and bot comments
+cannot trigger work. Mention access is disabled until an allowlist is saved; GitHub
+acknowledgements can be disabled separately.
+
+Existing Apps must enable **Issues: read and write** and the **Issue comment** event
+in GitHub App settings and approve the installation permission change. See
+[GitHub issue mentions](github-mentions.md) for setup, security boundaries,
+deduplication/retry behavior, and API configuration.
+
+### Per-Chat Worktrees
+
+The initial checkout is a repository cache. Every chat gets its own persistent Git
+worktree, exposed to its agent at `/projects/<project-id>`. Its working files live in
+`.sessions/<project-id>/<chat-id>` in the projects volume. Only selected repositories'
+Git metadata and that chat's working files are mounted. Two chats can edit and commit
+on the same repository concurrently without sharing an index or HEAD.
+
+Worktrees start at the locally cached default-branch commit with **detached HEAD**; no chat
+branch is created. Empty repositories get a local empty initial commit. Later turns
+reuse the existing HEAD, staged changes, and uncommitted files without resetting or
+pulling. Removing a project or deleting a chat does not delete its worktree or commits.
+Worktrees are locked against Git's automatic pruning. These are collaboration
+workspaces, not a security boundary between mutually untrusted agents: Git objects,
+refs and repository configuration are shared, and committed content may be visible
+to other chats that select the same project.
+
+Selected projects with changes appear in a compact, expandable bar above the chat
+composer. Each project shows added/deleted line totals on the left and its changed-file
+count on the right. Expand it for a repository-relative folder tree with file statuses
+and per-file counts. Each folder can be collapsed independently using the mouse or
+keyboard; refreshes preserve the expanded/collapsed state. Only changed files and their
+parent folders appear, with full paths available on hover.
+The authenticated `/api/chats/{chat_id}/project-changes` endpoint reads only that chat's
+selected worktrees, locally and without fetching, changing the index or running external
+diff/textconv helpers. The visible chat refreshes every 3 seconds during a turn, every
+15 seconds while idle, at turn end, and when returning to the tab or focusing the window.
+Failed reads are shown as unavailable,
+not clean. Ignored files are excluded; binary files and oversized untracked files have
+no numeric line count. Renames count as one file; submodule working-directory edits
+are excluded (changed submodule commit pointers are included).
+
+The bar shows pending changes: unpushed commits plus staged, unstaged and untracked edits.
+It compares the worktree to the nearest first-parent ancestor already reachable from a
+local remote-tracking ref (updated by a normal push), capped at the starting revision in
+`refs/nautionette/chats/<chat-id>` when present. Pushing clears the published changes on
+the next refresh; any remaining local edits stay visible. Remote tips ahead of or diverged
+from the chat are not compared directly, so unrelated remote work is not reported as edits.
+Without a published ancestor, the attachment revision is the fallback; older worktrees
+without either baseline explicitly show **uncommitted changes** relative to HEAD.
+The bar is a net diff, not a history of every intermediate edit, and hides clean projects.
+It uses locally known refs, not a live remote query; remote changes made elsewhere become
+known after a fetch.
+
+To publish a detached commit, choose the target explicitly, for example
+`git push origin HEAD:refs/heads/main`. The agent asks when the target is unclear.
+Concurrent pushes to the same target can be rejected as non-fast-forward; fetch and
+reconcile those changes, never force-push to bypass them. GitHub branch protection
+and App permissions still apply. Git LFS, submodule authentication, and GitHub
+Enterprise hosts are not part of this integration.
+
+There is no Git proxy or extra Git service. Worktree setup is offline. Agents use
+normal Git fetch/pull/push directly against the HTTPS origin. The backend supplies fresh,
+repository-scoped installation tokens for each turn through a Git credential helper.
+GitHub tokens still expire within one hour, but the backend renews them five minutes
+before expiry for as long as that exact turn is running, including timeout-exempt
+sessions. Renewal uses the turn's original project selection, not later chat settings
+or steering messages. The authenticated broker delivers each batch to a root-owned,
+agent-readable private file in the disposable container and atomically replaces it.
+The helper reads that file on every Git invocation, so existing shells and subagents
+see renewed credentials without restarting. Tokens never enter Docker environment
+variables, CLI arguments, Git config, persistent worktrees, or job files; agents never
+receive the App private key and must not print or copy credentials.
+
+Transient GitHub/broker failures retry every 15 seconds. Failed or ambiguous deliveries
+reuse the pending batch rather than minting a token on every retry. Superseded tokens
+expire naturally so in-flight Git operations are not interrupted. Cleanup stops renewal
+before removing the container and revokes all remaining issued tokens (best effort,
+including unacknowledged deliveries and failure/shutdown cleanup). Orphaned, stopped,
+or finished turns cannot renew. If infrastructure stays unavailable past token expiry,
+authenticated Git fails closed until renewal succeeds; local Git work is unaffected.
+
+Deploy the backend, broker and rebuilt agent images together. Existing containers use
+their old helper; this change takes effect on new turns, without changing worktrees or
+commits. The initial repository download from Settings runs on the backend, not inside
+an agent.
+Project management is user-only and is not exposed through backend MCP.
+
+### Git authorship
+
+**Settings > Git authorship** controls attribution for new agent-created commits across
+selected repositories. The options are:
+
+| Mode | Author | Committer | `Co-authored-by` trailer |
+| --- | --- | --- | --- |
+| Denkzeug only (default) | Automation | Automation | None |
+| You as author | Human | Automation | None |
+| You as author + automation co-author (recommended) | Human | Automation | Automation |
+| Automation as author + you as co-author | Automation | Automation | Human |
+
+Enter your name and GitHub-associated email before selecting a human-attribution mode.
+Both automation name and email are configurable too. GitHub profile attribution requires
+an email associated with the corresponding account; the default automation email does
+not guarantee a linked bot profile. Commit email addresses are visible in history: use
+the exact GitHub-provided noreply address if you want to keep your email private.
+Co-authorship credits collaboration; it does not add a `Signed-off-by` certification.
+
+Settings are instance-wide, validated together, and read when each agent call starts.
+Running calls keep their original settings; subsequent calls (including queued ones) get
+changes. The default remains automation-only until configured. Reset restores that default.
+No existing commits, repository config, credentials or GitHub App push permissions change.
+
+The agent receives author/committer identity through its Git environment. Co-author modes
+install a temporary, repository-scoped `commit-msg` hook overlay for the selected worktrees;
+it adds a deduplicated trailer after the editor and before any existing commit-message hook.
+Other repository hooks and their failures are preserved. Regular local Git commits honor
+this; GitHub API/MCP commits, `--no-verify`, and low-level `git commit-tree` bypass Git hooks.
+The agent is instructed to use local Git, not bypass identity/hooks, and verify attribution
+before pushing. The empty workspace initialization commit is not a collaborative code change
+and has no co-author trailer. History is never rewritten merely to change attribution.
+
+### Deployment
+
+Docker Engine 26+ (API 1.45+) is required for volume-subpath mounts. Rebuild/recreate
+the changed services with:
+
+```sh
+docker compose up -d --build backend docker-broker frontend-web
+```
+
+The backend and broker must mount the same named projects volume at `/projects`
+(read-only in the broker). The broker discovers the actual volume name from its
+own Docker mount metadata, including deployment-platform prefixes; `PROJECTS_VOLUME`
+is no longer used. Keep Docker's default container hostname so the broker can inspect
+itself. No checkout migration or re-download is needed when a platform prefixes the
+volume name.
+
+The broker rebuilds the changed Pi images automatically. All chat agents (with or
+without project mounts) and project agents run as UID 10001, matching the backend,
+with capabilities dropped. Custom agent sets must keep
+their image-provided Pi configuration readable so it can be copied into `/workspace`.
+
+Checks: `uv run pytest tests/backend/test_projects.py tests/backend/test_github_setup.py tests/backend/test_github_connections.py
+tests/backend/test_project_credentials.py tests/broker/test_git_credentials.py
+ tests/broker/test_projects.py`, `node --test tests/agent/test_project_git.mjs`, and
+`npm --prefix services/frontend run test:e2e -- projects.spec.js`. The opt-in Docker
+check is `NAUTIONETTE_DOCKER_TESTS=1 uv run pytest tests/broker/test_projects_docker.py
+ tests/broker/test_git_credentials_docker.py`;
+it uses a local `nautionette/pi-base:dev` image and removes its temporary resources.
+
+## Chats become workflows
+
+A chat is an interactive, streaming conversation with durable history and native session state. A workflow makes a repeatable process explicit, durable and schedulable. Turning useful work from one into the other is a normal user action.
+
+Promotion does five things:
+
+1. Read the transcript and find the repeatable steps.
+2. Turn what was fixed in the chat (a date, a repo, a customer) into workflow inputs.
+3. Convert interactive agent turns into activity steps with declared output schemas.
+4. Write the workflow file and deploy it.
+5. Attach a trigger: a Temporal schedule, a webhook, or another workflow.
+
+There is no mandatory draft or approval step. The agent deploys validated code, runs it with relevant inputs, inspects results, and repairs failures without routine permission questions. Scheduling still follows the user's requested task.
+
+The deploy itself:
+
+1. Pi calls an authoring tool in `workflow-mcp` through the gateway — not a shell. The operations are validated and deterministic, so the same request always produces the same file.
+2. The backend asks workflow-mcp to validate and atomically replace the live file on the shared volume. Invalid code leaves the previous version untouched.
+3. The backend publishes the change event and asks the broker to reload workers. The deployment response includes its diff, validation report, and worker restart status.
+4. The agent starts a run, inspects its history and results, and fixes/redeploys errors. A started run is not reported as successful until the result confirms it.
+
+### Backend MCP
+
+The backend exposes streamable HTTP MCP at `/mcp/`, authenticated with a bearer
+`INTERNAL_TOKEN` or `APP_TOKEN`. With both tokens empty it follows the app's open
+development mode; configure tokens for a shared deployment. At startup it probes
+its own endpoint and registers an authenticated `backend` target in agentgateway,
+so tools arrive as `backend_<operation>` without manual setup. `BACKEND_MCP_URL`
+defaults to `http://backend:8080/mcp/` and must be reachable from agentgateway.
+
+Tools are generated from the existing backend API schemas and dispatch through the
+same routes and validation as the app. They cover system health, recent events,
+workflow validation/deployment/settings/schedules, runs and execution history,
+worker restarts, saved-agent configurations, model integrations, and MCP server
+configuration. For example:
+`backend_system_status`, `backend_deploy_workflow`, `backend_run_workflow`,
+`backend_read_run`, and `backend_restart_workers`. JSON request bodies are passed
+as the tool's `body` argument. Mutations emit audit events without their credentials
+or request payloads.
+
+The workflow tools also support this loop directly: `workflows_write_workflow`
+deploys and reloads workers, `workflows_run_workflow` starts a run, and
+`workflows_read_run` reports its results and failures. Check `ready` and
+`worker_restart` after deployment; reload failures are returned, not hidden.
+Backend source-code rewriting, arbitrary shell/proxy access, and recursive chat
+invocations are not exposed. Existing drafts remain available for compatibility,
+but new agent writes and chat promotions deploy directly.
+
+## Workflows are Python files
+
+A workflow is a plain Python module against the Temporal Python SDK, with a manifest at the top. No bespoke DSL and no database row: what an agent writes is what a person reads, edits and reviews.
+
+```python
+MANIFEST = {
+    "schema": 1,
+    "name": "daily-repo-digest",
+    "inputs": {"type": "object", "properties": {"repo": {"type": "string"}}},
+    "outputs": {"type": "object", "properties": {"summary": {"type": "string"}}},
+    "agent_set": "default",
+}
+```
+
+Where the files live:
+
+| Stage | Where |
+| --- | --- |
+| Live workflows | The shared volume. `workflows/` in this repo is the seed, copied in on first start. |
+| Deployment | Validated authoring tools publish files and reload workers; automatic Git synchronization is not provided. |
+
+Git is the reason a workflow is a file at all. Nothing in the design assumes an agent wrote it — a workflow typed by hand in an editor and pushed from a laptop takes exactly the same path through validation and deploy.
+
+### Interactive flow views
+
+Workflows open on **Flow**. The definition diagram shows activities, child workflows,
+conditions, loops, timers, parallel groups, and returns without executing the source.
+Select a node to inspect its source; pan, zoom, search, or change the layout direction.
+Run controls, code, and history remain in their own tabs.
+
+Loops have a header and a dashed enclosure around their body, including nested
+loops. `continue` and `break` appear as **Next iteration** and **Exit loop**, without
+loop-back arrows crossing the body. Groups retain their structure in revision comparisons.
+
+Built-in activity nodes show agent sets and prompts, MCP servers/tools/arguments,
+HTTP methods and URLs, event payloads, and artifact filenames/content. The inspector
+adds output schemas, timeouts, and retry policies when present. Source expressions
+are marked explicitly and never evaluated; runtime defaults are not guessed.
+Agent run results show the actual tools used when that information is recorded.
+
+Select a run from the flow source menu, or open **Runs**, for observed Temporal history.
+Active runs refresh every three seconds while the page is visible. Nodes carry real
+execution states, retry attempts, durations, inputs, results, and failures. Refreshes
+preserve the camera and selection. The active step opens in view on short screens;
+node details become a bottom sheet on mobile.
+
+Open a run's **Statistics** tab for agent-call counts grouped by agent set/model,
+model-response counts, token usage (uncached input, output, cache reads/writes), and
+named tool-call counts with failures and active/interrupted calls. Direct workflow
+MCP calls are distinguished from MCP calls inside an agent and local/extension tools.
+Counts include retry attempts; tool start/end events count as one call. Statistics
+refresh every five seconds while this tab is visible on a live run, and are also
+available in the run-detail and run-history APIs.
+
+Statistics are stored separately from Temporal history, including for silent or
+failed runs. Tokens are summed across reported model responses, not just the last
+response of an agent's tool loop. Missing usage is unknown, never zero; incomplete
+usage and older agent images' last-response-only totals are labeled partial. Runs
+created before accounting was introduced show that statistics were not recorded.
+The default agent bridge supplies MCP provenance from discovery, not tool-name
+heuristics; unclassified tools stay separate. Extension-managed child agents and
+child workflow internals are not included. The ledger contains only identities,
+counts, and status—never prompts, tool arguments/results, or credentials. Agent
+and direct MCP accounting failures are logged without retrying an otherwise
+successful side effect. Rebuild the worker and agent images together with the backend.
+
+Detailed execution histories are retained for **7 days after completion** by default
+(`TEMPORAL_HISTORY_RETENTION_DAYS`). Auto-setup applies the policy to new namespaces;
+the backend reconciles the configured namespace on startup and every minute, including
+existing installations, retrying Temporal outages without blocking schedule recovery.
+Retention changes cannot restore already-deleted histories and do not guarantee that
+previously closed runs' already-scheduled deletions are postponed. Saved run summaries,
+inputs, and results remain in the app after the detailed history expires. Old runs open
+their saved details with an expiry notice; their Flow view does not fabricate steps or
+keep retrying. Unknown runs return 404; Temporal outages remain retryable errors, not
+expiry notices.
+
+Legacy drafts open with a visual comparison: green additions, amber changes, and dashed red
+removals, including changed connections. **Proposed**, **Deployed**, and **Code diff**
+remain available for inspection and deployment. Changes outside diagrammed steps are reflected on
+the workflow node and in the code diff.
+
+Definition diagrams are structural previews, not a Python execution engine. Helper
+calls, dynamic expressions, and complex exception handling stay as source blocks;
+warnings flag partial diagrams. Run diagrams cover ordinary activities, child workflows,
+timers, and received signals in a single execution, with edges based on observed command
+and completion order, not inferred data dependencies. Local activity markers and child
+execution internals are not expanded; child nodes link to their own run. History is
+capped at 2,000 relevant events with an explicit warning, and payloads use the history
+reader's existing truncation limits. A lost connection leaves the last graph visible
+and marks updates as paused.
+
+Chat snapshots and global live events use supervised SSE connections. Temporary
+network/server errors retry with jittered exponential backoff (at most 30 seconds
+between attempts), instead of relying on the browser to retry a permanently closed
+`EventSource`. Named heartbeats every ~20 seconds let the client replace connections
+that have stalled for 60 seconds. Offline devices pause retries; returning online,
+focusing the window, or returning to a visible tab wakes an unhealthy connection.
+Recovery keeps saved messages and unsent drafts, refreshes global data, and does not
+replay message sends. An authenticated, five-second HEAD probe distinguishes
+transient failures from rejected credentials or a deleted chat; 401/403 requests a
+new token rather than retrying forever. Other permanent failures offer manual
+reconnect. Closing a stream cancels its probes, timers, and lifecycle listeners.
+
+Frontend verification (from the repository root):
+
+```sh
+npm --prefix services/frontend ci
+npm --prefix services/frontend test
+services/frontend/node_modules/.bin/playwright install chromium
+npm --prefix services/frontend run test:e2e -- --workers=1
+npm --prefix services/frontend run build
+```
+
+The browser tests use mocked API responses and the real Python graph builders via
+`uv`, so the workspace's Python dependencies must also be installed. They do not
+start workflows or require a running Temporal server. Live-connection tests also
+use a real local HTTP/SSE server to exercise disconnects, 503s, stalled streams,
+and credential replacement in Chromium and WebKit:
+
+```sh
+services/frontend/node_modules/.bin/playwright install chromium webkit
+npm --prefix services/frontend run test:e2e -- tests/live-connection.spec.js --workers=1
+npm --prefix services/frontend run test:e2e -- tests/live-connection.spec.js --browser=webkit --workers=1
+```
+
+## The authoring schema
+
+An agent that writes code needs a narrow door. `workflow-mcp` is that door: every tool takes JSON-Schema-validated arguments, and every write runs the same checks, no matter whether Pi, the frontend or a future git sync asked for it.
+
+| Tool | Does |
+| --- | --- |
+| `list_workflows` | Names, manifests, versions. |
+| `read_workflow` | The current file. |
+| `validate_workflow` | Runs the checks below and writes nothing. |
+| `write_workflow` | Validates, deploys, reloads workers, and returns a diff and status. |
+| `run_workflow` | Starts a deployed workflow with its input; returns a workflow ID. |
+| `list_runs` / `read_run` | Finds runs and inspects progress, errors and final results. |
+| `delete_workflow` | Removes the schedule and file, forgets settings, and reloads workers. Run/chat history stays. |
+
+The checks, in order:
+
+1. Tool arguments against the tool schema.
+2. Manifest against the workflow schema — name, `schema` version, input and output schemas, agent set.
+3. The file parses, imports in a throwaway subprocess, and registers with the Temporal SDK.
+4. Validated source is deployed atomically. The agent receives the diff and reload status, then tests the workflow and inspects results without an approval gate.
+
+Extensible on purpose: the manifest schema is versioned and additive, unknown keys prefixed `x_` are preserved instead of rejected, and a new rule is a new step in that list. It is deliberately not a policy engine — good enough to stop broken code, cheap enough to change.
+
+## Two ways Pi is called
+
+| | Interactive | Activity |
+| --- | --- | --- |
+| Caller | Backend, for a user in a chat | A Temporal activity, through the backend |
+| Returns | A JSON stream | One complete JSON object |
+| Shape | Free-form, rendered live | Structured output, checked against the schema the activity declares |
+
+In activity mode an agent step is a typed function. A stream would be wasted there: nobody is watching, and the next step cannot read half a stream. If the model returns text instead of the declared object, the activity fails and Temporal retries it. Progress events still go to the backend in both modes.
+
+Both modes start a fresh container, but interactive state is not discarded:
+
+- Interactive chats resume the chat-scoped native Pi session and persistent selected project worktrees.
+- A workflow decides what to hand over — the full history of a run, a summary, or only typed inputs. That choice is workflow code, visible in the file and replayable by Temporal.
+
+The container contract is one environment variable in and NDJSON out. `AGENT_JOB` carries a
+base64 JSON job; `agent-run` renders the prompt, runs `pi --mode json`, and translates Pi's event
+stream into `delta`, `tool`, `error` and a final `result` line. Nothing else crosses the boundary.
+
+## Scaling rules
+
+| | Policy |
+| --- | --- |
+| Temporal workers | At least one always running. Never scale to zero, or triggers pile up with nothing to pick them up. |
+| Pi | Always zero between calls. One `docker run --rm` per call, gone when the call returns — including for pinned or busy workflows. |
+| State | Containers and `/workspace` are disposable. Chat sessions, original attachments and selected project worktrees persist outside them; workflow inputs and results are explicit. |
+| Images | Built in advance and checked periodically. If cleanup removes one, it is rebuilt; a call arriving during recovery waits for the build. |
+
+### Execution health and recovery
+
+The broker checks Docker at startup and every `CONTAINER_RECONCILE_SECONDS` (default: 30).
+It acquires missing Pi base and agent-set images, restores the base-image alias, starts stopped
+workers, restarts unhealthy workers with the configured drain timeout, and recreates deleted
+workers up to `WORKER_REPLICAS` (minimum: one). Failures are reported and retried on later passes.
+All worker operations are scoped to the broker's own Compose project.
+
+Every worker loads all workflow files on the configured Temporal task queue; separate containers
+per workflow are unnecessary. A Docker readiness probe checks a fresh worker heartbeat, successful
+workflow loading, and whether the loaded source files still match the shared volume. Changed files
+therefore trigger recovery even if the explicit deploy-time restart was missed. Invalid workflows
+remain degraded until their code or dependencies are fixed; recovery cannot repair workflow code.
+
+Set `AGENT_IMAGE_REGISTRY_PREFIX` to pull CI-published, source-hashed Pi images before
+falling back to a local build. Empty (the default) keeps local-only builds. See
+[the CI image rollout](github-pipelines.md#faster-pi-image-startup) for package
+visibility/authentication and staging verification. Exact local images are reused
+without any registry request, and forced rebuilds still build locally.
+
+`/api/system` exposes the broker's live image status, missing images, desired/ready worker counts,
+container states, and readiness errors. An HTTP-successful but degraded broker is not shown as healthy.
+Pi containers themselves remain intentionally ephemeral: there is no idle Pi container to keep alive.
+
+Recovery is eventual, not uninterrupted availability: allow for the reconciliation interval, image
+builds, dependency installation, and worker startup. Worker probes run every 10 seconds, require
+three failed checks, and allow 360 seconds for initial dependency installation. Docker and the broker
+must remain running; the worker image must be locally available or pullable. Recreated workers use
+the fixed image, environment, network, and volume configuration in the broker, not arbitrary container
+arguments. Custom deployments must keep those settings aligned with their worker configuration.
+
+Deploy these checks with `docker compose up -d --build worker docker-broker backend`. Compose starts
+workers before the broker and stops the broker first on stack shutdown. Stop the broker before
+intentionally stopping or removing individual workers for maintenance, or it will restore them.
+
+### Container health checks (Coolify)
+
+Every long-running service declares a Docker health check. Checks for our built images live in
+their Dockerfiles; PostgreSQL and the optional debug Temporal UI declare theirs in
+`docker-compose.yaml`. Coolify's Docker Compose build pack uses these declarations, so no duplicate
+health check needs to be configured in its UI.
+
+| Service | Check |
+| --- | --- |
+| Backend, workflow MCP | Local HTTP `/healthz` endpoint |
+| Docker broker | Local `/healthz` response must report `status: ok`, including execution readiness |
+| Worker | Fresh heartbeat, loaded workflows, and matching source files |
+| Frontend web, website | Local Nginx root page returns HTTP success |
+| agentgateway | Native readiness endpoint at `http://127.0.0.1:15021/healthz/ready` |
+| Temporal | `temporal operator cluster health` against `127.0.0.1:7233` |
+| PostgreSQL | `pg_isready` |
+| Temporal UI (`debug` profile) | Local HTTP root page on port 8080 |
+
+The gateway image includes a static BusyBox executable for its probe because the upstream image
+has no shell. Gateway readiness does not make a model call or require provider credentials.
+Probe ports stay private; they do not need to be published for Coolify. Build-only Pi images and
+short-lived agent runs intentionally have no service health check.
+
+Rebuild and redeploy the stack in Coolify to apply changed checks. Locally, use
+`docker compose up -d --build` and inspect the results with `docker compose ps`. Restarting an
+existing container alone does not apply new image health-check metadata. Allow for the configured
+startup grace periods, especially Temporal database setup and worker dependency installation.
+
+Health checks report container status; they do not themselves restart an unhealthy process.
+The broker recovers unhealthy workers as described above. For other services, `restart: unless-stopped`
+restarts exited containers, not containers whose only failure is an unhealthy status.
+
+## OpenTelemetry
+
+Optional, vendor-neutral OTLP/HTTP tracing covers service requests, Temporal
+workflows/activities and agent/model/tool calls. HTTP metrics and payload-free,
+correlated severity logs are exported too. Use your own telemetry backend; none
+is bundled. The optional private collector relay keeps ingestion credentials out
+of agent containers and scrubs payload-bearing trace fields. Staging and production
+have distinct environment and source-version labels.
+
+See [Telemetry configuration and privacy](telemetry.md) for setup, supported
+transports, limits and verification. Exporting is disabled by default.
+
+## Layout
+
+```
+docker-compose.yaml            every component; backend and website publish loopback ports (debug is optional)
+pyproject.toml / uv.lock      one uv workspace for every Python service
+.env.example                  copy to .env; no secrets are committed
+libs/nautionette/             manifest schema and source helpers, shared by the services
+services/
+  backend/                    entrypoint, management, calls the broker
+  docker-broker/              owns docker.sock, fixed verbs only
+  agentgateway/               gateway runtime image and baseline config
+  workflow-mcp/               MCP + REST server for workflow authoring
+  worker/                     Temporal workers
+  frontend/                   one Quasar codebase, web and app targets
+  website/                    the promotional site
+images/
+  pi-base/                    Node + the Pi CLI + the agent-run contract
+  agent-sets/default/         the one agent set: gateway provider + MCP tool bridge
+infra/temporal/               Temporal server config
+tests/                        one pytest suite over every Python service
+workflows/                    Python workflow files, seeded into the volume
+```
+
+Every Python service ships one distinctly named package — `nautionette_backend`,
+`nautionette_worker`, `nautionette_workflow_mcp`, `nautionette_docker_broker` — so all
+four can be installed into the one workspace venv without shadowing each other.
+
+The backend is the largest of them, and is laid out by what each file is about:
+
+```
+services/backend/nautionette_backend/
+  main.py            assembles the app and nothing else
+  config.py          the environment, read once
+  security.py        the bearer token and the internal token
+  db.py              SQLite storage, and the one connection
+  events.py          the in-process fan-out behind /api/events
+  runtime.py         saved settings, the history budget, the catalog cache
+  agent_profiles.py  global defaults, saved agents and configuration inheritance
+  fields.py          declared form fields, and checking a payload against them
+  gateway_config.py  writing to agentgateway's own config store
+  catalog.py         which models and tools exist, and who serves each one
+  mcp_servers.py     MCP targets: probe, write, remove
+  runs.py            starting a run, following it, delivering its result
+  clients/           one module per service this one talks to
+  agent/             prompts, one agent call, and chat promotion
+  integrations/      the provider registry, and what it becomes in the gateway
+  routers/           the HTTP surface, one router per thing
+```
+
+Networks: `edge` (published), `internal` (services, outbound allowed so the gateway reaches the model provider), `agents` (sandbox outbound access, gateway and signed MaxIO transfers), `outputs` (private backend-to-MaxIO traffic), `control` (backend to broker only), `data` (Temporal to Postgres only).
+
+## Model integrations
+
+Model providers are managed under **Settings > Agents & models > Model integrations**: pick one from the
+list, add it, test it, and remove it again. OpenRouter, GitHub Copilot, OpenAI, Anthropic, Groq,
+Mistral, DeepSeek and xAI ship as entries in one registry, and **Custom** covers any other endpoint
+that speaks the OpenAI chat completions API. Every integration becomes an agentgateway route, so
+they all behave the same way; OpenRouter is added automatically on first start for continuity.
+
+Denkzeug never stores a model list. It asks each provider what it serves — OpenRouter and custom
+endpoints through their own catalog, Copilot through the authenticated account — and labels every
+entry in the pickers by both integration and model vendor. A prefixed integration wins over the
+OpenRouter wildcard for its own namespace, so `openai/*` goes direct once OpenAI is configured.
+
+Credentials never touch this codebase. Paste a provider's API key into the integration form and
+agentgateway keeps it in the `agentgateway-data` volume; the backend writes it once and never reads
+it back to a client, so a phone is enough to add a provider. To hold keys in the environment
+instead, put them in `.env`, recreate the gateway with
+`docker compose up -d --force-recreate agentgateway`, and type `$OPENAI_API_KEY` (or whichever
+variable) into the same field. Either way the secret stops at agentgateway.
+
+For **GitHub Copilot**, use **Sign in with GitHub** when adding the integration,
+or on its existing card to reconnect. Open the GitHub authorization link, enter
+the displayed one-time code, and authorize with an account that has Copilot
+access. GitHub may name the authorization app **GitHub Copilot**. Keep the
+Denkzeug form open until sign-in completes, then use **Test** to verify model
+access. The device flow does not need a public callback URL.
+
+The backend holds the pending device code only in memory until cancellation or
+expiry. A backend restart requires starting sign-in again. On success, the token
+replaces the integration's credential in the persistent `agentgateway-data`
+volume; neither the token nor the private device code is returned to the browser.
+Manual token entry and `GH_COPILOT_TOKEN` remain available as alternatives.
+Missing or rejected credentials now link the recovery instructions to sign-in,
+rather than requiring a new integration. Deploy the sign-in UI and API together
+with `docker compose up -d --build backend frontend-web`.
+
+MCP servers are managed under **Settings > MCP servers**. Choose **HTTP** for an
+existing endpoint, or **stdio** to launch a trusted command inside agentgateway.
+The stdio form accepts an executable, a JSON argument array and secret environment
+variables; no separate MCP container is required. See [MCP server setup](mcp-servers.md)
+for the Brave Search example, deployment steps and the shared-container trust boundary.
+
+Updated desktop apps automatically detect OAuth for hosted endpoints such as
+`https://workiq.svc.cloud.microsoft/mcp`. Enter the endpoint and click **Connect**;
+client overrides are under Advanced settings. Validated setup is remembered for
+retry/relogin. Expired connections prompt only when an agent requests a tool that
+needs sign-in: the call waits up to three minutes, then runs after login. Skip,
+snooze or timeout fails the call without dispatching it. The backend owns PKCE, encrypted token
+storage and refresh, while the desktop only receives the loopback callback. No CLI or
+container browser is needed. See [hosted OAuth setup](mcp-servers.md#hosted-https-oauth-recommended-for-workiq).
+
+They also support **stdio → CLI OAuth** as an alternative. The CLI runs in
+agentgateway, its actual callback port is detected from its login URL, and the
+desktop forwards query or POST callbacks to that CLI through authenticated APIs.
+The CLI owns its tokens and refresh; no public OAuth callback or container browser
+is needed for supported loopback flows. WorkIQ has a pinned preset with explicit
+EULA/account-sharing consent. Deploy the gateway/backend/frontend and use the
+matching desktop build; web/mobile clients cannot receive these callbacks.
+
+## Python development and integration tests
+
+Working on the Python services:
+
+```
+uv sync                                 # one workspace, one lock file
+uv run pytest                           # every service, no Docker and no network
+uv run ruff check . && uv run ruff format .
+uv run --package nautionette-backend python -m nautionette_backend.server
+```
+
+The suite in `tests/` covers all four services. Everything outside a process is faked:
+agentgateway keeps its config resources in a dict, the broker replays a canned agent
+stream, Temporal is a dictionary of executions, and outgoing HTTP is answered from a
+routing table. So `uv run pytest` needs nothing running and finishes in seconds.
+
+```
+tests/backend/        the API surface, plus the modules behind it
+tests/broker/         image tagging, the fixed verbs, the restart scoping
+tests/worker/         the activities a workflow may name, and loading workflow files
+tests/workflow_mcp/   the store, the check chain, the REST face
+tests/lib/            the manifest schema and the source reader
+```
+
+The workflow import check uses a subprocess; it is marked `slow` and runs by default,
+since the committed workflows are validated with the real chain. The optional gateway
+runtime test starts a real gateway and Node MCP fixture (no downloads or provider key):
+
+```sh
+NAUTIONETTE_TEST_GATEWAY_BINARY=/path/to/agentgateway uv run pytest tests/agentgateway
+```
+
+It verifies mixed HTTP/stdio discovery, literal arguments and secrets, environment
+isolation, failed-save protection, session cleanup, persistence across gateway restarts,
+and removal. Full CLI OAuth E2E also exercises the real gateway, backend APIs,
+CLI credential cache and production desktop receiver/controller:
+
+```sh
+NAUTIONETTE_TEST_GATEWAY_BINARY=/path/to/agentgateway uv run pytest tests/backend/test_mcp_oauth_e2e.py tests/backend/test_mcp_http_oauth_e2e.py
+```
+
+It covers query and form_post responses and CLI retries with a new callback port,
+without using a Microsoft account or workplace data. CI runs it against the
+checksum-pinned gateway release; a separate packaged Electron smoke test checks
+real preload/IPC and loopback sockets. The buffer checks also exercise all three LLM API formats past the
+old 2 MiB ceiling, the exact 256 MiB boundary (including chunked requests), and
+large requests/responses through a local fake provider. Without the variable,
+runtime checks are skipped; the checked-in buffer/capacity guards still run.

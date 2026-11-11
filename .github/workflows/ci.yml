@@ -47,7 +47,7 @@ jobs:
       - name: Shared display branding matches every build context
         run: |
           python3 scripts/sync_brand.py --check
-          uv run pytest tests/test_branding.py tests/backend/test_display_brand.py tests/backend/test_build_metadata.py
+          uv run pytest tests/test_branding.py tests/test_readme.py tests/backend/test_display_brand.py tests/backend/test_build_metadata.py
 
       - name: Lint
         run: uv run ruff check --output-format github .
