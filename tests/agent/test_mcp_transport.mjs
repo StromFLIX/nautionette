@@ -95,10 +95,11 @@ test('OAuth gate holds dispatch until sign-in, then permits exactly one tool cal
     requests.push(params)
     return params.name === 'backend_mcp_oauth_gate' ? gateResult(statuses.shift()) : { content: [] }
   }
-  await waitForMcpAuth(rpc, { grant: 'private' }, 'example_write', 'call-1')
+  await waitForMcpAuth(rpc, { grant: 'private' }, 'example_write', 'call_provider|' + 'signed-state'.repeat(100))
   await rpc('tools/call', { name: 'example_write', arguments: { text: 'once' } })
   assert.deepEqual(requests.map(item => item.name), ['backend_mcp_oauth_gate', 'backend_mcp_oauth_gate', 'example_write'])
   assert.equal(requests[0].arguments.body.tool_call_id, requests[1].arguments.body.tool_call_id)
+  assert.match(requests[0].arguments.body.tool_call_id, /^[a-f0-9]{64}$/)
 })
 
 for (const status of ['failed', 'timed_out', 'unknown']) test(`OAuth ${status} never dispatches the held call`, async () => {
@@ -109,6 +110,35 @@ for (const status of ['failed', 'timed_out', 'unknown']) test(`OAuth ${status} n
     await rpc('tools/call', { name: 'example_write' })
   }, /tool was not called/)
   assert.deepEqual(requests, ['backend_mcp_oauth_gate'])
+})
+
+test('signed provider call IDs stay bounded, stable and distinct across gate polls and cancellation', async () => {
+  // Responses providers can append a signature much longer than the gate API's
+  // 256-character limit. Truncating it would conflate calls sharing a prefix.
+  const prefix = 'call_provider|' + 'signed-provider-state/'.repeat(100)
+  const ids = [], requests = []
+  const rpc = async (_method, params) => {
+    const body = params.arguments.body
+    assert.match(body.tool_call_id, /^[a-f0-9]{64}$/)
+    assert.ok(!body.tool_call_id.includes('signed-provider-state'))
+    ids.push(body.tool_call_id)
+    requests.push(body)
+    return gateResult('ready')
+  }
+  for (const id of [prefix + 'a', prefix + 'a', prefix + 'b', 'ordinary-call'])
+    await waitForMcpAuth(rpc, { grant: 'private' }, 'example_write', id)
+  assert.equal(ids[0], ids[1])
+  assert.equal(new Set(ids).size, 3)
+
+  const controller = new AbortController()
+  await assert.rejects(waitForMcpAuth(async (method, params) => {
+    await rpc(method, params)
+    controller.abort()
+    return gateResult('waiting')
+  }, { grant: 'private' }, 'example_write', prefix + 'a', controller.signal), /abort/i)
+  assert.equal(requests.at(-2).tool_call_id, ids[0])
+  assert.equal(requests.at(-1).tool_call_id, ids[0])
+  assert.equal(requests.at(-1).cancel, true)
 })
 
 test('OAuth wait is abortable and private error bodies never reach model context', async () => {

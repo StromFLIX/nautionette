@@ -18,16 +18,17 @@ test('Android changes display resources, never package or URI identifiers', () =
   assert.equal(configureAndroidStrings(strings), strings)
 })
 
-test('launcher exports have platform dimensions and Electron uses the same master', () => {
-  for (const [name, size] of [['app-icon.png', 1024], ['ic_launcher.png', 192], ['ic_launcher_foreground.png', 432]]) {
+test('launcher exports have platform dimensions and Electron uses the larger desktop master', () => {
+  for (const [name, size] of [['app-icon.png', 1024], ['desktop-icon.png', 1024], ['ic_launcher.png', 192], ['ic_launcher_foreground.png', 432]]) {
     const png = readFileSync(join(frontend, 'native/icons', name))
     assert.equal(png.subarray(1, 4).toString(), 'PNG')
     assert.equal(png.readUInt32BE(16), size)
     assert.equal(png.readUInt32BE(20), size)
   }
   for (const path of ['build/icon.png', 'desktop/icon.png']) {
-    assert.deepEqual(readFileSync(join(frontend, path)), readFileSync(join(frontend, 'native/icons/app-icon.png')))
+    assert.deepEqual(readFileSync(join(frontend, path)), readFileSync(join(frontend, 'native/icons/desktop-icon.png')))
   }
+  assert.notDeepEqual(readFileSync(join(frontend, 'desktop/icon.png')), readFileSync(join(frontend, 'native/icons/app-icon.png')))
 })
 
 test('iOS sync installs the approved icon into the current Capacitor template', () => {
