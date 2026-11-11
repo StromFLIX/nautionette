@@ -774,6 +774,12 @@ async def disable(row, value):
     ).rowcount
     if not claimed:
         return
+    for identifier, login in list(_sessions.items()):
+        if login.name == row["name"] and login.revision == row["revision"]:
+            # A token can expire before the browser-session TTL. Evict only
+            # this revision so its stale pending login cannot block relogin.
+            _sessions.pop(identifier)
+            login.tokens, login.verifier, login.previous = None, "", None
     current = await current_target(row["name"])
     if current == target(row["name"], value) or current is not None and current == value.get("previous"):
         await gateway.delete_config_resource("mcp.target", row["name"])

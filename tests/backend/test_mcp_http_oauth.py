@@ -420,6 +420,9 @@ async def test_expired_pending_credentials_are_removed_even_when_gateway_readine
         assert "example" not in backend.gateway.resources["mcp.target"]
     # Keep one-click setup, but never replay the authorization code/rotating refresh token.
     assert oauth.public_connections()["example"]["url"] == URL
+    # The expired login's in-memory session must not block an immediate relogin
+    # until its longer browser-session TTL elapses.
+    begin(client)
     await oauth.refresh_once()
     assert len(hosted.calls) == calls
 
