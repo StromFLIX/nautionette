@@ -18,7 +18,7 @@ from pathlib import Path
 import httpx
 import pytest
 import yaml
-from nautionette_backend.clients.agentgateway import GatewayClient
+from nautionette_backend.clients.agentgateway import GatewayClient, MCPHTTPError
 from nautionette_backend.mcp_selection import HEADER, scoped_target
 
 CONFIG = Path(__file__).resolve().parents[2] / "services/agentgateway/config/config.yaml"
@@ -380,10 +380,20 @@ async def test_real_gateway_scopes_before_contact_preserves_names_and_singleton_
                 denied = scoped_target({**target("alpha"), "condition": "false"})
                 await native.put_config_resources("mcp.target", [denied])
                 for _ in range(50):
-                    tools = await native.mcp_tools(f"{base}/mcp", extra={HEADER: "alpha"})
-                    if "alpha_read" not in {tool["name"] for tool in tools}:
-                        break
+                    try:
+                        tools = await native.mcp_tools(f"{base}/mcp", extra={HEADER: "alpha"})
+                        if "alpha_read" not in {tool["name"] for tool in tools}:
+                            break
+                    except MCPHTTPError as error:
+                        # Config acknowledgement precedes the asynchronous data-plane
+                        # update, which can invalidate a handshake between initialize
+                        # and tools/list. Retry only fresh, read-only discovery here;
+                        # the policy write and business tool calls are never replayed.
+                        if error.response.status_code not in {400, 404}:
+                            raise
                     await asyncio.sleep(0.1)
+                else:
+                    pytest.fail("gateway deny condition did not become ready")
                 assert {tool["name"] for tool in tools} == {"workflows_read", "backend_read"}
                 assert upstream.calls == ["/backend"]  # Only the deliberate read-only control call ran.
     finally:
