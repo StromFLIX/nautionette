@@ -33,6 +33,9 @@ def _strip_userinfo(url: str) -> str:
 
 def public_target(entry: dict[str, Any]) -> dict[str, Any]:
     """Expose editable launch metadata, but never environment values or HTTP auth."""
+    from ..mcp_selection import has_scope
+
+    scope = {"selection_scoped": True} if has_scope(entry) else {}
     if "stdio" in entry:
         stdio = entry["stdio"]
         return {
@@ -42,10 +45,12 @@ def public_target(entry: dict[str, Any]) -> dict[str, Any]:
             "command": stdio.get("cmd", ""),
             "args": stdio.get("args", []),
             "env": {key: None for key in stdio.get("env", {})},
+            **scope,
         }
     return {
         "name": entry.get("name") or "mcp",
         "host": _strip_userinfo(entry.get("mcp", {}).get("host", "")),
+        **scope,
     }
 
 
@@ -147,6 +152,28 @@ class GatewayClient:
             # only availability; never exception text, URLs or response bodies.
             result["status"] = "degraded"
             result["mcp"] = {"status": "unavailable"}
+        if result["mcp"]["status"] == "ok":
+            from ..mcp_selection import has_scope
+
+            try:
+                async with asyncio.timeout(5):
+                    config = await self.config()
+                    resources = await self.config_resources("mcp.target")
+                owned = [
+                    item["value"] for item in resources if item.get("id") == item.get("value", {}).get("name")
+                ]
+                scoped = sum(has_scope(value) for value in owned)
+                required = len(config.get("targets") or []) >= 2 and bool(owned)
+                ready = not required or scoped == len(owned)
+                result["mcp_selection"] = {
+                    "status": "ok" if ready else "unavailable",
+                    "managed_targets": len(owned),
+                    "scoped_targets": scoped,
+                }
+                if not ready:
+                    result["status"] = "degraded"
+            except (httpx.HTTPError, ValueError, TypeError, TimeoutError):
+                result["mcp_selection"] = {"status": "unknown"}
         return result
 
     async def config(self) -> dict[str, Any]:

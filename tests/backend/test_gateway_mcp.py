@@ -114,6 +114,43 @@ async def test_gateway_health_checks_tools_not_just_model_routes(http, monkeypat
     assert "private" not in json.dumps(result)
 
 
+@pytest.mark.parametrize("scoped", [False, True])
+async def test_gateway_health_exposes_unsupported_or_missing_startup_policy(http, monkeypatch, scoped):
+    from nautionette_backend.mcp_selection import scoped_target
+
+    target = {
+        "name": "backend",
+        "mcp": {"host": "http://backend.test/mcp"},
+        "policies": {"backendAuth": {"key": {"value": "private-secret"}}},
+    }
+    if scoped:
+        target = scoped_target(target)
+    http["http://gateway.test/v1/models"] = lambda _: httpx.Response(200, json={"data": []})
+    http["http://gateway.test/api/config/effective"] = lambda _: httpx.Response(
+        200,
+        json={
+            "mcp": {"targets": [target, {"name": "workflows", "mcp": {"host": "http://workflows.test/mcp"}}]}
+        },
+    )
+    http["http://gateway.test/api/config/resources/mcp.target"] = lambda _: httpx.Response(
+        200, json={"resources": [{"id": "backend", "value": target}]}
+    )
+    client = GatewayClient("http://gateway.test")
+
+    async def tools(*_args, **_kwargs):
+        return [{"name": "backend_system_status"}]
+
+    monkeypatch.setattr(client, "mcp_tools", tools)
+    result = await client.health()
+    assert result["status"] == ("ok" if scoped else "degraded")
+    assert result["mcp_selection"] == {
+        "status": "ok" if scoped else "unavailable",
+        "managed_targets": 1,
+        "scoped_targets": int(scoped),
+    }
+    assert "private-secret" not in json.dumps(result)
+
+
 async def test_gateway_health_bounds_the_entire_tool_handshake(http, monkeypatch):
     http["http://gateway.test/v1/models"] = lambda _: httpx.Response(200, json={"data": []})
     client = GatewayClient("http://gateway.test")

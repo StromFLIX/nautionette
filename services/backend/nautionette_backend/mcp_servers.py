@@ -365,6 +365,7 @@ async def payload() -> dict[str, Any]:
                 ),
                 # A file-owned target is the checked-in baseline; the app cannot touch it.
                 "managed": target["name"] in managed,
+                **({"startup_scoped": True} if target.get("selection_scoped") else {}),
                 **({"oauth": oauth[target["name"]]} if target["name"] in oauth else {}),
                 "credential": credential_state(stored_credential(target["name"], targets)),
                 "tool_count": counts.get(target["name"], 0),
@@ -459,6 +460,7 @@ async def bootstrap_backend() -> None:
 
     credential = settings.internal_token or settings.app_token
     target = target_value("backend", settings.backend_mcp_url, credential)
+    phase, last_status = "backend registration", None
     for retry in range(8):
         try:
             async with mcp_oauth._lock:
@@ -469,11 +471,18 @@ async def bootstrap_backend() -> None:
                 if verdict["ok"]:
                     if resource_map(targets).get("backend", {}).get("value") != target:
                         await gateway.put_config_resources("mcp.target", [target])
+                    phase = "target selection configuration (requires agentgateway v1.7.0+)"
                     await reconcile_selection()
                     forget_catalog()
                     bus.publish("mcp.server.changed", {"server": "backend", "configured": True})
                     return
-        except (HTTPException, httpx.HTTPError):
-            pass
+        except HTTPException as error:
+            last_status = error.status_code
+        except httpx.HTTPError as error:
+            last_status = error.response.status_code if isinstance(error, httpx.HTTPStatusError) else None
         await asyncio.sleep(min(0.25 * 2**retry, 5.0))
-    logging.getLogger(__name__).warning("Backend MCP registration failed; agentgateway has no backend tools")
+    logging.getLogger("uvicorn.error").warning(
+        "MCP startup incomplete: phase=%s http_status=%s; inspect gateway compatibility/configuration",
+        phase,
+        last_status,
+    )

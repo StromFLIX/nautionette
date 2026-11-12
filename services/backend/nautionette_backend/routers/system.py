@@ -35,6 +35,13 @@ async def healthz() -> dict[str, Any]:
 
 @router.get("/api/system", dependencies=[Depends(require_user)])
 async def system_status() -> dict[str, Any]:
+    """Check this Denkzeug application's system/component health and readiness.
+
+    Reports Temporal, broker/agents/workers, model gateway and MCP tools, workflow
+    authoring, authentication and build/environment status. This is the app's own
+    backend health check, not hosting-provider infrastructure or a mini-app's status.
+    """
+
     async def safe(coro, name: str) -> dict[str, Any]:
         try:
             detail = await coro

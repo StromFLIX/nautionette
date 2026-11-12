@@ -48,6 +48,21 @@ test('explicit tool-name preloading is bounded by the current allowlist and iden
   f.handlers.before_agent_start(explicit)
   assert.ok(f.pi.getActiveTools().includes('remote_lookup'))
   assert.match(explicit.systemPromptOptions.sections.nautionette_mcp, /tool_search/)
+  assert.match(explicit.systemPromptOptions.sections.nautionette_mcp, /remote_lookup/)
+  assert.doesNotMatch(explicit.systemPromptOptions.sections.nautionette_mcp, /forbidden_delete/)
+  assert.match(explicit.systemPromptOptions.sections.nautionette_mcp, /not '\+' operators/)
+})
+
+test('search directory is bounded while every allowed schema remains searchable', () => {
+  const f = mockPi()
+  const tools = Array.from({ length: 1500 }, (_, i) => ({ name: `remote_${String(i).padStart(4, '0')}_lookup_record`, description: 'Read a record', parameters: {}, execute() {} }))
+  registerMcpTools(f.pi, tools)
+  f.handlers.session_start({}, f.ctx)
+  const event = { prompt: '', systemPromptOptions: { sections: {} } }
+  f.handlers.before_agent_start(event)
+  assert.ok(event.systemPromptOptions.sections.nautionette_mcp.length < 13000)
+  assert.match(event.systemPromptOptions.sections.nautionette_mcp, /Additional selected names/)
+  assert.equal(f.pi.getAllTools().filter(t => t.exposure === 'deferred').length, 1500)
 })
 
 test('custom hosts without native search retain direct capabilities rather than inaccessible tools', () => {

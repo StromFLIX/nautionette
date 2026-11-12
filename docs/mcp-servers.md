@@ -28,6 +28,14 @@ It includes Node, npm, npx, Python 3, uv and uvx. Commands requiring other binar
 browsers, native build tools, private package-registry configuration or system
 libraries need those installed/configured in a custom image first.
 
+**Check stored deployment overrides:** `AGENTGATEWAY_VERSION` must be `v1.7.0`
+(or a compatible newer release) for pre-initialization target conditions. An old
+Coolify/environment override takes precedence over the Compose/Dockerfile default.
+The gateway health component now reports selection-policy coverage and becomes
+`degraded` if named runtime targets in a multi-target gateway are still unscoped;
+inspect backend bootstrap
+logs for a sanitized phase/HTTP status instead of assuming filtering is active.
+
 The gateway remains non-root (UID/GID 65532). Its SQLite config and package caches
 live in the existing `agentgateway-data` volume. Stdio processes get a minimal
 `PATH=/usr/local/bin:/usr/bin:/bin` and `HOME=/data/mcp`, plus the environment values
@@ -91,7 +99,10 @@ initialize MCP servers merely to admit a message.
 
 Selected remote schemas use native Pi `deferred` exposure. The active `tool_search`
 tool discovers them by task or exact name and loads matching schemas for the next
-model request; it never executes the remote tool itself. Local coding/history and
+model request; it never executes the remote tool itself. A bounded, names-only
+directory keeps discovery grounded without including every parameter schema.
+Search accepts plain words/exact names, not `+` operators. Already declared tools
+should be called directly, not searched for repeatedly. Local coding/history and
 first-party output/delegation/creative tools stay direct. Explicit allowed tool
 names in the current prompt can be loaded immediately to avoid a search round
 trip. Old eager native transcripts migrate once; later turns retain searched

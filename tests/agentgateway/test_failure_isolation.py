@@ -214,7 +214,9 @@ async def test_real_gateway_keeps_healthy_tools_and_never_bypasses_failed_auth(t
 
 
 @pytest.mark.slow
-async def test_real_gateway_scopes_before_contact_preserves_names_and_singleton_bootstrap(tmp_path):
+async def test_real_gateway_scopes_before_contact_preserves_names_and_singleton_bootstrap(
+    tmp_path, monkeypatch
+):
     binary = os.environ.get("NAUTIONETTE_TEST_GATEWAY_BINARY")
     if not binary:
         pytest.skip("Set NAUTIONETTE_TEST_GATEWAY_BINARY for real MCP target-selection checks")
@@ -265,8 +267,23 @@ async def test_real_gateway_scopes_before_contact_preserves_names_and_singleton_
                     pytest.fail("gateway did not start")
                 native = GatewayClient(base)
                 assert [tool["name"] for tool in await native.mcp_tools(f"{base}/mcp")] == ["read"]
-                await native.put_config_resources(
-                    "mcp.target", [target(name) for name in ["backend", "alpha", "beta", "broken"]]
+                # Existing hybrid records must round-trip through real GET, not
+                # only our in-memory fake's simplified resource representation.
+                saved = await client.put(
+                    "/api/config/resources/mcp.target",
+                    json={
+                        "resources": [
+                            {"value": target(name)} for name in ["backend", "alpha", "beta", "broken"]
+                        ]
+                    },
+                )
+                saved.raise_for_status()
+                from nautionette_backend import mcp_servers
+
+                monkeypatch.setattr(mcp_servers, "gateway", native)
+                await mcp_servers.reconcile_selection()
+                assert all(
+                    "condition" in item["value"] for item in await native.config_resources("mcp.target")
                 )
                 for _ in range(50):
                     try:

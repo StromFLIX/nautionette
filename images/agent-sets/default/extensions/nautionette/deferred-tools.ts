@@ -6,6 +6,15 @@ const MARKER = "nautionette.mcp-schema-mode";
 export function registerMcpTools(pi: ExtensionAPI, tools: any[], mode = "deferred") {
   if (!["direct", "deferred"].includes(mode)) throw new Error("Invalid MCP schema mode");
   const names = new Set(tools.map(tool => tool.name));
+  // Names are much cheaper than schemas and prevent blind discovery loops.
+  // Bound the directory for very large installations; search still sees all allowed tools.
+  const directory: string[] = [];
+  let directorySize = 0;
+  for (const name of [...names].sort()) {
+    const quoted = JSON.stringify(name);
+    if (directorySize + quoted.length > 12000) break;
+    directory.push(quoted); directorySize += quoted.length + 2;
+  }
   for (const tool of tools) pi.registerTool({ ...tool, exposure: mode === "deferred" ? "deferred" : "direct" });
   if (!tools.length) return;
   let deferred = mode === "deferred";
@@ -33,7 +42,7 @@ export function registerMcpTools(pi: ExtensionAPI, tools: any[], mode = "deferre
   pi.on("before_agent_start", event => {
     if (!deferred) return;
     event.systemPromptOptions.sections.nautionette_mcp =
-      "Selected external MCP capabilities are available through tool_search. Search by task or exact tool name before calling a tool that is not loaded. File, shell, history and first-party output/creative tools remain directly available. Search does not execute a remote tool or grant additional permissions.";
+      "Selected external MCP capabilities are available through tool_search. It accepts plain words or exact tool names, not '+' operators or query syntax. Prefer an exact name from the directory below; if already declared, call it directly instead of searching again. The backend_ tools manage this Denkzeug application's own status/health, settings and chats; other services are separate. File, shell, history and first-party output/creative tools remain direct. Search never executes a remote tool or grants permissions. Selected tool names (schemas load on demand): [" + directory.join(", ") + "]" + (directory.length < names.size ? " Additional selected names are searchable but omitted from this bounded directory." : "");
     // An explicit, exact tool name in this input can be loaded without an extra
     // discovery/model round trip. Only currently allowed, registered names qualify.
     const mentioned = tools.filter(tool => {

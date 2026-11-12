@@ -34,6 +34,13 @@ def target_headers(targets: list[str] | None) -> dict[str, str]:
     return {HEADER: value}
 
 
+def has_scope(target: dict[str, Any]) -> bool:
+    condition = target.get("condition")
+    return condition == CONDITION or (
+        isinstance(condition, str) and condition.startswith("(") and condition.endswith(_SUFFIX)
+    )
+
+
 def logical_target(target: dict[str, Any]) -> dict[str, Any]:
     value = deepcopy(target)
     condition = value.get("condition")
