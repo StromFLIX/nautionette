@@ -83,6 +83,8 @@ async def test_stream_runner_passes_the_correct_timeout_to_broker(live, monkeypa
     outgoing = dict(calls[0][0])
     assert outgoing.pop("output_publication")["grant"]
     assert outgoing.pop("artcraft") == artcraft.for_run()
+    assert outgoing.pop("mcp_targets") is None
+    assert "mcp_targets" not in job
     assert "artcraft" not in job
     assert outgoing == job  # Private publication configuration never mutates the saved job.
     # Workflow budgets are not affected even if the flag is accidentally copied.

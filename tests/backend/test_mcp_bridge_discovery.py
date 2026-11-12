@@ -127,6 +127,33 @@ def test_every_published_oauth_state_keeps_fresh_discovery_and_learns_new_schema
     assert json.loads(stored["schema"])["inputSchema"]["properties"] == {"updated": {"type": "boolean"}}
 
 
+def test_unselected_live_oauth_does_not_force_second_federation_discovery(client, bridge):
+    connection(bridge, status="connected", published=True)
+    payload = augment(client, {"targets": []})
+    assert payload == {"tools": [], "oauth_tools": ["example_write"]}
+    assert bridge.discovery_calls == []
+
+
+def test_selected_live_oauth_discovery_keeps_the_same_request_scope(client, bridge, live, monkeypatch):
+    connection(bridge, status="connected", published=True)
+    original = live.gateway.mcp_tools
+    scopes = []
+
+    async def record(url=None, extra=None, **kwargs):
+        scopes.append(extra)
+        return await original(url, extra, **kwargs)
+
+    monkeypatch.setattr(live.gateway, "mcp_tools", record)
+    payload = augment(client, {"targets": ["example"]})
+    assert "example_write" in payload["oauth_tools"]
+    assert scopes == [{"x-nautionette-mcp-targets": "example"}]
+
+
+def test_invalid_target_scope_is_rejected_without_discovery(client, bridge):
+    assert client.post("/api/mcp-oauth/tools", json={"targets": ["bad,header"]}).status_code == 422
+    assert bridge.discovery_calls == []
+
+
 def test_mixed_live_and_offline_oauth_preserves_both_owner_sets(client, bridge):
     offline = connection(bridge)
     connection(bridge, "active", status="connected", published=True)

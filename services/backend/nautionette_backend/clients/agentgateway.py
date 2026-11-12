@@ -213,6 +213,19 @@ class GatewayClient:
         return response.json().get("resources", [])
 
     async def put_config_resources(self, kind: str, values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if kind == "mcp.target":
+            from ..mcp_selection import scoped_target
+
+            # v1.7 target conditions require multiple configured targets. Keep
+            # custom singleton deployments/probes unchanged (and their raw names).
+            config = await self.config()
+            names = {target["name"] for target in config.get("targets") or []}
+            names.update(value["name"] for value in values)
+            if len(names) >= 2:
+                values = [scoped_target(value) for value in values]
+        return await self._write_config_resources(kind, values)
+
+    async def _write_config_resources(self, kind: str, values: list[dict[str, Any]]) -> list[dict[str, Any]]:
         response = await shared().put(
             f"{self.base_url}/api/config/resources/{kind}",
             json={"resources": [{"value": value} for value in values]},
@@ -222,6 +235,21 @@ class GatewayClient:
         return response.json().get("resources", [])
 
     async def delete_config_resource(self, kind: str, resource_id: str) -> None:
+        if kind == "mcp.target":
+            from ..mcp_selection import logical_target
+
+            resources = await self.config_resources(kind)
+            deleting = next((item["value"]["name"] for item in resources if item["id"] == resource_id), None)
+            config = await self.config()
+            remaining = {item["name"] for item in config.get("targets") or []} - {deleting}
+            if deleting and len(remaining) == 1:
+                for item in resources:
+                    if item["value"]["name"] in remaining:
+                        logical = logical_target(item["value"])
+                        if logical != item["value"]:
+                            # Remove only our optimization before a custom gateway
+                            # becomes singleton; never strip external conditions.
+                            await self._write_config_resources(kind, [logical])
         encoded = quote(resource_id, safe="")
         response = await shared().delete(f"{self.base_url}/api/config/resources/{kind}/{encoded}", timeout=20)
         response.raise_for_status()

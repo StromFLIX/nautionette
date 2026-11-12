@@ -127,6 +127,43 @@ for (const status of [400, 500]) test(`fresh authenticated dispatch HTTP ${statu
   assert.equal(deleted, 1)
 })
 
+for (const selection of [null, [], ['github', 'backend']]) test(`scope ${JSON.stringify(selection)} survives every request, recovery and fresh OAuth dispatch`, async () => {
+  const requests = []
+  let sessions = 0, rejected = false
+  const mutable = selection === null ? null : [...selection]
+  const transport = createMcpTransport('http://gateway/mcp', async (_url, options) => {
+    const request = options.method === 'DELETE' ? { method: 'DELETE' } : JSON.parse(options.body)
+    requests.push({ ...request, headers: options.headers })
+    if (request.method === 'initialize') {
+      sessions++
+      return Response.json({ result: {} }, { headers: { 'mcp-session-id': `scope-${sessions}` } })
+    }
+    if (request.method === 'notifications/initialized') return new Response(null, { status: 202 })
+    if (request.method === 'tools/list' && !rejected) {
+      rejected = true
+      return new Response('', { status: 404 })
+    }
+    if (request.method === 'DELETE') return new Response(null, { status: 204 })
+    return Response.json({ result: { tools: [] } })
+  }, mutable)
+  mutable?.push('must-not-retarget-session')
+  await transport.rpc('tools/list')
+  await transport.rpcFresh('tools/call', { name: 'backend_read_chat_output', arguments: {} })
+  await transport.close()
+  assert.equal(sessions, 3)
+  for (const request of requests) {
+    const expected = selection === null ? undefined : [...selection].sort().join(',')
+    assert.equal(request.headers['x-nautionette-mcp-targets'], expected, request.method)
+  }
+  assert.equal(requests.filter(r => r.method === 'DELETE').length, 2)
+})
+
+for (const names of [['bad,name'], ['bad\r\nheader'], [''], ['x'.repeat(129)], Array.from({ length: 100 }, (_, i) => `${i}`.repeat(100))]) {
+  test('invalid target header cannot fall back to unrestricted discovery', () => {
+    assert.throws(() => createMcpTransport('http://gateway/mcp', fetch, names), /Invalid MCP target selection/)
+  })
+}
+
 const gateResult = status => ({ content: [{ type: 'text', text: JSON.stringify({ status }) }] })
 test('OAuth gate holds dispatch until sign-in, then permits exactly one tool call', async () => {
   const requests = [], statuses = ['waiting', 'ready']

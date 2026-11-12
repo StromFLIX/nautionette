@@ -111,6 +111,13 @@ async def mcp_oauth_tools(body: dict[str, Any] = Body(default={})) -> dict:
     from ..clients import gateway
     from ..db import db
     from ..gateway_config import attempt
+    from ..mcp_selection import target_headers
+
+    selected_targets = body.get("targets")
+    try:
+        target_headers(selected_targets)
+    except ValueError as exc:
+        raise HTTPException(422, "Invalid MCP target selection") from exc
 
     # Pi has already listed the live federation. Only a published hosted-OAuth
     # target needs a second discovery to learn its current schemas and gate owners.
@@ -127,10 +134,16 @@ async def mcp_oauth_tools(body: dict[str, Any] = Body(default={})) -> dict:
         if (
             config is None
             or changed
-            or any(target["name"] in connections for target in config.get("targets") or [])
+            or any(
+                target["name"] in connections
+                and (selected_targets is None or target["name"] in selected_targets)
+                for target in config.get("targets") or []
+            )
         ):
             # An unknown config is not evidence that OAuth targets are absent.
-            tools, _ = await tool_catalog(config if config is not None else dict(EMPTY_CONFIG))
+            tools, _ = await tool_catalog(
+                config if config is not None else dict(EMPTY_CONFIG), selected_targets=selected_targets
+            )
         else:
             tools = mcp_auth_wait.unavailable_tools()
     return {

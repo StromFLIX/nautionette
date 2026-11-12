@@ -29,6 +29,7 @@ CATALOG_TTL = 60.0
 model_windows: dict[str, int] = {}
 
 _catalog_cache: dict[str, Any] = {"at": 0.0, "value": None}
+_model_catalog_cache: dict[str, Any] = {"at": 0.0, "value": None}
 
 # Flipped by the first agent call that comes back clean, so the status page can
 # say "a model answered" without anyone configuring a second flag.
@@ -88,13 +89,30 @@ def cached_catalog() -> dict[str, Any] | None:
     return None
 
 
+def cached_models() -> list[dict[str, Any]] | None:
+    if time.time() - _model_catalog_cache["at"] < CATALOG_TTL:
+        return _model_catalog_cache["value"]
+    return None
+
+
+def cache_models(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    _model_catalog_cache.update(at=time.time(), value=models)
+    model_windows.clear()
+    model_windows.update(
+        {model["id"]: model["context_length"] for model in models if model.get("context_length")}
+    )
+    return models
+
+
 def cache_catalog(value: dict[str, Any]) -> dict[str, Any]:
     _catalog_cache.update(at=time.time(), value=value)
+    cache_models(value.get("models", []))
     return value
 
 
 def forget_catalog() -> None:
     _catalog_cache.update(at=0.0, value=None)
+    _model_catalog_cache.update(at=0.0, value=None)
 
 
 # --------------------------------------------------------- has a model answered

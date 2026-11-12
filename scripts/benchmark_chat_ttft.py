@@ -6,7 +6,9 @@ BASE=https://your-instance APP_TOKEN=... uv run python scripts/benchmark_chat_tt
 Uses a dedicated chat, never the caller's active chat. First and subsequent turns
 are reported separately. Status/phase events, reasoning and tool starts are NOT
 text tokens. This is HTTP/SSE latency, not browser paint latency. Model calls cost
-money. No prompts, responses, tool arguments or credentials are written to output.
+money. Custom --prompt values can execute real tools: use controlled read-only
+staging tasks. First action/result timings exclude the tool_search loader.
+No prompts, responses, tool arguments or credentials are written to output.
 """
 
 from __future__ import annotations
@@ -56,6 +58,7 @@ def measure_turn(
     chat_id: str,
     project_ids: list[str],
     *,
+    prompt: str = PROMPT,
     clock: Callable[[], float] = time.perf_counter,
 ) -> dict[str, Any]:
     turn_id = uuid.uuid4().hex
@@ -67,6 +70,10 @@ def measure_turn(
         "first_reasoning_ms": None,
         "milestones_ms": {},
         "tool_calls": 0,
+        "tool_names": [],
+        "first_tool_ms": None,
+        "first_action_ms": None,
+        "first_action_result_ms": None,
     }
     started = clock()
     done = False
@@ -77,7 +84,7 @@ def measure_turn(
             "POST",
             f"/api/chats/{chat_id}/messages",
             headers={"Accept": "text/event-stream"},
-            json={"text": PROMPT, "message_id": turn_id, "project_ids": project_ids},
+            json={"text": prompt, "message_id": turn_id, "project_ids": project_ids},
         ) as response:
             sample["headers_ms"] = round((clock() - started) * 1000, 3)
             response.raise_for_status()
@@ -97,6 +104,24 @@ def measure_turn(
                     sample["first_reasoning_ms"] = elapsed
                 elif kind == "tool":
                     sample["tool_calls"] += 1
+                    sample["tool_names"].append(event.get("name"))
+                    if sample["first_tool_ms"] is None:
+                        sample["first_tool_ms"] = elapsed
+                    if event.get("name") != "tool_search" and sample["first_action_ms"] is None:
+                        sample["first_action_ms"] = elapsed
+                elif kind == "tool_done" and event.get("name") != "tool_search" and not event.get("error"):
+                    if sample["first_action_result_ms"] is None:
+                        sample["first_action_result_ms"] = elapsed
+                elif kind == "usage" and event.get("context"):
+                    sample["context"] = {
+                        key: event["context"].get(key)
+                        for key in (
+                            "input_tokens",
+                            "output_tokens",
+                            "cache_read_tokens",
+                            "cache_write_tokens",
+                        )
+                    }
                 elif kind == "error":
                     failure = "agent_error"
                 elif kind == "result":
@@ -155,7 +180,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project-id", action="append", default=[], help="Repeat for multiple projects")
     parser.add_argument("--model", help="Omit to inherit the current default agent's model")
     parser.add_argument("--reasoning-effort", help="Omit to inherit the agent/model default")
-    parser.add_argument("--no-mcp-tools", action="store_true", help="Explicit empty MCP selection control")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--no-mcp-tools", action="store_true", help="Explicit empty MCP selection control")
+    selection.add_argument("--tools-file", help="JSON array of MCP tool names; overrides inherited selection")
+    parser.add_argument("--prompt", default=PROMPT, help="Controlled read-only prompt; may call real tools")
     parser.add_argument("--samples", type=int, default=5)
     parser.add_argument("--timeout", type=float, default=180, help="HTTP inactivity timeout, seconds")
     args = parser.parse_args(argv)
@@ -185,6 +213,16 @@ def main(argv: list[str] | None = None) -> int:
         config["reasoning_effort"] = args.reasoning_effort
     if args.no_mcp_tools:
         config["tools"] = []
+    elif args.tools_file:
+        with open(args.tools_file) as file:
+            tools = json.load(file)
+        if (
+            not isinstance(tools, list)
+            or len(tools) > 2000
+            or any(not isinstance(t, str) or not t for t in tools)
+        ):
+            parser.error("tools-file must contain a JSON array of at most 2000 tool names")
+        config["tools"] = tools
     with httpx.Client(
         base_url=base,
         headers={"Authorization": f"Bearer {os.environ['APP_TOKEN']}"},
@@ -205,13 +243,13 @@ def main(argv: list[str] | None = None) -> int:
             "model": chat.get("model"),
             "reasoning_effort": chat.get("reasoning_effort"),
             "project_ids": args.project_id,
-            "mcp_selection": "empty" if args.no_mcp_tools else "inherited",
+            "mcp_selection": "empty" if args.no_mcp_tools else "explicit" if args.tools_file else "inherited",
             "selected_mcp_count": len(chat["tools"]) if isinstance(chat.get("tools"), list) else "all",
             "samples": [],
         }
         print(f"Retaining benchmark chat {chat['id']} for inspection.", file=sys.stderr)
         for index in range(args.samples):
-            sample = measure_turn(client, chat["id"], args.project_id)
+            sample = measure_turn(client, chat["id"], args.project_id, prompt=args.prompt)
             sample["turn"] = "first" if index == 0 else "subsequent"
             report["samples"].append(sample)
             if not sample["ok"]:

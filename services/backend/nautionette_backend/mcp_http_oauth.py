@@ -599,7 +599,9 @@ async def _activate(row, value) -> bool:
         if row["name"] not in {item["name"] for item in targets}:
             return False
         expected_names = {f"{row['name']}_{name}" for name in names} if len(targets) > 1 else set(names)
-        tools = await gateway.mcp_tools(timeout=10)
+        from .mcp_selection import target_headers
+
+        tools = await gateway.mcp_tools(timeout=10, extra=target_headers([row["name"]]))
         if not names or not expected_names.issubset(tool["name"] for tool in tools):
             return False
     except (HTTPException, httpx.HTTPError, ValueError, TimeoutError):

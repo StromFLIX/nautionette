@@ -178,6 +178,29 @@ def test_image_capabilities_are_from_the_winning_integration_only(client, stocke
     assert models["openai/gpt-4o"]["supports_images"] is None
 
 
+async def test_cold_model_admission_never_discovers_unselected_mcp_sources(stocked, live, monkeypatch):
+    calls = []
+    original = live.gateway.integration_models
+
+    async def models(instance):
+        calls.append(instance)
+        return await original(instance)
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("model capability admission must not initialize MCP sources or agent images")
+
+    monkeypatch.setattr(live.gateway, "integration_models", models)
+    monkeypatch.setattr(live.gateway, "mcp_tools", forbidden)
+    monkeypatch.setattr(live.broker, "agent_sets", forbidden)
+    assert (await catalog.model_info("openai/gpt-4o"))["id"] == "openai/gpt-4o"
+    assert (await catalog.model_info("openai/gpt-4o-mini"))["id"] == "openai/gpt-4o-mini"
+    assert calls == ["openai"]
+    assert runtime.cached_catalog() is None  # The actual tool picker still needs its own discovery.
+    runtime.forget_catalog()
+    await catalog.model_info("openai/gpt-4o")
+    assert calls == ["openai", "openai"]
+
+
 # ------------------------------------------------------------------ route choice
 
 

@@ -33,6 +33,7 @@ from .gateway_config import (
     resource_map,
     storage_mode,
 )
+from .mcp_selection import logical_target, scoped_target
 from .runtime import forget_catalog
 
 _URL = r"https?://[A-Za-z0-9.-]+(?::\d{1,5})?(?:/[^\s?#]*)?(?:\?[^\s#]*)?"
@@ -313,7 +314,10 @@ async def fetch_resources() -> tuple[str, list[dict[str, Any]]]:
         )
     except httpx.HTTPError as exc:
         raise gateway_problem(exc) from exc
-    return storage_mode(runtime_state), targets
+    # Selection is transport metadata, not an external edit to OAuth/CLI ownership.
+    return storage_mode(runtime_state), [
+        {**resource, "value": logical_target(resource["value"])} for resource in targets
+    ]
 
 
 async def probe(url: str, credential: str) -> dict[str, Any]:
@@ -425,21 +429,50 @@ async def test(name: str) -> dict[str, Any]:
     return await probe(target["mcp"]["host"], stored_credential(name, targets))
 
 
+async def reconcile_selection() -> None:
+    """Decorate existing hybrid targets without reconstructing credentials or policies.
+
+    Call under mcp_oauth._lock. Re-read each resource immediately before updating;
+    gateway PUT has no compare-and-set, so external config writers must still be
+    coordinated, just as for ordinary Settings writes. Missing headers keep their
+    previous behavior, and custom conditions remain an outer AND.
+    """
+    if len((await gateway.config()).get("targets") or []) < 2:
+        return
+    for resource in await gateway.config_resources("mcp.target"):
+        current = next(
+            (item for item in await gateway.config_resources("mcp.target") if item["id"] == resource["id"]),
+            None,
+        )
+        if current is None or current["id"] != current["value"].get("name"):
+            # App management uses target-name resource IDs. Do not copy an
+            # externally identified resource under a new ID while reconciling.
+            continue
+        value = current["value"]
+        desired = scoped_target(value)
+        if desired != value:
+            await gateway.put_config_resources("mcp.target", [desired])
+
+
 async def bootstrap_backend() -> None:
+    from . import mcp_oauth
+
     credential = settings.internal_token or settings.app_token
     target = target_value("backend", settings.backend_mcp_url, credential)
     for retry in range(8):
         try:
-            mode, targets = await fetch_resources()
-            require_writable(mode)
-            await recover_stdio_probes()
-            verdict = await probe(settings.backend_mcp_url, credential)
-            if verdict["ok"]:
-                if resource_map(targets).get("backend", {}).get("value") != target:
-                    await gateway.put_config_resources("mcp.target", [target])
-                forget_catalog()
-                bus.publish("mcp.server.changed", {"server": "backend", "configured": True})
-                return
+            async with mcp_oauth._lock:
+                mode, targets = await fetch_resources()
+                require_writable(mode)
+                await recover_stdio_probes()
+                verdict = await probe(settings.backend_mcp_url, credential)
+                if verdict["ok"]:
+                    if resource_map(targets).get("backend", {}).get("value") != target:
+                        await gateway.put_config_resources("mcp.target", [target])
+                    await reconcile_selection()
+                    forget_catalog()
+                    bus.publish("mcp.server.changed", {"server": "backend", "configured": True})
+                    return
         except (HTTPException, httpx.HTTPError):
             pass
         await asyncio.sleep(min(0.25 * 2**retry, 5.0))

@@ -1,13 +1,9 @@
 // Durable native Pi state, separate from Pi home/auth and the ephemeral workspace.
-import { appendFileSync, closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { SessionManager, CURRENT_SESSION_VERSION } from '/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js';
 import { fileReferences } from './chat-files.mjs';
 import { toolContextEdits } from './tool-context.mjs';
-
-export function syncFile(path) {
-  const fd = openSync(path, 'r');
-  try { fsyncSync(fd); } finally { closeSync(fd); }
-}
+import { syncFile } from './session-sync.mjs';
 
 export function prepareSession(job, workspace, directory = '/chat-session') {
   mkdirSync(directory, { recursive: true, mode: 0o700 });

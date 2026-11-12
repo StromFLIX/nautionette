@@ -140,18 +140,16 @@ def test_cold_catalog_still_rejects_known_unsupported_route(client, backend, mon
 
     runtime.forget_catalog()
 
-    async def build():
-        return {
-            "models": [
-                {
-                    "id": "vision/bad-route",
-                    "supports_images": False,
-                    "image_support_reason": "No compatible image API route.",
-                }
-            ]
-        }
+    async def models(_config):
+        return [
+            {
+                "id": "vision/bad-route",
+                "supports_images": False,
+                "image_support_reason": "No compatible image API route.",
+            }
+        ]
 
-    monkeypatch.setattr(catalog, "build", build)
+    monkeypatch.setattr(catalog, "model_catalog", models)
     chat_id = client.post("/api/chats", json={"model": "vision/bad-route"}).json()["id"]
     image = store_attachment(chat_id, picture(), "image/png", "image")
     result = client.post(f"/api/chats/{chat_id}/messages", json={"attachment_ids": [image["id"]]})

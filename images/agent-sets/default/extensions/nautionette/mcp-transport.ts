@@ -1,5 +1,10 @@
 /** Recover the shared MCP session without blindly repeating a mutation. */
-export function createMcpTransport(url: string, fetcher: typeof fetch = fetch) {
+export function createMcpTransport(url: string, fetcher: typeof fetch = fetch, selection: readonly string[] | null = null) {
+  // Immutable for the entire MCP session, including recovery and post-login calls.
+  const targets = selection === null ? null : [...new Set(selection)].sort();
+  if (targets && (targets.some(name => !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(name)) || targets.join(",").length > 8000))
+    throw new Error("Invalid MCP target selection");
+  const scopeHeaders = targets === null ? {} : { "x-nautionette-mcp-targets": targets.join(",") };
   let messageId = 0;
   let sessionId: string | undefined;
   let connected = false;
@@ -24,6 +29,7 @@ export function createMcpTransport(url: string, fetcher: typeof fetch = fetch) {
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
       "mcp-protocol-version": "2025-06-18",
+      ...scopeHeaders,
     };
     const requestSession = sessionId;
     if (requestSession) headers["mcp-session-id"] = requestSession;
@@ -92,7 +98,7 @@ export function createMcpTransport(url: string, fetcher: typeof fetch = fetch) {
     try {
       const response = await fetcher(url, { method: "DELETE", headers: {
         accept: "application/json, text/event-stream",
-        "mcp-session-id": sessionId, "mcp-protocol-version": "2025-06-18",
+        "mcp-session-id": sessionId, "mcp-protocol-version": "2025-06-18", ...scopeHeaders,
       }, signal: AbortSignal.timeout(5000) });
       await response.body?.cancel();
     } catch { /* Best effort; cleanup must not hide an operation's outcome. */ }
@@ -102,7 +108,7 @@ export function createMcpTransport(url: string, fetcher: typeof fetch = fetch) {
     // Federation sessions may retain the upstream connection/credentials from
     // before OAuth finished. Never dispatch an authenticated call through that
     // old snapshot or reset a shared session underneath concurrent tool calls.
-    const fresh = createMcpTransport(url, fetcher);
+    const fresh = createMcpTransport(url, fetcher, targets);
     try { return await fresh.rpc(method, params, signal); }
     finally { await fresh.close(); }
   }

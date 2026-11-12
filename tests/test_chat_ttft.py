@@ -134,6 +134,28 @@ def test_parses_multiline_sse_comments_and_unterminated_final_frame():
     assert list(sse_events(response)) == [{"type": "started"}, {"type": "done"}]
 
 
+def test_first_useful_action_excludes_search_and_failed_results():
+    result, _ = run(
+        [
+            (0.1, {"type": "tool", "name": "tool_search"}),
+            (0.2, {"type": "tool_done", "name": "tool_search", "error": False}),
+            (0.3, {"type": "tool", "name": "backend_system_status"}),
+            (0.4, {"type": "tool_done", "name": "backend_system_status", "error": True}),
+            (0.5, {"type": "tool_done", "name": "backend_system_status", "error": False}),
+            (0.6, {"type": "usage", "context": {"input_tokens": 4000, "cache_read_tokens": 3900}}),
+            (0.7, {"type": "delta", "text": "READY"}),
+            (0.8, {"type": "result", "ok": True}),
+            (0.9, {"type": "done"}),
+        ]
+    )
+    assert result["ok"]
+    assert result["first_tool_ms"] == 100
+    assert result["first_action_ms"] == 300
+    assert result["first_action_result_ms"] == 500
+    assert result["tool_names"] == ["tool_search", "backend_system_status"]
+    assert result["context"]["input_tokens"] == 4000
+
+
 def test_summary_excludes_failed_samples_even_after_they_stream_text():
     samples = [
         {"ok": True, "ttft_text_ms": 300},

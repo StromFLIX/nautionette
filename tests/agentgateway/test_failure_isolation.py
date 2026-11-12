@@ -19,6 +19,7 @@ import httpx
 import pytest
 import yaml
 from nautionette_backend.clients.agentgateway import GatewayClient
+from nautionette_backend.mcp_selection import HEADER, scoped_target
 
 CONFIG = Path(__file__).resolve().parents[2] / "services/agentgateway/config/config.yaml"
 
@@ -199,6 +200,175 @@ async def test_real_gateway_keeps_healthy_tools_and_never_bypasses_failed_auth(t
                 upstream.all_broken = True
                 with pytest.raises((httpx.HTTPError, ValueError)):
                     await GatewayClient(base).mcp_tools(f"{base}/mcp", timeout=5)
+    finally:
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+        upstream.shutdown()
+        upstream.server_close()
+        thread.join(timeout=5)
+
+
+@pytest.mark.slow
+async def test_real_gateway_scopes_before_contact_preserves_names_and_singleton_bootstrap(tmp_path):
+    binary = os.environ.get("NAUTIONETTE_TEST_GATEWAY_BINARY")
+    if not binary:
+        pytest.skip("Set NAUTIONETTE_TEST_GATEWAY_BINARY for real MCP target-selection checks")
+    upstream = ThreadingHTTPServer(("127.0.0.1", 0), McpUpstream)
+    upstream.failure_stage, upstream.failure_status = "initialize", 401
+    upstream.all_broken, upstream.requests, upstream.calls = False, [], []
+    thread = threading.Thread(target=upstream.serve_forever, daemon=True)
+    thread.start()
+    port = free_port()
+    base = f"http://127.0.0.1:{port}"
+    config = yaml.safe_load(CONFIG.read_text())
+    config["config"].update(
+        database={"url": f"sqlite:///{tmp_path}/selection.db"},
+        adminAddr="127.0.0.1:0",
+        readinessAddr="127.0.0.1:0",
+        statsAddr="127.0.0.1:0",
+    )
+    config["gateways"]["default"]["port"] = port
+
+    def target(name):
+        return {
+            "name": name,
+            "mcp": {"host": f"http://127.0.0.1:{upstream.server_port}/{name}"},
+            "policies": {"backendAuth": {"key": {"value": "local-test-token"}}},
+        }
+
+    # The file-owned first-party workflow service stays unfiltered: startup is
+    # valid on an empty volume, before backend registers the second real target.
+    config["mcp"]["targets"] = [target("workflows")]
+    path = tmp_path / "selection.yaml"
+    path.write_text(yaml.safe_dump(config))
+    process = None
+    try:
+        with (tmp_path / "selection.log").open("w") as log:
+            process = subprocess.Popen(  # noqa: S603 - opt-in checksum-pinned test binary
+                [str(Path(binary).resolve()), "-f", str(path)], stdout=log, stderr=log
+            )
+            async with httpx.AsyncClient(base_url=base, timeout=5, trust_env=False) as client:
+                for _ in range(100):
+                    assert process.poll() is None, (tmp_path / "selection.log").read_text()
+                    try:
+                        if (await client.get("/api/runtime")).status_code == 200:
+                            break
+                    except httpx.HTTPError:
+                        pass
+                    await asyncio.sleep(0.1)
+                else:
+                    pytest.fail("gateway did not start")
+                native = GatewayClient(base)
+                assert [tool["name"] for tool in await native.mcp_tools(f"{base}/mcp")] == ["read"]
+                await native.put_config_resources(
+                    "mcp.target", [target(name) for name in ["backend", "alpha", "beta", "broken"]]
+                )
+                for _ in range(50):
+                    try:
+                        tools = await native.mcp_tools(f"{base}/mcp", extra={HEADER: "alpha"})
+                        if {tool["name"] for tool in tools} == {
+                            "workflows_read",
+                            "backend_read",
+                            "alpha_read",
+                        }:
+                            break
+                    except httpx.HTTPError:
+                        pass  # Config acknowledgement can precede data-plane session invalidation.
+                    await asyncio.sleep(0.1)
+                else:
+                    pytest.fail("scoped gateway catalog did not become ready")
+                # Control uses its own backend-only scope. A newly connected
+                # remote target must not invalidate a held OAuth gate's session.
+                control_headers = {
+                    "Accept": "application/json, text/event-stream",
+                    "MCP-Protocol-Version": "2025-06-18",
+                    HEADER: "",
+                }
+                handshake = await client.post(
+                    "/mcp",
+                    headers=control_headers,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 71,
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2025-06-18",
+                            "capabilities": {},
+                            "clientInfo": {"name": "control", "version": "1"},
+                        },
+                    },
+                )
+                handshake.raise_for_status()
+                control_headers["Mcp-Session-Id"] = handshake.headers["mcp-session-id"]
+                initialized = await client.post(
+                    "/mcp",
+                    headers=control_headers,
+                    json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+                )
+                initialized.raise_for_status()
+                await native.put_config_resources("mcp.target", [target("gamma")])
+                for _ in range(50):
+                    try:
+                        fresh = await native.mcp_tools(f"{base}/mcp", extra={HEADER: "gamma"})
+                        if "gamma_read" in {tool["name"] for tool in fresh}:
+                            break
+                    except httpx.HTTPError:
+                        pass
+                    await asyncio.sleep(0.1)
+                answer = await client.post(
+                    "/mcp",
+                    headers=control_headers,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 72,
+                        "method": "tools/call",
+                        "params": {"name": "backend_read", "arguments": {}},
+                    },
+                )
+                answer.raise_for_status()
+                assert "healthy result" in answer.text
+                await client.delete("/mcp", headers=control_headers)
+                upstream.requests.clear()
+                for selected, expected in [
+                    ("", {"workflows_read", "backend_read"}),
+                    ("alpha", {"workflows_read", "backend_read", "alpha_read"}),
+                ]:
+                    tools = await native.mcp_tools(f"{base}/mcp", extra={HEADER: selected})
+                    assert {tool["name"] for tool in tools} == expected
+                assert all(path not in {"/beta", "/broken"} for path, _ in upstream.requests)
+                # Separate concurrent sessions never change shared target membership.
+                alpha, beta = await asyncio.gather(
+                    native.mcp_tools(f"{base}/mcp", extra={HEADER: "alpha"}),
+                    native.mcp_tools(f"{base}/mcp", extra={HEADER: "beta"}),
+                )
+                assert {tool["name"] for tool in alpha} == {"workflows_read", "backend_read", "alpha_read"}
+                assert {tool["name"] for tool in beta} == {"workflows_read", "backend_read", "beta_read"}
+                # Missing header remains legacy all-target discovery, including
+                # failed auth. It is not made successful by removing authentication.
+                upstream.requests.clear()
+                tools = await native.mcp_tools(f"{base}/mcp")
+                assert {tool["name"] for tool in tools} == {
+                    "workflows_read",
+                    "backend_read",
+                    "alpha_read",
+                    "beta_read",
+                    "gamma_read",
+                }
+                assert ("/broken", "initialize") in upstream.requests
+                denied = scoped_target({**target("alpha"), "condition": "false"})
+                await native.put_config_resources("mcp.target", [denied])
+                for _ in range(50):
+                    tools = await native.mcp_tools(f"{base}/mcp", extra={HEADER: "alpha"})
+                    if "alpha_read" not in {tool["name"] for tool in tools}:
+                        break
+                    await asyncio.sleep(0.1)
+                assert {tool["name"] for tool in tools} == {"workflows_read", "backend_read"}
+                assert upstream.calls == ["/backend"]  # Only the deliberate read-only control call ran.
     finally:
         if process is not None and process.poll() is None:
             process.terminate()

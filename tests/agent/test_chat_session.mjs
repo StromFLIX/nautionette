@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, rmSync, appendFileSync, writeFileSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import { SessionManager, CURRENT_SESSION_VERSION } from '/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/index.js'
 import { prepareSession } from '../../images/pi-base/chat-session.mjs'
@@ -80,3 +81,22 @@ test('session paths cannot be symlinks', () => fixture(dir => {
   symlinkSync(join(dir, 'outside'), join(dir, 'session.jsonl'))
   assert.throws(() => prepareSession({}, dir, dir), /regular file/)
 }))
+
+test('durability extension imports stay independent of the heavy SDK/session producer', () => {
+  const visited = new Set()
+  function visit(url) {
+    if (visited.has(url.href)) return
+    visited.add(url.href)
+    const source = readFileSync(url, 'utf8')
+    assert.doesNotMatch(source, /(?:from\s*|import\s*\()\s*['"][^'"]*(?:pi-coding-agent|chat-session\.mjs)/,
+      `heavy dependency in ${fileURLToPath(url)}`)
+    for (const match of source.matchAll(/from ['"]([^'"]+)['"]/g)) {
+      if (match[1].startsWith('.')) visit(new URL(match[1], url))
+      else assert.ok(match[1].startsWith('node:'), `unexpected startup dependency: ${match[1]}`)
+    }
+  }
+  visit(new URL('../../images/pi-base/chat-session-extension.mjs', import.meta.url))
+  assert.ok([...visited].some(path => path.endsWith('/session-sync.mjs')))
+  const dockerfile = readFileSync(new URL('../../images/pi-base/Dockerfile', import.meta.url), 'utf8')
+  assert.match(dockerfile, /COPY session-sync\.mjs \/usr\/local\/lib\/nautionette\/session-sync\.mjs/)
+})

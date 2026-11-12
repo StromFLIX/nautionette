@@ -61,22 +61,58 @@ Deploy both **agentgateway and backend** for these protections; restart/recreate
 the gateway to load the baseline failure policy. Existing agent turns that
 started without MCP tools need a new turn to rediscover them.
 
-## Agent startup discovery
+## Agent startup discovery and deferred schemas
 
-Pi still lists the live MCP federation on every agent start; selected tools and
-first-party output/delegation transports are unchanged. The private OAuth bridge
-only augments that snapshot with saved disconnected-tool schemas and gate metadata.
-When no managed hosted-OAuth target is published, it skips a redundant second
-federated discovery. With no hosted-OAuth connections, even the extra target-config
-lookup is unnecessary. CLI-managed stdio targets remain part of the initial live list.
+Pi still discovers live tools on every agent start. For an explicit tool selection,
+the backend resolves known server prefixes against current gateway configuration
+and passes an immutable `x-nautionette-mcp-targets` header through initialization,
+listing, calls, recovery, fresh OAuth sessions and cleanup. Unselected external
+runtime targets are excluded **before** initialization. `null` (all tools), unknown
+or raw tool ownership, config outages and truly singleton gateways retain ordinary
+unrestricted discovery. An empty selection is distinct from a missing header.
+The exact tool allowlist still applies after discovery; this header is an
+optimization, **not authorization**.
 
-Any published hosted-OAuth target keeps the existing fresh-discovery/schema-owner
-registration path, regardless of connection status (including pending login or
-cleanup). Unknown gateway configuration or a connection/revision change during the
-lookup also falls back to fresh discovery. This is not a credential/authorization
-cache: call-time gates, token expiry, demand-driven reconnect, fresh authenticated
-sessions and no-replay rules remain in force. Deploy the **backend** for this
-optimization; the agent image and frontend need no changes.
+The local backend and file-owned workflow service remain available for private
+first-party capabilities. Keeping the workflow baseline unfiltered also allows a
+fresh gateway to boot with its single baseline target before backend registration;
+no dummy upstream or name change is introduced. Backend bootstrap decorates existing
+hybrid targets, preserving credentials and custom conditions as an outer AND.
+Ownership comparisons ignore only this exact app-owned wrapper, so it cannot make
+an OAuth refresh look like an external edit. App writes are serialized during
+reconciliation and resources are re-read before updating. Gateway config PUT has
+no compare-and-set: external configuration writers must still coordinate with
+Settings/bootstrap. Additional file-owned targets are not rewritten and retain
+their configured startup behavior.
+
+Model capability validation no longer builds the tool picker when its cache is
+cold. Model metadata uses the same 60-second TTL/invalidation but does not
+initialize MCP servers merely to admit a message.
+
+Selected remote schemas use native Pi `deferred` exposure. The active `tool_search`
+tool discovers them by task or exact name and loads matching schemas for the next
+model request; it never executes the remote tool itself. Local coding/history and
+first-party output/delegation/creative tools stay direct. Explicit allowed tool
+names in the current prompt can be loaded immediately to avoid a search round
+trip. Old eager native transcripts migrate once; later turns retain searched
+schemas on that branch, subject to the current tool allowlist. A custom host
+without native search falls back to direct schemas rather than leaving tools
+unreachable. Set `AGENT_MCP_SCHEMA_MODE=direct` on the broker to restore eager
+schemas for compatibility or controlled comparisons; restart the broker and use a
+new turn. Search can add a model round trip for remote tasks, so compare first
+useful tool execution/result as well as first text.
+
+The private OAuth bridge augments live discovery with saved disconnected-tool
+schemas and gate metadata. It skips redundant discovery when no selected,
+published hosted-OAuth target needs fresh owner registration. Unknown config or a
+connection/revision change falls back to fresh discovery. Call-time gates, expiry,
+demand-driven reconnect and fresh authenticated dispatch remain in force. The
+agent closes its MCP session on orderly shutdown; forced termination still relies
+on gateway cleanup. Sessions are not shared across chats, and mutations are never
+blindly replayed.
+
+Deploy **backend, broker and rebuilt agent images** together for these changes;
+frontend changes are not required.
 
 ## Brave Search example
 

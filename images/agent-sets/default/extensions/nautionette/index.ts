@@ -16,6 +16,7 @@ import { AUTH_TRANSPORT_TOOLS, authControl, waitForMcpAuth } from "./mcp-auth.ts
 import { modelLimits } from "./model-limits.ts";
 import { reasoningConfig, reasoningPayload } from "./reasoning.ts";
 import { allowedTools } from "./tool-selection.ts";
+import { registerMcpTools } from "./deferred-tools.ts";
 import { isOutputTransportTool, loadOutputGrant, registerOutputTools } from "./outputs.ts";
 import { CRAFT_TOOL_NAMES, registerCraftTools } from "./artcraft.ts";
 import { SUBAGENT_TOOLS, registerSubagentTools } from "./subagents.ts";
@@ -29,7 +30,13 @@ const ALLOWED = allowedTools(process.env.NAUTIONETTE_TOOLS_JSON, process.env.NAU
 
 type JsonRpcResult = Record<string, any>;
 
-const transport = createMcpTransport(MCP_URL);
+const MODE = process.env.NAUTIONETTE_MCP_SCHEMA_MODE || "deferred";
+if (!["direct", "deferred"].includes(MODE)) throw new Error("Invalid MCP schema mode");
+const TARGETS = allowedTools(process.env.NAUTIONETTE_MCP_TARGETS_JSON);
+const transport = createMcpTransport(MCP_URL, fetch, TARGETS === null ? null : [...TARGETS]);
+// First-party control must not retain an external session snapshot from before
+// login. New remote targets cannot invalidate this backend/workflows-only scope.
+const control = createMcpTransport(MCP_URL, fetch, []);
 const rpc = transport.rpc;
 
 function renderToolResult(result: JsonRpcResult): string {
@@ -42,6 +49,7 @@ function renderToolResult(result: JsonRpcResult): string {
 }
 
 export default async function (pi: ExtensionAPI) {
+  pi.on("session_shutdown", () => Promise.all([transport.close(), control.close()]));
   const api = await modelApi(MODEL, GATEWAY);
   const reasoning = reasoningConfig();
   console.error(`[nautionette] model ${MODEL} uses ${api} through agentgateway`);
@@ -85,8 +93,8 @@ export default async function (pi: ExtensionAPI) {
   // Local first-party tools hold a private, turn-scoped capability. The raw
   // transports must never be declared to the model or gated by MCP selection.
   const grant = loadOutputGrant();
-  registerOutputTools(pi, rpc, grant);
-  registerSubagentTools(pi, rpc, grant, ALLOWED);
+  registerOutputTools(pi, control.rpc, grant);
+  registerSubagentTools(pi, control.rpc, grant, ALLOWED);
   registerCraftTools(pi);
 
   // Tools are discovered, not hard-coded: federate a new MCP server behind the
@@ -98,7 +106,7 @@ export default async function (pi: ExtensionAPI) {
     const authGates = all.some(tool => tool.name === "backend_mcp_oauth_gate");
     const oauthTools = new Set<string>();
     if (authGates) {
-      const saved = await authControl(rpc, "backend_mcp_oauth_tools", {});
+      const saved = await authControl(control.rpc, "backend_mcp_oauth_tools", { targets: TARGETS === null ? null : [...TARGETS] });
       for (const name of saved.oauth_tools || []) oauthTools.add(name);
       const names = new Set(all.map(tool => tool.name));
       for (const tool of saved.tools || []) {
@@ -114,16 +122,17 @@ export default async function (pi: ExtensionAPI) {
       writeFileSync(process.env.NAUTIONETTE_MCP_CATALOG_FILE, JSON.stringify(tools.map(tool => tool.name)), { mode: 0o600 });
     }
 
-    for (const tool of tools) {
-      pi.registerTool({
+    const definitions = tools.map(tool => ({
         name: tool.name,
+        namespace: { name: tool.server || tool.name.split("_")[0] || "mcp", description: "Selected MCP capabilities" },
+        annotations: tool.annotations,
         label: tool.title ?? tool.name,
         description: tool.description ?? `MCP tool ${tool.name}`,
         promptSnippet: tool.description?.split("\n")[0],
         parameters: tool.inputSchema ?? { type: "object", properties: {} },
         async execute(_toolCallId: string, params: unknown, signal?: AbortSignal) {
           if (oauthTools.has(tool.name)) {
-            await waitForMcpAuth(rpc, grant || {}, tool.name, _toolCallId, signal);
+            await waitForMcpAuth(control.rpc, grant || {}, tool.name, _toolCallId, signal);
           }
           const dispatch = oauthTools.has(tool.name) ? transport.rpcFresh : rpc;
           const result = await dispatch("tools/call", { name: tool.name, arguments: params ?? {} }, signal);
@@ -131,8 +140,8 @@ export default async function (pi: ExtensionAPI) {
           if (result?.isError) throw new Error(text);
           return { content: [{ type: "text", text }], details: result ?? {} };
         },
-      });
-    }
+      }));
+    registerMcpTools(pi, definitions, MODE);
     console.error(`[nautionette] bridged ${tools.length} of ${all.length} MCP tool(s) from ${MCP_URL}`);
   } catch (error) {
     // A missing gateway must not cost the agent its built-in tools.

@@ -24,7 +24,7 @@ from .gateway_config import attempt
 from .integrations import configured_instances, discover_models, ensure_defaults, instance_label
 from .integrations.registry import RESOURCE_PREFIX
 from .model_capabilities import model_capabilities
-from .runtime import cache_catalog, cached_catalog, context_hints, model_windows, runtime
+from .runtime import cache_catalog, cache_models, cached_catalog, cached_models, context_hints, runtime
 
 EMPTY_CONFIG: dict[str, Any] = {
     "providers": [],
@@ -95,12 +95,21 @@ async def model_catalog(config: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(out, key=lambda model: (model["gateway"], model["provider"], model["id"]))
 
 
-async def tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+async def tool_catalog(
+    config: dict[str, Any], *, selected_targets: list[str] | None = None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Federated tools, each attributed to the MCP server it came from."""
+    from .mcp_selection import target_headers
+
     targets = config.get("targets") or []
+    discovery = (
+        gateway.mcp_tools(extra=target_headers(selected_targets))
+        if selected_targets is not None
+        else gateway.mcp_tools()
+    )
     federated = [
         tool
-        for tool in await attempt(gateway.mcp_tools(), [])
+        for tool in await attempt(discovery, [])
         if tool["name"] not in RESERVED_TOOL_NAMES | CRAFT_TOOL_NAMES
     ]
 
@@ -119,7 +128,12 @@ async def tool_catalog(config: dict[str, Any]) -> tuple[list[dict[str, Any]], li
     # Asking every server directly is the fallback for a gateway that does not
     # prefix, and a remote server is slow, so only pay for it when a name needs it.
     if len(targets) > 1 and any(not prefixed(tool["name"]) for tool in federated):
-        http_targets = [target for target in targets if target.get("host")]
+        http_targets = [
+            target
+            for target in targets
+            if target.get("host")
+            and (selected_targets is None or target["name"] in {"backend", "workflows", *selected_targets})
+        ]
         per_target = await asyncio.gather(
             *(attempt(gateway.mcp_tools(target["host"]), []) for target in http_targets)
         )
@@ -203,10 +217,6 @@ async def build(refresh: bool = False) -> dict[str, Any]:
         model_catalog(config),
         tool_catalog(config),
     )
-    model_windows.clear()
-    model_windows.update(
-        {model["id"]: model["context_length"] for model in models if model.get("context_length")}
-    )
     return cache_catalog(
         {
             "agent_sets": agent_sets or [{"name": settings.default_agent_set, "ready": True}],
@@ -223,8 +233,15 @@ async def build(refresh: bool = False) -> dict[str, Any]:
 
 
 async def model_info(model: str | None) -> dict[str, Any]:
-    available = cached_catalog() or await build()
-    return next((item for item in available.get("models", []) if item["id"] == model), {})
+    # Admission needs fresh model capabilities, not a tool picker. A cold/expired
+    # picker must not initialize every MCP source before a scoped agent can start.
+    available = cached_models()
+    if available is None:
+        with contextlib.suppress(HTTPException):
+            await ensure_defaults()
+        config = await attempt(gateway.config(), dict(EMPTY_CONFIG))
+        available = cache_models(await model_catalog(config))
+    return next((item for item in available if item["id"] == model), {})
 
 
 async def reset_default_model(excluded: str | None = None) -> bool:

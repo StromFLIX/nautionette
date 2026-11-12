@@ -74,7 +74,10 @@ unreleased lock or failed Docker cleanup fails closed; no second writer starts.
 including live steering. Native custom entries bind consumed input IDs to Pi user
 entries. Session state is synced before external tools, subsequent model requests,
 turn boundaries and final exit. The journal and session are updated throughout a
-run, not saved only after the final answer.
+run, not saved only after the final answer. The durability extension imports only
+its lightweight `session-sync.mjs` fsync helper, not the supervisor's SDK-based
+session producer. This avoids loading another SDK graph inside Pi without
+removing any flush, validation, journal or checkpoint boundary.
 
 A submitted/consumed ID is never blindly resubmitted. Orderly settlement may
 release steering inputs that were not consumed, allowing their queued turns to

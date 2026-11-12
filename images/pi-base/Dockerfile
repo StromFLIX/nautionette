@@ -61,6 +61,7 @@ COPY chat-recovery.mjs /usr/local/lib/nautionette/chat-recovery.mjs
 COPY chat-compaction-extension.mjs /usr/local/lib/nautionette/chat-compaction-extension.mjs
 COPY chat-files.mjs /usr/local/lib/nautionette/chat-files.mjs
 COPY chat-session.mjs /usr/local/lib/nautionette/chat-session.mjs
+COPY session-sync.mjs /usr/local/lib/nautionette/session-sync.mjs
 COPY chat-session-extension.mjs /usr/local/lib/nautionette/chat-session-extension.mjs
 COPY tool-context.mjs /usr/local/lib/nautionette/tool-context.mjs
 COPY package-install.mjs /usr/local/lib/nautionette/package-install.mjs

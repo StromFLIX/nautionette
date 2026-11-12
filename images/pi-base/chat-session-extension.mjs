@@ -1,7 +1,7 @@
 // Loaded explicitly for durable chats, regardless of the selected agent set.
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { syncFile } from './chat-session.mjs';
+import { syncFile } from './session-sync.mjs';
 import { toolContextEdits } from './tool-context.mjs';
 
 export default function (pi) {
