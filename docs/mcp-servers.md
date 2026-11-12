@@ -22,19 +22,26 @@ Rebuild/redeploy **agentgateway, backend and frontend-web** together:
 docker compose up -d --build agentgateway backend frontend-web
 ```
 
-In Coolify, redeploy the updated Compose stack. The gateway uses v1.7.0 by
-default, with the upstream binary copied into a Node 24 / Debian Trixie image.
+In Coolify, redeploy the updated Compose stack. The gateway version is controlled
+by the tested pin in `services/agentgateway/Dockerfile` (currently v1.7.0), with the
+upstream binary copied into a Node 24 / Debian Trixie image.
 It includes Node, npm, npx, Python 3, uv and uvx. Commands requiring other binaries,
 browsers, native build tools, private package-registry configuration or system
 libraries need those installed/configured in a custom image first.
 
-**Check stored deployment overrides:** `AGENTGATEWAY_VERSION` must be `v1.7.0`
-(or a compatible newer release) for pre-initialization target conditions. An old
-Coolify/environment override takes precedence over the Compose/Dockerfile default.
-The gateway health component now reports selection-policy coverage and becomes
-`degraded` if named runtime targets in a multi-target gateway are still unscoped;
-inspect backend bootstrap
-logs for a sanitized phase/HTTP status instead of assuming filtering is active.
+**No deployment-level gateway version override is needed.** Compose deliberately
+does not forward `AGENTGATEWAY_VERSION` as a build argument. Coolify saves variables
+in Compose defaults as persistent settings, which can leave an old version pinned
+across later releases. Remove legacy `AGENTGATEWAY_VERSION` entries from normal and
+preview environments; they no longer control this Compose build. Repository pin
+updates go through CI and the normal release pipeline, not an untested `latest` tag.
+A custom standalone Docker build can still explicitly choose a build argument;
+pre-initialization target conditions require v1.7.0 or a compatible newer release.
+
+The gateway health component reports selection-policy coverage and becomes
+`degraded` if named runtime targets in a multi-target gateway are still unscoped.
+Inspect backend bootstrap logs for a sanitized phase/HTTP status instead of
+assuming filtering is active.
 
 The gateway remains non-root (UID/GID 65532). Its SQLite config and package caches
 live in the existing `agentgateway-data` volume. Stdio processes get a minimal

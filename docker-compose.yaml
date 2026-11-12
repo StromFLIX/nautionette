@@ -199,9 +199,9 @@ services:
   # upstream binary plus Node/Python runtimes for trusted stdio MCP targets.
   agentgateway:
     build:
+      # Version is pinned in the Dockerfile and tested in CI, not deployment env.
+      # Coolify persists Compose default variables, which otherwise freeze old pins.
       context: ./services/agentgateway
-      args:
-        AGENTGATEWAY_VERSION: ${AGENTGATEWAY_VERSION:-v1.7.0}
     image: ${STACK_NAMESPACE:-nautionette}/agentgateway:dev
     restart: unless-stopped
     command: ["-f", "/config/config.yaml"]

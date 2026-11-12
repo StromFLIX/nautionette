@@ -29,6 +29,18 @@ def test_python_services_copy_uv_into_the_same_patch_pinned_python_runtime():
     assert len(uv_pins) == 1
 
 
+def test_gateway_version_follows_the_tested_dockerfile_not_a_persisted_deployment_variable():
+    compose = (ROOT / "docker-compose.yaml").read_text()
+    gateway = yaml.safe_load(compose)["services"]["agentgateway"]
+    assert gateway["build"]["context"] == "./services/agentgateway"
+    assert "AGENTGATEWAY_VERSION" not in json.dumps(gateway)
+    assert not re.search(r"^AGENTGATEWAY_VERSION\s*=", (ROOT / ".env.example").read_text(), re.MULTILINE)
+    dockerfile = (ROOT / "services/agentgateway/Dockerfile").read_text()
+    pin = re.search(r"^ARG AGENTGATEWAY_VERSION=(v\d+\.\d+\.\d+)$", dockerfile, re.MULTILINE)[1]
+    ci = (ROOT / ".github/workflows/ci.yml").read_text()
+    assert f"releases/download/{pin}/agentgateway-linux-amd64" in ci
+
+
 def test_browser_and_pi_runtime_guards_match_their_actual_image_pins():
     package = json.loads((ROOT / "services/frontend/package.json").read_text())
     lock = json.loads((ROOT / "services/frontend/package-lock.json").read_text())
