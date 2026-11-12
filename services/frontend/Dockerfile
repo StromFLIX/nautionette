@@ -7,7 +7,9 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
-RUN npm run build
+ARG APP_VERSION=dev
+ARG APP_RELEASE_TAG=
+RUN APP_VERSION="$APP_VERSION" APP_RELEASE_TAG="$APP_RELEASE_TAG" npm run build
 
 FROM nginx:1.31.8-alpine
 RUN apk upgrade --no-cache

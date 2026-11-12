@@ -23,7 +23,8 @@
     </div>
 
     <dl class="system-health__config">
-      <div><dt>Version</dt><dd class="mono"><BuildVersion :system="store.system" /></dd></div>
+      <div><dt>Client version</dt><dd class="mono"><BuildVersion :system="clientBuildInfo" /></dd></div>
+      <div><dt>Server version</dt><dd class="mono"><BuildVersion :system="store.system" /></dd></div>
       <div><dt>Authentication</dt><dd>{{ flag(store.system.auth_enabled, 'Enabled', 'Disabled') }}</dd></div>
       <div><dt>Default model</dt><dd class="mono">{{ store.system.model || 'Not configured' }}</dd></div>
       <div><dt>Model credentials</dt><dd>{{ flag(store.system.model_key_present, 'Available', 'Not detected') }}</dd></div>
@@ -73,6 +74,7 @@ import { store } from '../../store'
 import HealthDetails from './HealthDetails.vue'
 import BuildVersion from '../BuildVersion.vue'
 
+const clientBuildInfo = __CLIENT_BUILD_INFO__
 const loading = ref(false)
 const error = ref('')
 const checkedAt = ref('')

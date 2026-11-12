@@ -437,6 +437,9 @@ services:
   frontend-web:
     build:
       context: ./services/frontend
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
+        APP_RELEASE_TAG: ${APP_RELEASE_TAG:-}
     image: ${STACK_NAMESPACE:-nautionette}/frontend:dev
     restart: unless-stopped
     networks: [internal]
