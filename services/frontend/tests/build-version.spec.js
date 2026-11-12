@@ -1,6 +1,10 @@
 import { test, expect } from '@playwright/test'
 import { brand } from '../src/brand.js'
 import { mockDesign } from './design-fixture.js'
+import { clientBuildInfo } from '../scripts/client-build-info.js'
+import { formatBuildInfo } from '../src/build-info.js'
+
+const client = formatBuildInfo(clientBuildInfo('serve'))
 
 const commit = '68c4590f45388cc3d9270c459a5cd30985aba4e4'
 
@@ -17,7 +21,12 @@ for (const width of [1440, 320]) {
       await context.route('**/api/system', route => route.fulfill({ json: { ...metadata, components: [], agent_sets: [] } }))
       await page.setViewportSize({ width, height: 900 })
       await page.goto('/settings/system')
-      const surfaces = page.locator('.build-version')
+      const versions = page.locator('.build-version')
+      await expect(versions).toHaveText([client.label, label, client.label, label])
+      await expect(page.getByLabel('Build versions')).toContainText(`Client ${client.label}`)
+      await expect(page.getByLabel('Build versions')).toContainText(`Server ${label}`)
+      await expect(page.locator('.system-health__config dt')).toContainText(['Client version', 'Server version', 'Authentication', 'Default model', 'Model credentials'])
+      const surfaces = page.locator('.settings__versions > span:nth-child(2) .build-version, .system-health__config > div:nth-child(2) .build-version')
       await expect(surfaces).toHaveCount(2)
       for (const surface of await surfaces.all()) {
         await expect(surface).toBeVisible()
@@ -46,9 +55,9 @@ test('refreshed release metadata updates both surfaces without reloading', async
   let payload = { version: commit, components: [], agent_sets: [] }
   await context.route('**/api/system', route => route.fulfill({ json: payload }))
   await page.goto('/settings/system')
-  await expect(page.locator('.build-version').first()).toHaveText('68c4590')
+  await expect(page.locator('.build-version')).toHaveText([client.label, '68c4590', client.label, '68c4590'])
   payload = { ...payload, release_tag: 'v3.2.1' }
   await page.getByRole('button', { name: 'Refresh system health' }).click()
-  await expect(page.locator('.build-version')).toHaveText(['v3.2.1', 'v3.2.1'])
-  await expect(page.locator('a.build-version')).toHaveCount(0)
+  await expect(page.locator('.build-version')).toHaveText([client.label, 'v3.2.1', client.label, 'v3.2.1'])
+  await expect(page.locator('a.build-version')).toHaveCount(client.commit ? 2 : 0)
 })
