@@ -11,8 +11,10 @@ export function registerMcpTools(pi: ExtensionAPI, tools: any[]) {
   // deferred-schema experiment. Only today's allowed/registered tools are added.
   pi.on("session_start", (_event, ctx) => {
     const previous = ctx.sessionManager.getBranch().findLast(entry =>
-      entry.type === "custom" && entry.customType === LEGACY_MARKER)?.data as { mode?: string } | undefined;
-    if (previous?.mode !== "deferred") return;
+      entry.type === "custom" && entry.customType === LEGACY_MARKER)?.data as { mode?: string; directToolsRestored?: boolean } | undefined;
+    // The old operator fallback also wrote "direct" without necessarily restoring
+    // schemas that an earlier deferred turn had explicitly removed.
+    if (!previous || !["deferred", "direct"].includes(previous.mode || "") || previous.directToolsRestored) return;
     const all = pi.getAllTools();
     const otherDeferredTools = all.some(tool => !names.has(tool.name) &&
       (tool.exposure === "deferred" || tool.exposure === "codemode"));
@@ -21,6 +23,6 @@ export function registerMcpTools(pi: ExtensionAPI, tools: any[]) {
     const active = pi.getActiveTools().filter(name =>
       name !== "tool_search" || otherDeferredTools || !builtinSearch);
     pi.setActiveTools([...new Set([...active, ...names])]);
-    pi.appendEntry(LEGACY_MARKER, { mode: "direct" });
+    pi.appendEntry(LEGACY_MARKER, { mode: "direct", directToolsRestored: true });
   });
 }

@@ -41,8 +41,8 @@ test('all selected schemas are direct and no prompt/discovery hook is installed'
   assert.doesNotMatch(runner, /builtin:tool-search|NAUTIONETTE_MCP_SCHEMA_MODE/)
 })
 
-test('old deferred sessions restore every currently allowed tool once and retire our builtin loader', () => {
-  const f = mockPi('deferred')
+for (const previous of ['deferred', 'direct']) test(`old ${previous} experiment sessions restore every currently allowed tool once and retire our builtin loader`, () => {
+  const f = mockPi(previous)
   registerMcpTools(f.pi, definitions)
   f.handlers.session_start({}, f.ctx)
   assert.deepEqual(f.pi.getActiveTools(), ['read', 'publish_output', 'remote_lookup', 'remote_secondary'])
@@ -126,14 +126,14 @@ async function fixture(fn) {
     writeFileSync(legacy, `export default pi => {
       pi.registerProvider('nautionette', { baseUrl: '${origin}/v1', apiKey: 'fixture', api: 'openai-completions', models: [{ id: 'test-model', name: 'fixture', reasoning: false, input: ['text'], contextWindow: 128000, maxTokens: 1024, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] });
       for (const name of ['remote_lookup','remote_secondary']) pi.registerTool({ name, description: name, exposure: 'deferred', parameters: { type: 'object', properties: { value: { type: 'string' } } }, async execute() { return { content: [{type:'text',text:'legacy fixture result'}], details: {} }; } });
-      pi.on('session_start', () => { pi.setActiveTools([...pi.getActiveTools(), 'tool_search']); pi.appendEntry('nautionette.mcp-schema-mode', {mode:'deferred'}); });
+      pi.on('session_start', () => { pi.setActiveTools([...pi.getActiveTools().filter(name => !['remote_lookup','remote_secondary'].includes(name)), 'tool_search']); pi.appendEntry('nautionette.mcp-schema-mode', {mode:process.env.LEGACY_SCHEMA_MARKER || 'deferred'}); });
     }`)
-    async function run({ allowed = ['remote_lookup', 'remote_secondary'], seedLegacy = false, persistent = true, oldMode = 'deferred' } = {}) {
+    async function run({ allowed = ['remote_lookup', 'remote_secondary'], seedLegacy = false, persistent = true, oldMode = 'deferred', legacyMarker = 'deferred' } = {}) {
       runId++; called = false
       // Explicit native search here simulates its normal CLI registration; the
       // production supervisor must no longer force-load or activate this tool.
       child = spawn('pi', ['--mode', 'json', ...(persistent ? ['--session', join(dir, 'session.jsonl')] : ['--no-session']), '--no-extensions', '--no-context-files', '--no-skills', '--no-themes', '--no-prompt-templates', '-e', 'builtin:tool-search', '-e', seedLegacy ? legacy : extension, '--provider', 'nautionette', '--model', 'test-model', '--approve', '--', 'fixture request'], {
-        cwd: dir, env: { ...process.env, HOME: dir, PI_CODING_AGENT_DIR: config, PI_OFFLINE: '1', PI_TELEMETRY: '0', AGENT_MODEL: 'test-model', AGENTGATEWAY_URL: origin, MCP_URL: origin + '/mcp', NAUTIONETTE_MODEL_API: 'openai-completions', NAUTIONETTE_MODEL_REASONING: '{"supported":false}', NAUTIONETTE_REASONING_EFFORT: '', NAUTIONETTE_MCP_SCHEMA_MODE: oldMode, NAUTIONETTE_MCP_TARGETS_JSON: '["remote"]', NAUTIONETTE_TOOLS_JSON: JSON.stringify(allowed), NAUTIONETTE_ARTCRAFT_JSON: '[]', NAUTIONETTE_OUTPUT_GRANT_FILE: join(dir, 'no-grant'), NODE_OPTIONS: '' }, stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: dir, env: { ...process.env, HOME: dir, PI_CODING_AGENT_DIR: config, PI_OFFLINE: '1', PI_TELEMETRY: '0', AGENT_MODEL: 'test-model', AGENTGATEWAY_URL: origin, MCP_URL: origin + '/mcp', NAUTIONETTE_MODEL_API: 'openai-completions', NAUTIONETTE_MODEL_REASONING: '{"supported":false}', NAUTIONETTE_REASONING_EFFORT: '', NAUTIONETTE_MCP_SCHEMA_MODE: oldMode, LEGACY_SCHEMA_MARKER: legacyMarker, NAUTIONETTE_MCP_TARGETS_JSON: '["remote"]', NAUTIONETTE_TOOLS_JSON: JSON.stringify(allowed), NAUTIONETTE_ARTCRAFT_JSON: '[]', NAUTIONETTE_OUTPUT_GRANT_FILE: join(dir, 'no-grant'), NODE_OPTIONS: '' }, stdio: ['ignore', 'pipe', 'pipe'],
       })
       let stdout = '', stderr = ''
       child.stdout.on('data', chunk => { stdout += chunk }); child.stderr.on('data', chunk => { stderr += chunk })
@@ -176,21 +176,24 @@ test('stale schema-mode environment settings cannot reactivate deferred schemas'
   assert.equal(requests.length, 2)
 }))
 
-test('native deferred history migrates to all current direct schemas without another search, then honors revocation', { timeout: 30000 }, () => fixture(async f => {
-  const legacy = await f.run({ seedLegacy: true })
+for (const marker of ['deferred', 'direct']) test(`native ${marker} experiment history migrates to all current direct schemas without another search, then honors revocation`, { timeout: 30000 }, () => fixture(async f => {
+  // Start with an eager transcript so the legacy experiment records a real
+  // toolsRemoved delta, rather than a schema the branch had never mentioned.
+  assertDirect((await f.run())[0])
+  const legacy = await f.run({ seedLegacy: true, legacyMarker: marker })
   assert.ok(legacy[0].tools.some(t => t.function.name === 'tool_search'))
   assert.ok(!legacy[0].tools.some(t => t.function.name === 'remote_secondary'))
   const restored = await f.run()
   assertDirect(restored[0])
   assert.equal(restored.length, 2)
-  assert.equal(f.calls.length, 1)
+  assert.equal(f.calls.length, 2)
   const resumed = await f.run()
   assertDirect(resumed[0])
   assert.equal(resumed.length, 2)
-  assert.equal(f.calls.length, 2)
+  assert.equal(f.calls.length, 3)
   const revoked = await f.run({ allowed: [] })
   assert.ok(!revoked[0].tools.some(t => t.function.name === 'remote_lookup'))
   assert.ok(!revoked[0].tools.some(t => t.function.name === 'remote_secondary'))
   assert.ok(!revoked[0].tools.some(t => t.function.name === 'tool_search'))
-  assert.equal(f.calls.length, 2)
+  assert.equal(f.calls.length, 3)
 }))
