@@ -112,7 +112,27 @@ async def mcp_oauth_tools(body: dict[str, Any] = Body(default={})) -> dict:
     from ..db import db
     from ..gateway_config import attempt
 
-    tools, _ = await tool_catalog(await attempt(gateway.config(), dict(EMPTY_CONFIG)))
+    # Pi has already listed the live federation. Only a published hosted-OAuth
+    # target needs a second discovery to learn its current schemas and gate owners.
+    # Disconnected targets keep their saved schemas; this never caches authorization.
+    connections = mcp_http_oauth.public_connections()
+    tools = []
+    if connections:
+        config = await attempt(gateway.config(), None)
+        changed = connections != mcp_http_oauth.public_connections()
+        if changed:
+            # Login/removal/refresh may have yielded a different owner revision
+            # during config I/O. Use a fresh view and the original discovery path.
+            config = await attempt(gateway.config(), None)
+        if (
+            config is None
+            or changed
+            or any(target["name"] in connections for target in config.get("targets") or [])
+        ):
+            # An unknown config is not evidence that OAuth targets are absent.
+            tools, _ = await tool_catalog(config if config is not None else dict(EMPTY_CONFIG))
+        else:
+            tools = mcp_auth_wait.unavailable_tools()
     return {
         "tools": tools,
         "oauth_tools": [row["name"] for row in db.query("SELECT name FROM mcp_oauth_tools")],

@@ -61,6 +61,23 @@ Deploy both **agentgateway and backend** for these protections; restart/recreate
 the gateway to load the baseline failure policy. Existing agent turns that
 started without MCP tools need a new turn to rediscover them.
 
+## Agent startup discovery
+
+Pi still lists the live MCP federation on every agent start; selected tools and
+first-party output/delegation transports are unchanged. The private OAuth bridge
+only augments that snapshot with saved disconnected-tool schemas and gate metadata.
+When no managed hosted-OAuth target is published, it skips a redundant second
+federated discovery. With no hosted-OAuth connections, even the extra target-config
+lookup is unnecessary. CLI-managed stdio targets remain part of the initial live list.
+
+Any published hosted-OAuth target keeps the existing fresh-discovery/schema-owner
+registration path, regardless of connection status (including pending login or
+cleanup). Unknown gateway configuration or a connection/revision change during the
+lookup also falls back to fresh discovery. This is not a credential/authorization
+cache: call-time gates, token expiry, demand-driven reconnect, fresh authenticated
+sessions and no-replay rules remain in force. Deploy the **backend** for this
+optimization; the agent image and frontend need no changes.
+
 ## Brave Search example
 
 In **Settings > MCP servers > Add server**:
