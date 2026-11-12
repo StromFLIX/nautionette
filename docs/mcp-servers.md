@@ -76,7 +76,7 @@ Deploy both **agentgateway and backend** for these protections; restart/recreate
 the gateway to load the baseline failure policy. Existing agent turns that
 started without MCP tools need a new turn to rediscover them.
 
-## Agent startup discovery and deferred schemas
+## Agent startup discovery and direct tool availability
 
 Pi still discovers live tools on every agent start. For an explicit tool selection,
 the backend resolves known server prefixes against current gateway configuration
@@ -104,21 +104,20 @@ Model capability validation no longer builds the tool picker when its cache is
 cold. Model metadata uses the same 60-second TTL/invalidation but does not
 initialize MCP servers merely to admit a message.
 
-Selected remote schemas use native Pi `deferred` exposure. The active `tool_search`
-tool discovers them by task or exact name and loads matching schemas for the next
-model request; it never executes the remote tool itself. A bounded, names-only
-directory keeps discovery grounded without including every parameter schema.
-Search accepts plain words/exact names, not `+` operators. Already declared tools
-should be called directly, not searched for repeatedly. Local coding/history and
-first-party output/delegation/creative tools stay direct. Explicit allowed tool
-names in the current prompt can be loaded immediately to avoid a search round
-trip. Old eager native transcripts migrate once; later turns retain searched
-schemas on that branch, subject to the current tool allowlist. A custom host
-without native search falls back to direct schemas rather than leaving tools
-unreachable. Set `AGENT_MCP_SCHEMA_MODE=direct` on the broker to restore eager
-schemas for compatibility or controlled comparisons; restart the broker and use a
-new turn. Search can add a model round trip for remote tasks, so compare first
-useful tool execution/result as well as first text.
+All selected MCP tools and their full schemas are directly available from the
+first model request. The deferred-schema/tool-search experiment has been removed:
+there is no automatic search activation, names-only directory, or schema-mode
+switch. Local coding/history and first-party output/delegation/creative tools are
+unchanged. This intentionally keeps the larger schema prompt to preserve the
+established workflow and integration calling pattern without a loader round trip.
+
+Chats that used the experiment retain their history. On their next fresh agent
+process, a one-time migration restores today's allowed MCP tools to direct access
+and removes our old built-in search activation when no other installed extension
+needs deferred discovery. Other extensions' tools/search configuration are not
+removed. Legacy `AGENT_MCP_SCHEMA_MODE` deployment entries no longer affect agent
+behavior and can be deleted. Apply the rollback with rebuilt agent/broker images
+and a new turn; already-running processes retain their original code/loadout.
 
 The private OAuth bridge augments live discovery with saved disconnected-tool
 schemas and gate metadata. It skips redundant discovery when no selected,

@@ -41,6 +41,15 @@ def test_gateway_version_follows_the_tested_dockerfile_not_a_persisted_deploymen
     assert f"releases/download/{pin}/agentgateway-linux-amd64" in ci
 
 
+def test_mcp_schema_search_experiment_has_no_deployment_switch():
+    compose = (ROOT / "docker-compose.yaml").read_text()
+    example = (ROOT / ".env.example").read_text()
+    broker = (ROOT / "services/docker-broker/nautionette_docker_broker/config.py").read_text()
+    assert "AGENT_MCP_SCHEMA_MODE" not in compose
+    assert not re.search(r"^AGENT_MCP_SCHEMA_MODE\s*=", example, re.MULTILINE)
+    assert "NAUTIONETTE_MCP_SCHEMA_MODE" not in broker
+
+
 def test_browser_and_pi_runtime_guards_match_their_actual_image_pins():
     package = json.loads((ROOT / "services/frontend/package.json").read_text())
     lock = json.loads((ROOT / "services/frontend/package-lock.json").read_text())

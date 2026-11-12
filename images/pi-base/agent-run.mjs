@@ -198,7 +198,6 @@ async function main() {
   const interactive = Boolean(job.chat_id);
   const args = ["--mode", interactive ? "rpc" : "json", ...(historyFile ? ["--session", historyFile] : ["--no-session"]),
                 "--provider", "nautionette", "--model", model, "--approve"];
-  args.push("--extension", "builtin:tool-search");
   if (interactive) args.push("--extension", "/usr/local/lib/nautionette/chat-compaction-extension.mjs");
   if (continuity) args.push("--extension", "/usr/local/lib/nautionette/chat-session-extension.mjs");
   const systemInstructions = [job.system_prompt];

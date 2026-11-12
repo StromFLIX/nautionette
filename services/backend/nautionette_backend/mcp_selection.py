@@ -105,7 +105,7 @@ async def for_run(tools: list[str] | None) -> list[str] | None:
     local = (
         set(RESERVED_TOOL_NAMES)
         | set(CRAFT_TOOL_NAMES)
-        | {"list_subagents", "call_subagent", "wait_for_subagent", "tool_search"}
+        | {"list_subagents", "call_subagent", "wait_for_subagent"}
     )
     selected = targets_for_tools(tools, targets, local, offline)
     try:

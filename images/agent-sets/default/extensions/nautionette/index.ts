@@ -16,7 +16,7 @@ import { AUTH_TRANSPORT_TOOLS, authControl, waitForMcpAuth } from "./mcp-auth.ts
 import { modelLimits } from "./model-limits.ts";
 import { reasoningConfig, reasoningPayload } from "./reasoning.ts";
 import { allowedTools } from "./tool-selection.ts";
-import { registerMcpTools } from "./deferred-tools.ts";
+import { registerMcpTools } from "./mcp-tools.ts";
 import { isOutputTransportTool, loadOutputGrant, registerOutputTools } from "./outputs.ts";
 import { CRAFT_TOOL_NAMES, registerCraftTools } from "./artcraft.ts";
 import { SUBAGENT_TOOLS, registerSubagentTools } from "./subagents.ts";
@@ -30,8 +30,6 @@ const ALLOWED = allowedTools(process.env.NAUTIONETTE_TOOLS_JSON, process.env.NAU
 
 type JsonRpcResult = Record<string, any>;
 
-const MODE = process.env.NAUTIONETTE_MCP_SCHEMA_MODE || "deferred";
-if (!["direct", "deferred"].includes(MODE)) throw new Error("Invalid MCP schema mode");
 const TARGETS = allowedTools(process.env.NAUTIONETTE_MCP_TARGETS_JSON);
 const transport = createMcpTransport(MCP_URL, fetch, TARGETS === null ? null : [...TARGETS]);
 // First-party control must not retain an external session snapshot from before
@@ -141,7 +139,7 @@ export default async function (pi: ExtensionAPI) {
           return { content: [{ type: "text", text }], details: result ?? {} };
         },
       }));
-    registerMcpTools(pi, definitions, MODE);
+    registerMcpTools(pi, definitions);
     console.error(`[nautionette] bridged ${tools.length} of ${all.length} MCP tool(s) from ${MCP_URL}`);
   } catch (error) {
     // A missing gateway must not cost the agent its built-in tools.
