@@ -640,5 +640,10 @@ if __name__ == "__main__":
     try:
         main()
     except Exception:
+        if len(sys.argv) > 2 and sys.argv[1] != "status":
+            folder = Path(sys.argv[2])
+            if folder.parent == ROOT / "runs" and folder.exists():
+                with (folder / "failure.log").open("a") as log:
+                    traceback.print_exc(file=log)
         print("Temporal maintenance failed; inspect private host run state/diagnostics.", file=sys.stderr)
         sys.exit(1)

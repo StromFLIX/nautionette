@@ -80,8 +80,9 @@ async def run():
             "maxio": {"/data": "maxio-data"},
             "agentgateway": {"/data": "agentgateway-data"},
         }
-        http = """import json
+        http = """import json,signal,sys
 from http.server import BaseHTTPRequestHandler,HTTPServer
+signal.signal(signal.SIGTERM,lambda *_:sys.exit(0))
 class Handler(BaseHTTPRequestHandler):
  def do_GET(self):
   names=('temporal','broker','agentgateway','workflow-mcp')
@@ -91,6 +92,7 @@ class Handler(BaseHTTPRequestHandler):
   self.send_response(200);self.end_headers();self.wfile.write(json.dumps(value).encode())
 HTTPServer(('0.0.0.0',8080),Handler).serve_forever()
 """
+        idle = "import time,signal,sys;signal.signal(signal.SIGTERM,lambda *_:sys.exit(0));time.sleep(36000)"
         for service in (
             "backend",
             "docker-broker",
@@ -104,7 +106,11 @@ HTTPServer(('0.0.0.0',8080),Handler).serve_forever()
             name = fixture.prefix + "-" + service
             container = client.containers.run(
                 image,
-                ["python", "-c", http if service == "backend" else "import time;time.sleep(36000)"],
+                [
+                    "python",
+                    "-c",
+                    http if service == "backend" else idle,
+                ],
                 name=name,
                 detach=True,
                 user="0:0",
