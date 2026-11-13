@@ -55,6 +55,22 @@ def write_completed_receipt():
         os.close(fd)
 
 
+def verify_and_complete():
+    # Compose reports 'started' before every service is ready for inspection.
+    # This operation only verifies metadata/versions, restores restart policies
+    # idempotently and writes the receipt; it never repeats schema migrations.
+    deadline = time.monotonic() + 180
+    while True:
+        try:
+            host.finish(location())
+            write_completed_receipt()
+            return
+        except RuntimeError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(2)
+
+
 def serve():
     path = location()
     os.umask(0o077)
@@ -130,7 +146,6 @@ if __name__ == "__main__":
         print(json.dumps(status()))
     elif sys.argv[1] == "finish":
         sys.path.insert(0, str(location()))
-        host.finish(location())
-        write_completed_receipt()
+        verify_and_complete()
     else:
         raise ValueError("Unknown controller operation")

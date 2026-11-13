@@ -153,6 +153,25 @@ def test_duplicate_post_hook_reads_stopped_receipt_without_starting_or_executing
     assert container.update.call_count == 2
 
 
+def test_post_hook_waits_for_service_startup_without_repeating_migrations(monkeypatch):
+    monkeypatch.setattr(job, "location", lambda: "run")
+    finish = Mock(side_effect=[RuntimeError("services starting"), None])
+    receipt = Mock()
+    monkeypatch.setattr(job.host, "finish", finish)
+    monkeypatch.setattr(job, "write_completed_receipt", receipt)
+    monkeypatch.setattr(job.time, "sleep", Mock())
+    monkeypatch.setattr(job.time, "monotonic", Mock(side_effect=[0, 1]))
+    job.verify_and_complete()
+    assert finish.call_count == 2
+    receipt.assert_called_once()
+    monkeypatch.setattr(job.host, "finish", Mock(side_effect=RuntimeError("wrong deployed revision")))
+    monkeypatch.setattr(job.time, "monotonic", Mock(side_effect=[0, 181]))
+    receipt.reset_mock()
+    with pytest.raises(RuntimeError, match="wrong deployed revision"):
+        job.verify_and_complete()
+    receipt.assert_not_called()
+
+
 def test_job_publishes_receipt_only_after_verified_finish(tmp_path, monkeypatch):
     monkeypatch.setattr(job, "COMPLETED_RECEIPT", str(tmp_path / "completed.json"))
     monkeypatch.setenv("MAINTENANCE_COMMIT", COMMIT)

@@ -67,7 +67,9 @@ The installed Coolify **4.7.5** implementation was checked for these behaviors:
   report `completed` for the exact `APP_VERSION`. GitHub's authenticated component
   health gate cannot mistake a failed post-hook for a successful upgrade. After
   verification, the post-hook writes a small, fsynced container-local receipt,
-  disables controller restart and stops it. Health reads the bounded receipt via
+  disables controller restart and stops it. Verification tolerates up to 180 seconds
+  of normal service startup with idempotent metadata checks only; it never retries
+  schema migrations. Health reads the bounded receipt via
   Docker's read-only archive API; no privileged controller process stays running.
   Automatic health also requires `exited` and `restart=no`, so a swallowed cleanup
   error cannot leave a privileged idle controller behind unnoticed.
