@@ -32,7 +32,8 @@ async def run():
         fixture.docker("network", "create", fixture.network)
         client.networks.create(internal)
         fixture.postgres("postgres")
-        legacy = fixture.build("1.29.7", "legacy")
+        # Match the real preflight discovery: Coolify had persisted a 1.29.0 build arg.
+        legacy = fixture.build("1.29.0", "legacy")
         old, address = fixture.start(legacy)
         client.networks.get(internal).connect(old, aliases=["temporal"])
         fixture.wait(

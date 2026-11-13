@@ -79,7 +79,7 @@ def operation(tmp_path, monkeypatch):
         "data_network": "data",
         "volumes": {},
     }
-    metadata = {"stack": stack, "from": "1.29.7", "shards": "4"}
+    metadata = {"stack": stack, "from": "1.29.0", "shards": "4"}
     state = {
         **metadata,
         "status": "queued",
@@ -119,10 +119,11 @@ def test_automatic_migration_restores_backup_before_any_schema_write_and_checks_
     path, calls, _ = operation
     host.run(path)
     assert host.load(path)["status"] == "prepared"
-    first_write = next(index for index, call in enumerate(calls) if "upgrade-from-1.29.7" in call)
+    first_write = next(index for index, call in enumerate(calls) if "upgrade-from-1.29.0" in call)
     assert calls.index(("backup",)) < calls.index(("restore",)) < first_write
     assert [(call[1], call[2]) for call in calls if call[0] == "probe"] == [
-        ("capture", "1.29.7"),
+        ("capture", "1.29.0"),
+        ("check", "1.29.7"),
         ("check", "1.30.9"),
         ("check", "1.31.5"),
         ("check", "1.32.2"),
@@ -155,7 +156,7 @@ def test_failure_before_schema_writes_can_restore_original_stack(operation):
     assert host.load(path)["status"] == "failed"
     assert host.load(path)["safe_to_retry"] is True
     assert calls.count(("start",)) == 2
-    assert ("probe", "resume", "1.29.7") in calls
+    assert ("probe", "resume", "1.29.0") in calls
 
 
 @pytest.mark.parametrize(

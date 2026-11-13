@@ -10,6 +10,7 @@ export PGCONNECT_TIMEOUT=5
 core=${DBNAME:-temporal}
 visibility=${VISIBILITY_DBNAME:-temporal_visibility}
 case "${TEMPORAL_TOOLS_VERSION:?}" in
+    1.29.7) previous=1.29.0; core_before=1.18; vis_before=1.9; core_after=1.18; vis_after=1.9 ;;
     1.30.9) previous=1.29.7; core_before=1.18; vis_before=1.9; core_after=1.18; vis_after=1.13 ;;
     1.31.5) previous=1.30.9; core_before=1.18; vis_before=1.13; core_after=1.19; vis_after=1.14 ;;
     1.32.2) previous=1.31.5; core_before=1.19; vis_before=1.14; core_after=1.19; vis_after=1.14 ;;

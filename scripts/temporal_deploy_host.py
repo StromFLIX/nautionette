@@ -100,8 +100,11 @@ def plan(path: Path) -> dict:
     for index, version in enumerate(versions):
         if not re.fullmatch(r"1\.\d+\.\d+", version):
             raise ValueError("Invalid Temporal version")
-        if index and int(version.split(".")[1]) != int(versions[index - 1].split(".")[1]) + 1:
-            raise ValueError("Temporal plan skips a minor release")
+        if index:
+            previous = tuple(map(int, versions[index - 1].split(".")))
+            current = tuple(map(int, version.split(".")))
+            if current <= previous or current[1] not in {previous[1], previous[1] + 1}:
+                raise ValueError("Temporal plan skips a minor release or downgrades a patch")
     return result
 
 

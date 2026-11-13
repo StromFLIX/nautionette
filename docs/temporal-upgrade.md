@@ -68,11 +68,16 @@ started. The same host lock and active-operation markers exclude staging refresh
 
 ## What the first automatic migration does
 
-The reviewed plan is **1.29.7 → 1.30.9 → 1.31.5 → 1.32.2**:
+The reviewed plan is **1.29.0 → 1.29.7 → 1.30.9 → 1.31.5 → 1.32.2**.
+Live staging preflight discovered that an old persisted Coolify build argument had
+kept its actual binary at 1.29.0 despite the repository's 1.29.7 default. Upgrade
+from the observed version, not an assumed image pin. Already-patched 1.29.7 stacks
+start at that entry; the older baseline first receives the same-minor patch hop.
 
 | Server/tools release | Core schema | PostgreSQL visibility schema |
 | --- | --- | --- |
-| 1.29.7 baseline | 1.18 | 1.9 |
+| 1.29.0 observed baseline | 1.18 | 1.9 |
+| 1.29.7 patched baseline | 1.18 | 1.9 |
 | 1.30.9 | 1.18 | 1.13 |
 | 1.31.5 | 1.19 | 1.14 |
 | 1.32.2 | 1.19 | 1.14 |
