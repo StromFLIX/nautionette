@@ -203,6 +203,17 @@ jobs:
         working-directory: services/stt
         run: /tmp/stt-venv/bin/python -m unittest test_server -v
 
+  temporal-upgrade:
+    name: Temporal PostgreSQL upgrade and restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.3
+      - run: uv sync --locked --all-packages
+      - name: Rehearse every server minor with durable histories and restored backups
+        run: uv run --locked python -m scripts.check_temporal_upgrade
+
   images:
     name: Image (${{ matrix.name }})
     runs-on: ubuntu-latest

@@ -217,6 +217,10 @@ vulnerability across several binaries.
   minor-version upgrades, namespace initialization, schedule/replay/resumption and
   rollback tests. Before 1.31 the core/visibility schemas must reach v1.19/v1.14.
   This is a separate operational migration, not an unattended tag substitution.
+  The [migration runbook](temporal-upgrade.md) now provides an opt-in maintained
+  server overlay, guarded schema tooling and a real PostgreSQL upgrade/restore
+  CI rehearsal. Live migration remains pending; the base pin is intentionally
+  unchanged until each environment completes its maintenance procedure.
 - **PostgreSQL 18:** requires a real major-version data migration (and changed
   official-image data-directory conventions). Keep major 17 for existing volumes.
 - **huggingface-hub 2.4.0:** FastEmbed 0.9.1 requires `<2`; retain latest compatible

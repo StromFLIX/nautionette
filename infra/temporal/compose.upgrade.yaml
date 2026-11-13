@@ -1,0 +1,37 @@
+# Opt-in maintained server deployment. Read docs/temporal-upgrade.md FIRST.
+# Merge after the root docker-compose.yaml; paths are relative to that root.
+# No startup migrations: existing databases must be upgraded deliberately.
+services:
+  temporal:
+    build:
+      context: ./infra/temporal
+      dockerfile: Dockerfile.server
+      args:
+        TEMPORAL_VERSION: 1.32.2
+    environment:
+      # Both old and new templates default to 4. Never change an existing
+      # cluster's shard count: verify the deployed config before migration.
+      NUM_HISTORY_SHARDS: ${TEMPORAL_NUM_HISTORY_SHARDS:-4}
+    stop_grace_period: 60s
+
+  temporal-schema:
+    profiles: [maintenance]
+    build:
+      context: ./infra/temporal
+      dockerfile: Dockerfile.tools
+      args:
+        TEMPORAL_VERSION: 1.32.2
+    image: ${STACK_NAMESPACE:-nautionette}/temporal-schema:dev
+    restart: "no"
+    environment:
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-temporal}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD}
+      POSTGRES_SEEDS: postgres
+    networks: [data]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    cap_drop: [ALL]
+    depends_on:
+      postgres:
+        condition: service_healthy

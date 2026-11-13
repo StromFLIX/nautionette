@@ -164,7 +164,12 @@ test restores. Protect backups as secrets. See [output storage](chat-outputs.md)
 
 ## Update or stop
 
-Back up before an update and inspect release notes. In a normal branch checkout:
+Back up before an update and inspect release notes. Temporal's migration off the
+legacy auto-setup image requires a separate maintenance window: follow the
+[consecutive-minor upgrade and restore runbook](temporal-upgrade.md), not a tag
+substitution. The maintained overlay is opt-in until each stack is migrated.
+
+In a normal branch checkout:
 
 ```sh
 git pull --ff-only

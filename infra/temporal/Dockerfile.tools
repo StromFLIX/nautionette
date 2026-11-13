@@ -1,0 +1,9 @@
+ARG TEMPORAL_VERSION=1.32.2
+FROM temporalio/admin-tools:${TEMPORAL_VERSION}
+USER root
+RUN apk add --no-cache postgresql-client && apk upgrade --no-cache
+ARG TEMPORAL_VERSION
+ENV TEMPORAL_TOOLS_VERSION=${TEMPORAL_VERSION}
+COPY --chmod=755 migrate.sh /usr/local/bin/nautionette-temporal-schema
+USER temporal
+ENTRYPOINT ["/usr/local/bin/nautionette-temporal-schema"]
