@@ -234,6 +234,10 @@ jobs:
           - { name: agentgateway, context: services/agentgateway, file: services/agentgateway/Dockerfile }
           - { name: stt, context: services/stt, file: services/stt/Dockerfile }
           - { name: temporal, context: infra/temporal, file: infra/temporal/Dockerfile }
+          - { name: temporal-tools, context: infra/temporal, file: infra/temporal/Dockerfile.tools }
+          - { name: temporal-legacy, context: infra/temporal, file: infra/temporal/Dockerfile.legacy }
+          - { name: temporal-tools-legacy, context: infra/temporal, file: infra/temporal/Dockerfile.tools-legacy }
+          - { name: temporal-controller, context: .dependency-controller, file: .dependency-controller/context/Dockerfile.controller }
           - { name: maxio, context: infra/maxio, file: infra/maxio/Dockerfile }
           - { name: postgres, context: infra/postgres, file: infra/postgres/Dockerfile }
           - { name: otel-collector, context: infra/otel-collector, file: infra/otel-collector/Dockerfile }
@@ -241,6 +245,19 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v4
+
+      - name: Materialize the exact deployment controller build context
+        if: matrix.name == 'temporal-controller'
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from scripts.temporal_deploy import candidate_files
+          for name, content in candidate_files(os.environ['GITHUB_SHA']).items():
+              path = Path('.dependency-controller') / name
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_text(content)
+          PY
 
       - uses: docker/build-push-action@v7
         with:

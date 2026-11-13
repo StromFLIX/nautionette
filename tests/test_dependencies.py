@@ -4,9 +4,49 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 
+from scripts.summarize_dependency_artifacts import summarize
+
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_artifact_summary_keeps_versions_fix_states_and_every_report(tmp_path):
+    sbom = tmp_path / "sbom-example"
+    sbom.mkdir()
+    (sbom / "sbom.json").write_text(
+        json.dumps({"packages": [{"name": "unowned-binary", "versionInfo": "1"}]})
+    )
+    match = {
+        "artifact": {"name": "stdlib", "version": "go1.27.3", "type": "go-module"},
+        "vulnerability": {
+            "id": "GO-2026-6859",
+            "severity": "Unknown",
+            "namespace": "govulndb:language:go",
+            "fix": {"state": "fixed", "versions": ["1.27.4"]},
+        },
+    }
+    for name in ("one", "two"):
+        report = tmp_path / f"vulnerabilities-{name}"
+        report.mkdir()
+        (report / "report.json").write_text(json.dumps({"matches": [match, match]}))
+    result = summarize(tmp_path, "https://github.com/example/repo/actions/runs/1")
+    assert result["inventories"]["sbom-example"]["package_count"] == 1
+    assert len(result["artifacts"]) == 3
+    assert all(len(artifact["sha256"]) == 64 for artifact in result["artifacts"])
+    assert len(result["findings"]) == 1
+    finding = result["findings"][0]
+    assert finding["fixed_versions"] == ("1.27.4",)
+    assert finding["fix_state"] == "fixed"
+    assert finding["severity"] == "Unknown"  # Never hide findings based on severity.
+    assert finding["version"] == "go1.27.3"
+    assert finding["reports"] == ["vulnerabilities-one/report.json", "vulnerabilities-two/report.json"]
+
+
+def test_artifact_summary_refuses_empty_or_incomplete_downloads(tmp_path):
+    with pytest.raises(ValueError, match="check artifact downloads"):
+        summarize(tmp_path, "https://github.com/example/repo/actions/runs/1")
 
 
 def test_python_services_copy_uv_into_the_same_patch_pinned_python_runtime():
@@ -70,6 +110,36 @@ def test_image_smokes_install_workspace_packages_and_dev_test_tools():
     )
     script = smoke["run"]
     assert script.index("uv sync --locked --all-packages") < script.index("uv run --locked pytest")
+
+
+def test_image_inventory_covers_maintenance_and_recovery_dockerfiles_too():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    matrix = workflow["jobs"]["images"]["strategy"]["matrix"]["include"]
+    covered = {item["file"] for item in matrix}
+    # The controller must inventory the same bundled source as the deployment
+    # hook, not a convenient directory containing a different Dockerfile/context.
+    controller = next(item for item in matrix if item["name"] == "temporal-controller")
+    assert controller["context"] == ".dependency-controller"
+    step = next(
+        step
+        for step in workflow["jobs"]["images"]["steps"]
+        if step.get("name") == "Materialize the exact deployment controller build context"
+    )
+    assert "candidate_files(os.environ['GITHUB_SHA'])" in step["run"]
+    covered.remove(controller["file"])
+    covered.add("infra/temporal/Dockerfile.controller")
+    # These are built, exercised and inventoried in the separate agent-images job.
+    covered.update(
+        {
+            "services/miniapp-sdk/Dockerfile",
+            "images/pi-base/Dockerfile",
+            "images/agent-sets/default/Dockerfile",
+        }
+    )
+    actual = {
+        str(path.relative_to(ROOT)) for path in ROOT.glob("**/Dockerfile*") if ".venv" not in path.parts
+    }
+    assert covered == actual
 
 
 def test_patched_storage_images_keep_the_existing_volume_and_non_root_contracts():

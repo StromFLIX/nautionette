@@ -1,6 +1,6 @@
 # Keep PostgreSQL 17 and its data/entrypoint contract. Rebuild only the privilege
 # helper: the upstream gosu binary embeds Go 1.24.6 even in gosu 1.20 releases.
-FROM golang:1.27.3-alpine3.24 AS gosu
+FROM golang:1.27.4-alpine3.24 AS gosu
 ADD --checksum=sha256:207a2045e890d3ca3326027c5f585733085960b401a49dbc00e3bb628c054cf8 https://codeload.github.com/tianon/gosu/tar.gz/refs/tags/1.20 /tmp/gosu.tar.gz
 WORKDIR /src
 RUN tar -xzf /tmp/gosu.tar.gz --strip-components=1 -C /src
