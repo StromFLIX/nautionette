@@ -6,10 +6,7 @@
       </button>
       <div class="settings__breadcrumb grow"><span>Workspace</span><span aria-hidden="true">/</span><h1>Settings</h1></div>
       <kbd class="settings__shortcut">⌘ / Ctrl ,</kbd>
-      <div class="settings__versions caption dim" aria-label="Build versions">
-        <span>Client <BuildVersion :system="clientBuildInfo" /></span>
-        <span>Server <BuildVersion :system="store.system" /></span>
-      </div>
+      <BuildVersionPill :client-system="clientBuildInfo" :server-system="store.system" />
     </header>
 
     <div class="settings__searchbar">
@@ -87,7 +84,7 @@ import { health, store } from '../store'
 import { brand } from '../brand'
 import { SETTINGS_GROUPS, SETTINGS_SECTIONS, searchSettings } from '../settings-registry'
 import PackageSearch from '../components/settings/PackageSearch.vue'
-import BuildVersion from '../components/BuildVersion.vue'
+import BuildVersionPill from '../components/BuildVersionPill.vue'
 
 const clientBuildInfo = __CLIENT_BUILD_INFO__
 const route = useRoute()
@@ -158,8 +155,6 @@ onUnmounted(() => { document.removeEventListener('keydown', shortcuts); observer
 <style scoped>
 .settings { min-width: 0; overflow: hidden; }
 .settings__head { gap: 14px; }
-.settings__versions { display: flex; flex-direction: column; flex-shrink: 0; gap: 2px; }
-.settings__versions > span { white-space: nowrap; }
 .settings__head button, .settings__category, .settings__mobile-nav { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 .settings__category:focus-visible, .settings__result:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .settings__category:active { background: var(--surface-hover); }
