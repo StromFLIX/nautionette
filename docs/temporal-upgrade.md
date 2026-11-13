@@ -6,6 +6,11 @@ The maintained target is **Temporal 1.32.2**, with matching `admin-tools`.
 The reviewed path is **1.29.7 → 1.30.9 → 1.31.5 → 1.32.2**.
 This change supplies explicit schema tools, an opt-in Compose overlay and a
 PostgreSQL-backed CI rehearsal. **It does not migrate staging or production.**
+Staging refresh additionally refuses different Temporal image IDs: copying old
+production schemas into an already-upgraded staging server would bypass this
+migration. Align and verify both images before re-enabling refresh (even builds
+of the same version must match; this is intentionally conservative).
+
 The base Compose file deliberately retains `auto-setup:1.29.7` until each stack
 has completed its maintenance procedure. Do not change `TEMPORAL_VERSION` on the
 legacy Dockerfile: newer `auto-setup` tags do not exist.

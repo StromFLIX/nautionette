@@ -116,7 +116,7 @@ class Rehearsal:
             "-e",
             "POSTGRES_USER=temporal",
             "-e",
-            "POSTGRES_DB=postgres",
+            "POSTGRES_DB=temporal",
             "-v",
             volume + ":/var/lib/postgresql/data",
             "postgres:17-alpine",
@@ -208,6 +208,15 @@ class Rehearsal:
             except subprocess.CalledProcessError:
                 return
             raise AssertionError(f"Unsafe schema operation unexpectedly succeeded: {command}")
+
+    def diagnostics(self):
+        # Only disposable fixture containers; redact even their generated password.
+        for container in self.containers:
+            result = subprocess.run(
+                ["docker", "logs", "--tail", "60", container], capture_output=True, env=self.env
+            )
+            text = (result.stdout + result.stderr).decode(errors="replace")
+            print(f"--- {container} ---\n" + text.replace(self.env["POSTGRES_PASSWORD"], "[redacted]"))
 
     def cleanup(self):
         for container in reversed(self.containers):
@@ -365,6 +374,8 @@ async def run():
                     "-U",
                     "temporal",
                     "--exit-on-error",
+                    "--clean",
+                    "--if-exists",
                     "--create",
                     "-d",
                     "postgres",
@@ -402,6 +413,7 @@ async def run():
             "fresh install"
         )
     except subprocess.CalledProcessError as exc:
+        test.diagnostics()
         # No command/environment dump: tools may include connection configuration.
         print((exc.stderr or b"").decode(errors="replace"))
         raise RuntimeError("Docker rehearsal failed; inspect the CI step") from None

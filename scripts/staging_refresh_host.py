@@ -154,6 +154,7 @@ def inventory(rows: list[dict], app: str, environment: str) -> dict:
         "copy_image": backend["Image"],
         "worker_image": groups["worker"][0]["Image"],
         "postgres_image": groups["postgres"][0]["Image"],
+        "temporal_image": groups["temporal"][0]["Image"],
         "maxio_image": groups["maxio"][0]["Image"],
         "containers": [
             {"id": r["Id"], "service": service(r), "restart": r["HostConfig"]["RestartPolicy"]}
@@ -168,6 +169,11 @@ def assert_isolated(rows: list[dict], production: dict, staging: dict) -> None:
         raise RuntimeError("Production and staging are not isolated")
     if production["postgres_image"] != staging["postgres_image"]:
         raise RuntimeError("Physical PostgreSQL copy requires the same Postgres image ID")
+    if production["temporal_image"] != staging["temporal_image"]:
+        raise RuntimeError(
+            "Temporal image IDs differ; a physical refresh cannot skip server/schema migration. "
+            "Align and verify both environments before refreshing."
+        )
     if production["maxio_image"] != staging["maxio_image"]:
         raise RuntimeError("Physical MaxIO copy requires the same MaxIO image ID")
     for stack, forbidden in [(production, target), (staging, source)]:

@@ -20,7 +20,9 @@ def container(app, svc, *, environment=None):
         volumes = {"/projects": "projects"}
     return {
         "Id": app + "-" + svc,
-        "Image": "same-" + svc + "-image" if svc in {"postgres", "maxio"} else app + "-" + svc + "-image",
+        "Image": "same-" + svc + "-image"
+        if svc in {"postgres", "maxio", "temporal"}
+        else app + "-" + svc + "-image",
         "Config": {
             "Labels": {"com.docker.compose.project": app, "com.docker.compose.service": svc},
             "Env": [
@@ -59,7 +61,15 @@ def test_inventory_is_secret_free_and_datasets_are_distinct(stacks):
 
 @pytest.mark.parametrize(
     "fault",
-    ["shared_volume", "shared_network", "postgres_image", "maxio_image", "foreign_mount", "active_agent"],
+    [
+        "shared_volume",
+        "shared_network",
+        "postgres_image",
+        "temporal_image",
+        "maxio_image",
+        "foreign_mount",
+        "active_agent",
+    ],
 )
 def test_isolation_failures_are_closed(stacks, fault):
     rows, prod, stage = stacks
@@ -69,6 +79,8 @@ def test_isolation_failures_are_closed(stacks, fault):
         stage["network"] = prod["network"]
     elif fault == "postgres_image":
         stage["postgres_image"] = "other-version"
+    elif fault == "temporal_image":
+        stage["temporal_image"] = "other-version"
     elif fault == "maxio_image":
         stage["maxio_image"] = "other-version"
     elif fault == "foreign_mount":
