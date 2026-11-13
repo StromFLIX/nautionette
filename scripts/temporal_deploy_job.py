@@ -6,13 +6,20 @@ import fcntl
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
 import traceback
 from pathlib import Path
 
-import temporal_deploy_host as host
+if __package__:
+    from nautionette.temporal_state import COMPLETED_RECEIPT
+
+    from . import temporal_deploy_host as host
+else:
+    import temporal_deploy_host as host
+    from temporal_state import COMPLETED_RECEIPT
 
 
 def location():
@@ -27,6 +34,25 @@ def status():
     return {
         key: state[key] for key in ("status", "commit", "target", "shards", "safe_to_retry") if key in state
     }
+
+
+def write_completed_receipt():
+    value = status()
+    if value["status"] != "completed" or value["commit"] != os.environ["MAINTENANCE_COMMIT"]:
+        raise RuntimeError("Cannot issue a receipt for incomplete maintenance")
+    destination = Path(COMPLETED_RECEIPT)
+    temporary = destination.with_suffix(".tmp")
+    fd = os.open(temporary, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as file:
+        json.dump(value, file)
+        file.flush()
+        os.fsync(file.fileno())
+    temporary.replace(destination)
+    fd = os.open(destination.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def serve():
@@ -90,6 +116,9 @@ def serve():
             # Let the Coolify hook return. Reconciled workers cannot access the
             # stopped old server; intermediate servers existed only on data net.
             host.unpause_broker(host.load(path)["stack"])
+    # The post-hook will retire this idle controller after publishing its receipt.
+    # Handle SIGTERM so routine cleanup does not wait for Docker's kill timeout.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     while True:
         time.sleep(3600)
 
@@ -102,5 +131,6 @@ if __name__ == "__main__":
     elif sys.argv[1] == "finish":
         sys.path.insert(0, str(location()))
         host.finish(location())
+        write_completed_receipt()
     else:
         raise ValueError("Unknown controller operation")

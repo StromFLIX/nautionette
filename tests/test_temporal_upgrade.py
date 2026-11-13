@@ -108,17 +108,15 @@ def test_unsafe_jump_partial_state_outage_or_reinitialization_never_mutates(
 
 def test_maintained_images_have_matching_pins_and_preserve_network_volume_contracts():
     base = yaml.safe_load((ROOT / "docker-compose.yaml").read_text())["services"]
-    override = yaml.safe_load((ROOT / "infra/temporal/compose.upgrade.yaml").read_text())["services"]
     # Maintained default is pinned by source, not a stale Coolify env default.
     assert base["temporal"]["build"]["context"] == "./infra/temporal"
     assert base["temporal"]["build"]["args"]["TEMPORAL_VERSION"] == "1.32.2"
-    assert set(override) == {"temporal", "temporal-schema"}
     assert "postgres-data:/var/lib/postgresql/data" in base["postgres"]["volumes"]
-    assert "networks" not in override["temporal"]
-    assert "ports" not in override["temporal"]
-    for service in override.values():
-        assert service["build"]["args"]["TEMPORAL_VERSION"] == "1.32.2"
-    schema = override["temporal-schema"]
+    assert base["temporal"]["networks"] == ["internal", "data"]
+    assert "ports" not in base["temporal"]
+    assert base["temporal"]["stop_grace_period"] == "60s"
+    schema = base["temporal-schema"]
+    assert schema["build"]["args"]["TEMPORAL_VERSION"] == "1.32.2"
     assert schema["profiles"] == ["maintenance"]
     assert schema["networks"] == ["data"]
     assert schema["read_only"] is True

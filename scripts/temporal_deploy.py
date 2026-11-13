@@ -8,6 +8,7 @@ import json
 import re
 import shlex
 import subprocess
+from pathlib import Path
 
 MANAGED = ": nautionette-temporal-hook-v1; "
 
@@ -16,9 +17,27 @@ def candidate_files(commit: str) -> dict[str, str]:
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Maintenance needs an exact candidate commit")
     names = subprocess.check_output(  # noqa: S603 - fixed Git operation with validated commit
-        ["/usr/bin/git", "ls-tree", "-r", "--name-only", commit, "infra/temporal"], text=True
+        [
+            "/usr/bin/git",
+            "ls-tree",
+            "-r",
+            "--name-only",
+            commit,
+            "infra/temporal",
+            "libs/nautionette/src/nautionette/temporal_state.py",
+        ],
+        text=True,
     ).splitlines()
-    paths = {"context/" + name.removeprefix("infra/temporal/"): name for name in names}
+    paths = {
+        "context/" + name.removeprefix("infra/temporal/"): name
+        for name in names
+        if name.startswith("infra/temporal/")
+    }
+    # Old candidate hooks do not use receipts. Preserve retry/promotion of those
+    # releases while bundling the shared reader for new brokers/controllers.
+    reader = "libs/nautionette/src/nautionette/temporal_state.py"
+    if reader in names:
+        paths["temporal_state.py"] = reader
     for name in (
         "temporal_deploy_host.py",
         "temporal_deploy_probe.py",
@@ -45,6 +64,12 @@ def candidate_files(commit: str) -> dict[str, str]:
 
 
 def command(files: dict, app: str, target: str, commit: str, shards: str, mode: str) -> str:
+    files = dict(files)
+    if "temporal_state.py" not in files:
+        # Read-only protocol adaptation for pre-receipt release hooks. Mutating
+        # schema/image/controller code still comes from the exact candidate.
+        reader = Path(__file__).resolve().parents[1] / "libs/nautionette/src/nautionette/temporal_state.py"
+        files["temporal_state.py"] = reader.read_text()
     payload = {"app": app, "target": target, "commit": commit, "shards": shards, "mode": mode, "files": files}
     packed = base64.b64encode(gzip.compress(json.dumps(payload).encode(), mtime=0)).decode()
     # One physical line: Coolify normalizes command newlines. No credential is
@@ -54,6 +79,9 @@ def command(files: dict, app: str, target: str, commit: str, shards: str, mode: 
         f"p=json.loads(gzip.decompress(base64.b64decode({packed!r}))); "
         "n={'__name__':'temporal_hook'}; "
         "exec(compile(p['files']['temporal_deploy_hook.py'],'temporal_hook','exec'),n); "
+        "r={'__name__':'temporal_state'}; "
+        "exec(compile(p['files']['temporal_state.py'],'temporal_state','exec'),r); "
+        "n['state']=r['controller_state']; "
         "exec(\"try:\\n n['hook'](p)\\nexcept Exception:\\n "
         "print('Temporal hook failed; inspect private controller state.',file=sys.stderr);sys.exit(1)\")"
     )

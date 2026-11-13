@@ -25,7 +25,9 @@ There is no production data copy and no automatic production release from a main
 push. Production retains the existing exact-commit staging/release gates. A
 migration failure prevents promotion/deployment success; it is not a silent skip.
 Routine later deployments check the existing version/schema and avoid taking a
-backup or running schema updates when already current.
+backup or running schema updates when already current. Completed controllers are
+retired, not left running with Docker access. Keep the managed hooks and synchronized
+version/fence settings: they are future-deployment safeguards, not one-off debris.
 
 ## Native deployment integration
 
@@ -34,6 +36,8 @@ production staging evidence **before** installing managed hooks and queueing a
 deployment. `scripts/temporal_deploy.py` obtains the scripts, image context and
 `upgrade-plan.json` from the exact candidate Git commit, not a moving main branch.
 The compressed hook contains source code and identifiers, never DB credentials.
+A read-only receipt adapter from the trusted control checkout supports retries of
+pre-cleanup release hooks; it does not replace their candidate-pinned migration code.
 Before queueing, the script synchronizes Coolify's persisted `TEMPORAL_VERSION`
 build argument to the candidate plan and verifies the value. Coolify supplies
 these keys as CLI `--build-arg` flags, which override even a literal Compose pin;
@@ -61,7 +65,12 @@ The installed Coolify **4.7.5** implementation was checked for these behaviors:
 - Post-hook failures are logged but **do not make Coolify report failure**. Therefore
   the new broker's read-only health check additionally requires the controller to
   report `completed` for the exact `APP_VERSION`. GitHub's authenticated component
-  health gate cannot mistake a failed post-hook for a successful upgrade.
+  health gate cannot mistake a failed post-hook for a successful upgrade. After
+  verification, the post-hook writes a small, fsynced container-local receipt,
+  disables controller restart and stops it. Health reads the bounded receipt via
+  Docker's read-only archive API; no privileged controller process stays running.
+  Automatic health also requires `exited` and `restart=no`, so a swallowed cleanup
+  error cannot leave a privileged idle controller behind unnoticed.
 
 The controller is detached from the broker/hook process and persists its state,
 private logs and backups under `/var/lib/nautionette-temporal`. It survives runner
@@ -160,8 +169,8 @@ Backups/logs remain root-only on the deployment host. They can contain workflow
 identities, inputs/results and integration credentials. Keep the existing private,
 encrypted off-host backup policy and monitor retention/capacity. Do not publish
 these directories as CI artifacts or chat outputs. Successful later deployments
-retain earlier backup directories; deleting an idle old controller is not deleting
-its backups.
+retain earlier backup directories. Removing/replacing a completed controller does
+not delete its host backups. There is deliberately no automatic backup deletion.
 
 ## CI and acceptance evidence
 
@@ -174,7 +183,9 @@ CI job **Temporal PostgreSQL upgrade and restore** runs two real Docker tests:
   controller on a disposable stack, real stopped-volume backup/isolated restore,
   broker pause/unpause, client-before-server MCP stream shutdown, a SIGINT-only
   object-store fixture matching MaxIO 0.4.2, all server hops,
-  application-history resumption and duplicate hook delivery. It needs no live Coolify credentials or SSH access.
+  application-history resumption, duplicate hook delivery, and reading completion
+  proof from a stopped, non-restarting controller. It needs no live Coolify
+  credentials or SSH access.
 
 Unit tests cover ordering, schema mismatch/jump refusal, recovery before/after
 possible writes, hook ownership and the health fence against ignored post-hook
@@ -185,11 +196,25 @@ the acceptance criterion.
 ## Failure, retry and recovery
 
 The application-specific controller is named `nautionette-temporal-<app-uuid>`.
-Inspect it with your normal trusted host administration path:
+During maintenance, inspect it with your normal trusted host administration path:
 
 ```sh
 docker exec nautionette-temporal-APP_UUID python /opt/maintenance/temporal_deploy_job.py status
 ```
+
+Completed controllers are intentionally stopped (`restart=no`). Their small receipt
+can be copied without starting them:
+
+```sh
+umask 077
+docker cp nautionette-temporal-APP_UUID:/opt/maintenance/completed.json ./temporal-completion.json
+```
+
+Keep that stopped controller until the next deployment replaces it. Automatic
+installations fail health if their completion proof is missing, malformed or for
+another commit; do not globally prune stopped containers. Failed/prepared controllers
+are never retired automatically. Pre-cleanup releases retain live status inspection
+until their next normal deployment installs receipt support.
 
 Only fixed status/verification operations are exposed internally; do not make a
 public generic execution endpoint to control it. Private run state/logs/backups
@@ -217,8 +242,8 @@ are in `/var/lib/nautionette-temporal/runs/<run-id>`.
 Coolify hooks intentionally do not run inside `docker compose up`. Existing manual
 installations must perform the same backup/restore and consecutive-minor procedure
 before starting the maintained default. `Dockerfile.legacy` is retained only for
-old-server recovery/rehearsal. `compose.upgrade.yaml` is a compatibility overlay;
-the maintained service configuration now lives in the root Compose file.
+old-server recovery/rehearsal. The obsolete `compose.upgrade.yaml` overlay has been
+removed; all maintained service configuration lives in the root Compose file.
 
 A genuinely empty installation explicitly initializes schemas and its namespace:
 

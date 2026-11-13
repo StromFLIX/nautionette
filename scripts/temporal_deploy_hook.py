@@ -21,13 +21,30 @@ LABEL = "nautionette.temporal.project"
 
 
 def state(container):
-    result = container.exec_run(["python", "/opt/maintenance/temporal_deploy_job.py", "status"])
-    if result.exit_code:
-        raise RuntimeError("Cannot inspect durable Temporal maintenance state")
-    return json.loads(result.output)
+    from nautionette.temporal_state import controller_state
+
+    return controller_state(container)
+
+
+def retire(container, read_receipt):
+    # Never stop prepared, failed or ambiguous work. A durable, validated receipt
+    # must exist first; health checks can read it without a privileged live process.
+    if read_receipt(container) is None:
+        raise RuntimeError("Cannot retire maintenance without its completion receipt")
+    container.update(restart_policy={"Name": "no"})
+    container.reload()
+    if container.status == "running":
+        container.stop(timeout=5)
+    if read_receipt(container) is None:
+        raise RuntimeError("Maintenance completion receipt disappeared")
 
 
 def hook(payload: dict):
+    # This hook initially runs in the *old* broker, which has not installed the
+    # new reader yet. Use candidate-pinned standard-library source, not host code.
+    readers = {"__name__": "temporal_state"}
+    exec(compile(payload["files"]["temporal_state.py"], "temporal_state", "exec"), readers)  # noqa: S102 - candidate-pinned code
+    read_state, read_receipt = readers["controller_state"], readers["completed_receipt"]
     client = docker.from_env()
     app, commit, mode = payload["app"], payload["commit"], payload["mode"]
     own = client.containers.get(os.environ["HOSTNAME"])
@@ -44,19 +61,28 @@ def hook(payload: dict):
     if mode == "finish":
         if controller is None or controller.labels.get("nautionette.temporal.commit") != commit:
             raise RuntimeError("Missing candidate maintenance controller")
-        result = controller.exec_run(["python", "/opt/maintenance/temporal_deploy_job.py", "finish"])
-        if result.exit_code or state(controller).get("status") != "completed":
+        controller.reload()
+        if controller.status == "running":
+            result = controller.exec_run(["python", "/opt/maintenance/temporal_deploy_job.py", "finish"])
+            if result.exit_code:
+                raise RuntimeError("Temporal post-deployment verification failed")
+        if read_state(controller).get("status") != "completed":
             raise RuntimeError("Temporal post-deployment verification failed")
-        print("Temporal version, schemas, shard count and deployed revision verified.", flush=True)
+        retire(controller, read_receipt)
+        print(
+            "Temporal deployment verified; maintenance controller stopped and receipt retained.", flush=True
+        )
         return
     if mode != "prepare":
         raise ValueError("Unknown Temporal hook operation")
     if controller is not None:
-        previous = state(controller)
+        previous = read_state(controller)
         if previous.get("commit") != commit or previous.get("safe_to_retry"):
             if previous.get("status") != "completed" and not previous.get("safe_to_retry"):
                 raise RuntimeError("Unfinished Temporal migration; recover the existing controller first")
-            controller.stop(timeout=30)
+            controller.reload()
+            if controller.status == "running":
+                controller.stop(timeout=5)
             controller.remove()
             controller = None
     if controller is None:
@@ -99,7 +125,7 @@ def hook(payload: dict):
         )
     deadline = time.monotonic() + 105 * 60
     while True:
-        result = state(controller)
+        result = read_state(controller)
         if result.get("commit") != commit:
             raise RuntimeError("Maintenance controller has a different candidate revision")
         if result["status"] in {"prepared", "current", "completed"}:

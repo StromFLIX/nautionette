@@ -155,6 +155,8 @@ services:
       WORKER_IMAGE: ${STACK_NAMESPACE:-nautionette}/worker:dev
       WORKER_REPLICAS: ${WORKER_REPLICAS:-1}
       CONTAINER_RECONCILE_SECONDS: ${CONTAINER_RECONCILE_SECONDS:-30}
+      # Completed controllers may be stopped; their receipt is still mandatory.
+      TEMPORAL_MAINTENANCE_APP: ${TEMPORAL_MAINTENANCE_APP:-}
       TEMPORAL_ADDRESS: temporal:7233
       TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
       TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-nautionette}
@@ -377,6 +379,7 @@ services:
         TEMPORAL_VERSION: 1.32.2
     image: ${STACK_NAMESPACE:-nautionette}/temporal:dev
     restart: unless-stopped
+    stop_grace_period: 60s
     environment:
       DB: postgres12
       DB_PORT: 5432

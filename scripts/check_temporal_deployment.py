@@ -217,6 +217,12 @@ time.sleep(36000)
             container.start()
         hook({**payload, "mode": "finish"})
         assert state(job)["status"] == "completed"
+        job.reload()
+        assert job.status == "exited"
+        assert job.attrs["HostConfig"]["RestartPolicy"]["Name"] == "no"
+        # Completion is readable without executing or restarting the controller.
+        hook({**payload, "mode": "finish"})
+        assert state(job)["status"] == "completed"
         sdk = await Client.connect(address)
         await resume(sdk, ["application-pending"])
         # Coolify may invoke a hook twice; no second snapshot or schema mutation.
@@ -231,6 +237,9 @@ time.sleep(36000)
     except Exception:
         try:
             job = client.containers.get(controller)
+            if job.status != "running":
+                print("Stopped controller state:", state(job))
+                raise
             result = job.exec_run(
                 [
                     "python",
@@ -252,16 +261,28 @@ time.sleep(36000)
     finally:
         try:
             job = client.containers.get(controller)
-            # Backups stay private during a live rollout; disposable CI removes
-            # only this fixture's run directory through its own controller.
-            job.exec_run(
+            # Live backups are never deleted. This disposable CI-only helper has
+            # no Docker socket and removes only its validated random fixture run.
+            run_id = next(
+                item.split("=", 1)[1]
+                for item in job.attrs["Config"]["Env"]
+                if item.startswith("MAINTENANCE_RUN_ID=")
+            )
+            client.containers.run(
+                image,
                 [
                     "python",
                     "-c",
-                    "import shutil,os;root='/var/lib/nautionette-temporal/';"
-                    "shutil.rmtree(root+'runs/'+os.environ['MAINTENANCE_RUN_ID']);"
-                    "os.unlink(root+'active-'+os.environ['MAINTENANCE_APP'])",
-                ]
+                    "import os,re,shutil,pathlib;r=os.environ['RUN'];a=os.environ['APP'];"
+                    "assert re.fullmatch(r'[a-zA-Z0-9_-]+',r) and r.endswith('-'+a);"
+                    "root=pathlib.Path('/cleanup');shutil.rmtree(root/'runs'/r);"
+                    "(root/('active-'+a)).unlink(missing_ok=True);(root/'fences'/a).unlink(missing_ok=True)",
+                ],
+                remove=True,
+                network="none",
+                user="0:0",
+                environment={"RUN": run_id, "APP": fixture.prefix},
+                volumes={"/var/lib/nautionette-temporal": {"bind": "/cleanup", "mode": "rw"}},
             )
             job.remove(force=True)
         except docker.errors.NotFound:

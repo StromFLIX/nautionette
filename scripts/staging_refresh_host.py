@@ -253,7 +253,7 @@ def free_space(path: Path, production: dict, staging: dict) -> None:
         raise RuntimeError("Insufficient free disk for backups and staging restoration")
 
 
-def health(stack: dict, expected: str, attempts: int = 60) -> None:
+def health(stack: dict, expected: str, attempts: int = 60, *, migration_preflight: bool = False) -> None:
     code = """import json, os, urllib.request
 headers = {'Authorization': 'Bearer '+os.environ['APP_TOKEN']}
 r = urllib.request.Request('http://127.0.0.1:8080/api/system', headers=headers)
@@ -261,10 +261,18 @@ s = json.load(urllib.request.urlopen(r, timeout=15))
 assert s['environment'] == os.environ['APP_ENVIRONMENT'] == EXPECTED
 assert s['auth_enabled'] is True
 assert {c['name'] for c in s['components']} == {'temporal', 'broker', 'agentgateway', 'workflow-mcp'}
-assert all(c['status'] == 'ok' for c in s['components'])
+def healthy(c):
+    if c['status'] == 'ok':
+        return True
+    d = c.get('detail') or {}
+    return (PREFLIGHT and c['name'] == 'broker' and c['status'] == 'degraded'
+            and d.get('docker') is True and d.get('image_status') == 'ready'
+            and (d.get('workers') or {}).get('status') == 'ready'
+            and (d.get('temporal_migration') or {}).get('phase') == 'verification_pending')
+assert all(healthy(c) for c in s['components'])
 r = urllib.request.Request('http://127.0.0.1:8080/api/settings/storage', headers=headers)
 assert json.load(urllib.request.urlopen(r, timeout=15))['health']['status'] == 'ok'
-""".replace("EXPECTED", repr(expected))
+""".replace("EXPECTED", repr(expected)).replace("PREFLIGHT", repr(migration_preflight))
     for attempt in range(attempts):
         try:
             docker("exec", stack["backend"], "python", "-c", code, timeout=30)

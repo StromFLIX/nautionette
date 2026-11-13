@@ -24,7 +24,6 @@ else:
     import staging_refresh_host as storage
 
 ROOT = Path("/var/lib/nautionette-temporal")
-TERMINAL = {"prepared", "completed", "failed", "needs_recovery"}
 WRITERS = {"docker-broker", "backend", "worker", "agentgateway", "workflow-mcp"}
 
 
@@ -126,7 +125,7 @@ def docker(*args: str, timeout: int = 120, path: Path | None = None) -> str:
         ["/usr/bin/docker", *args], capture_output=True, text=True, timeout=timeout
     )
     if path is not None:
-        # Private diagnostics only, never returned through SSH/CI.
+        # Private diagnostics only, never returned in deployment output.
         with (path / "operations.log").open("a") as log:
             log.write(result.stdout + result.stderr)
     if result.returncode:
@@ -658,7 +657,10 @@ def launch(path: Path, app: str, environment: str, commit: str):
         save(path, state)
         print(json.dumps({"status": "current", "target": target, "shards": metadata["shards"]}))
         return
-    storage.health(metadata["stack"], environment, attempts=1)
+    # The new controller itself makes the old deployment's receipt pending.
+    # Require all physical services healthy, without circularly demanding that
+    # this migration has already completed before it can begin.
+    storage.health(metadata["stack"], environment, attempts=1, migration_preflight=True)
     # Reserve conservative backup capacity using the existing volume sizing check.
     free_space(path, metadata["stack"])
     save(path, state)
