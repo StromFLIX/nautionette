@@ -62,6 +62,15 @@ def test_public_chat_payload_cannot_forge_origin(client, db):
     assert "origin" not in message["meta"] and "sender_agent" not in message["meta"]
 
 
+def test_crash_between_acceptance_and_job_persistence_preserves_source(db):
+    origin = provenance.workflow_origin("maintenance", "wf-run", relation="call", trigger="schedule")
+    chat = db.create_chat(title="Task", agent_set="default")
+    db.accept_chat_message(chat["id"], "work", "unpersisted", origin=origin)
+    assert db.chat_snapshot(chat["id"])["active_turn"]["origin"] == origin
+    db.finish_chat_turn("unpersisted", "Interrupted before execution", {"error": "Backend restarted"})
+    assert db.list_messages(chat["id"])[-1]["meta"]["origin"] == origin
+
+
 def test_live_snapshot_and_saved_answer_share_caller_after_restart(db):
     import json
 

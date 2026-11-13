@@ -964,7 +964,10 @@ class Database:
                 if job.get("agent_id")
                 else None
             )
-            turn["origin"] = job.get("origin")
+            request = self.one("SELECT meta FROM messages WHERE id = ?", (turn["user_id"],))
+            turn["origin"] = job.get("origin") or json.loads((request or {}).get("meta") or "{}").get(
+                "origin"
+            )
             turn["steps"] = json.loads(turn["steps"])
             turn["context"] = json.loads(turn["context"]) if turn["context"] else None
             turn["timing"] = json.loads(turn["timing"]) if turn["timing"] else None
@@ -1100,8 +1103,12 @@ class Database:
                 "turn_id": turn["id"],
                 "sender_agent": {"id": job["agent_id"], "name": job.get("agent_name") or "Agent"},
             }
-        if job.get("origin"):
-            meta = {**meta, "origin": job["origin"]}
+        # A crash can happen after message acceptance but before job persistence.
+        # Recovery must retain the caller recorded on that accepted request too.
+        request = self._conn.execute("SELECT meta FROM messages WHERE id = ?", (turn["user_id"],)).fetchone()
+        origin = job.get("origin") or json.loads(request["meta"] if request else "{}").get("origin")
+        if origin:
+            meta = {**meta, "origin": origin}
         # Keep the latest provider measurement through reloads and interrupted-turn recovery.
         meta = {**meta, "context": json.loads(turn["context"]) if turn["context"] else None}
         # Bind immutable output revisions to the answer segment which published
