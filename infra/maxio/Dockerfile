@@ -6,6 +6,6 @@ USER root
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
-USER maxio:maxio
 # MaxIO 0.4.2's graceful shutdown listens to ctrl_c (SIGINT), not SIGTERM.
 STOPSIGNAL SIGINT
+USER maxio:maxio
