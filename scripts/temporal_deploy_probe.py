@@ -17,6 +17,7 @@ from pathlib import Path
 from temporalio import activity, workflow
 from temporalio.api.workflowservice.v1 import GetClusterInfoRequest, ListNamespacesRequest
 from temporalio.client import Client, Schedule, ScheduleActionStartWorkflow, ScheduleSpec, ScheduleState
+from temporalio.service import RPCError, RPCStatusCode
 from temporalio.worker import Replayer, UnsandboxedWorkflowRunner, Worker
 
 STATE = Path("/migration/probe.json")
@@ -61,6 +62,20 @@ def fingerprints(history) -> list[str]:
     return [
         hashlib.sha256(event.SerializeToString(deterministic=True)).hexdigest() for event in history.events
     ]
+
+
+async def checkpoint(handle):
+    # Frontend health can precede matching/history membership after a restore.
+    # Retry only this read, never repeat a workflow/schedule mutation ourselves.
+    async with asyncio.timeout(180):
+        while True:
+            try:
+                if await handle.query(MigrationProbe.checkpoint):
+                    return
+            except RPCError as error:
+                if error.status not in {RPCStatusCode.UNAVAILABLE, RPCStatusCode.DEADLINE_EXCEEDED}:
+                    raise
+            await asyncio.sleep(2)
 
 
 async def namespaces(client):
@@ -130,9 +145,7 @@ async def probe(mode: str):
             handle = await client.start_workflow(
                 MigrationProbe.run, True, id=state["queue"], task_queue=state["queue"]
             )
-            async with asyncio.timeout(90):
-                while not await handle.query(MigrationProbe.checkpoint):
-                    await asyncio.sleep(0.5)
+            await checkpoint(handle)
         await client.create_schedule(
             state["queue"],
             Schedule(
@@ -175,8 +188,7 @@ async def probe(mode: str):
             activities=[migration_echo],
             workflow_runner=UnsandboxedWorkflowRunner(),
         ):
-            if not await client.get_workflow_handle(state["queue"]).query(MigrationProbe.checkpoint):
-                raise RuntimeError("Suspended workflow did not resume")
+            await checkpoint(client.get_workflow_handle(state["queue"]))
             result = await client.execute_workflow(
                 MigrationProbe.run,
                 False,

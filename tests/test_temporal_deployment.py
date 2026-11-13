@@ -261,3 +261,21 @@ async def test_probe_awaits_sdk_schedule_iterator_before_capture(tmp_path, monke
     await probe.probe("capture")
     client.list_schedules.assert_awaited_once()
     assert json.loads(probe.STATE.read_text())["cluster"] == {"id": "cluster", "shards": 4}
+
+
+@pytest.mark.asyncio
+async def test_readiness_waits_for_matching_membership_but_does_not_hide_other_rpc_errors(monkeypatch):
+    monkeypatch.setattr(probe.asyncio, "sleep", AsyncMock())
+    handle = SimpleNamespace(
+        query=AsyncMock(
+            side_effect=[
+                probe.RPCError("Not enough hosts", probe.RPCStatusCode.UNAVAILABLE, b""),
+                True,
+            ]
+        )
+    )
+    await probe.checkpoint(handle)
+    assert handle.query.await_count == 2
+    handle.query.side_effect = probe.RPCError("Denied", probe.RPCStatusCode.PERMISSION_DENIED, b"")
+    with pytest.raises(probe.RPCError):
+        await probe.checkpoint(handle)
