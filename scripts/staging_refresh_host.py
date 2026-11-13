@@ -524,7 +524,7 @@ async def quarantine() -> None:
         clean = 0
         for _ in range(60):
             changed = False
-            async for schedule in scoped.list_schedules():
+            async for schedule in await scoped.list_schedules():
                 handle = scoped.get_schedule_handle(schedule.id)
                 description = await handle.describe()
                 if not description.schedule.state.paused:

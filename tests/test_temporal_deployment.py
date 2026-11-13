@@ -3,15 +3,17 @@
 import json
 import os
 import subprocess
+from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from nautionette_docker_broker import temporal_maintenance
 
 from scripts import temporal_deploy as transport
 from scripts import temporal_deploy_host as host
+from scripts import temporal_deploy_probe as probe
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMIT = "b" * 40
@@ -208,3 +210,46 @@ def test_server_startup_fence_blocks_skipped_hooks_and_wrong_revisions(tmp_path,
     )
     assert (result.stdout == "started") is allowed
     assert (result.returncode == 0) is allowed
+
+
+@pytest.mark.asyncio
+async def test_probe_awaits_sdk_schedule_iterator_before_capture(tmp_path, monkeypatch):
+    async def empty():
+        if False:
+            yield
+
+    @asynccontextmanager
+    async def worker(*args, **kwargs):
+        yield
+
+    client = SimpleNamespace(
+        workflow_service=SimpleNamespace(
+            get_cluster_info=AsyncMock(
+                return_value=SimpleNamespace(
+                    cluster_id="cluster",
+                    history_shard_count=4,
+                )
+            )
+        ),
+        list_schedules=AsyncMock(side_effect=lambda: empty()),
+        list_workflows=Mock(side_effect=lambda *args: empty()),
+        start_workflow=AsyncMock(return_value=SimpleNamespace(query=AsyncMock(return_value=True))),
+        create_schedule=AsyncMock(),
+    )
+    monkeypatch.setattr(probe.Client, "connect", AsyncMock(return_value=client))
+    monkeypatch.setattr(
+        probe, "namespaces", AsyncMock(return_value={"default": {"id": "ns", "retention": 604800}})
+    )
+    monkeypatch.setattr(probe, "Worker", worker)
+    monkeypatch.setattr(probe, "STATE", tmp_path / "probe.json")
+    monkeypatch.setattr(probe.os, "sync", lambda: None)
+    for key, value in {
+        "TEMPORAL_ADDRESS": "server:7233",
+        "TEMPORAL_NAMESPACE": "default",
+        "PROBE_ID": "unique",
+        "PROBE_SHARDS": "4",
+    }.items():
+        monkeypatch.setenv(key, value)
+    await probe.probe("capture")
+    client.list_schedules.assert_awaited_once()
+    assert json.loads(probe.STATE.read_text())["cluster"] == {"id": "cluster", "shards": 4}

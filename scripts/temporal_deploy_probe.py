@@ -103,7 +103,7 @@ async def probe(mode: str):
         for name in state["namespaces"]:
             scoped = await Client.connect(address, namespace=name)
             state["schedules"][name] = {}
-            async for row in scoped.list_schedules():
+            async for row in await scoped.list_schedules():
                 description = await scoped.get_schedule_handle(row.id).describe()
                 state["schedules"][name][row.id] = description.schedule.state.paused
             async for row in scoped.list_workflows('ExecutionStatus = "Running"'):
@@ -158,7 +158,7 @@ async def probe(mode: str):
                 raise RuntimeError("Retained workflow history changed or disappeared")
         for name, schedules in state["schedules"].items():
             scoped = await Client.connect(address, namespace=name)
-            actual = {row.id async for row in scoped.list_schedules()}
+            actual = {row.id async for row in await scoped.list_schedules()}
             if actual - {state["queue"]} != set(schedules):
                 raise RuntimeError("Schedule identities changed")
             for id in schedules:
