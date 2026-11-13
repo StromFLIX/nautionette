@@ -309,7 +309,11 @@ def server(path: Path, stack: dict, image: str, network: str | None = None) -> s
 
 def build(path: Path, version: str, kind: str) -> str:
     tag = "nautionette/temporal-maintenance:" + path.name + "-" + kind + "-" + version
-    dockerfile = "Dockerfile.tools" if kind == "tools" else "Dockerfile"
+    if version.startswith("1.29."):
+        # 1.29.7 exists in the deprecated bundle, not the new admin-tools line.
+        dockerfile = "Dockerfile.tools-legacy" if kind == "tools" else "Dockerfile.legacy"
+    else:
+        dockerfile = "Dockerfile.tools" if kind == "tools" else "Dockerfile"
     docker(
         "build",
         "--build-arg",

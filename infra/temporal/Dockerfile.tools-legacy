@@ -1,0 +1,10 @@
+# The final 1.29 patch was published in the legacy bundle, not admin-tools.
+ARG TEMPORAL_VERSION=1.29.7
+FROM temporalio/auto-setup:${TEMPORAL_VERSION}
+USER root
+RUN apk add --no-cache postgresql-client && apk upgrade --no-cache
+ARG TEMPORAL_VERSION
+ENV TEMPORAL_TOOLS_VERSION=${TEMPORAL_VERSION}
+COPY --chmod=755 migrate.sh /usr/local/bin/nautionette-temporal-schema
+USER temporal
+ENTRYPOINT ["/usr/local/bin/nautionette-temporal-schema"]

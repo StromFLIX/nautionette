@@ -73,6 +73,9 @@ Live staging preflight discovered that an old persisted Coolify build argument h
 kept its actual binary at 1.29.0 despite the repository's 1.29.7 default. Upgrade
 from the observed version, not an assumed image pin. Already-patched 1.29.7 stacks
 start at that entry; the older baseline first receives the same-minor patch hop.
+The 1.29.7 hop uses its published legacy bundle for both server and tools;
+`admin-tools:1.29.7` is not published. Only this pre-schema-transition patch step
+uses auto-setup; 1.30 and later use maintained server/admin-tools images.
 
 | Server/tools release | Core schema | PostgreSQL visibility schema |
 | --- | --- | --- |

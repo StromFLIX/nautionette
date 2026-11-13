@@ -67,6 +67,24 @@ def test_preflight_selects_private_data_network_not_coolifys_shared_network(monk
         host.private_data_network(container, container)
 
 
+@pytest.mark.parametrize(
+    "version,kind,dockerfile",
+    [
+        ("1.29.7", "tools", "Dockerfile.tools-legacy"),
+        ("1.29.7", "server", "Dockerfile.legacy"),
+        ("1.30.9", "tools", "Dockerfile.tools"),
+        ("1.32.2", "server", "Dockerfile"),
+    ],
+)
+def test_legacy_patch_uses_published_bundle_not_nonexistent_admin_tag(
+    tmp_path, monkeypatch, version, kind, dockerfile
+):
+    command = Mock(return_value="sha256:fixture")
+    monkeypatch.setattr(host, "docker", command)
+    host.build(tmp_path, version, kind)
+    assert str(tmp_path / "context" / dockerfile) in command.call_args_list[0].args
+
+
 def test_helper_container_names_fit_docker_dns_labels():
     first = Path("a" * 100)
     second = Path("b" * 100)
