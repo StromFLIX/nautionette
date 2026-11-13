@@ -96,7 +96,7 @@ jobs:
         run: uv run pytest tests/backend/test_db.py tests/backend/test_retired_features.py tests/backend/test_miniapps.py tests/backend/test_miniapp_development.py tests/broker/test_miniapps.py tests/broker/test_miniapp_networks.py tests/broker/test_image_context.py tests/workflow_mcp/test_tools.py tests/backend/test_gateway_mcp.py tests/backend/test_temporal_schedules.py
 
       - name: Workflow history expiry, retention and run recovery
-        run: uv run pytest tests/backend/test_run_retention.py tests/backend/test_runs.py tests/backend/test_execution_graph.py tests/backend/test_internal.py tests/backend/test_workflow_agents.py tests/backend/test_schedule_recovery.py tests/backend/test_run_statistics.py tests/worker/test_activities.py
+        run: uv run pytest tests/backend/test_run_retention.py tests/backend/test_runs.py tests/backend/test_execution_graph.py tests/backend/test_internal.py tests/backend/test_workflow_agents.py tests/backend/test_provenance.py tests/backend/test_schedule_recovery.py tests/backend/test_run_statistics.py tests/worker/test_activities.py
 
       - name: Indexed conversation search, synchronization and fallback
         run: uv run pytest tests/backend/test_chat_search.py

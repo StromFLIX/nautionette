@@ -58,3 +58,51 @@ test('messages show sending agent identities, not a human sender', async ({ page
   await expect(page.locator('#message-answer .bubble__sender')).toContainText('Researcher')
   await expect(page.getByRole('link', { name: 'Source chat', exact: true })).toHaveAttribute('href', '/chats/source')
 })
+
+for (const width of [1440, 320]) {
+  test(`workflow calls, results and nested agents share attribution at ${width}px`, async ({ page, context }) => {
+    await page.setViewportSize({ width, height: 1100 })
+    const state = await mockAgents(context)
+    const origin = { kind: 'workflow', relation: 'call', workflow: 'weekly_repository_updates', workflow_id: 'workflow-run', trigger: 'agent' }
+    state.data.messages = [
+      { id: 'task', role: 'user', content: 'Read-only verification task', meta: { origin }, created_at: 1700000000 },
+      { id: 'reply', role: 'assistant', content: 'Verification passed', meta: { origin, sender_agent: { id: 'marvin', name: 'Marvin' } }, created_at: 1700000001 },
+      { id: 'nested', role: 'user', content: 'Inspect one dependency', meta: { origin: { kind: 'agent', relation: 'call', agent_id: 'marvin', agent_name: 'Marvin', chat_id: 'parent', root: { ...origin, trigger: 'schedule' } } }, created_at: 1700000002 },
+      { id: 'result', role: 'assistant', content: 'Maintenance completed', meta: { run: { workflow: 'weekly_repository_updates', workflow_id: 'workflow-run', status: 'completed' } }, created_at: 1700000003 }
+    ]
+    await page.goto('/chats/alpha')
+    for (const id of ['task', 'reply']) {
+      const badge = page.locator(`#message-${id} .message-origin`)
+      await expect(badge).toContainText('Called by workflow')
+      await expect(badge).toContainText('Agent-started')
+      await expect(badge.getByRole('link', { name: 'weekly_repository_updates', exact: true })).toHaveAttribute('href', '/workflows/weekly_repository_updates')
+      await expect(badge.getByRole('link', { name: 'View run', exact: true })).toHaveAttribute('href', '/runs/workflow-run')
+    }
+    await expect(page.locator('#message-reply .bubble__sender')).toContainText('Marvin')
+    await expect(page.locator('#message-nested .message-origin')).toContainText('Called by Marvin')
+    await expect(page.locator('#message-nested .message-origin')).toContainText('Scheduled')
+    await expect(page.locator('#message-nested').getByRole('link', { name: 'Source chat', exact: true })).toHaveAttribute('href', '/chats/parent')
+    await expect(page.locator('#message-nested').getByRole('link', { name: 'View workflow run', exact: true })).toHaveAttribute('href', '/runs/workflow-run')
+    await expect(page.locator('#message-result .message-origin')).toContainText('Result from')
+    await expect(page.locator('#message-result .message-origin')).toContainText('completed')
+    expect(await page.locator('.thread__body').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+    if (process.env.PROVENANCE_SCREENSHOTS) await page.screenshot({ path: `/workspace/provenance-${width}.png`, fullPage: true })
+    await page.reload()
+    await expect(page.locator('#message-task .message-origin')).toContainText('Agent-started')
+  })
+}
+
+test('streaming workflow replies keep their origin after reconnect', async ({ page, context }) => {
+  const state = await mockAgents(context)
+  state.data.active_turn = {
+    id: 'live-turn', steps: [{ kind: 'text', text: 'Checking dependencies' }], status: 'Working',
+    sender_agent: { id: 'marvin', name: 'Marvin' },
+    origin: { kind: 'workflow', relation: 'call', workflow: 'maintenance', workflow_id: 'scheduled-run', trigger: 'schedule' }
+  }
+  await page.goto('/chats/alpha')
+  const badge = page.locator('.msg--assistant .message-origin')
+  await expect(badge).toContainText('Scheduled')
+  await expect(badge.getByRole('link', { name: 'View run', exact: true })).toHaveAttribute('href', '/runs/scheduled-run')
+  await page.reload()
+  await expect(badge).toContainText('Scheduled')
+})

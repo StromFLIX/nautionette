@@ -21,6 +21,7 @@ from temporalio.client import WorkflowFailureError
 from temporalio.exceptions import ApplicationError
 from temporalio.service import RPCError, RPCStatusCode
 
+from . import provenance
 from .background import spawn
 from .clients import authoring, broker, temporal
 from .db import db
@@ -219,11 +220,22 @@ async def deliver_to_chat(name: str, workflow_id: str, status: str, result: Any)
             + (body or "Failure details could not be retrieved. Open this run's history for diagnostics.")
             + f"\n\nRun ID: `{workflow_id}`"
         )
+    recorded = db.one("SELECT trigger, run_id FROM runs WHERE workflow_id = ?", (workflow_id,)) or {}
     db.add_message(
         chat_id,
         "assistant",
         body,
-        {"run": {"workflow": name, "workflow_id": workflow_id, "status": status}},
+        {
+            "run": {"workflow": name, "workflow_id": workflow_id, "status": status},
+            "origin": provenance.workflow_origin(
+                name,
+                workflow_id,
+                relation="result",
+                trigger=recorded.get("trigger", "unknown"),
+                run_id=recorded.get("run_id"),
+                status=status,
+            ),
+        },
     )
     bus.publish("chat.answered", {"chat_id": chat_id, "ok": status == "completed"})
 

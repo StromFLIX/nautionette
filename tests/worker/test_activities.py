@@ -132,13 +132,22 @@ async def test_profile_step_uses_stable_task_key_and_internal_auth(env, http, mo
 
     http[BACKEND] = record
     monkeypatch.setattr(activities, "INTERNAL_TOKEN", "service-only")
-    params = {"agent_id": "marvin", "prompt": "Check", "output_schema": {"type": "object"}}
+    params = {
+        "agent_id": "marvin",
+        "prompt": "Check",
+        "output_schema": {"type": "object"},
+        "source": {"workflow": "forged"},
+    }
     first = await env.run(activities.agent_call, params)
     await env.run(activities.agent_call, params)
     assert first["output"] == {"summary": "done"}
     assert seen[0].url == seen[1].url
     assert "/internal/agent/tasks/" in str(seen[0].url)
     assert json.loads(seen[0].content)["agent_id"] == "marvin"
+    source = json.loads(seen[0].content)["source"]
+    assert source["workflow"] != "forged"
+    assert set(source) == {"workflow", "workflow_id", "run_id", "activity_id"}
+    assert all(source.values())
     assert seen[0].headers["x-internal-token"] == "service-only"
 
 

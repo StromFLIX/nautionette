@@ -14,7 +14,7 @@ import sqlite3
 
 from fastapi import HTTPException
 
-from . import agent_profiles
+from . import agent_profiles, provenance
 from .db import db
 from .routers.chats import new_chat, stop_chat, submit_message
 
@@ -26,7 +26,9 @@ def task_ids(key: str) -> tuple[str, str]:
     return digest[:12], f"workflow-agent-{digest}"
 
 
-async def start(key: str, agent_id: str, prompt: str, *, validate_only: bool = False) -> dict:
+async def start(
+    key: str, agent_id: str, prompt: str, *, validate_only: bool = False, source: dict | None = None
+) -> dict:
     chat_id, turn_id = task_ids(key)
     if not isinstance(agent_id, str) or not agent_id:
         raise HTTPException(422, "agent_id is required")
@@ -43,6 +45,21 @@ async def start(key: str, agent_id: str, prompt: str, *, validate_only: bool = F
             "model": selected["model"],
             "project_ids": selected["project_ids"],
         }
+    if not source or not source.get("run_id") or not source.get("activity_id"):
+        raise HTTPException(422, "Workflow agent calls require execution provenance from the worker")
+    expected = hashlib.sha256(f"{source['run_id']}:{source['activity_id']}".encode()).hexdigest()
+    if key != expected:
+        raise HTTPException(409, "Activity key does not match workflow caller identity")
+    message = db.one("SELECT meta FROM messages WHERE id = ? AND chat_id = ?", (turn_id, chat_id))
+    origin = json.loads(message["meta"]).get("origin") if message else None
+    if origin:
+        if any(
+            origin.get(field) != source.get(field)
+            for field in ("workflow", "workflow_id", "run_id", "activity_id")
+        ):
+            raise HTTPException(409, "Activity key already belongs to a different workflow caller")
+    else:
+        origin = await provenance.workflow_call(source)
     prompt_hash = hashlib.sha256(prompt.strip().encode()).hexdigest()
     db.execute(
         "INSERT OR IGNORE INTO workflow_agent_tasks (key, chat_id, agent_id, prompt_hash) VALUES (?,?,?,?)",
@@ -72,7 +89,7 @@ async def start(key: str, agent_id: str, prompt: str, *, validate_only: bool = F
     turn = db.one("SELECT state, job FROM chat_turns WHERE id = ? AND chat_id = ?", (turn_id, chat_id))
     if turn and (turn["job"] or turn["state"] not in {"running", "queued"}):
         return status(key)
-    await submit_message(chat_id, {"text": prompt, "message_id": turn_id})
+    await submit_message(chat_id, {"text": prompt, "message_id": turn_id}, origin=origin)
     return status(key)
 
 

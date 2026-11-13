@@ -138,6 +138,7 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
                             "project_ids",
                             "packages",
                             "timeout_exempt",
+                            "origin",
                         )
                     ):
                         break

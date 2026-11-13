@@ -9,7 +9,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, Field
 
-from .. import run_statistics, runs, workflow_agents
+from .. import provenance, run_statistics, runs, workflow_agents
 from ..agent import agent_job, call_agent
 from ..clients import temporal
 from ..db import db
@@ -38,6 +38,9 @@ async def internal_agent_call(payload: dict[str, Any] = Body(...)) -> dict[str, 
         run_id=payload.get("run_id", ""),
         timeout_seconds=int(payload.get("timeout_seconds") or 900),
     )
+    if payload.get("source"):
+        job["origin"] = await provenance.workflow_call(payload["source"])
+        job["prompt"] = provenance.context(job["origin"]) + job["prompt"]
     bus.publish("agent.activity", {"run_id": job["run_id"], "agent_set": job["agent_set"]})
     call_id = uuid.uuid4().hex
     accounting = run_statistics.AgentStatistics()
@@ -71,7 +74,15 @@ async def internal_agent_call(payload: dict[str, Any] = Body(...)) -> dict[str, 
         save(status)
 
 
+class WorkflowCaller(BaseModel):
+    workflow: str = Field(pattern=r"^[a-z][a-z0-9_]{0,127}$")
+    workflow_id: str = Field(min_length=1, max_length=512)
+    run_id: str = Field(min_length=1, max_length=128)
+    activity_id: str = Field(min_length=1, max_length=128)
+
+
 class ProfileAgentTask(BaseModel):
+    source: WorkflowCaller | None = None
     agent_id: str = Field(min_length=1, max_length=64)
     prompt: str = Field(min_length=1, max_length=100000)
     validate_only: bool = False
@@ -81,7 +92,11 @@ class ProfileAgentTask(BaseModel):
 async def start_profile_agent_task(key: str, payload: ProfileAgentTask) -> dict[str, Any]:
     """Idempotently admit a saved-profile task through the normal chat pipeline."""
     return await workflow_agents.start(
-        key, payload.agent_id, payload.prompt, validate_only=payload.validate_only
+        key,
+        payload.agent_id,
+        payload.prompt,
+        validate_only=payload.validate_only,
+        source=payload.source.model_dump() if payload.source else None,
     )
 
 

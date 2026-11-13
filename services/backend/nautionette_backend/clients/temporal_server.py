@@ -158,6 +158,9 @@ class TemporalGateway:
             "workflow_id": info.id,
             "run_id": info.run_id,
             "workflow_type": info.workflow_type,
+            "trigger": "schedule"
+            if (getattr(info, "search_attributes", None) or {}).get("TemporalScheduledById")
+            else "unknown",
             "status": info.status.name if info.status else "UNKNOWN",
             "start_time": info.start_time.isoformat() if info.start_time else None,
             "close_time": info.close_time.isoformat() if info.close_time else None,

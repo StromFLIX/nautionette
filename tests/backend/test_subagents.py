@@ -56,6 +56,25 @@ def child_scope(db, result):
         yield grant["grant"]
 
 
+def test_workflow_ancestry_survives_subagent_admission_and_completion(client, db, scope):
+    root = {
+        "kind": "workflow",
+        "relation": "call",
+        "workflow": "maintenance",
+        "workflow_id": "scheduled-run",
+        "trigger": "schedule",
+    }
+    parent = json.loads(db.one("SELECT job FROM chat_turns WHERE id='root'")["job"])
+    db.execute("UPDATE chat_turns SET job=? WHERE id='root'", (json.dumps({**parent, "origin": root}),))
+    result = start(client, scope).json()
+    job = json.loads(db.one("SELECT job FROM chat_turns WHERE id=?", (result["turn_id"],))["job"])
+    assert job["origin"]["kind"] == "agent" and job["origin"]["root"] == root
+    assert "scheduled-run" in job["prompt"]
+    assert db.chat_snapshot(result["chat_id"])["active_turn"]["origin"] == job["origin"]
+    finish(db, result)
+    assert all(m["meta"]["origin"]["root"] == root for m in db.list_messages(result["chat_id"]))
+
+
 def test_allowlist_defaults_validation_and_deletion_cleanup(client, scope):
     assert scope["child"]["allowed_subagents"] == []
     for value in (None, "all", [123], ["missing"]):
@@ -241,7 +260,9 @@ async def test_child_executes_normal_pipeline_and_keeps_snapshot_identity(client
     answer = db.list_messages(first["chat_id"])[-1]
     assert answer["meta"]["sender_agent"]["name"] == "Research"
     assert (first["chat_id"], first["turn_id"]) in backend.broker.cleanups
-    assert "Message from agent Lead" in backend.broker.jobs[-1]["prompt"]
+    assert "not a new message from the human user" in backend.broker.jobs[-1]["prompt"]
+    assert backend.broker.jobs[-1]["origin"]["agent_name"] == "Lead"
+    assert answer["meta"]["origin"]["kind"] == "agent"
 
 
 def test_uncertain_admission_is_not_replayed(client, db, scope):

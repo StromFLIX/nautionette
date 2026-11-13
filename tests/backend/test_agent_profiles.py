@@ -1,5 +1,6 @@
 """Defaults and saved agents are presets, never live pointers into a running chat."""
 
+import hashlib
 import json
 import sqlite3
 from unittest.mock import AsyncMock
@@ -338,15 +339,18 @@ def test_resetting_global_settings_leaves_agents_and_explicit_empty_selections_i
 
 
 def test_workflow_task_reaches_broker_with_saved_model_tools_persona_and_projects(
-    client, internal_headers, configured, broker, monkeypatch
+    client, internal_headers, configured, broker, monkeypatch, db
 ):
     monkeypatch.setattr(projects, "prepare_worktrees", lambda *args: {})
+    source = {"workflow": "maintenance", "workflow_id": "wf-test", "run_id": "run-test", "activity_id": "3"}
+    db.record_run("maintenance", "wf-test", "run-test", "agent", {})
     agent = create(
         client,
         {"model": "test/other", "tools": [], "project_ids": [configured], "system_prompt": "Saved persona"},
     )
-    url = f"/internal/agent/tasks/{'f' * 64}"
-    started = client.post(url, headers=internal_headers, json={"agent_id": agent["id"], "prompt": "Check"})
+    url = "/internal/agent/tasks/" + hashlib.sha256(b"run-test:3").hexdigest()
+    payload = {"agent_id": agent["id"], "prompt": "Check", "source": source}
+    started = client.post(url, headers=internal_headers, json=payload)
     assert started.status_code == 200
     for _ in range(100):
         result = client.get(url, headers=internal_headers).json()
@@ -360,10 +364,11 @@ def test_workflow_task_reaches_broker_with_saved_model_tools_persona_and_project
     assert job["chat_id"] == started.json()["chat_id"]
     assert job["turn_id"] == started.json()["turn_id"]
     assert job["timeout_exempt"] is True
+    assert job["origin"]["workflow_id"] == "wf-test" and job["origin"]["trigger"] == "agent"
+    assert "not a new message from the human user" in job["prompt"]
+    assert all(m["meta"]["origin"]["workflow_id"] == "wf-test" for m in db.list_messages(job["chat_id"]))
     count = len(broker.jobs)
-    assert client.post(
-        url, headers=internal_headers, json={"agent_id": agent["id"], "prompt": "Check"}
-    ).json()["ok"]
+    assert client.post(url, headers=internal_headers, json=payload).json()["ok"]
     assert len(broker.jobs) == count
 
 

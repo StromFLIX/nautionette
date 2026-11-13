@@ -863,6 +863,7 @@ class Database:
         queue: bool = False,
         attachment_ids: list[str] | None = None,
         sender: dict[str, Any] | None = None,
+        origin: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], bool]:
         with self._lock, self._conn:
             existing = self._conn.execute(
@@ -905,6 +906,8 @@ class Database:
             meta = {"project_ids": project_ids} if project_ids else {}
             if sender:
                 meta["sender_agent"] = sender
+            if origin:
+                meta["origin"] = origin
             if attachments:
                 meta["attachments"] = attachments
             if waiting:
@@ -961,6 +964,7 @@ class Database:
                 if job.get("agent_id")
                 else None
             )
+            turn["origin"] = job.get("origin")
             turn["steps"] = json.loads(turn["steps"])
             turn["context"] = json.loads(turn["context"]) if turn["context"] else None
             turn["timing"] = json.loads(turn["timing"]) if turn["timing"] else None
@@ -1096,6 +1100,8 @@ class Database:
                 "turn_id": turn["id"],
                 "sender_agent": {"id": job["agent_id"], "name": job.get("agent_name") or "Agent"},
             }
+        if job.get("origin"):
+            meta = {**meta, "origin": job["origin"]}
         # Keep the latest provider measurement through reloads and interrupted-turn recovery.
         meta = {**meta, "context": json.loads(turn["context"]) if turn["context"] else None}
         # Bind immutable output revisions to the answer segment which published

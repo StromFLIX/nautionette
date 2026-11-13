@@ -39,6 +39,26 @@ source, inputs or history. Normal Git attribution, hooks, deployment draining,
 turn persistence and tool restrictions remain in effect. The linked chat is
 visible in the app and contains the full progress and diagnostic history.
 
+## Caller attribution
+
+Workflow calls and results use the same server-owned `origin` metadata as agent
+delegation. A call says **Called by workflow** and links to both the workflow and
+the exact run; result delivery says **Result from**. Scheduled, human/manual,
+agent-started and webhook runs remain distinct. The trigger comes from the
+recorded run or Temporal, not from workflow inputs or model output. An unknown
+trigger is never guessed to be scheduled.
+
+The worker derives workflow/run/activity identity from Temporal's activity
+context, and the backend verifies it. New saved-profile tasks without that
+identity are rejected. Normal public chat payloads cannot set attribution.
+The task message, live response, persisted answer and recovery checkpoints all
+retain the same caller metadata. A further subagent call shows its immediate
+calling agent plus the original workflow/run, without changing subagent limits
+or tying the workflow's lifetime to a parent chat turn. The called model also
+receives an explicit automation-origin prefix, not an apparent human request.
+Legacy workflow result and agent-sender metadata remains readable by the shared
+UI; attribution is not inferred from arbitrary chat titles or prompt wording.
+
 ## Retries and cancellation
 
 A task identity is derived from the Temporal workflow run ID and activity ID,

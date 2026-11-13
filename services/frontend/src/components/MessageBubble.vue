@@ -1,18 +1,14 @@
 <template>
   <div class="msg" data-skin-part="message" :data-role="role" :class="`msg--${role}`">
-    <div class="bubble" :class="{ 'bubble--wide': run || hasTools }">
-      <div v-if="meta.sender_agent" class="bubble__sender">
+    <div class="bubble" :class="{ 'bubble--wide': origin?.relation === 'result' || hasTools }">
+      <div v-if="meta.sender_agent && !(role === 'user' && origin?.kind === 'agent')" class="bubble__sender">
         <AgentAvatar :agent="senderAgent" class="bubble__sender-avatar" />
         <span class="bubble__sender-name truncate" :title="senderAgent.name">{{ senderAgent.name }}</span>
         <RouterLink v-if="meta.sender_agent.chat_id" class="bubble__sender-source" :to="`/chats/${meta.sender_agent.chat_id}`">
           Source chat<span class="material-icons" aria-hidden="true">arrow_outward</span>
         </RouterLink>
       </div>
-      <RouterLink v-if="run" class="bubble__run" :to="`/runs/${run.workflow_id}`">
-        <span class="material-icons">bolt</span>
-        <span class="grow truncate">{{ run.workflow }}</span>
-        <span class="chip" :class="`chip--${RUN_TONE[run.status] || ''}`">{{ run.status }}</span>
-      </RouterLink>
+      <MessageOrigin v-if="origin" :origin="origin" />
       <div v-if="meta.attachments?.length" class="bubble__images">
         <ChatAttachment v-for="attachment in meta.attachments" :key="attachment.id" :attachment="attachment" :chat-id="chatId" />
       </div>
@@ -67,11 +63,13 @@ import ToolCallGroup from './ToolCallGroup.vue'
 import ChatAttachment from './ChatAttachment.vue'
 import OutputRow from './OutputRow.vue'
 import AgentAvatar from './AgentAvatar.vue'
+import MessageOrigin from './MessageOrigin.vue'
+import { messageOrigin } from '../message-origin'
 import { store } from '../store'
 import { groupToolCalls } from '../timeline'
 import { renderMarkdown } from '../markdown'
 import { copyText } from '../clipboard'
-import { RUN_TONE, shortTime } from '../format'
+import { shortTime } from '../format'
 import { preferences } from '../preferences'
 
 const props = defineProps({
@@ -147,7 +145,7 @@ function copyCode (event) {
 }
 
 const hasTools = computed(() => steps.value.some((step) => step.kind === 'tool'))
-const run = computed(() => props.meta?.run || null)
+const origin = computed(() => messageOrigin(props.meta, props.role))
 // The backend folds a failure into the body too, so only add it when it is new.
 const error = computed(() => {
   const detail = props.meta?.error || ''
@@ -200,28 +198,6 @@ const time = computed(() => shortTime(props.createdAt))
 
 .bubble--wide {
   max-width: 92%;
-}
-
-.bubble__run {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: -3px -5px 8px;
-  padding: 5px 7px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-active);
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  text-decoration: none;
-}
-
-.bubble__run:hover {
-  color: var(--text);
-}
-
-.bubble__run .material-icons {
-  font-size: 0.875rem;
-  color: var(--accent-hover);
 }
 
 .msg__time {

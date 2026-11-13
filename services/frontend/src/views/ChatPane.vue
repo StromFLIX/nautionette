@@ -67,7 +67,7 @@
         />
         <MessageBubble
           v-if="conversation.activeTurn" role="assistant" live
-          :content="conversation.liveSteps.length || conversation.liveStatus ? '' : '…'" :meta="{ steps: conversation.liveSteps, timing: conversation.activeTurn?.timing, outputs: conversation.liveOutputs, sender_agent: conversation.activeTurn?.sender_agent || (chat?.agent_id ? { id: chat.agent_id, name: chat.agent_name } : null) }"
+          :content="conversation.liveSteps.length || conversation.liveStatus ? '' : '…'" :meta="{ steps: conversation.liveSteps, timing: conversation.activeTurn?.timing, outputs: conversation.liveOutputs, origin: conversation.activeTurn?.origin, sender_agent: conversation.activeTurn?.sender_agent || (chat?.agent_id ? { id: chat.agent_id, name: chat.agent_name } : null) }"
           :chat-id="chatId" :status="conversation.liveStatus" @open-output="openOutput"
         />
         <section v-if="conversation.queuedMessages.length" class="thread__queue" aria-label="Queued messages">

@@ -14,6 +14,7 @@ from typing import Any
 
 from nautionette.chat_sessions import SESSION_FILE, chat_directory, session_exists, session_lock
 
+from . import provenance
 from .db import db
 
 
@@ -49,6 +50,8 @@ def legacy_history(chat_id: str, turn_id: str) -> list[dict[str, Any]]:
         if message["role"] not in {"user", "assistant"}:
             continue
         content = message["content"] or ""
+        if message["role"] == "user" and message["meta"].get("origin"):
+            content = provenance.context(message["meta"]["origin"]) + content
         references = []
         for attachment in message["meta"].get("attachments", []):
             row = db.one(

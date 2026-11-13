@@ -15,7 +15,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from . import agent_profiles, chat_outputs
+from . import agent_profiles, chat_outputs, provenance
 from .db import db
 from .runtime import runtime
 
@@ -201,15 +201,17 @@ async def start(grant: str, request_id: str, agent_id: str, text: str, chat_id: 
                 if not current or current.get("agent_id") != agent_id or current.get("agent_customized"):
                     raise HTTPException(409, "Target chat configuration changed during admission")
 
+            sender = {
+                "id": job["agent_id"],
+                "name": job.get("agent_name") or "Agent",
+                "chat_id": parent_chat,
+                "call_id": call_id,
+            }
             await submit_message(
                 chat_id,
                 {"text": text, "message_id": child_turn},
-                sender={
-                    "id": job["agent_id"],
-                    "name": job.get("agent_name") or "Agent",
-                    "chat_id": parent_chat,
-                    "call_id": call_id,
-                },
+                sender=sender,
+                origin=provenance.agent_call(sender, job.get("origin")),
                 delegation=call_id,
                 before_accept=before_accept,
             )

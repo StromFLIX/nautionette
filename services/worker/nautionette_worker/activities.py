@@ -65,6 +65,7 @@ async def agent_call(params: dict[str, Any]) -> dict[str, Any]:
         "output_schema": params.get("output_schema"),
         "agent_set": params.get("agent_set"),
         "run_id": info.workflow_id,
+        "source": _workflow_source(),
         "timeout_seconds": int(params.get("timeout_seconds") or AGENT_TIMEOUT_SECONDS),
     }
     timeout = payload["timeout_seconds"] + 60
@@ -80,6 +81,16 @@ async def agent_call(params: dict[str, Any]) -> dict[str, Any]:
     if schema and result.get("output") is None:
         raise RuntimeError("agent returned text where a structured object was declared")
     return result
+
+
+def _workflow_source() -> dict[str, str]:
+    info = activity.info()
+    return {
+        "workflow": info.workflow_type,
+        "workflow_id": info.workflow_id,
+        "run_id": info.workflow_run_id,
+        "activity_id": info.activity_id,
+    }
 
 
 def _profile_task_url() -> str:
@@ -104,6 +115,7 @@ async def _profile_agent_call(params: dict[str, Any]) -> dict[str, Any]:
                 "agent_id": params["agent_id"],
                 "prompt": params.get("prompt", ""),
                 "validate_only": params.get("validate_only", False),
+                "source": _workflow_source(),
             },
             headers=_headers(),
         )

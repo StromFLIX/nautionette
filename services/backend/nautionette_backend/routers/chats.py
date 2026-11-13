@@ -23,6 +23,7 @@ from .. import (
     chat_sessions,
     project_changes,
     projects,
+    provenance,
 )
 from ..agent import (
     agent_job,
@@ -362,6 +363,7 @@ async def submit_message(
     *,
     stream: bool = False,
     sender: dict[str, Any] | None = None,
+    origin: dict[str, Any] | None = None,
     delegation: str | None = None,
     before_accept: Callable[[], None] | None = None,
 ):
@@ -415,6 +417,7 @@ async def submit_message(
             queue=payload.get("queue") is True,
             attachment_ids=attachment_ids,
             sender=sender,
+            origin=origin,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -446,7 +449,10 @@ async def submit_message(
         run_id=f"chat-{chat_id}",
         timeout_seconds=settings.agent_run_timeout_seconds,
     )
-    if sender:
+    if origin:
+        job["origin"] = origin
+        job["prompt"] = provenance.context(origin) + text
+    elif sender:
         job["prompt"] = f"Message from agent {sender['name']} ({sender['id']}), not the human user:\n\n{text}"
     if chat.get("system_prompt"):
         # Persona instructions supplement, never replace, the app's operating rules.
