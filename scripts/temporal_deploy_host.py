@@ -25,21 +25,58 @@ else:
 
 ROOT = Path("/var/lib/nautionette-temporal")
 TERMINAL = {"prepared", "completed", "failed", "needs_recovery"}
-WRITERS = {"docker-broker", "backend", "worker", "workflow-mcp"}
+WRITERS = {"docker-broker", "backend", "worker", "agentgateway", "workflow-mcp"}
+
+
+def note_stopping(service: str):
+    if os.environ.get("MAINTENANCE_RUN_ID"):
+        path = ROOT / "runs" / storage.checked_id(os.environ["MAINTENANCE_RUN_ID"])
+        state = load(path)
+        state["stopping_service"] = service
+        save(path, state)
 
 
 def stop(stack: dict):
-    # The Coolify hook runs in the broker: pause it while the independent
-    # controller works. This also freezes worker reconciliation and hook polling.
+    # Drain admission while its broker/gateway dependencies are still serving.
+    # Pausing the broker first can deadlock an admitted turn waiting on it.
+    for item in stack["containers"]:
+        if item["service"] == "backend":
+            note_stopping("backend")
+            info = json.loads(docker("inspect", item["id"]))[0]
+            docker("update", "--restart=no", item["id"])
+            if info["State"]["Running"]:
+                drain = storage.env(info).get("BACKEND_CHAT_DRAIN_SECONDS", "3600")
+                if not drain.isdecimal() or int(drain) > 3600:
+                    raise RuntimeError("Backend drain configuration exceeds automatic maintenance budget")
+                grace = max(90, int(drain) + 120, int(info["Config"].get("StopTimeout") or 0))
+                docker("stop", "--time", str(grace), item["id"], timeout=grace + 30)
+                stopped = json.loads(docker("inspect", item["id"]))[0]["State"]
+                if stopped["Running"] or stopped.get("ExitCode") == 137:
+                    raise RuntimeError("Backend did not drain cleanly; no snapshot will be taken")
+    # The pre-hook lives in the broker: pause it rather than killing the hook.
     for item in stack["containers"]:
         if item["service"] == "docker-broker":
+            note_stopping("docker-broker")
             info = json.loads(docker("inspect", item["id"]))[0]
             docker("update", "--restart=no", item["id"])
             if info["State"]["Running"] and not info["State"].get("Paused"):
                 docker("pause", item["id"])
-    storage.stop(
-        {**stack, "containers": [item for item in stack["containers"] if item["service"] != "docker-broker"]}
-    )
+    # Close MCP clients before MCP servers. Otherwise long-lived gateway streams
+    # hold workflow-mcp's Uvicorn shutdown open until Docker would SIGKILL it.
+    for service in (
+        "worker",
+        "agentgateway",
+        "workflow-mcp",
+        "frontend-web",
+        "website",
+        "temporal",
+        "maxio",
+        "postgres",
+    ):
+        group = [item for item in stack["containers"] if item["service"] == service]
+        if group:
+            note_stopping(service)
+            storage.stop({**stack, "containers": group})
 
 
 def unpause_broker(stack: dict):

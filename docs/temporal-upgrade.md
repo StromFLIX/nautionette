@@ -91,8 +91,10 @@ uses auto-setup; 1.30 and later use maintained server/admin-tools images.
    versions/schemas fail closed. No database is initialized over existing data.
 2. Build all matching tools/server images before pausing writes. Record immutable
    image IDs; recheck the inventory before touching services.
-3. Pause the broker (including worker reconciliation), stop submission/worker
-   services cleanly and save namespace identities/retention, original schedule
+3. Drain/stop the backend while its broker/gateway dependencies are still serving,
+   honoring its configured chat drain and Compose stop grace. Then pause the broker
+   (including worker reconciliation), drain workers, stop the gateway's long-lived
+   MCP clients **before** the workflow MCP server, and save namespace identities/retention, original schedule
    states and fingerprints of pending user histories. Pause schedules. Create a
    synthetic durable workflow/schedule on a unique queue, never an app queue.
 4. Stop the remaining services cleanly and take a verified, stopped cross-volume
@@ -163,8 +165,8 @@ CI job **Temporal PostgreSQL upgrade and restore** runs two real Docker tests:
   the old server and explicit fresh initialization.
 - `scripts.check_temporal_deployment`: the actual candidate hook and detached
   controller on a disposable stack, real stopped-volume backup/isolated restore,
-  broker pause/unpause, all server hops, application-history resumption and duplicate
-  hook delivery. It needs no live Coolify credentials or SSH access.
+  broker pause/unpause, client-before-server MCP stream shutdown, all server hops,
+  application-history resumption and duplicate hook delivery. It needs no live Coolify credentials or SSH access.
 
 Unit tests cover ordering, schema mismatch/jump refusal, recovery before/after
 possible writes, hook ownership and the health fence against ignored post-hook

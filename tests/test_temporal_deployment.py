@@ -85,6 +85,48 @@ def test_legacy_patch_uses_published_bundle_not_nonexistent_admin_tag(
     assert str(tmp_path / "context" / dockerfile) in command.call_args_list[0].args
 
 
+def test_shutdown_drains_backend_before_freezing_broker_and_closes_mcp_clients_first(monkeypatch):
+    monkeypatch.delenv("MAINTENANCE_RUN_ID", raising=False)
+    calls = []
+    running = {"backend": True, "docker-broker": True}
+
+    def docker(*args, **kwargs):
+        calls.append(args)
+        if args[0] == "inspect":
+            return json.dumps(
+                [
+                    {
+                        "State": {"Running": running[args[1]], "Paused": False, "ExitCode": 0},
+                        "Config": {"Env": ["BACKEND_CHAT_DRAIN_SECONDS=25"], "StopTimeout": 300},
+                    }
+                ]
+            )
+        if args[0] == "stop":
+            running[args[-1]] = False
+        return ""
+
+    monkeypatch.setattr(host, "docker", docker)
+    monkeypatch.setattr(
+        host.storage, "stop", lambda group: calls.append(("group", group["containers"][0]["service"]))
+    )
+    stack = {
+        "containers": [
+            {"id": name, "service": name}
+            for name in (
+                "backend",
+                "docker-broker",
+                "workflow-mcp",
+                "agentgateway",
+                "worker",
+            )
+        ]
+    }
+    host.stop(stack)
+    assert calls.index(("stop", "--time", "300", "backend")) < calls.index(("pause", "docker-broker"))
+    assert calls.index(("group", "worker")) < calls.index(("group", "agentgateway"))
+    assert calls.index(("group", "agentgateway")) < calls.index(("group", "workflow-mcp"))
+
+
 def test_helper_container_names_fit_docker_dns_labels():
     first = Path("a" * 100)
     second = Path("b" * 100)

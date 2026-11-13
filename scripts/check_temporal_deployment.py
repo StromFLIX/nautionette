@@ -95,6 +95,32 @@ class Handler(BaseHTTPRequestHandler):
 HTTPServer(('0.0.0.0',8080),Handler).serve_forever()
 """
         idle = "import time,signal,sys;signal.signal(signal.SIGTERM,lambda *_:sys.exit(0));time.sleep(36000)"
+        mcp_server = """import socket,threading,signal,sys
+workers=[]
+def connection(c):
+ with c:
+  c.sendall(b'r')
+  while c.recv(1024): pass
+def stop(*_):
+ for worker in workers: worker.join()
+ sys.exit(0)
+signal.signal(signal.SIGTERM,stop)
+s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+s.bind(('0.0.0.0',8901));s.listen()
+while True:
+ c,_=s.accept();t=threading.Thread(target=connection,args=(c,));t.start();workers.append(t)
+"""
+        gateway = f"""import socket,signal,sys,time,pathlib
+for attempt in range(60):
+ try:
+  c=socket.create_connection(({fixture.prefix + "-workflow-mcp"!r},8901));break
+ except OSError: time.sleep(0.5)
+else: sys.exit(1)
+assert c.recv(1)==b'r'
+signal.signal(signal.SIGTERM,lambda *_:(c.close(),sys.exit(0)))
+pathlib.Path('/tmp/stream-connected').touch()
+time.sleep(36000)
+"""
         for service in (
             "backend",
             "docker-broker",
@@ -111,7 +137,7 @@ HTTPServer(('0.0.0.0',8080),Handler).serve_forever()
                 [
                     "python",
                     "-c",
-                    http if service == "backend" else idle,
+                    {"backend": http, "workflow-mcp": mcp_server, "agentgateway": gateway}.get(service, idle),
                 ],
                 name=name,
                 detach=True,
@@ -136,6 +162,15 @@ HTTPServer(('0.0.0.0',8080),Handler).serve_forever()
             )
             fixture.containers.append(name)
             services[service] = container
+        fixture.wait(
+            lambda: fixture.docker(
+                "exec",
+                services["agentgateway"].id,
+                "python",
+                "-c",
+                "from pathlib import Path;assert Path('/tmp/stream-connected').exists()",
+            )
+        )
         own = os.environ.get("HOSTNAME")
         os.environ["HOSTNAME"] = services["docker-broker"].id
         payload = {
