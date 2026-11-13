@@ -36,8 +36,7 @@ async def run():
         client.networks.get(internal).connect(pg, aliases=["postgres-coolify"])
         # Match the real preflight discovery: Coolify had persisted a 1.29.0 build arg.
         legacy = fixture.build("1.29.0", "legacy")
-        old, address = fixture.start(legacy)
-        client.networks.get(internal).connect(old, aliases=["temporal"])
+        old, address = fixture.start(legacy, public_network=internal)
         fixture.wait(
             lambda: fixture.docker(
                 "exec", old, "temporal", "operator", "namespace", "describe", "--namespace", "default"
@@ -169,8 +168,7 @@ HTTPServer(('0.0.0.0',8080),Handler).serve_forever()
         )
         final_image = "nautionette/temporal-maintenance:" + run_id + "-server-1.32.2"
         old_container.remove()
-        new, address = fixture.start(final_image, fence=(fixture.prefix, commit))
-        client.networks.get(internal).connect(new, aliases=["temporal"])
+        new, address = fixture.start(final_image, fence=(fixture.prefix, commit), public_network=internal)
         for container in services.values():
             container.start()
         hook({**payload, "mode": "finish"})

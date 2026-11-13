@@ -141,13 +141,16 @@ class Rehearsal:
                 time.sleep(2)
 
     def start(
-        self, image: str, db: str = "postgres", fence: tuple[str, str] | None = None
+        self,
+        image: str,
+        db: str = "postgres",
+        fence: tuple[str, str] | None = None,
+        public_network: str | None = None,
     ) -> tuple[str, str]:
         name = f"{self.prefix}-server-{len(self.containers)}"
         self.containers.append(name)
         self.docker(
-            "run",
-            "-d",
+            "create",
             "--name",
             name,
             "--label",
@@ -192,6 +195,11 @@ class Rehearsal:
             ),
             image,
         )
+        if public_network:
+            # Docker assigns published ports only with a non-internal endpoint.
+            # Attach both networks before start, matching deployed Compose ordering.
+            self.docker("network", "connect", "--alias", "temporal", public_network, name)
+        self.docker("start", name)
         self.wait(
             lambda: self.docker(
                 "exec",
