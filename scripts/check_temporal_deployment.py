@@ -177,6 +177,27 @@ HTTPServer(('0.0.0.0',8080),Handler).serve_forever()
         else:
             os.environ["HOSTNAME"] = own
         print("PASS: native hooks, broker pause, restore, minor hops, resumption, duplicate delivery")
+    except Exception:
+        try:
+            job = client.containers.get(controller)
+            result = job.exec_run(
+                [
+                    "python",
+                    "-c",
+                    "import os,pathlib;root=pathlib.Path('/var/lib/nautionette-temporal/runs');"
+                    "root=root/os.environ['MAINTENANCE_RUN_ID'];s=root/'state.json';"
+                    "print('STATE',s.read_text() if s.exists() else 'missing');"
+                    "[(print('LOG',p.name),print(p.read_text()[-24000:])) for p in root.glob('*.log')]",
+                ]
+            )
+            # This job only runs on random disposable fixture data. Even its
+            # generated DB password is redacted before printing diagnostics.
+            print(
+                result.output.decode(errors="replace").replace(fixture.env["POSTGRES_PASSWORD"], "[redacted]")
+            )
+        except docker.errors.NotFound:
+            pass
+        raise
     finally:
         try:
             job = client.containers.get(controller)

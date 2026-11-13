@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 from pathlib import Path
 
 if __package__:
@@ -81,6 +82,11 @@ def docker(*args: str, timeout: int = 120, path: Path | None = None) -> str:
         with (path / "operations.log").open("a") as log:
             log.write(result.stdout + result.stderr)
     if result.returncode:
+        if path is None and os.environ.get("MAINTENANCE_RUN_ID"):
+            folder = ROOT / "runs" / storage.checked_id(os.environ["MAINTENANCE_RUN_ID"])
+            if folder.exists():
+                with (folder / "operations.log").open("a") as log:
+                    log.write(result.stderr)
         raise RuntimeError("Docker maintenance operation failed; inspect private host diagnostics")
     return result.stdout.strip()
 
@@ -233,6 +239,8 @@ def probe(path: Path, stack: dict, server: str, mode: str, version: str, network
         "PROBE_ID=" + name(path, "workflow"),
         "-e",
         "PROBE_VERSION=" + version,
+        "-e",
+        "PROBE_SHARDS=" + load(path)["shards"],
         stack["worker_image"],
         "/migration/temporal_deploy_probe.py",
         mode,
@@ -553,6 +561,8 @@ def launch(path: Path, app: str, environment: str, commit: str):
     try:
         metadata = preflight(path, app, environment)
     except Exception:
+        with (path / "preflight.log").open("a") as log:
+            traceback.print_exc(file=log)
         save(
             path, {"status": "failed", "safe_to_retry": True, "app": app, "commit": commit, "target": target}
         )

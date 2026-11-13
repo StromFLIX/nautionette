@@ -15,7 +15,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from temporalio import activity, workflow
-from temporalio.api.workflowservice.v1 import ListNamespacesRequest
+from temporalio.api.workflowservice.v1 import GetClusterInfoRequest, ListNamespacesRequest
 from temporalio.client import Client, Schedule, ScheduleActionStartWorkflow, ScheduleSpec, ScheduleState
 from temporalio.worker import Replayer, UnsandboxedWorkflowRunner, Worker
 
@@ -84,7 +84,11 @@ async def namespaces(client):
 async def probe(mode: str):
     address, namespace = os.environ["TEMPORAL_ADDRESS"], os.environ["TEMPORAL_NAMESPACE"]
     client = await Client.connect(address, namespace=namespace)
+    cluster = await client.workflow_service.get_cluster_info(GetClusterInfoRequest())
+    cluster_identity = {"id": cluster.cluster_id, "shards": cluster.history_shard_count}
     if mode == "capture":
+        if cluster.history_shard_count != int(os.environ["PROBE_SHARDS"]):
+            raise RuntimeError("Persisted cluster shard count differs from the deployment configuration")
         if STATE.exists():
             raise RuntimeError("Refusing to overwrite migration evidence")
         state = {
@@ -92,6 +96,7 @@ async def probe(mode: str):
             "schedules": {},
             "histories": [],
             "queue": os.environ["PROBE_ID"],
+            "cluster": cluster_identity,
         }
         if namespace not in state["namespaces"]:
             raise RuntimeError("Configured namespace is missing")
@@ -142,6 +147,8 @@ async def probe(mode: str):
 
     state = json.loads(STATE.read_text())
     if mode in {"check", "finish"}:
+        if cluster_identity != state["cluster"]:
+            raise RuntimeError("Cluster identity/history shard count changed")
         if await namespaces(client) != state["namespaces"]:
             raise RuntimeError("Namespace identity/retention changed")
         for item in state["histories"]:
