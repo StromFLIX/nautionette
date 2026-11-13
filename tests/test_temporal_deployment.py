@@ -127,6 +127,23 @@ def test_shutdown_drains_backend_before_freezing_broker_and_closes_mcp_clients_f
     assert calls.index(("group", "agentgateway")) < calls.index(("group", "workflow-mcp"))
 
 
+@pytest.mark.parametrize("exit_code", [0, 137])
+def test_maxio_uses_its_graceful_sigint_and_still_refuses_sigkill(monkeypatch, exit_code):
+    monkeypatch.delenv("MAINTENANCE_RUN_ID", raising=False)
+    docker = Mock(return_value=json.dumps([{"State": {"Running": False, "ExitCode": exit_code}}]))
+    monkeypatch.setattr(host, "docker", docker)
+    stack = {"containers": [{"id": "maxio", "service": "maxio"}]}
+    if exit_code == 137:
+        with pytest.raises(RuntimeError, match="MaxIO did not drain"):
+            host.stop(stack)
+    else:
+        host.stop(stack)
+    assert any(
+        call.args == ("stop", "--signal", "SIGINT", "--time", "90", "maxio") for call in docker.call_args_list
+    )
+    assert "STOPSIGNAL SIGINT" in (ROOT / "infra/maxio/Dockerfile").read_text()
+
+
 def test_helper_container_names_fit_docker_dns_labels():
     first = Path("a" * 100)
     second = Path("b" * 100)

@@ -76,7 +76,17 @@ def stop(stack: dict):
         group = [item for item in stack["containers"] if item["service"] == service]
         if group:
             note_stopping(service)
-            storage.stop({**stack, "containers": group})
+            if service == "maxio":
+                # Pinned MaxIO 0.4.2 only installs tokio::signal::ctrl_c(),
+                # so SIGTERM is ignored as PID 1. Never SIGKILL it for backup.
+                for item in group:
+                    docker("update", "--restart=no", item["id"])
+                    docker("stop", "--signal", "SIGINT", "--time", "90", item["id"], timeout=120)
+                    info = json.loads(docker("inspect", item["id"]))[0]["State"]
+                    if info["Running"] or info.get("ExitCode") == 137:
+                        raise RuntimeError("MaxIO did not drain cleanly; no snapshot will be taken")
+            else:
+                storage.stop({**stack, "containers": group})
 
 
 def unpause_broker(stack: dict):

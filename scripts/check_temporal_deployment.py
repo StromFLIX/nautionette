@@ -121,6 +121,10 @@ signal.signal(signal.SIGTERM,lambda *_:(c.close(),sys.exit(0)))
 pathlib.Path('/tmp/stream-connected').touch()
 time.sleep(36000)
 """
+        maxio = (
+            "import time,signal,sys;signal.signal(signal.SIGTERM,signal.SIG_IGN);"
+            "signal.signal(signal.SIGINT,lambda *_:sys.exit(0));time.sleep(36000)"
+        )
         for service in (
             "backend",
             "docker-broker",
@@ -137,7 +141,12 @@ time.sleep(36000)
                 [
                     "python",
                     "-c",
-                    {"backend": http, "workflow-mcp": mcp_server, "agentgateway": gateway}.get(service, idle),
+                    {
+                        "backend": http,
+                        "workflow-mcp": mcp_server,
+                        "agentgateway": gateway,
+                        "maxio": maxio,
+                    }.get(service, idle),
                 ],
                 name=name,
                 detach=True,

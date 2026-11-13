@@ -97,7 +97,10 @@ uses auto-setup; 1.30 and later use maintained server/admin-tools images.
    MCP clients **before** the workflow MCP server, and save namespace identities/retention, original schedule
    states and fingerprints of pending user histories. Pause schedules. Create a
    synthetic durable workflow/schedule on a unique queue, never an app queue.
-4. Stop the remaining services cleanly and take a verified, stopped cross-volume
+4. Stop the remaining services cleanly. MaxIO 0.4.2 listens to SIGINT (`ctrl_c`),
+   not SIGTERM: the controller explicitly sends SIGINT to existing containers and
+   the wrapper now declares `STOPSIGNAL SIGINT` for normal future deployments.
+   A SIGKILL exit is still refused. Take a verified, stopped cross-volume
    backup: PostgreSQL, backend state, workflow files, gateway state, artifacts,
    projects, chat sessions and output objects. Preserve metadata and permissions.
 5. Restore the PostgreSQL backup to another volume on an isolated network, boot
@@ -165,7 +168,8 @@ CI job **Temporal PostgreSQL upgrade and restore** runs two real Docker tests:
   the old server and explicit fresh initialization.
 - `scripts.check_temporal_deployment`: the actual candidate hook and detached
   controller on a disposable stack, real stopped-volume backup/isolated restore,
-  broker pause/unpause, client-before-server MCP stream shutdown, all server hops,
+  broker pause/unpause, client-before-server MCP stream shutdown, a SIGINT-only
+  object-store fixture matching MaxIO 0.4.2, all server hops,
   application-history resumption and duplicate hook delivery. It needs no live Coolify credentials or SSH access.
 
 Unit tests cover ordering, schema mismatch/jump refusal, recovery before/after
