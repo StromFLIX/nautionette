@@ -255,6 +255,7 @@ class FakeTemporal:
         self.results: dict[str, Any] = {}
         self.histories: dict[str, list[dict[str, Any]]] = {}
         self.schedule_specs: dict[str, dict[str, Any]] = {}
+        self.disabled_schedules: set[str] = set()
         self.cancelled: list[str] = []
         self.terminated: list[tuple[str, str]] = []
 
@@ -327,6 +328,17 @@ class FakeTemporal:
             "input": payload,
             **schedule_summary(spec, paused=paused),
         }
+
+    async def set_workflow_disabled(self, workflow: str, disabled: bool) -> None:
+        spec = self.schedule_specs.get(workflow)
+        if spec is None:
+            return
+        if disabled and not spec["paused"]:
+            spec["paused"] = True
+            self.disabled_schedules.add(workflow)
+        elif not disabled and workflow in self.disabled_schedules:
+            spec["paused"] = False
+            self.disabled_schedules.remove(workflow)
 
     async def ensure_schedule_timeout(self, workflow: str, timeout_minutes: int) -> None:
         self.schedule_specs[workflow]["timeout_minutes"] = timeout_minutes

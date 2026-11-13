@@ -118,8 +118,20 @@ test('native RPC budgets and continuity across failed/successful compaction, mod
       system_prompt: 'Current permissions and fresh instructions apply.' })
     assert.equal(readFileSync(operation, 'utf8'), 'once')
     assert.equal(readFileSync(join(state, `attachments/${'a'.repeat(32)}.txt`), 'utf8'), 'original bytes')
+    phase = 'workflow-result'
+    const external = { id: 'workflow-result-1', source_id: 'workflow-result-1', content: 'AUTOMATION_RESULT_42',
+      origin: { kind: 'workflow', relation: 'result', workflow: 'digest', workflow_id: 'digest-run', trigger: 'schedule' } }
+    const imported = await run({ turn_id: 'four', prompt: 'Explain the workflow result above.', external_messages: [external] })
+    assert.deepEqual(imported.find(e => e.type === 'session_ready').context_message_ids, ['workflow-result-1'])
+    const workflowRequest = requests.find(r => r.phase === phase).request
+    assert.ok(workflowRequest.messages.some(m => JSON.stringify(m).includes('AUTOMATION_RESULT_42')))
+    assert.ok(workflowRequest.messages.some(m => JSON.stringify(m).includes('digest-run')))
+    phase = 'lost-context-ack'
+    await run({ turn_id: 'five', prompt: 'Continue without repeating work.', external_messages: [external] })
+    assert.equal(readFileSync(operation, 'utf8'), 'once')
     assert.equal(new Set(outputs.map(out => out.find(e => e.type === 'session_ready').id)).size, 1)
     const native = readFileSync(join(state, 'session.jsonl'), 'utf8').trim().split('\n').map(JSON.parse)
+    assert.equal(native.filter(e => e.customType === 'nautionette.workflow-result').length, 1)
     assert.ok(native.some(e => e.type === 'compaction'))
     assert.ok(native.some(e => e.customType === 'test.state' && e.data.counter === 7))
     assert.ok(native.some(e => e.message?.role === 'toolResult' && JSON.stringify(e).includes(evidence)))

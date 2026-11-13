@@ -33,7 +33,19 @@ def legacy_history(chat_id: str, turn_id: str) -> list[dict[str, Any]]:
             "This chat's native Pi session is missing. Restore the chat-sessions backup; "
             "UI text is not a replacement for native history."
         )
-    messages = [m for m in db.list_messages(chat_id) if m["id"] != turn_id and not m["meta"].get("queued")]
+    external = {
+        row["message_id"]
+        for row in db.query(
+            "SELECT c.message_id FROM chat_context_messages c "
+            "JOIN messages m ON m.id = c.message_id WHERE m.chat_id = ?",
+            (chat_id,),
+        )
+    }
+    messages = [
+        m
+        for m in db.list_messages(chat_id)
+        if m["id"] != turn_id and m["id"] not in external and not m["meta"].get("queued")
+    ]
     all_attachments = [a for m in messages for a in m["meta"].get("attachments", [])]
     attachment_ids = {a["id"] for a in all_attachments}
     hydrated_ids = {a["id"] for a in all_attachments[-4:]}
@@ -87,6 +99,60 @@ def legacy_history(chat_id: str, turn_id: str) -> list[dict[str, Any]]:
             entry["steps"] = steps
         out.append(entry)
     return out
+
+
+def pending_context(chat_id: str) -> list[dict[str, Any]]:
+    """Bound the batch, preserving full source text for native evidence.
+
+    One oversized result may exceed the batch budget by itself. Temporal bounds
+    individual results; the native importer bounds their model projection, not
+    the original evidence. Remaining messages stay pending for a later turn.
+    """
+    rows = db.query(
+        "SELECT m.id, c.source_id, m.content, m.meta FROM chat_context_messages c "
+        "JOIN messages m ON m.id = c.message_id WHERE m.chat_id = ? AND c.imported = 0 "
+        "ORDER BY m.rowid LIMIT 50",
+        (chat_id,),
+    )
+    messages = []
+    size = 0
+    for row in rows:
+        length = len(row["content"].encode("utf-8"))
+        if messages and size + length > 256_000:
+            break
+        size += length
+        messages.append(
+            {
+                "id": row["id"],
+                "source_id": row["source_id"],
+                "content": row["content"],
+                "origin": json.loads(row["meta"]).get("origin"),
+            }
+        )
+    return messages
+
+
+def acknowledge_context(chat_id: str, sent: list[dict], received: list[str]) -> None:
+    # A runner may acknowledge only immutable message IDs sent to this turn.
+    allowed = {message["id"] for message in sent}
+    for message_id in received:
+        if isinstance(message_id, str) and message_id in allowed:
+            db.execute(
+                "UPDATE chat_context_messages SET imported = 1 WHERE message_id = ? "
+                "AND message_id IN (SELECT id FROM messages WHERE chat_id = ?)",
+                (message_id, chat_id),
+            )
+
+
+def has_pending_context(chat_id: str) -> bool:
+    return (
+        db.one(
+            "SELECT 1 FROM chat_context_messages c JOIN messages m ON m.id = c.message_id "
+            "WHERE m.chat_id = ? AND c.imported = 0 LIMIT 1",
+            (chat_id,),
+        )
+        is not None
+    )
 
 
 def delete(chat_id: str) -> None:

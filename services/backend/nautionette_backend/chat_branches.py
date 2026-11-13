@@ -235,6 +235,11 @@ def branch(chat_id: str) -> dict:
                     ),
                 )
                 connection.execute(
+                    "INSERT INTO chat_context_messages (message_id, source_id, imported) "
+                    "SELECT ?, source_id, imported FROM chat_context_messages WHERE message_id = ?",
+                    (message_id, message["id"]),
+                )
+                connection.execute(
                     "UPDATE chat_images SET message_id = ? WHERE chat_id = ? AND message_id IS NULL",
                     (message_id, target_id),
                 )

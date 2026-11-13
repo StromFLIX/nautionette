@@ -267,6 +267,24 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 CREATE INDEX IF NOT EXISTS runs_workflow ON runs(workflow, created_at);
 CREATE INDEX IF NOT EXISTS runs_workflow_id ON runs(workflow_id);
+-- Completion and delivery are separate durable obligations. Old terminal runs
+-- are intentionally not backfilled: that would replay historical notifications.
+CREATE TABLE IF NOT EXISTS run_deliveries (
+    run_id TEXT PRIMARY KEY REFERENCES runs(id) ON DELETE CASCADE,
+    state TEXT NOT NULL CHECK(state IN ('pending', 'delivered', 'skipped')),
+    chat_id TEXT,
+    message_id TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    retry_at REAL NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS run_deliveries_pending ON run_deliveries(state, retry_at);
+-- Server-originated messages enter native context only at the next safe turn
+-- boundary. Keep the source identity when copying a branched conversation.
+CREATE TABLE IF NOT EXISTS chat_context_messages (
+    message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+    source_id TEXT NOT NULL,
+    imported INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS workflow_calls (
     workflow_id TEXT NOT NULL,
     call_id TEXT NOT NULL,

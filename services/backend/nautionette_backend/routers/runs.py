@@ -98,7 +98,14 @@ async def cancel_run(workflow_id: str) -> dict[str, Any]:
 async def terminate_run(workflow_id: str, payload: dict[str, Any] = Body(default={})) -> dict[str, Any]:
     """For a run that cannot be asked nicely, because its worker cannot load it."""
     await temporal.terminate(workflow_id, payload.get("reason") or "terminated from the app")
-    db.update_run(workflow_id, "terminated")
+    row = runs.stored_run(workflow_id)
+    if row:
+        await runs.complete_run(
+            row["workflow"],
+            workflow_id,
+            "terminated",
+            {"summary": payload.get("reason") or "Terminated from the app."},
+        )
     bus.publish("run.terminated", {"workflow_id": workflow_id})
     return {"ok": True}
 

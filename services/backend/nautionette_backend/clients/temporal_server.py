@@ -28,6 +28,9 @@ from temporalio.service import RPCError, RPCStatusCode
 from ..config import settings
 from ..schedules import schedule_summary
 
+# Ownership survives lost replies/backend restarts. Never resume an operator's pause.
+DISABLED_SCHEDULE_NOTE = "Disabled by Denkzeug workflow settings.\n"
+
 # The events that explain a run. The rest is Temporal's own bookkeeping.
 _HISTORY_EVENTS = {
     "workflow_execution_started_event_attributes": "workflow.started",
@@ -354,6 +357,36 @@ class TemporalGateway:
                 next_action_times=description.info.next_action_times,
             ),
         }
+
+    async def set_workflow_disabled(self, workflow: str, disabled: bool) -> None:
+        """Pause future starts, or release only a pause owned by this control.
+
+        Update just the state using Temporal's optimistic update callback. Keep
+        recurrence, inputs, policies, timeouts and any previous note unchanged.
+        An already-started execution is deliberately not cancelled.
+        """
+        client = await self.client()
+
+        def update(current):
+            schedule = current.description.schedule
+            state = schedule.state
+            owned = (state.note or "").startswith(DISABLED_SCHEDULE_NOTE)
+            if disabled:
+                if state.paused:
+                    return None
+                note = state.note if owned else DISABLED_SCHEDULE_NOTE + (state.note or "")
+                state = replace(state, paused=True, note=note)
+            elif owned:
+                state = replace(state, paused=False, note=state.note[len(DISABLED_SCHEDULE_NOTE) :])
+            else:
+                return None
+            return ScheduleUpdate(schedule=replace(schedule, state=state))
+
+        try:
+            await client.get_schedule_handle(self._schedule_id(workflow)).update(update)
+        except RPCError as exc:
+            if exc.status != RPCStatusCode.NOT_FOUND:
+                raise
 
     async def ensure_schedule_timeout(self, workflow: str, timeout_minutes: int) -> None:
         """Migrate existing actions without resetting recurrence, inputs or pause state."""

@@ -115,7 +115,9 @@ async def control_turn(turn_id: str, chat_id: str, job: dict[str, Any], finished
                 )
                 for pending in queued:
                     # A prior control delivery may have yielded during SIGTERM.
-                    if is_draining() or not pending["job"]:
+                    if is_draining() or not pending["job"] or chat_sessions.has_pending_context(chat_id):
+                        # Results arriving during this turn need a fresh native
+                        # import boundary, never text-only steering past them.
                         break
                     candidate = json.loads(pending["job"])
                     # Attachment messages run as their own durable turn. Never send a text-only
@@ -266,6 +268,7 @@ async def _run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
         # Only the first native turn imports legacy UI records. Pi, not SQL
         # transcript trimming, owns context and compaction from then onward.
         job["history"] = chat_sessions.legacy_history(chat_id, turn_id)
+        job["external_messages"] = chat_sessions.pending_context(chat_id)
         job.update(chat_attachments.load_attachments(chat_id, job.get("attachments", [])))
         for message in job["history"]:
             attachments = message.pop("attachments", [])
@@ -314,6 +317,9 @@ async def _run_turn(turn_id: str, chat_id: str, job: dict[str, Any]) -> None:
                         "Native Pi session identity changed unexpectedly; original history retained"
                     )
                 db.execute("UPDATE chats SET pi_session_id = ? WHERE id = ?", (session_id, chat_id))
+                chat_sessions.acknowledge_context(
+                    chat_id, job["external_messages"], event.get("context_message_ids") or []
+                )
             elif kind == "commands":
                 current = db.get_chat(chat_id)
                 if (

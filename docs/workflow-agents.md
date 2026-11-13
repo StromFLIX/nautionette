@@ -1,5 +1,8 @@
 # Saved agents in workflows
 
+For Disable/Enable semantics, durable result delivery and results entering native
+chat context, see [Workflow lifecycle](workflow-lifecycle.md).
+
 The `agent_call` activity accepts an optional saved `agent_id`. Without it, the
 existing generic activity agent still uses instance defaults. With it, execution
 uses that saved profile's model, reasoning effort, persona, tools, packages and

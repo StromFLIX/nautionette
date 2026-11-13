@@ -21,12 +21,13 @@ from temporalio.client import WorkflowFailureError
 from temporalio.exceptions import ApplicationError
 from temporalio.service import RPCError, RPCStatusCode
 
-from . import provenance
+from . import provenance, run_delivery
 from .background import spawn
 from .clients import authoring, broker, temporal
 from .db import db
 from .events import bus
 from .runtime import runtime
+from .workflow_control import workflow_lock
 
 # Temporal ends a run at its own execution timeout, so watching only has to
 # outlast the longest a manifest may ask for (24 hours) before giving up.
@@ -100,9 +101,13 @@ async def reconcile_schedule_timeouts() -> None:
                 await temporal.delete_schedule(name)
                 bus.publish("workflow.unscheduled", {"workflow": name, "reason": "workflow deleted"})
                 continue
-            workflow = await authoring.get_workflow(name)
-            timeout = (workflow.get("manifest") or {}).get("timeout_minutes", 30)
-            await temporal.ensure_schedule_timeout(name, timeout)
+            async with workflow_lock(name):
+                # State synchronization does not depend on importing/validating
+                # workflow source: a broken definition must still be stoppable.
+                await temporal.set_workflow_disabled(name, db.workflow_settings(name)["disabled"])
+                workflow = await authoring.get_workflow(name)
+                timeout = (workflow.get("manifest") or {}).get("timeout_minutes", 30)
+                await temporal.ensure_schedule_timeout(name, timeout)
         except Exception:  # noqa: BLE001 - unavailable services can retry on the next pass
             log.exception("Could not reconcile schedule for %s", name)
 
@@ -110,7 +115,11 @@ async def reconcile_schedule_timeouts() -> None:
 async def reconcile_schedules() -> None:
     """Temporal fires schedules itself, even while this backend is offline."""
     while True:
-        for operation in (temporal.ensure_retention, discover_scheduled_runs, reconcile_schedule_timeouts):
+        for operation in (
+            reconcile_schedule_timeouts,
+            temporal.ensure_retention,
+            discover_scheduled_runs,
+        ):
             try:
                 await operation()
             except Exception:  # noqa: BLE001 - startup/outages must not kill the recovery loop
@@ -129,6 +138,11 @@ async def restart_worker() -> dict[str, Any]:
 
 
 async def start(name: str, payload: dict[str, Any], trigger: str) -> dict[str, Any]:
+    async with workflow_lock(name):
+        return await _start(name, payload, trigger)
+
+
+async def _start(name: str, payload: dict[str, Any], trigger: str) -> dict[str, Any]:
     if db.workflow_settings(name)["disabled"]:
         raise HTTPException(status_code=409, detail=f"{name} is disabled")
     workflow = await authoring.get_workflow(name)
@@ -193,25 +207,10 @@ async def deliver_to_chat(name: str, workflow_id: str, status: str, result: Any)
     # Check before creating a chat or touching its timestamp/context.
     if not should_deliver(status, result):
         return
-    config = db.workflow_settings(name)
     workflow_title = name
     # A deleted workflow still deserves to deliver its last result.
     with contextlib.suppress(Exception):
         workflow_title = (await authoring.get_workflow(name)).get("title") or name
-
-    chat_id = config["chat_id"] if config["chat_mode"] == "same" else None
-    if chat_id and not db.get_chat(chat_id):
-        chat_id = None
-    if not chat_id:
-        suffix = time.strftime("%d %b %H:%M") if config["chat_mode"] == "new" else ""
-        chat = db.create_chat(
-            title=f"{workflow_title} {suffix}".strip()[:120],
-            agent_set=runtime("default_agent_set"),
-            model=runtime("default_model"),
-        )
-        chat_id = chat["id"]
-        if config["chat_mode"] == "same":
-            db.set_workflow_settings(name, {"chat_id": chat_id})
 
     body = render_result(result)
     if status != "completed":
@@ -221,9 +220,9 @@ async def deliver_to_chat(name: str, workflow_id: str, status: str, result: Any)
             + f"\n\nRun ID: `{workflow_id}`"
         )
     recorded = db.one("SELECT trigger, run_id FROM runs WHERE workflow_id = ?", (workflow_id,)) or {}
-    db.add_message(
-        chat_id,
-        "assistant",
+    chat_id = run_delivery.commit(
+        name,
+        workflow_id,
         body,
         {
             "run": {"workflow": name, "workflow_id": workflow_id, "status": status},
@@ -236,8 +235,51 @@ async def deliver_to_chat(name: str, workflow_id: str, status: str, result: Any)
                 status=status,
             ),
         },
+        title=workflow_title,
+        agent_set=runtime("default_agent_set"),
+        model=runtime("default_model"),
     )
-    bus.publish("chat.answered", {"chat_id": chat_id, "ok": status == "completed"})
+    if chat_id:
+        bus.publish("chat.answered", {"chat_id": chat_id, "ok": status == "completed"})
+
+
+async def reconcile_deliveries() -> None:
+    """Independent recovery: slow Temporal/schedule discovery cannot delay results."""
+    while True:
+        try:
+            await retry_deliveries()
+        except Exception:  # noqa: BLE001 - a DB outage must not kill recovery permanently
+            log.warning("Workflow result outbox recovery will retry")
+        await asyncio.sleep(5)
+
+
+async def retry_deliveries() -> None:
+    """Drain the durable outbox independently of Temporal availability."""
+    for row in run_delivery.pending():
+        await try_delivery(
+            row["workflow"],
+            row["workflow_id"],
+            row["status"],
+            json.loads(row["result"]) if row["result"] is not None else None,
+        )
+
+
+async def try_delivery(name: str, workflow_id: str, status: str, result: Any) -> None:
+    try:
+        await deliver_to_chat(name, workflow_id, status, result)
+    except Exception:  # noqa: BLE001 - preserve the pending obligation for background/restart recovery
+        run_delivery.failed(workflow_id)
+        log.warning("Workflow result delivery pending: %s", workflow_id)
+
+
+async def complete_run(name: str, workflow_id: str, status: str, result: Any) -> None:
+    run_delivery.finish(workflow_id, status, result, notify=should_deliver(status, result))
+    sealed = stored_run(workflow_id)
+    # Concurrent completion/termination observers share the first sealed result.
+    await try_delivery(name, workflow_id, sealed["status"], sealed["result"])
+    bus.publish(
+        "run.finished", {"workflow": name, "workflow_id": workflow_id, "status": sealed["status"].upper()}
+    )
 
 
 async def watch(name: str, workflow_id: str) -> None:
@@ -264,14 +306,9 @@ async def watch(name: str, workflow_id: str) -> None:
                 result = {"summary": summary} if summary else None
             except Exception:  # noqa: BLE001 - an unavailable result is not the workflow's failure
                 log.warning("Could not retrieve output for closed run %s", workflow_id)
+                continue  # Do not seal a missing result as a successful silent run.
         status = info["status"].lower()
-        db.update_run(workflow_id, status, result)
-        with contextlib.suppress(Exception):
-            await deliver_to_chat(name, workflow_id, status, result)
-        bus.publish(
-            "run.finished",
-            {"workflow": name, "workflow_id": workflow_id, "status": info["status"]},
-        )
+        await complete_run(name, workflow_id, status, result)
         return
 
 

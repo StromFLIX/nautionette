@@ -216,3 +216,55 @@ async def test_describing_a_schedule_decodes_its_saved_workflow_input(monkeypatc
 
     assert result["input"] == {"url": "https://example.com"}
     assert converter.decoded == ["encoded-payload"]
+
+
+@pytest.mark.parametrize("operator_paused", [False, True])
+async def test_disable_owns_only_its_pause_and_keeps_all_schedule_fields(monkeypatch, operator_paused):
+    gateway = TemporalGateway()
+    schedule = Schedule(
+        action=ScheduleActionStartWorkflow("digest", {"days": 7}, id="digest-scheduled", task_queue="q"),
+        spec=temporal_spec(DailySchedule(frequency="daily", at="07:30", timezone="Europe/Berlin")),
+        state=ScheduleState(paused=operator_paused, note="operator note"),
+    )
+    client = ScheduleClient(None, schedule)
+
+    async def connect():
+        return client
+
+    monkeypatch.setattr(gateway, "client", connect)
+    await gateway.set_workflow_disabled("digest", True)
+    paused = client.handle.schedule
+    assert paused.state.paused
+    assert paused.action == schedule.action
+    assert paused.spec == schedule.spec
+    assert paused.policy == schedule.policy
+    await gateway.set_workflow_disabled("digest", True)  # Lost response/restart retry.
+    assert client.handle.updates == (0 if operator_paused else 1)
+    await gateway.set_workflow_disabled("digest", False)
+    assert client.handle.schedule.state.paused == operator_paused
+    assert client.handle.schedule.state.note == "operator note"
+    await gateway.set_workflow_disabled("digest", False)
+    assert client.handle.updates == (0 if operator_paused else 2)
+
+
+@pytest.mark.parametrize("status", [RPCStatusCode.NOT_FOUND, RPCStatusCode.UNAVAILABLE])
+async def test_disable_ignores_only_absent_schedule(monkeypatch, status):
+    gateway = TemporalGateway()
+
+    class Client:
+        def get_schedule_handle(self, schedule_id):
+            assert schedule_id == "schedule-digest"
+            return self
+
+        async def update(self, updater):
+            raise RPCError("schedule error", status, b"")
+
+    async def connect():
+        return Client()
+
+    monkeypatch.setattr(gateway, "client", connect)
+    if status == RPCStatusCode.NOT_FOUND:
+        await gateway.set_workflow_disabled("digest", True)
+    else:
+        with pytest.raises(RPCError):
+            await gateway.set_workflow_disabled("digest", True)

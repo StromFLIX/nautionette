@@ -72,6 +72,7 @@ async def lifespan(_: FastAPI):
     spawn(bootstrap(), name="integration-bootstrap")
     runs.resume_unfinished()
     spawn(runs.reconcile_schedules(), name="schedule-reconciliation")
+    spawn(runs.reconcile_deliveries(), name="workflow-result-delivery")
     bus.publish("system.start", {"version": settings.version})
     async with backend_mcp.http_app.router.lifespan_context(backend_mcp.http_app):
         spawn(mcp_servers.bootstrap_backend(), name="backend-mcp-bootstrap")

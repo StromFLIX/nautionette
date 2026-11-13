@@ -89,8 +89,8 @@
       <button class="btn btn--icon" aria-label="Workflow actions">
         <span class="material-icons" aria-hidden="true">more_vert</span>
         <q-menu anchor="bottom right" self="top right" class="pick-menu">
-          <button class="pick-menu__item" @click="toggleDisabled">
-            <span class="material-icons pick__icon">{{ disabled ? 'play_circle' : 'pause_circle' }}</span>
+          <button class="pick-menu__item" :disabled="togglingDisabled" @click="toggleDisabled">
+            <span class="material-icons pick__icon" aria-hidden="true">{{ disabled ? 'play_circle' : 'pause_circle' }}</span>
             {{ disabled ? 'Enable' : 'Disable' }}
           </button>
           <button class="pick-menu__item" @click="remove">
@@ -100,6 +100,11 @@
       </button>
     </header>
 
+    <section v-if="workflowControlError" class="notice" role="alert">
+      <span class="material-icons" aria-hidden="true">warning</span>
+      <span class="grow">{{ workflowControlError }}</span>
+      <button class="btn btn--sm btn--outline" :disabled="togglingDisabled" @click="syncDisabled()">Retry sync</button>
+    </section>
     <nav class="tabs" aria-label="Workflow views">
       <button
         v-for="item in tabs" :key="item" class="tab"
@@ -129,8 +134,8 @@
       <template v-if="tab === 'Run'">
         <section v-if="disabled" class="notice">
           <span class="material-icons">pause_circle</span>
-          <span class="grow">Disabled — triggers and schedules are refused.</span>
-          <button class="btn btn--sm btn--outline" @click="toggleDisabled">Enable</button>
+          <span class="grow">Disabled — new manual and webhook runs are blocked. Its schedule is paused when synchronized; existing runs continue.</span>
+          <button class="btn btn--sm btn--outline" :disabled="togglingDisabled" @click="toggleDisabled">Enable</button>
         </section>
 
         <section class="block">
@@ -347,6 +352,8 @@ const inputs = ref({})
 const running = ref(false)
 const scheduling = ref(false)
 const approving = ref(false)
+const togglingDisabled = ref(false)
+const workflowControlError = ref('')
 const scheduleFrequency = ref('daily')
 const scheduleAt = ref('')
 const scheduleMinute = ref(0)
@@ -408,6 +415,7 @@ async function load () {
   draft.value = null
   validation.value = null
   loadError.value = ''
+  workflowControlError.value = ''
   selectedRun.value = ''
   draftMode.value = 'changes'
   if (!name.value) return
@@ -508,9 +516,25 @@ function toggleScheduleDay (day) {
     : [...scheduleDays.value, day]
 }
 
-async function toggleDisabled () {
-  workflow.value.settings = await api.workflowSettings(workflow.value.name, { disabled: !disabled.value })
-  actions.loadWorkflows()
+async function syncDisabled (value = disabled.value) {
+  if (togglingDisabled.value) return
+  const target = workflow.value
+  togglingDisabled.value = true
+  workflowControlError.value = ''
+  try {
+    target.settings = await api.workflowSettings(target.name, { disabled: value })
+  } catch (error) {
+    // A failed Temporal update may still have durably saved the control intent.
+    if (error.detail?.settings) target.settings = error.detail.settings
+    if (workflow.value === target) workflowControlError.value = error.message
+  } finally {
+    togglingDisabled.value = false
+    actions.loadWorkflows().catch(() => {})
+  }
+}
+
+function toggleDisabled () {
+  return syncDisabled(!disabled.value)
 }
 
 async function setChatMode (mode) {

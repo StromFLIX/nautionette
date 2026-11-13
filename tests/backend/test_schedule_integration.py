@@ -73,6 +73,23 @@ async def test_real_schedule_is_discovered_and_delivered(backend, monkeypatch):
                 assert after.schedule.spec == before.schedule.spec
                 assert (await gateway.schedule("schedule_probe"))["input"] == payload
                 assert after.schedule.action.execution_timeout == timedelta(minutes=3)
+                # An operator pause is not owned by the workflow Disable control.
+                await gateway.set_workflow_disabled("schedule_probe", True)
+                await gateway.set_workflow_disabled("schedule_probe", False)
+                assert (await handle.describe()).schedule.state.paused
+                await handle.unpause()
+                await gateway.set_workflow_disabled("schedule_probe", True)
+                await gateway.set_workflow_disabled("schedule_probe", True)  # Lost response retry.
+                paused = await handle.describe()
+                assert paused.schedule.state.paused
+                assert paused.schedule.spec == after.schedule.spec
+                assert (await gateway.schedule("schedule_probe"))["input"] == payload
+                await asyncio.sleep(1.2)
+                count = (await handle.describe()).info.num_actions
+                await asyncio.sleep(1.2)
+                assert (await handle.describe()).info.num_actions == count
+                await gateway.set_workflow_disabled("schedule_probe", False)
+                assert not (await handle.describe()).schedule.state.paused
             finally:
                 await handle.delete()
                 await background.drain()

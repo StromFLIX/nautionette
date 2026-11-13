@@ -44,6 +44,35 @@ test('empty process views explain workflows, runs, and apps with real next steps
   await expect(page).toHaveURL(/\/settings\/app-runtimes$/)
 })
 
+test('workflow disable shows saved intent and retries schedule synchronization without toggling it back', async ({ page, context }) => {
+  const state = await mockProcesses(context)
+  const writes = []
+  const errors = []
+  page.on('pageerror', error => errors.push(error.message))
+  await context.route('**/api/workflows/digest/settings', async route => {
+    const payload = route.request().postDataJSON()
+    writes.push(payload)
+    state.workflow.settings = { disabled: payload.disabled }
+    if (writes.length === 1) return route.fulfill({ status: 503, json: { detail: {
+      message: 'Settings saved, but schedule synchronization is pending. Temporal may still start scheduled work.',
+      settings: state.workflow.settings,
+      schedule_sync_pending: true
+    } } })
+    return route.fulfill({ json: state.workflow.settings })
+  })
+  await page.goto('/workflows/digest?tab=Run')
+  await page.getByRole('button', { name: 'Workflow actions', exact: true }).click()
+  await page.getByRole('button', { name: 'Disable', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('alert')).toContainText('schedule synchronization is pending')
+  await expect(page.getByRole('button', { name: 'Run now', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'Retry sync', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  expect(writes).toEqual([{ disabled: true }, { disabled: true }])
+  expect(errors).toEqual([])
+  await noOverflow(page)
+})
+
 test.describe('touch process controls', () => {
   test.use({ hasTouch: true, viewport: { width: 320, height: 700 } })
   test('graph targets and workflow fields accommodate touch without overflowing', async ({ page, context }) => {

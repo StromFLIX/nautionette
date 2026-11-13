@@ -191,7 +191,7 @@ async function main() {
 
   const packageEnvironment = preparePackages();
   const continuity = durable ? prepareSession(job, workspace) : null;
-  if (continuity) emit({ type: "session_ready", id: continuity.id });
+  if (continuity) emit({ type: "session_ready", id: continuity.id, context_message_ids: continuity.contextMessageIds });
   const historyFile = continuity?.file || seedHistory(job, workspace, model);
   const prompt = renderPrompt(job);
   if (continuity && !/^\/compact(?:\s|$)/.test(prompt)) continuity.beginInput(job.turn_id);

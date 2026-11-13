@@ -2,7 +2,13 @@
 
 Every interactive chat resumes **one exact native Pi JSONL session**. No feature
 flag or new-chat-only behavior: existing chats import their stored history once,
-then use the same path as new chats. Workflow agent calls remain one-shot.
+then use the same path as new chats. Generic workflow activity agents remain
+one-shot; [saved-profile workflow tasks](workflow-agents.md) use durable chats.
+
+New workflow-result replies also enter an existing native session through a
+durable inbox at its next safe turn boundary, with automation provenance and
+lost-acknowledgement deduplication. Delivery never edits a running session or
+starts another model call. See [Workflow lifecycle](workflow-lifecycle.md).
 
 ## Ownership and context
 

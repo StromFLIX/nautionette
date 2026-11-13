@@ -14,6 +14,7 @@ from ..events import bus
 from ..runs import restart_worker
 from ..schedules import ScheduleRequest, temporal_spec
 from ..security import require_user
+from ..workflow_control import workflow_lock
 from ..workflow_graph import definition_graph
 
 router = APIRouter(dependencies=[Depends(require_user)])
@@ -64,9 +65,26 @@ async def patch_workflow_settings(name: str, payload: dict[str, Any] = Body(...)
         if payload["chat_mode"] not in CHAT_MODES:
             raise HTTPException(status_code=400, detail="chat_mode must be 'same' or 'new'")
         fields["chat_mode"] = payload["chat_mode"]
-    updated = db.set_workflow_settings(name, fields)
-    bus.publish("workflow.settings", {"workflow": name, **fields})
-    return updated
+    async with workflow_lock(name):
+        # Save intent first. Manual/webhook starts fail closed immediately; the
+        # periodic reconciler repairs a lost Temporal reply or backend restart.
+        updated = db.set_workflow_settings(name, fields)
+        bus.publish("workflow.settings", {"workflow": name, **fields})
+        if "disabled" in fields:
+            try:
+                await temporal.set_workflow_disabled(name, updated["disabled"])
+            except Exception as exc:
+                raise HTTPException(
+                    503,
+                    detail={
+                        "message": "Settings saved, but schedule synchronization is pending. "
+                        "Temporal may still start scheduled work until synchronization succeeds. "
+                        "Retry when Temporal is ready; background recovery will also retry.",
+                        "settings": updated,
+                        "schedule_sync_pending": True,
+                    },
+                ) from exc
+        return updated
 
 
 @router.post("/api/workflows/{name}/deploy")
@@ -107,12 +125,15 @@ async def schedule_workflow(name: str, payload: ScheduleRequest) -> dict[str, An
     problems = input_problems(manifest.get("inputs"), payload.input)
     if problems:
         raise HTTPException(status_code=400, detail={"workflow": name, "input": problems})
-    result = await temporal.set_schedule(
-        name,
-        temporal_spec(payload),
-        payload.input,
-        timeout_minutes=manifest.get("timeout_minutes", 30),
-    )
+    async with workflow_lock(name):
+        if db.workflow_settings(name)["disabled"]:
+            raise HTTPException(409, f"{name} is disabled; enable it before changing its schedule")
+        result = await temporal.set_schedule(
+            name,
+            temporal_spec(payload),
+            payload.input,
+            timeout_minutes=manifest.get("timeout_minutes", 30),
+        )
     bus.publish(
         "workflow.scheduled",
         {"workflow": name, "frequency": payload.frequency, "timezone": payload.timezone},

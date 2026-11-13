@@ -58,6 +58,7 @@ async def test_a_finished_run_is_recorded_and_delivered(client, digest):
 async def test_a_failed_run_is_recorded_with_no_result(client, digest):
     workflow_id = await started(client, digest)
     digest.temporal.executions[workflow_id]["status"] = "FAILED"
+    digest.temporal.results[workflow_id] = None
 
     await runs_service.watch("url_digest", workflow_id)
 
@@ -170,6 +171,7 @@ async def test_a_temporal_that_cannot_answer_is_waited_out_not_given_up_on(clien
         return {**digest.temporal.executions[workflow_id], **answer}
 
     monkeypatch.setattr(live.temporal, "describe", describe)
+    digest.temporal.results[workflow_id] = None
     await runs_service.watch("url_digest", workflow_id)
     assert digest.db.list_runs("url_digest")[0]["status"] == "completed"
 
