@@ -96,11 +96,17 @@ Downloaded and inspected **all 32 SPDX/Grype JSON files** from successful baseli
 [CI 43498882494](https://github.com/StromFLIX/nautionette/actions/runs/43498882494),
 commit `94bb46f81440f84dd2007bd14ddf41791d20bec2`. This is the latest successful
 pre-update CI, not a claim about post-update images or a running deployment.
-The [complete finding ledger](dependency-audit-2026-11-13-images-baseline.json)
-contains original artifact/file SHA-256s, 16 full-inventory counts/fingerprints,
-and **1,720 distinct package/version/advisory/namespace/fix tuples**, linked to
-every original report. Multiple binaries/images can duplicate a finding. No
-severity, unfixed issue or generic CPE match was filtered out.
+The baseline contained **1,720** distinct package/version/advisory/namespace/fix
+tuples. After implementing the updates, all **40** JSON files from successful
+[CI 43509214606](https://github.com/StromFLIX/nautionette/actions/runs/43509214606)
+for `0b7439069038e793beb6f1d6b5588a13a66dee63` were downloaded and inspected too.
+The [complete finding ledger](dependency-audit-2026-11-13-images.json) now records
+that tested candidate's original artifact/file SHA-256s, **20** full-inventory
+counts/fingerprints and **1,884** distinct tuples. The larger scope includes the
+four previously unscanned maintenance/recovery images; it is not evidence that
+updating the application introduced all the additional findings. Multiple
+binaries/images can duplicate a finding. No severity, unfixed issue or generic
+CPE match was filtered out.
 
 The new `scripts/summarize_dependency_artifacts.py` reproduces this ledger from
 downloaded artifacts; it rejects empty/incomplete input and does not change any
@@ -109,6 +115,23 @@ builds/inventories/scans **Temporal admin tools, both legacy recovery images and
 the actual candidate-bundled maintenance controller**. These four contexts were
 missing from the earlier SBOM matrix. Regression tests require coverage of every
 repository Dockerfile and the deployment controller's exact source-bundle builder.
+
+The first candidate's actual PostgreSQL SBOM confirms **17.12** and gosu's embedded
+**Go 1.27.4**; its Grype report contains only the three distro BusyBox matches,
+with **GO-2026-6859 absent**. All 24 CI jobs succeeded, including real Chromium /
+WebKit, native ArtCraft, offline compiler/runtime isolation, PostgreSQL volume
+reuse/privilege drop, MaxIO and Temporal migration/replay/restore tests. This is
+image/test evidence for that SHA, not a substitute for the final pushed SHA's gates.
+
+Inspection also found a genuine scanner blind spot: the compiler image's initial
+SPDX listed only **31 OS/image entries**, not its Cargo dependencies. Syft's image
+defaults do not enable its directory-oriented Cargo.lock cataloger. CI now adds
+`+rust-cargo-lock-cataloger` through `.github/syft-miniapp.yaml`, **preserving all
+normal image catalogers**, and fails if any external locked crate is missing from
+the actual image SPDX. The image retains `/sdk/template/Cargo.lock` and its vendor
+sources. The ledger records the earlier incomplete scan honestly; the final CI's
+compiler SPDX/Grype artifacts provide the expanded Rust inventory. This inventories
+optional/vendored source too, not proof every crate is linked into every miniapp.
 
 Observed baseline runtimes include Python **3.13.18**, Node **24.22.3**, npm
 **11.21.2**, uv **0.13.7**, BusyBox's copied static binary **1.38.0**, distro
@@ -123,8 +146,8 @@ Every exact advisory/package/version/fix state is retained in the ledger. These
 are the reasons/next actions for its categories, not a vulnerability allowlist:
 
 - **gosu GO-2026-6859:** remedied in source by the verified Go 1.27.4 rebuild.
-  Check the new PostgreSQL SBOM/security report and existing-volume/non-root test,
-  not just the Dockerfile. PostgreSQL's floating **17-alpine** now resolves to
+  The candidate PostgreSQL SBOM/security report and existing-volume/non-root test
+  verified this, not just the Dockerfile. PostgreSQL's floating **17-alpine** now resolves to
   **17.12**, a same-major patch; data path and volume identity remain unchanged.
 - **Temporal 1.32.2 / admin-tools:** no newer stable upstream release exists.
   Its embedded Thrift 0.24.0 findings (**CVE-2026-63772/66055/82458/83663/94637**)
@@ -141,6 +164,30 @@ are the reasons/next actions for its categories, not a vulnerability allowlist:
   x/net 0.60.0 needs 0.62.0. Collector also reports x/crypto's
   **GO-2026-5932**; use the exact ledger rather than assuming a module is fixed
   by apk. Recheck upstream releases and new image artifacts next run.
+- **Maintenance controller's copied Docker/Buildx binaries:** the current
+  `docker:29-cli` is CLI **29.9.3** (embedded Go **1.27.4**) and Buildx **0.39.0**
+  (embedded Go **1.26.10**). Buildx 0.39.0 was independently checked as upstream's
+  latest stable release. Its module graph still includes Docker 28.5.2 and
+  go-archive 0.2.0. Reports include **GO-2026-4887/6859**, x/crypto's
+  **GO-2026-5932**, **GHSA-hfg8-hc9c-6c3h** (archive fix 0.3.0), and Docker's
+  **GHSA-pxq6-2prw-chj9 / GHSA-x86f-5xw2-fm2r / GHSA-rg2x-37c3-w2rh /
+  GHSA-vp62-88p7-qqf5** (no fixed versions in the reports). Track official
+  Docker/Buildx rebuilt releases, then verify the private candidate-bundle build
+  and maintenance-controller rehearsal. Do not binary-patch a privileged
+  deployment tool or substitute a Docker daemon upgrade (host daemon is not a
+  repository dependency). The controller remains deployment-only, stopped with
+  restart disabled after completion, with no public command API.
+- **Legacy recovery server/tools:** the newly scanned 1.29.7 images report older
+  Go 1.25.11/1.26.4 and numerous embedded SDK, Thrift, Echo, gRPC, JOSE, OTel,
+  crypto/net/text and stdlib findings. Every exact version/ID/fix is in the ledger
+  under `vulnerabilities-temporal-legacy` / `-tools-legacy`. They are intentionally
+  pinned to the original restore/minor-hop compatibility contract, not normal
+  deployed services. Do not replace them with a maintained server and invalidate
+  the old-schema restore test. Required next step is upstream backports for that
+  old line, or a separately rehearsed replacement/recovery protocol; continue
+  using only private disposable migration/recovery networks meanwhile. Some
+  embedded server pseudo-version CPE/advisory matches are not reliable evidence
+  of the actual server release, so retain rather than silently dismiss them.
 - **npm's own nested glob/minimatch:** **GHSA-3g3m-2fjr-6pw4** (glob 13.0.6 →
   14.0.2) and **GHSA-g3hv-75wg-m249** (minimatch 10.2.5 → 11.0.1) occur in
   the globally installed npm 11.21.2 tool bundle. This is separate from the
@@ -169,8 +216,9 @@ are the reasons/next actions for its categories, not a vulnerability allowlist:
 
 Report-only image scanning remains visible; application `npm audit` still blocks
 CI. No authentication, networks, credentials, volume retention or security gate
-was weakened. The baseline ledger is intentionally not relabelled as a final
-post-update vulnerability count: use this candidate's new CI artifacts for that.
+was weakened. The ledger identifies its exact tested image source SHA; use the
+final pushed candidate's new artifacts for final counts, especially the corrected
+Cargo inventory. It is not a claim about live deployments or other architectures.
 
 ## Current upstream pins and intentional holds
 

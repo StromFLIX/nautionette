@@ -7,9 +7,36 @@ from pathlib import Path
 import pytest
 import yaml
 
+from scripts.check_miniapp_sbom import verify as verify_cargo_inventory
 from scripts.summarize_dependency_artifacts import summarize
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_compiler_sbom_must_inventory_vendored_crates_not_only_os_packages():
+    lock = {"package": [{"name": "rusqlite", "version": "0.42.0", "source": "registry"}]}
+    sbom = {"packages": [{"name": "busybox", "versionInfo": "1.37.0"}]}
+    with pytest.raises(ValueError, match="missing locked crates"):
+        verify_cargo_inventory(sbom, lock)
+    sbom["packages"].append({"name": "rusqlite", "versionInfo": "0.41.1"})
+    with pytest.raises(ValueError, match="missing locked crates"):
+        verify_cargo_inventory(sbom, lock)
+    sbom["packages"].append({"name": "rusqlite", "versionInfo": "0.42.0"})
+    assert verify_cargo_inventory(sbom, lock) == 1
+    with pytest.raises(ValueError, match="no external crates"):
+        verify_cargo_inventory(sbom, {"package": []})
+
+
+def test_compiler_sbom_adds_cargo_cataloger_without_disabling_image_defaults():
+    config = yaml.safe_load((ROOT / ".github/syft-miniapp.yaml").read_text())
+    assert config == {"select-catalogers": ["+rust-cargo-lock-cataloger"]}
+    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    steps = workflow["jobs"]["agent-images"]["steps"]
+    inventory = next(
+        step for step in steps if step.get("name") == "Inventory mini-app compiler and vendored Rust crates"
+    )
+    assert inventory["with"]["config"] == ".github/syft-miniapp.yaml"
+    assert any("scripts.check_miniapp_sbom" in step.get("run", "") for step in steps)
 
 
 def test_artifact_summary_keeps_versions_fix_states_and_every_report(tmp_path):

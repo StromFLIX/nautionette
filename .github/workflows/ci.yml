@@ -482,9 +482,13 @@ jobs:
         uses: anchore/sbom-action@v0.24.3
         with:
           image: nautionette/miniapp-builder:dev
+          config: .github/syft-miniapp.yaml
           artifact-name: sbom-miniapp-builder.spdx.json
           output-file: sbom-miniapp-builder.spdx.json
           upload-release-assets: false
+
+      - name: Compiler image SBOM includes every vendored Cargo dependency
+        run: python3 -m scripts.check_miniapp_sbom sbom-miniapp-builder.spdx.json
 
       - uses: anchore/scan-action@v7.4.2
         with:

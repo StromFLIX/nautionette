@@ -1,180 +1,220 @@
 {
-  "run_url": "https://github.com/StromFLIX/nautionette/actions/runs/43498882494",
+  "run_url": "https://github.com/StromFLIX/nautionette/actions/runs/43509214606",
   "scope": "Observed CI images only; excludes deployments, other architectures and native artifact volumes",
   "artifacts": [
     {
       "artifact": "sbom-agentgateway.spdx.json",
       "file": "sbom-agentgateway.spdx.json",
-      "sha256": "d8ee7b422fc5f1fcdadbe825f161ba4934d07f82f06896151e171e65b458fecd"
+      "sha256": "fd1b25fb837b82e06cf399f34711711a5e44e8340f41c2aa1a3ddf65132c1351"
     },
     {
       "artifact": "sbom-backend.spdx.json",
       "file": "sbom-backend.spdx.json",
-      "sha256": "b7702f6e3dbc5017a4ca484b5bb27278df47840cff0a79c41ea396d72628ce08"
+      "sha256": "959b1672dbf4710938651c8b99a7e43a03a3786fcdae770a493bdfa050c23dfd"
     },
     {
       "artifact": "sbom-docker-broker.spdx.json",
       "file": "sbom-docker-broker.spdx.json",
-      "sha256": "33d8b9c4f61c5e65ae778cc1c29772604f2e5bc1328aa236ab60ce286b39e6ce"
+      "sha256": "5d1579a4e83a0a4ac1ae238df7fdb1df250e6a75dfa1601ddfb37a4c39e2408d"
     },
     {
       "artifact": "sbom-frontend.spdx.json",
       "file": "sbom-frontend.spdx.json",
-      "sha256": "18b99d17005365ce6ba0393a1476d495d907bf4af0d711a736243b5a1e41cbe7"
+      "sha256": "fae1a1de562adb0c29d37cb86b835e081ace536630c50bd0b76113214b036c94"
     },
     {
       "artifact": "sbom-maxio.spdx.json",
       "file": "sbom-maxio.spdx.json",
-      "sha256": "8bf7ded4b7c7825298c7e8a78a2953f87c4a1c7c7a2032a409bc4a826accd071"
+      "sha256": "b0c049549aaeef6cb8e19e0af9b6cb65fce04d4e8e1b057dfca6a11fdfae78fd"
     },
     {
       "artifact": "sbom-miniapp-builder.spdx.json",
       "file": "sbom-miniapp-builder.spdx.json",
-      "sha256": "9caf483e501a4c1dee4a72a8b8deed21a6afacbb1bf16eb869d4b9f9fc8088c9"
+      "sha256": "556f4ab7e6a07a34fa7a9ab0f889d0c5dadcbe757ef7f47c9cf5eb5105e071b6"
     },
     {
       "artifact": "sbom-otel-collector.spdx.json",
       "file": "sbom-otel-collector.spdx.json",
-      "sha256": "9b3df6bbb3c8fdcb650b623633bb1b487b861b9f1fbf7d3ee0518636310ddde1"
+      "sha256": "006e6af94089e781bc2bc8b72c4c44d1428a25d227697c202c2ca063a980cd96"
     },
     {
       "artifact": "sbom-pi-agent-default.spdx.json",
       "file": "sbom-pi-agent-default.spdx.json",
-      "sha256": "6570bbe344f12a0070dd361af2ef012e419000a40909bac4b463684022b7c588"
+      "sha256": "b5a4214e25b5ffb8dc02b079f9831515c589b3b9ec5ec93c58f0a05a295261e7"
     },
     {
       "artifact": "sbom-pi-base.spdx.json",
       "file": "sbom-pi-base.spdx.json",
-      "sha256": "3e935fc1d933e68810a1910be81225a4fe98e9caf46f816809f567377fa120f8"
+      "sha256": "a79a2ae0a718962882426649b846a23415e343812cc3222ec82aa900fac1d16c"
     },
     {
       "artifact": "sbom-postgres.spdx.json",
       "file": "sbom-postgres.spdx.json",
-      "sha256": "bde59946b2b67389b390d238d2b50a5b0f06d55460abcbf821fff1779b927491"
+      "sha256": "79deecc4b6deaf2659be22cece1107aece0bf05904cd813c9c85010c6c7483c3"
     },
     {
       "artifact": "sbom-stt.spdx.json",
       "file": "sbom-stt.spdx.json",
-      "sha256": "928ba73ebc7c1fae0be8cc61133a7af22f971b7fd4d44b66c8860456aafec7a8"
+      "sha256": "6c28a163e960430b3987d634b483a3d5fba4b7a12393e093b00c8aeca897ffa6"
+    },
+    {
+      "artifact": "sbom-temporal-controller.spdx.json",
+      "file": "sbom-temporal-controller.spdx.json",
+      "sha256": "a77e8df12b14018c92758f4aef8b5ae03a435f8ae3b1b7389fd7f2f76db8f2da"
+    },
+    {
+      "artifact": "sbom-temporal-legacy.spdx.json",
+      "file": "sbom-temporal-legacy.spdx.json",
+      "sha256": "8024354fea850029d20063f51df51288652dd4af5929aa0bb4e0e7396b2223b3"
+    },
+    {
+      "artifact": "sbom-temporal-tools-legacy.spdx.json",
+      "file": "sbom-temporal-tools-legacy.spdx.json",
+      "sha256": "a85fe40d29202581f7bab77e1b61d0935328bfa797a077324132f8f922bfdae6"
+    },
+    {
+      "artifact": "sbom-temporal-tools.spdx.json",
+      "file": "sbom-temporal-tools.spdx.json",
+      "sha256": "e9a1e22eb3f7faaa7efaba200807a68680c99e33528263f3c2c83b8fb87b6a37"
     },
     {
       "artifact": "sbom-temporal-ui.spdx.json",
       "file": "sbom-temporal-ui.spdx.json",
-      "sha256": "d3cec2e46da02a9253bdc13cc436f3d0c53642485f145068402dfada18f92a60"
+      "sha256": "f1e99e6932a42961433aa67f224ae7923ef11569d3c094204aa8849474f31e4a"
     },
     {
       "artifact": "sbom-temporal.spdx.json",
       "file": "sbom-temporal.spdx.json",
-      "sha256": "fd4dbbe0bc9e14b967f371f6b2be268e2dcf1846bff532174c2be7f67bd770b2"
+      "sha256": "e7705b3828dd8431035eba00412ee9c5f00cdf2c6272c4183e2661ff215e11e2"
     },
     {
       "artifact": "sbom-website.spdx.json",
       "file": "sbom-website.spdx.json",
-      "sha256": "368324f080c43a6802b6c53846635bcfe4dd4842388cd2996ee1571b831b1d3c"
+      "sha256": "5d7866d4db434a4295147626a2e387c19f34c10bb1777afd24e18f8566d1618e"
     },
     {
       "artifact": "sbom-worker.spdx.json",
       "file": "sbom-worker.spdx.json",
-      "sha256": "0606a0158e607146e190703b3c1456613618b6073d0c806519bfe27b350ec15d"
+      "sha256": "cb329f47706162b2f7116827f29518a9d6b78c764c3341d6b7579865030f8c31"
     },
     {
       "artifact": "sbom-workflow-mcp.spdx.json",
       "file": "sbom-workflow-mcp.spdx.json",
-      "sha256": "244b5bf16e913279d6d6eb058f03d952efd9388429fe93bcea565801a08f423e"
+      "sha256": "1dc5e3e72f9dc59aeb865138aee67d634cf5b669c8c55f70fe4bccca1796f964"
     },
     {
       "artifact": "vulnerabilities-agent-images",
       "file": "vulnerabilities-miniapp-builder.json",
-      "sha256": "11fde8acb7dd1b76a568159963e69965e56466e5c25b629b42649f6c7a65c79a"
+      "sha256": "568ee34fcec2a21ac1749b091dcfbc89828aa47a1d0ff2349ca89e7740f93351"
     },
     {
       "artifact": "vulnerabilities-agent-images",
       "file": "vulnerabilities-pi-agent-default.json",
-      "sha256": "f68e927674be6e2ecd5a8c00b2f82afe8baed84802b8d1a0d4b6cc34819f1572"
+      "sha256": "ae20b114c0b2afdaeeccb8fa1d8a9b722097f54261c5319b21cffd5bc97a036d"
     },
     {
       "artifact": "vulnerabilities-agent-images",
       "file": "vulnerabilities-pi-base.json",
-      "sha256": "c4d594fe62f9228bc180e12d716706810e856f17e3b7d08767440050b6b727a4"
+      "sha256": "f80d90748fd3eea0172472c40a4849c914ec57046cdf6b300f740d618896177c"
     },
     {
       "artifact": "vulnerabilities-agentgateway",
       "file": "vulnerabilities.json",
-      "sha256": "7209a6ff7a625adc5eda7755c6386d732ac211b6dd3b34e0f2da769b290e935d"
+      "sha256": "8595d34544fe0a6f8f66186672aa6dc9bd76cb9599ec4f5c236b75623ab8085b"
     },
     {
       "artifact": "vulnerabilities-backend",
       "file": "vulnerabilities.json",
-      "sha256": "7224faaff969265c74d47647767e11ba055ea28a1ccd49932ebac5a12d903c98"
+      "sha256": "399ad3c9d218b60bc6c82826dd7e9be2465e8178b2ba577beb06dc786365e50e"
     },
     {
       "artifact": "vulnerabilities-docker-broker",
       "file": "vulnerabilities.json",
-      "sha256": "256ee1d09d7a06c0377de042106293bece32fbdb638f09cbf8b746a2f447a735"
+      "sha256": "51ad9bd61081635fe368b0f30f6c6b1f1194d7d3128c5d8adcc6ceb08a7689bd"
     },
     {
       "artifact": "vulnerabilities-frontend",
       "file": "vulnerabilities.json",
-      "sha256": "deeb93416b86d131fbc487bb788d1c20cdb8caa28c2d753bce4599469ef5eba8"
+      "sha256": "ff52758346e39f5cb29aa703b126e580aa9102ef3aeb3022eb269b43554be46b"
     },
     {
       "artifact": "vulnerabilities-maxio",
       "file": "vulnerabilities.json",
-      "sha256": "98702bf147f09249a966a47ef9693321606c786ed85a530ad64449c1536479f6"
+      "sha256": "b398ee29e6fce0f8fa32cfa0b8a85f9d3d569e15970c584ce5ae0ab5484ad4a4"
     },
     {
       "artifact": "vulnerabilities-otel-collector",
       "file": "vulnerabilities.json",
-      "sha256": "1cde20bb59cad74380a21545b9f17d676a3199f79328c9100bfee6f9cab92211"
+      "sha256": "cc149dbbbcf7a315b36a448b57e20ff1b60237c299d508632d06da8d93a8a56f"
     },
     {
       "artifact": "vulnerabilities-postgres",
       "file": "vulnerabilities.json",
-      "sha256": "d481c1b74b9a2f00e5ebe15b4629225eaa866a31fb67b0701d944122bca87823"
+      "sha256": "5882048d30c5ff0218a934a2a7d18601aa4c69f7353fd106436117c883d07da5"
     },
     {
       "artifact": "vulnerabilities-stt",
       "file": "vulnerabilities.json",
-      "sha256": "7f44b576052e6330fde041dd8547f25bb795559a1e01a59a6eb5318af1332dfc"
+      "sha256": "253518c2c584b3614c4e3aa0988ecf83b41b1a76bc744e71051b9c23f481850d"
     },
     {
       "artifact": "vulnerabilities-temporal",
       "file": "vulnerabilities.json",
-      "sha256": "0db7bac89e82dbb217faacfeec9e379f3639a026701bd277c270378fba05193b"
+      "sha256": "5d1b989ec97dda479074b243ac64d826bc960dd262e36fc02fff4a45ebff2075"
+    },
+    {
+      "artifact": "vulnerabilities-temporal-controller",
+      "file": "vulnerabilities.json",
+      "sha256": "056cb97f884098ae94b1ab676fd5560e45867fe54bb433c02a44598c09ec05e4"
+    },
+    {
+      "artifact": "vulnerabilities-temporal-legacy",
+      "file": "vulnerabilities.json",
+      "sha256": "669199bc93040172ad709311d39c869c21f9d5c8d0b45693fcae77a18ce60c64"
+    },
+    {
+      "artifact": "vulnerabilities-temporal-tools",
+      "file": "vulnerabilities.json",
+      "sha256": "56d0a7a2d82dfc84a79096f1b03be73714ee9ad3fdd86d4b1125c2242b50ff51"
+    },
+    {
+      "artifact": "vulnerabilities-temporal-tools-legacy",
+      "file": "vulnerabilities.json",
+      "sha256": "49ededaf782c577848830229040dfa43773da1d0e79c2c41f71c8c8b8b159ed8"
     },
     {
       "artifact": "vulnerabilities-temporal-ui",
       "file": "vulnerabilities.json",
-      "sha256": "1525c4b8b18edbd721383774c29c6b495e3f8a399bc95e9d30d020b4eeaf6e4e"
+      "sha256": "896e4f8f651ad88dea77e05bd0b8466d90496282cb88d7004413743af484fa7b"
     },
     {
       "artifact": "vulnerabilities-website",
       "file": "vulnerabilities.json",
-      "sha256": "075b7934ef0eabbef133c0d54565397d3961b489a0751752ff56c354bddb302d"
+      "sha256": "4c6e0b5a6e309294e3502716b9837c414055bf0765dbe3fb20555672e936ad1f"
     },
     {
       "artifact": "vulnerabilities-worker",
       "file": "vulnerabilities.json",
-      "sha256": "b42eadba39110adea728d52db1f7548d4d035bf15845b4eacaba3ae9fe814073"
+      "sha256": "082b7c2d6339f5cc030efbe71fa5a1c619b50cabe92e0d2ad19038de7b4b55e9"
     },
     {
       "artifact": "vulnerabilities-workflow-mcp",
       "file": "vulnerabilities.json",
-      "sha256": "c405b300b6b1a38658b15aeb8d53da49b7e41a3b28ee9b5475c88e3cb9d0114b"
+      "sha256": "afbe02ded43fa3b27a515b9f96a40c2eaabf62546fbac2e83020fa00dfeebae8"
     }
   ],
   "inventories": {
     "sbom-agentgateway.spdx.json": {
       "package_count": 1270,
-      "packages_sha256": "15cf8a1b2c2465a9a43e8d294edc6f2483868f8f57311702bcbe79bcfc08cdfe"
+      "packages_sha256": "4540dfa7e2f736f64e923970123f21a86e28443e348ce808c889ed35c8a5501c"
     },
     "sbom-backend.spdx.json": {
       "package_count": 1331,
-      "packages_sha256": "f1183316dd09a1a0f9819ebc8ddc00ba41d542df21d6ad08c0339dcf65d1035f"
+      "packages_sha256": "63c147400e8fc96dd6d99d4e2aed6a2bd3e3cda8c8891897f64c0ba939beb4ef"
     },
     "sbom-docker-broker.spdx.json": {
       "package_count": 1240,
-      "packages_sha256": "2327ce469050dd9e65a21a7234042cd5b1f58d1d2e2d6583d37bd69b1221438b"
+      "packages_sha256": "68db892545738de78271796b2910902585084ec1a529d631dd5bc26a44deb84c"
     },
     "sbom-frontend.spdx.json": {
       "package_count": 73,
@@ -194,19 +234,35 @@
     },
     "sbom-pi-agent-default.spdx.json": {
       "package_count": 1587,
-      "packages_sha256": "e3978c21ccd8979b306193672b77c9602ffc44148bd5d84aa157d39a8aac0939"
+      "packages_sha256": "0ac21d908ec41f85fd3e543631ed0f181ee62db6105f84f132f1941aff0f782b"
     },
     "sbom-pi-base.spdx.json": {
       "package_count": 1587,
-      "packages_sha256": "0c727dbbb141c1d5789c3e600e6dcdd65070bf4f7c480f62db1f8de7082dc0ec"
+      "packages_sha256": "7e4045c1e5825d138388aebe4a2bf3ee5f1c02ebfabfd727148338991f6c34e0"
     },
     "sbom-postgres.spdx.json": {
       "package_count": 51,
-      "packages_sha256": "52a33dd2f00b7ddfa0bdbd3ec479389b8f13ad7d8f1ca6e0be395594f73289fb"
+      "packages_sha256": "06e4ae4a3112035a5ebe9512185e34c6a2bb69996b69003215372306c297a55a"
     },
     "sbom-stt.spdx.json": {
       "package_count": 135,
-      "packages_sha256": "d8517e2866487f731c8e9f27ae42059b63f75503eac3834c532b8876361ca158"
+      "packages_sha256": "1033cdd20edf43265af0eb83668be68b3820e60f0cf7c004b457cc8b033fd3dd"
+    },
+    "sbom-temporal-controller.spdx.json": {
+      "package_count": 319,
+      "packages_sha256": "6e300f37acc54c388309e21f813906c4cc52e33ab6ab6b8fc5c9ceb2681755f7"
+    },
+    "sbom-temporal-legacy.spdx.json": {
+      "package_count": 730,
+      "packages_sha256": "a83ca5c07380254b1cae38ca548a194a0b5d1412a1498af3ce833a8c3c3625ae"
+    },
+    "sbom-temporal-tools-legacy.spdx.json": {
+      "package_count": 734,
+      "packages_sha256": "5b00358a8fd745b4a7097d7011ff93c909c809f2bc36a59e1e2497e498419003"
+    },
+    "sbom-temporal-tools.spdx.json": {
+      "package_count": 672,
+      "packages_sha256": "25b1db5d3edf8031245a6f57301f820c4fb1d3a35abb0fccb0178cfe046f6e73"
     },
     "sbom-temporal-ui.spdx.json": {
       "package_count": 82,
@@ -222,11 +278,11 @@
     },
     "sbom-worker.spdx.json": {
       "package_count": 1214,
-      "packages_sha256": "42916a7027bfdd658cfb9a34d63eb82f82c9d37ae9ae4de8d8de27f14ce8b172"
+      "packages_sha256": "8d638503628ab8b6d850ff71d4e23c6552cd9087962a8cc8ec819c8977a483d0"
     },
     "sbom-workflow-mcp.spdx.json": {
       "package_count": 1266,
-      "packages_sha256": "7852511bfe76411fc4f0f40b88951d878a6f4cb10b55eb6887670f0dfbc128e8"
+      "packages_sha256": "2f59032f78113a0ae6b1b5c770cd5bc932e651d9ad2491a8c81d2cc4dad27320"
     }
   },
   "findings": [
@@ -246,6 +302,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -3624,6 +3681,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -3644,6 +3702,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -3664,6 +3723,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -3684,6 +3744,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -3704,6 +3765,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -3724,6 +3786,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -3744,6 +3807,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -3764,6 +3828,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -3861,6 +3926,20 @@
     },
     {
       "package": "busybox",
+      "version": "1.37.0-r30",
+      "type": "apk",
+      "advisory": "CVE-2025-60876",
+      "severity": "Medium",
+      "namespace": "nvd:cpe",
+      "fix_state": "",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "busybox",
       "version": "1.37.0-r31",
       "type": "apk",
       "advisory": "CVE-2025-60876",
@@ -3871,6 +3950,7 @@
       "reports": [
         "vulnerabilities-frontend/vulnerabilities.json",
         "vulnerabilities-postgres/vulnerabilities.json",
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal-ui/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json",
         "vulnerabilities-website/vulnerabilities.json"
@@ -3933,6 +4013,20 @@
     },
     {
       "package": "busybox-binsh",
+      "version": "1.37.0-r30",
+      "type": "apk",
+      "advisory": "CVE-2025-60876",
+      "severity": "Medium",
+      "namespace": "nvd:cpe",
+      "fix_state": "",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "busybox-binsh",
       "version": "1.37.0-r31",
       "type": "apk",
       "advisory": "CVE-2025-60876",
@@ -3943,6 +4037,7 @@
       "reports": [
         "vulnerabilities-frontend/vulnerabilities.json",
         "vulnerabilities-postgres/vulnerabilities.json",
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal-ui/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json",
         "vulnerabilities-website/vulnerabilities.json"
@@ -3978,6 +4073,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -3998,6 +4094,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -4018,6 +4115,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -4038,6 +4136,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -4058,6 +4157,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -4772,6 +4872,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -4792,6 +4893,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -4825,8 +4927,25 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "filippo.io/edwards25519",
+      "version": "v1.1.0",
+      "type": "go-module",
+      "advisory": "GHSA-fw7p-63qq-7hpr",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.1.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -5013,6 +5132,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5033,6 +5153,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5053,6 +5174,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5073,6 +5195,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5093,6 +5216,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5113,6 +5237,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5467,6 +5592,214 @@
     },
     {
       "package": "github.com/apache/thrift",
+      "version": "v0.17.0",
+      "type": "go-module",
+      "advisory": "CVE-2026-63772",
+      "severity": "High",
+      "namespace": "nvd:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.25.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.17.0",
+      "type": "go-module",
+      "advisory": "CVE-2026-66055",
+      "severity": "High",
+      "namespace": "nvd:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.25.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.17.0",
+      "type": "go-module",
+      "advisory": "CVE-2026-82458",
+      "severity": "High",
+      "namespace": "nvd:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.25.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.17.0",
+      "type": "go-module",
+      "advisory": "CVE-2026-83663",
+      "severity": "High",
+      "namespace": "nvd:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.25.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.17.0",
+      "type": "go-module",
+      "advisory": "CVE-2026-94637",
+      "severity": "High",
+      "namespace": "nvd:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.25.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.17.0",
+      "type": "go-module",
+      "advisory": "GHSA-8wv5-x4w7-5gww",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.24.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.17.0",
+      "type": "go-module",
+      "advisory": "GHSA-wf45-q9ch-q8gh",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.23.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.23.0",
+      "type": "go-module",
+      "advisory": "CVE-2026-63772",
+      "severity": "High",
+      "namespace": "nvd:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.25.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.23.0",
+      "type": "go-module",
+      "advisory": "CVE-2026-66055",
+      "severity": "High",
+      "namespace": "nvd:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.25.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.23.0",
+      "type": "go-module",
+      "advisory": "CVE-2026-82458",
+      "severity": "High",
+      "namespace": "nvd:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.25.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.23.0",
+      "type": "go-module",
+      "advisory": "CVE-2026-83663",
+      "severity": "High",
+      "namespace": "nvd:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.25.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.23.0",
+      "type": "go-module",
+      "advisory": "CVE-2026-94637",
+      "severity": "High",
+      "namespace": "nvd:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.25.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
+      "version": "v0.23.0",
+      "type": "go-module",
+      "advisory": "GHSA-8wv5-x4w7-5gww",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.24.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/apache/thrift",
       "version": "v0.24.0",
       "type": "go-module",
       "advisory": "CVE-2026-63772",
@@ -5477,6 +5810,7 @@
         "0.25.0"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
       ]
     },
@@ -5492,6 +5826,7 @@
         "0.25.0"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
       ]
     },
@@ -5507,6 +5842,7 @@
         "0.25.0"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
       ]
     },
@@ -5522,6 +5858,7 @@
         "0.25.0"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
       ]
     },
@@ -5537,7 +5874,201 @@
         "0.25.0"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/aws/aws-sdk-go-v2/service/lambda",
+      "version": "v1.88.0",
+      "type": "go-module",
+      "advisory": "GHSA-xmrv-pmrh-hhx2",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.88.5"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/docker/docker",
+      "version": "v28.5.2+incompatible",
+      "type": "go-module",
+      "advisory": "GHSA-pxq6-2prw-chj9",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "not-fixed",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-controller/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/docker/docker",
+      "version": "v28.5.2+incompatible",
+      "type": "go-module",
+      "advisory": "GHSA-rg2x-37c3-w2rh",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "not-fixed",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-controller/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/docker/docker",
+      "version": "v28.5.2+incompatible",
+      "type": "go-module",
+      "advisory": "GHSA-vp62-88p7-qqf5",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "not-fixed",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-controller/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/docker/docker",
+      "version": "v28.5.2+incompatible",
+      "type": "go-module",
+      "advisory": "GHSA-x86f-5xw2-fm2r",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "not-fixed",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-controller/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/docker/docker",
+      "version": "v28.5.2+incompatible",
+      "type": "go-module",
+      "advisory": "GO-2026-4887",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-controller/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/go-jose/go-jose/v4",
+      "version": "v4.1.4",
+      "type": "go-module",
+      "advisory": "GHSA-4w3g-jfj2-cw2q",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.1.5"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/go-jose/go-jose/v4",
+      "version": "v4.1.4",
+      "type": "go-module",
+      "advisory": "GHSA-mgcc-cww5-fp2q",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.1.6"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/go-jose/go-jose/v4",
+      "version": "v4.1.4",
+      "type": "go-module",
+      "advisory": "GHSA-vvm8-gf78-28g4",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.1.5"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/gomarkdown/markdown",
+      "version": "v0.0.0-20260411013819-759bbc3e3207",
+      "type": "go-module",
+      "advisory": "GHSA-cv23-7vc5-jfh7",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.0.0-20260724235538-61af6e1e6971"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/gorilla/websocket",
+      "version": "v1.5.0",
+      "type": "go-module",
+      "advisory": "GHSA-w67g-5rqw-f597",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.5.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/klauspost/compress",
+      "version": "v1.18.0",
+      "type": "go-module",
+      "advisory": "GHSA-259r-337f-4rfw",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.18.7"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/klauspost/compress",
+      "version": "v1.18.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6865",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.20.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -5552,7 +6083,228 @@
         "1.20.2"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-23wf-92cp-8pcj",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.15.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-246p-cpwv-v3jq",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "not-fixed",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-2ffq-g2xg-c22p",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.16.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-375p-5qhx-8wq4",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.16.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-3pmx-cf9f-34xr",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.16.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-99jh-6h7p-pp36",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "not-fixed",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-cxf3-9h37-7rr8",
+      "severity": "Critical",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.16.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-f48p-c9v4-h7xv",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.16.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-h7wr-284f-5qvc",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.16.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-h9g5-28mm-hx3g",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.16.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-r7w9-592q-9vg4",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.16.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-v753-g4cw-jm48",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.16.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-vfp3-v2gw-7wfq",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.15.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/labstack/echo/v4",
+      "version": "v4.13.4",
+      "type": "go-module",
+      "advisory": "GHSA-xwq5-6cqp-vx96",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "4.15.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -5565,6 +6317,7 @@
       "fix_state": "not-fixed",
       "fixed_versions": [],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal-ui/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
       ]
@@ -5579,8 +6332,24 @@
       "fix_state": "not-fixed",
       "fixed_versions": [],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal-ui/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "github.com/moby/go-archive",
+      "version": "v0.2.0",
+      "type": "go-module",
+      "advisory": "GHSA-hfg8-hc9c-6c3h",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.3.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-controller/vulnerabilities.json"
       ]
     },
     {
@@ -5601,6 +6370,71 @@
       ]
     },
     {
+      "package": "go.opentelemetry.io/otel",
+      "version": "v1.43.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5158",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.42.0",
+        "1.44.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
+      "version": "v1.11.2",
+      "type": "go-module",
+      "advisory": "GHSA-8wmf-6v46-5gfg",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.45.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
+      "version": "v1.34.0",
+      "type": "go-module",
+      "advisory": "GHSA-8wmf-6v46-5gfg",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.45.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
+      "version": "v1.35.0",
+      "type": "go-module",
+      "advisory": "GHSA-8wmf-6v46-5gfg",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.45.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
       "package": "go.opentelemetry.io/otel/exporters/otlp/otlptrace",
       "version": "v1.43.0",
       "type": "go-module",
@@ -5612,7 +6446,56 @@
         "1.45.0"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc",
+      "version": "v1.11.2",
+      "type": "go-module",
+      "advisory": "GHSA-8wmf-6v46-5gfg",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.45.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc",
+      "version": "v1.34.0",
+      "type": "go-module",
+      "advisory": "GHSA-8wmf-6v46-5gfg",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.45.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc",
+      "version": "v1.35.0",
+      "type": "go-module",
+      "advisory": "GHSA-8wmf-6v46-5gfg",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.45.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -5627,7 +6510,56 @@
         "1.45.0"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.opentelemetry.io/otel/sdk",
+      "version": "v1.11.2",
+      "type": "go-module",
+      "advisory": "GHSA-8wmf-6v46-5gfg",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.45.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.opentelemetry.io/otel/sdk",
+      "version": "v1.11.2",
+      "type": "go-module",
+      "advisory": "GHSA-p9f8-wvj8-2fg8",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.33.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.opentelemetry.io/otel/sdk",
+      "version": "v1.43.0",
+      "type": "go-module",
+      "advisory": "GHSA-8wmf-6v46-5gfg",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.45.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -5642,7 +6574,284 @@
         "1.45.0"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/api",
+      "version": "v1.18.1",
+      "type": "go-module",
+      "advisory": "GHSA-q9w6-cwj4-gf4p",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.44.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v0.0.0-20260611151627-0f82498d9dd5",
+      "type": "go-module",
+      "advisory": "GHSA-gm2g-2xr9-pxxj",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.20.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v0.0.0-20260611151627-0f82498d9dd5",
+      "type": "go-module",
+      "advisory": "GHSA-hmhp-gh8m-c8xp",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.27.4"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v0.0.0-20260611151627-0f82498d9dd5",
+      "type": "go-module",
+      "advisory": "GHSA-p768-c3pr-6459",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v0.0.0-20260611151627-0f82498d9dd5",
+      "type": "go-module",
+      "advisory": "GHSA-q98v-9f9w-f49q",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.28.4"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v0.0.0-20260611151627-0f82498d9dd5",
+      "type": "go-module",
+      "advisory": "GHSA-xpg8-3hhp-p7w8",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.29.5"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v0.0.0-20260611151627-0f82498d9dd5",
+      "type": "go-module",
+      "advisory": "GO-2024-2689",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.20.5",
+        "1.21.6",
+        "1.22.7"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v1.18.1-0.20230217005328-b313b7f58641",
+      "type": "go-module",
+      "advisory": "GHSA-gm2g-2xr9-pxxj",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.20.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v1.18.1-0.20230217005328-b313b7f58641",
+      "type": "go-module",
+      "advisory": "GHSA-hmhp-gh8m-c8xp",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.27.4"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v1.18.1-0.20230217005328-b313b7f58641",
+      "type": "go-module",
+      "advisory": "GHSA-p768-c3pr-6459",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v1.18.1-0.20230217005328-b313b7f58641",
+      "type": "go-module",
+      "advisory": "GHSA-q98v-9f9w-f49q",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.28.4"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v1.18.1-0.20230217005328-b313b7f58641",
+      "type": "go-module",
+      "advisory": "GHSA-xpg8-3hhp-p7w8",
+      "severity": "Low",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.29.5"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "go.temporal.io/server",
+      "version": "v1.18.1-0.20230217005328-b313b7f58641",
+      "type": "go-module",
+      "advisory": "GO-2024-2689",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.20.5",
+        "1.21.6",
+        "1.22.7"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/crypto",
+      "version": "v0.52.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5932",
+      "severity": "Unknown",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.58.1-0.20261009181718-2f1f834330b2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/crypto",
+      "version": "v0.52.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6303",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.55.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/crypto",
+      "version": "v0.52.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6354",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.56.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/crypto",
+      "version": "v0.52.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6355",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.56.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -5657,6 +6866,7 @@
         "0.58.1-0.20261009181718-2f1f834330b2"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal-ui/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
       ]
@@ -5674,8 +6884,442 @@
       ],
       "reports": [
         "vulnerabilities-otel-collector/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal-ui/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GHSA-5cv4-jp36-h3mw",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.55.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GHSA-qxp5-gwg8-xv66",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.36.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GHSA-vvgc-356p-c3xw",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.38.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-4440",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.45.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-4441",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.45.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-4918",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.53.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5025",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.55.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5026",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.55.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5027",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.55.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5029",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.55.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5030",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.55.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5942",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.56.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6603",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.60.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6610",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.60.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6611",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.60.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6612",
+      "severity": "Critical",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.60.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6617",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.60.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6860",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.62.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.35.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6866",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.62.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.55.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5942",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.56.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.55.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6603",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.60.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.55.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6610",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.60.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.55.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6611",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.60.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.55.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6612",
+      "severity": "Critical",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.60.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.55.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6617",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.60.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.55.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6860",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.62.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/net",
+      "version": "v0.55.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6866",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.62.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -5690,6 +7334,7 @@
         "0.62.0"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal-ui/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
       ]
@@ -5706,8 +7351,249 @@
         "0.62.0"
       ],
       "reports": [
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal-ui/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/oauth2",
+      "version": "v0.7.0",
+      "type": "go-module",
+      "advisory": "GHSA-6v2p-p543-phr9",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.27.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/sys",
+      "version": "v0.30.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5024",
+      "severity": "Low",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.44.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/text",
+      "version": "v0.22.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5970",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.39.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/text",
+      "version": "v0.22.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6629",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.41.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/text",
+      "version": "v0.37.0",
+      "type": "go-module",
+      "advisory": "GO-2026-5970",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.39.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "golang.org/x/text",
+      "version": "v0.37.0",
+      "type": "go-module",
+      "advisory": "GO-2026-6629",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.41.0"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "google.golang.org/grpc",
+      "version": "v1.56.3",
+      "type": "go-module",
+      "advisory": "GHSA-2v4p-qf9q-27wj",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.82.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "google.golang.org/grpc",
+      "version": "v1.56.3",
+      "type": "go-module",
+      "advisory": "GHSA-hrxh-6v49-42gf",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.82.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "google.golang.org/grpc",
+      "version": "v1.56.3",
+      "type": "go-module",
+      "advisory": "GHSA-p77j-4mvh-x3m3",
+      "severity": "Critical",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.79.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "google.golang.org/grpc",
+      "version": "v1.56.3",
+      "type": "go-module",
+      "advisory": "GHSA-qc2q-p7wx-3px3",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.83.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "google.golang.org/grpc",
+      "version": "v1.56.3",
+      "type": "go-module",
+      "advisory": "GHSA-vp52-pcj8-j9qc",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.83.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "google.golang.org/grpc",
+      "version": "v1.79.3",
+      "type": "go-module",
+      "advisory": "GHSA-2v4p-qf9q-27wj",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.82.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "google.golang.org/grpc",
+      "version": "v1.79.3",
+      "type": "go-module",
+      "advisory": "GHSA-hrxh-6v49-42gf",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.82.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "google.golang.org/grpc",
+      "version": "v1.79.3",
+      "type": "go-module",
+      "advisory": "GHSA-qc2q-p7wx-3px3",
+      "severity": "Medium",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.83.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "google.golang.org/grpc",
+      "version": "v1.79.3",
+      "type": "go-module",
+      "advisory": "GHSA-vp52-pcj8-j9qc",
+      "severity": "High",
+      "namespace": "github:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.83.1"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -5726,6 +7612,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5746,6 +7633,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5766,6 +7654,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5786,6 +7675,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5806,6 +7696,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5826,6 +7717,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5846,6 +7738,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5866,6 +7759,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5886,6 +7780,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -5932,6 +7827,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -6273,6 +8169,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7692,6 +9589,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7712,6 +9610,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7732,6 +9631,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7752,6 +9652,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7772,6 +9673,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7792,6 +9694,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7812,6 +9715,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7832,6 +9736,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7930,6 +9835,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7963,6 +9869,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -7983,6 +9890,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8003,6 +9911,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8023,6 +9932,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8043,6 +9953,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8063,6 +9974,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8083,6 +9995,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8103,6 +10016,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8123,6 +10037,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8143,6 +10058,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8163,6 +10079,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8183,6 +10100,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8203,6 +10121,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8223,6 +10142,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8243,6 +10163,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8263,6 +10184,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8283,6 +10205,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8303,6 +10226,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8323,6 +10247,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8343,6 +10268,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8363,6 +10289,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8383,6 +10310,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8403,6 +10331,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8423,6 +10352,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8443,6 +10373,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -8463,6 +10394,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9159,6 +11091,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9179,6 +11112,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9199,6 +11133,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9219,6 +11154,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9239,6 +11175,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9259,6 +11196,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9279,6 +11217,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9299,6 +11238,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9319,6 +11259,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9339,6 +11280,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9359,6 +11301,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9379,6 +11322,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9399,6 +11343,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9419,6 +11364,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9439,6 +11385,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9459,6 +11406,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9479,6 +11427,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9499,6 +11448,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9519,6 +11469,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9539,6 +11490,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9559,6 +11511,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9579,6 +11532,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9599,6 +11553,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9619,6 +11574,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9639,6 +11595,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -9659,6 +11616,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -14497,6 +16455,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -14517,6 +16476,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -14537,6 +16497,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -14557,6 +16518,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -14577,6 +16539,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -14597,6 +16560,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -14695,6 +16659,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -14715,6 +16680,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -15099,6 +17065,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -15119,6 +17086,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -15139,6 +17107,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -15159,6 +17128,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -15179,6 +17149,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -15199,6 +17170,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18249,6 +20221,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18269,6 +20242,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18289,6 +20263,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18309,6 +20284,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18329,6 +20305,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18349,6 +20326,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18369,6 +20347,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18389,6 +20368,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18484,6 +20464,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18501,6 +20482,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18518,6 +20500,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18677,6 +20660,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18697,6 +20681,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18717,6 +20702,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18737,6 +20723,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18770,6 +20757,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18790,6 +20778,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18823,6 +20812,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18843,6 +20833,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18876,6 +20867,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -18896,6 +20888,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19704,6 +21697,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19724,6 +21718,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19744,6 +21739,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19764,6 +21760,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19784,6 +21781,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19804,6 +21802,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19824,6 +21823,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19844,6 +21844,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19941,6 +21942,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19960,6 +21962,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19979,6 +21982,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -19998,6 +22002,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20017,6 +22022,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20036,6 +22042,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20055,6 +22062,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20074,6 +22082,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20093,6 +22102,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20112,6 +22122,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20131,6 +22142,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20150,6 +22162,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20169,6 +22182,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20188,6 +22202,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20207,6 +22222,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20226,6 +22242,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20245,6 +22262,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20264,6 +22282,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20283,6 +22302,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20485,6 +22505,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20505,6 +22526,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20525,6 +22547,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20545,6 +22568,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20565,6 +22589,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20585,6 +22610,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20754,6 +22780,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20774,6 +22801,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20794,6 +22822,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20814,6 +22843,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20834,6 +22864,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20854,6 +22885,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20952,6 +22984,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20972,6 +23005,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -20992,6 +23026,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21012,6 +23047,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21032,6 +23068,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21052,6 +23089,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21072,6 +23110,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21183,6 +23222,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21203,6 +23243,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21223,6 +23264,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21243,6 +23285,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21541,6 +23584,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21561,6 +23605,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21581,6 +23626,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21601,6 +23647,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21621,6 +23668,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21641,6 +23689,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21661,6 +23710,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21772,6 +23822,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21792,6 +23843,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21812,6 +23864,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21832,6 +23885,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21852,6 +23906,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21872,6 +23927,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21892,6 +23948,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -21912,6 +23969,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22500,6 +24558,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22520,6 +24579,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22661,6 +24721,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22681,6 +24742,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22701,6 +24763,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22721,6 +24784,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22741,6 +24805,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22761,6 +24826,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22781,6 +24847,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22801,6 +24868,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22899,6 +24967,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22919,6 +24988,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22939,6 +25009,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -22985,6 +25056,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23005,6 +25077,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23025,6 +25098,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23053,6 +25127,20 @@
       "fixed_versions": [],
       "reports": [
         "vulnerabilities-agentgateway/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "nghttp2-libs",
+      "version": "1.69.0-r0",
+      "type": "apk",
+      "advisory": "CVE-2026-58055",
+      "severity": "Medium",
+      "namespace": "nvd:cpe",
+      "fix_state": "",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -23071,6 +25159,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23091,6 +25180,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23111,6 +25201,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23131,6 +25222,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23151,6 +25243,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23171,6 +25264,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23321,6 +25415,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23341,6 +25436,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23560,6 +25656,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23580,6 +25677,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23600,6 +25698,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23620,6 +25719,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23640,6 +25740,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23788,6 +25889,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23809,6 +25911,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -23830,6 +25933,7 @@
         "vulnerabilities-backend/vulnerabilities.json",
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24395,6 +26499,20 @@
     },
     {
       "package": "ssl_client",
+      "version": "1.37.0-r30",
+      "type": "apk",
+      "advisory": "CVE-2025-60876",
+      "severity": "Medium",
+      "namespace": "nvd:cpe",
+      "fix_state": "",
+      "fixed_versions": [],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "ssl_client",
       "version": "1.37.0-r31",
       "type": "apk",
       "advisory": "CVE-2025-60876",
@@ -24405,9 +26523,422 @@
       "reports": [
         "vulnerabilities-frontend/vulnerabilities.json",
         "vulnerabilities-postgres/vulnerabilities.json",
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal-ui/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json",
         "vulnerabilities-website/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-4970",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.12",
+        "1.26.5",
+        "1.27.0-rc.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-5026",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-5856",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.12",
+        "1.26.5",
+        "1.27.0-rc.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-5972",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6088",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6089",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6090",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6091",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6218",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6599",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6600",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6603",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6604",
+      "severity": "Critical",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6605",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6607",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6608",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6609",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6610",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6611",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6612",
+      "severity": "Critical",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6613",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6617",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6809",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.10",
+        "1.27.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.25.11",
+      "type": "go-module",
+      "advisory": "GO-2026-6859",
+      "severity": "Unknown",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.11",
+        "1.27.4"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -24423,7 +26954,438 @@
         "1.27.4"
       ],
       "reports": [
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
+        "vulnerabilities-temporal-tools/vulnerabilities.json",
         "vulnerabilities-temporal/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-4970",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.12",
+        "1.26.5",
+        "1.27.0-rc.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-5026",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-5856",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.12",
+        "1.26.5",
+        "1.27.0-rc.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-5942",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-5972",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6088",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6089",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6090",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6091",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6218",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.25.13",
+        "1.26.6",
+        "1.27.0-rc.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6599",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6600",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6603",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6604",
+      "severity": "Critical",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6605",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6607",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6608",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6609",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6610",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6611",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6612",
+      "severity": "Critical",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6613",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9",
+        "1.27.2"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6617",
+      "severity": "High",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.9"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6809",
+      "severity": "Medium",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.10",
+        "1.27.3"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "stdlib",
+      "version": "go1.26.4",
+      "type": "go-module",
+      "advisory": "GO-2026-6859",
+      "severity": "Unknown",
+      "namespace": "govulndb:language:go",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "1.26.11",
+        "1.27.4"
+      ],
+      "reports": [
+        "vulnerabilities-temporal-legacy/vulnerabilities.json",
+        "vulnerabilities-temporal-tools-legacy/vulnerabilities.json"
       ]
     },
     {
@@ -24440,7 +27402,6 @@
       ],
       "reports": [
         "vulnerabilities-otel-collector/vulnerabilities.json",
-        "vulnerabilities-postgres/vulnerabilities.json",
         "vulnerabilities-temporal-ui/vulnerabilities.json"
       ]
     },
@@ -24460,6 +27421,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24480,6 +27442,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24500,6 +27463,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24520,6 +27484,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24592,6 +27557,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24612,6 +27578,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24632,6 +27599,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24652,6 +27620,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24672,6 +27641,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24692,6 +27662,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24712,6 +27683,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24732,6 +27704,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24830,6 +27803,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24850,6 +27824,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24870,6 +27845,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24890,6 +27866,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24910,6 +27887,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24930,6 +27908,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24950,6 +27929,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -24970,6 +27950,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -25662,6 +28643,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -25682,6 +28664,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]
@@ -25702,6 +28685,7 @@
         "vulnerabilities-docker-broker/vulnerabilities.json",
         "vulnerabilities-maxio/vulnerabilities.json",
         "vulnerabilities-stt/vulnerabilities.json",
+        "vulnerabilities-temporal-controller/vulnerabilities.json",
         "vulnerabilities-worker/vulnerabilities.json",
         "vulnerabilities-workflow-mcp/vulnerabilities.json"
       ]

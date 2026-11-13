@@ -1,0 +1,4 @@
+# Image defaults discover OS packages/binaries but omit Cargo.lock source graphs.
+# ADD this cataloger; do not replace the default installed-package inventory.
+select-catalogers:
+  - +rust-cargo-lock-cataloger
