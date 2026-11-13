@@ -245,6 +245,14 @@ CREATE TABLE IF NOT EXISTS chat_turn_events (
     payload TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS chat_turn_events_turn ON chat_turn_events(turn_id, seq);
+-- Keep identity tombstones after chat deletion: a workflow retry must not replay side effects.
+CREATE TABLE IF NOT EXISTS workflow_agent_tasks (
+    key TEXT PRIMARY KEY,
+    chat_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    prompt_hash TEXT NOT NULL,
+    admitted INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY,
     workflow TEXT NOT NULL,

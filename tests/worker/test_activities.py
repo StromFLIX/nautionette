@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 from nautionette_worker import activities
@@ -119,6 +121,114 @@ async def test_prose_where_an_object_was_declared_is_a_failure(env, http):
     http[BACKEND] = json_body({"ok": True, "text": "some prose", "output": None})
     with pytest.raises(RuntimeError, match="structured object was declared"):
         await env.run(activities.agent_call, {"prompt": "summarise", "output_schema": {"type": "object"}})
+
+
+async def test_profile_step_uses_stable_task_key_and_internal_auth(env, http, monkeypatch):
+    seen = []
+
+    def record(request):
+        seen.append(request)
+        return json_body({"ok": True, "text": '{"summary":"done"}'})(request)
+
+    http[BACKEND] = record
+    monkeypatch.setattr(activities, "INTERNAL_TOKEN", "service-only")
+    params = {"agent_id": "marvin", "prompt": "Check", "output_schema": {"type": "object"}}
+    first = await env.run(activities.agent_call, params)
+    await env.run(activities.agent_call, params)
+    assert first["output"] == {"summary": "done"}
+    assert seen[0].url == seen[1].url
+    assert "/internal/agent/tasks/" in str(seen[0].url)
+    assert json.loads(seen[0].content)["agent_id"] == "marvin"
+    assert seen[0].headers["x-internal-token"] == "service-only"
+
+
+async def test_profile_validation_does_not_poll_or_invoke_generic_agent(env, http):
+    seen = []
+
+    def record(request):
+        seen.append(request)
+        return json_body({"ok": True, "validated": True, "agent_id": "marvin"})(request)
+
+    http[BACKEND] = record
+    result = await env.run(
+        activities.agent_call, {"agent_id": "marvin", "prompt": "Check", "validate_only": True}
+    )
+    assert result["validated"] and len(seen) == 1
+    assert json.loads(seen[0].content)["validate_only"] is True
+
+
+async def test_profile_polling_reconnects_to_the_same_chat(env, http, monkeypatch):
+    async def no_wait(_):
+        pass
+
+    monkeypatch.setattr(activities.asyncio, "sleep", no_wait)
+    seen = []
+
+    def record(request):
+        seen.append(request)
+        answer = (
+            {"state": "running", "chat_id": "chat"}
+            if request.method == "POST"
+            else {"ok": True, "text": "done", "state": "completed", "chat_id": "chat"}
+        )
+        return json_body(answer)(request)
+
+    http[BACKEND] = record
+    assert (await env.run(activities.agent_call, {"agent_id": "marvin", "prompt": "Check"}))["ok"]
+    assert [r.method for r in seen] == ["POST", "GET"]
+    assert seen[0].url == seen[1].url
+
+
+async def test_failed_profile_task_is_not_replayed_as_new_task(env, http):
+    http[BACKEND] = json_body({"ok": False, "error": "deployment failed"})
+    with pytest.raises(RuntimeError, match="deployment failed"):
+        await env.run(activities.agent_call, {"agent_id": "marvin", "prompt": "Update"})
+
+
+async def test_profile_deadline_requests_stop_before_failing(env, http, monkeypatch):
+    seen = []
+    times = iter([0, 100])
+    monkeypatch.setattr(activities, "time", SimpleNamespace(monotonic=lambda: next(times, 100)))
+
+    def record(request):
+        seen.append(request.method)
+        return json_body({"ok": True} if request.method == "DELETE" else {"state": "running"})(request)
+
+    http[BACKEND] = record
+    with pytest.raises(TimeoutError, match="stop requested"):
+        await env.run(activities.agent_call, {"agent_id": "saved", "prompt": "work", "timeout_seconds": 1})
+    assert seen == ["POST", "DELETE"]
+
+
+@pytest.mark.parametrize("shutdown,expected", [(False, ["DELETE"]), (True, [])])
+async def test_profile_cancellation_stops_chat_but_worker_shutdown_reconnects(
+    env, http, monkeypatch, shutdown, expected
+):
+    async def cancelled(_):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(activities, "_profile_agent_call", cancelled)
+    monkeypatch.setattr(activities.activity, "is_cancelled", lambda: True)
+    monkeypatch.setattr(activities.activity, "is_worker_shutdown", lambda: shutdown)
+    seen = []
+
+    def record(request):
+        seen.append(request.method)
+        return json_body({"ok": True})(request)
+
+    http[BACKEND] = record
+    with pytest.raises(asyncio.CancelledError):
+        await env.run(activities.agent_call, {"agent_id": "saved", "prompt": "work"})
+    assert seen == expected
+
+
+async def test_profile_prose_is_not_accepted_as_structured_success(env, http):
+    http[BACKEND] = json_body({"ok": True, "text": "not JSON"})
+    with pytest.raises(json.JSONDecodeError):
+        await env.run(
+            activities.agent_call,
+            {"agent_id": "saved", "prompt": "work", "output_schema": {"type": "object"}},
+        )
 
 
 # ------------------------------------------------------------------- mcp_call

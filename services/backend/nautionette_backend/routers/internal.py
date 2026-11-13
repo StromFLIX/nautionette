@@ -9,7 +9,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, Field
 
-from .. import run_statistics, runs
+from .. import run_statistics, runs, workflow_agents
 from ..agent import agent_job, call_agent
 from ..clients import temporal
 from ..db import db
@@ -69,6 +69,30 @@ async def internal_agent_call(payload: dict[str, Any] = Body(...)) -> dict[str, 
         return result
     finally:
         save(status)
+
+
+class ProfileAgentTask(BaseModel):
+    agent_id: str = Field(min_length=1, max_length=64)
+    prompt: str = Field(min_length=1, max_length=100000)
+    validate_only: bool = False
+
+
+@router.post("/internal/agent/tasks/{key}")
+async def start_profile_agent_task(key: str, payload: ProfileAgentTask) -> dict[str, Any]:
+    """Idempotently admit a saved-profile task through the normal chat pipeline."""
+    return await workflow_agents.start(
+        key, payload.agent_id, payload.prompt, validate_only=payload.validate_only
+    )
+
+
+@router.get("/internal/agent/tasks/{key}")
+async def profile_agent_task_status(key: str) -> dict[str, Any]:
+    return workflow_agents.status(key)
+
+
+@router.delete("/internal/agent/tasks/{key}")
+async def stop_profile_agent_task(key: str) -> dict[str, Any]:
+    return await workflow_agents.stop(key)
 
 
 class McpCallObservation(BaseModel):

@@ -337,6 +337,36 @@ def test_resetting_global_settings_leaves_agents_and_explicit_empty_selections_i
     assert client.get(f"/api/agents/{agent['id']}").json()["config"]["tools"] == []
 
 
+def test_workflow_task_reaches_broker_with_saved_model_tools_persona_and_projects(
+    client, internal_headers, configured, broker, monkeypatch
+):
+    monkeypatch.setattr(projects, "prepare_worktrees", lambda *args: {})
+    agent = create(
+        client,
+        {"model": "test/other", "tools": [], "project_ids": [configured], "system_prompt": "Saved persona"},
+    )
+    url = f"/internal/agent/tasks/{'f' * 64}"
+    started = client.post(url, headers=internal_headers, json={"agent_id": agent["id"], "prompt": "Check"})
+    assert started.status_code == 200
+    for _ in range(100):
+        result = client.get(url, headers=internal_headers).json()
+        if "ok" in result:
+            break
+    assert result["ok"], result
+    job = broker.jobs[-1]
+    assert job["agent_id"] == agent["id"] and job["model"] == "test/other"
+    assert job["project_ids"] == [configured] and job["tools"] == []
+    assert "Saved persona" in job["system_prompt"]
+    assert job["chat_id"] == started.json()["chat_id"]
+    assert job["turn_id"] == started.json()["turn_id"]
+    assert job["timeout_exempt"] is True
+    count = len(broker.jobs)
+    assert client.post(
+        url, headers=internal_headers, json={"agent_id": agent["id"], "prompt": "Check"}
+    ).json()["ok"]
+    assert len(broker.jobs) == count
+
+
 def test_legacy_chats_migrate_without_adopting_new_defaults(tmp_path):
     path = str(tmp_path / "legacy.db")
     with sqlite3.connect(path) as connection:
