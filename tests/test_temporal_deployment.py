@@ -23,24 +23,37 @@ class API:
     def __init__(self):
         self.details = {}
         self.calls = []
+        self.env = {
+            "TEMPORAL_NUM_HISTORY_SHARDS": "4",
+            "TEMPORAL_MAINTENANCE_APP": "app",
+            "TEMPORAL_VERSION": "1.29.0",
+        }
 
     def call(self, path, method="GET", payload=None):
         self.calls.append((path, method, payload))
         if path.endswith("/envs"):
-            return [
-                {"key": "TEMPORAL_NUM_HISTORY_SHARDS", "value": "4"},
-                {"key": "TEMPORAL_MAINTENANCE_APP", "value": "app"},
-            ]
+            return [{"key": key, "value": value} for key, value in self.env.items()]
+        if path.endswith("/envs/bulk") and method == "PATCH":
+            self.env.update({row["key"]: row["value"] for row in payload["data"]})
+            return {}
         if method == "PATCH":
             self.details.update(payload)
         return self.details.copy()
 
 
 def test_hooks_use_only_existing_coolify_credentials_and_preserve_custom_hooks(monkeypatch):
-    monkeypatch.setattr(transport, "candidate_files", lambda commit: {"temporal_deploy_hook.py": "pass"})
+    monkeypatch.setattr(
+        transport,
+        "candidate_files",
+        lambda commit: {
+            "temporal_deploy_hook.py": "pass",
+            "context/upgrade-plan.json": json.dumps({"target": "1.32.2"}),
+        },
+    )
     api = API()
     deploy = transport.TemporalDeployment(api, "app", "staging", COMMIT)
     assert deploy.prepare() == "4"
+    assert api.env["TEMPORAL_VERSION"] == "1.32.2"  # Persisted CLI build-arg cannot force the old image.
     assert api.details["pre_deployment_command_container"] == "docker-broker"
     assert api.details["post_deployment_command_container"] == "docker-broker"
     assert all("\n" not in api.details[key] for key in ("pre_deployment_command", "post_deployment_command"))

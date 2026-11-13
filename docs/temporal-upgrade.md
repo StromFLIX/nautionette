@@ -34,6 +34,10 @@ production staging evidence **before** installing managed hooks and queueing a
 deployment. `scripts/temporal_deploy.py` obtains the scripts, image context and
 `upgrade-plan.json` from the exact candidate Git commit, not a moving main branch.
 The compressed hook contains source code and identifiers, never DB credentials.
+Before queueing, the script synchronizes Coolify's persisted `TEMPORAL_VERSION`
+build argument to the candidate plan and verifies the value. Coolify supplies
+these keys as CLI `--build-arg` flags, which override even a literal Compose pin;
+leaving an old value would rebuild the wrong image after successful migration.
 Existing custom pre/post hooks are refused rather than silently overwritten.
 
 The broker already has the Docker socket. The trusted hook uses that existing

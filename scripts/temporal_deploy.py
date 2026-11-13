@@ -82,30 +82,37 @@ class TemporalDeployment:
             for row in self.api.call(path + "/envs")
             if not row.get("is_preview", False)
         }
-        if values.get("TEMPORAL_MAINTENANCE_APP") != self.app:
+        required = {
+            "TEMPORAL_MAINTENANCE_APP": self.app,
+            # Coolify passes persisted env keys as CLI --build-arg values; those
+            # override even literal Compose build.args. Align with the candidate.
+            "TEMPORAL_VERSION": json.loads(self.files["context/upgrade-plan.json"])["target"],
+        }
+        missing = {key: value for key, value in required.items() if values.get(key) != value}
+        if missing:
             self.api.call(
                 path + "/envs/bulk",
                 "PATCH",
                 {
                     "data": [
                         {
-                            "key": "TEMPORAL_MAINTENANCE_APP",
-                            "value": self.app,
+                            "key": key,
+                            "value": value,
                             "is_buildtime": True,
                             "is_runtime": True,
                             "is_literal": True,
                         }
+                        for key, value in missing.items()
                     ]
                 },
             )
-            envs = self.api.call(path + "/envs")
-            if not any(
-                row.get("key") == "TEMPORAL_MAINTENANCE_APP"
-                and row.get("value") == self.app
-                and not row.get("is_preview", False)
-                for row in envs
-            ):
-                raise RuntimeError("Coolify did not persist the server startup fence identity")
+            verified_env = {
+                row.get("key"): row.get("value")
+                for row in self.api.call(path + "/envs")
+                if not row.get("is_preview", False)
+            }
+            if any(verified_env.get(key) != value for key, value in required.items()):
+                raise RuntimeError("Coolify did not persist the candidate server version/startup fence")
         shards = str(values.get("TEMPORAL_NUM_HISTORY_SHARDS") or "4")
         if not shards.isdecimal() or int(shards) < 1:
             raise ValueError("Invalid Temporal history shard count")
