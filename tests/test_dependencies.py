@@ -21,7 +21,18 @@ def test_compiler_sbom_must_inventory_vendored_crates_not_only_os_packages():
     sbom["packages"].append({"name": "rusqlite", "versionInfo": "0.41.1"})
     with pytest.raises(ValueError, match="missing locked crates"):
         verify_cargo_inventory(sbom, lock)
-    sbom["packages"].append({"name": "rusqlite", "versionInfo": "0.42.0"})
+    sbom["packages"].append(
+        {
+            "name": "rusqlite",
+            "versionInfo": "0.42.0",
+            "sourceInfo": "manifest: /sdk/vendor/rusqlite/Cargo.lock",
+        }
+    )
+    with pytest.raises(ValueError, match="missing locked crates"):
+        verify_cargo_inventory(sbom, lock)  # A dependency's own dev lock is not the SDK lock.
+    sbom["packages"].append(
+        {"name": "rusqlite", "versionInfo": "0.42.0", "sourceInfo": "manifest: /sdk/template/Cargo.lock"}
+    )
     assert verify_cargo_inventory(sbom, lock) == 1
     with pytest.raises(ValueError, match="no external crates"):
         verify_cargo_inventory(sbom, {"package": []})

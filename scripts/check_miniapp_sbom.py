@@ -16,7 +16,11 @@ from pathlib import Path
 
 def verify(sbom: dict, lock: dict) -> int:
     expected = {(p["name"], p["version"]) for p in lock["package"] if "source" in p}
-    actual = {(p["name"], p.get("versionInfo", "")) for p in sbom["packages"]}
+    actual = {
+        (p["name"], p.get("versionInfo", ""))
+        for p in sbom["packages"]
+        if p.get("sourceInfo", "").endswith("/sdk/template/Cargo.lock")
+    }
     if not expected:
         raise ValueError("Miniapp Cargo lock contains no external crates")
     missing = expected - actual

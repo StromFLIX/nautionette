@@ -1,206 +1,206 @@
 {
-  "run_url": "https://github.com/StromFLIX/nautionette/actions/runs/43509214606",
+  "run_url": "https://github.com/StromFLIX/nautionette/actions/runs/43512596141",
   "scope": "Observed CI images only; excludes deployments, other architectures and native artifact volumes",
   "artifacts": [
     {
       "artifact": "sbom-agentgateway.spdx.json",
       "file": "sbom-agentgateway.spdx.json",
-      "sha256": "fd1b25fb837b82e06cf399f34711711a5e44e8340f41c2aa1a3ddf65132c1351"
+      "sha256": "d32309a7645fa22a8a11fe6aa9d4dedcdda8d51c612023a50a06395a05787d13"
     },
     {
       "artifact": "sbom-backend.spdx.json",
       "file": "sbom-backend.spdx.json",
-      "sha256": "959b1672dbf4710938651c8b99a7e43a03a3786fcdae770a493bdfa050c23dfd"
+      "sha256": "58b5f45b344f2a725a43cd1c7ded9155e3bb9d54e4d0c41a4083990f618346cd"
     },
     {
       "artifact": "sbom-docker-broker.spdx.json",
       "file": "sbom-docker-broker.spdx.json",
-      "sha256": "5d1579a4e83a0a4ac1ae238df7fdb1df250e6a75dfa1601ddfb37a4c39e2408d"
+      "sha256": "331b7a5b7e4ed7d2fe7b0eed7494089b325c232784a8a38eaf97107c6e1f03c2"
     },
     {
       "artifact": "sbom-frontend.spdx.json",
       "file": "sbom-frontend.spdx.json",
-      "sha256": "fae1a1de562adb0c29d37cb86b835e081ace536630c50bd0b76113214b036c94"
+      "sha256": "7b3c6e771db3f54850cf0b8f60fa7d3be090a7a0641c599b580a421fd9aa5a6a"
     },
     {
       "artifact": "sbom-maxio.spdx.json",
       "file": "sbom-maxio.spdx.json",
-      "sha256": "b0c049549aaeef6cb8e19e0af9b6cb65fce04d4e8e1b057dfca6a11fdfae78fd"
+      "sha256": "5d4397172978213fb90486ebc5159878d38ea0b766ad3f181c8e1a78dff06d1f"
     },
     {
       "artifact": "sbom-miniapp-builder.spdx.json",
       "file": "sbom-miniapp-builder.spdx.json",
-      "sha256": "556f4ab7e6a07a34fa7a9ab0f889d0c5dadcbe757ef7f47c9cf5eb5105e071b6"
+      "sha256": "32a68ed3b507c7212ab6d2ff947564d3a60a1710c232bb507de01de01cdb1e82"
     },
     {
       "artifact": "sbom-otel-collector.spdx.json",
       "file": "sbom-otel-collector.spdx.json",
-      "sha256": "006e6af94089e781bc2bc8b72c4c44d1428a25d227697c202c2ca063a980cd96"
+      "sha256": "b88f79b51572375c89146c9afbf116947a2bd95ae794fa93c9f9d5fff4ea5147"
     },
     {
       "artifact": "sbom-pi-agent-default.spdx.json",
       "file": "sbom-pi-agent-default.spdx.json",
-      "sha256": "b5a4214e25b5ffb8dc02b079f9831515c589b3b9ec5ec93c58f0a05a295261e7"
+      "sha256": "c5eca7c14df1bbc7b8d599d682637f68e0d134c5ec9fc54d5c8b7eb6dc6ef25e"
     },
     {
       "artifact": "sbom-pi-base.spdx.json",
       "file": "sbom-pi-base.spdx.json",
-      "sha256": "a79a2ae0a718962882426649b846a23415e343812cc3222ec82aa900fac1d16c"
+      "sha256": "ba0cfa0a62455559cdaac31d6cf7f9d755cc7faed538bd47b94cca703fc18d97"
     },
     {
       "artifact": "sbom-postgres.spdx.json",
       "file": "sbom-postgres.spdx.json",
-      "sha256": "79deecc4b6deaf2659be22cece1107aece0bf05904cd813c9c85010c6c7483c3"
+      "sha256": "01c29ac34f606f43f88a7ba286dcef00067761d06027707ca5e35ff355c398d9"
     },
     {
       "artifact": "sbom-stt.spdx.json",
       "file": "sbom-stt.spdx.json",
-      "sha256": "6c28a163e960430b3987d634b483a3d5fba4b7a12393e093b00c8aeca897ffa6"
+      "sha256": "29ffada384c4a321d4c8b9533b61bf05c533b892e3a8678b64ecdd62a49f109c"
     },
     {
       "artifact": "sbom-temporal-controller.spdx.json",
       "file": "sbom-temporal-controller.spdx.json",
-      "sha256": "a77e8df12b14018c92758f4aef8b5ae03a435f8ae3b1b7389fd7f2f76db8f2da"
+      "sha256": "eb32e68d98ac4926e061a1a0402839a670136b8126fa29257cb6fc0a9d415c55"
     },
     {
       "artifact": "sbom-temporal-legacy.spdx.json",
       "file": "sbom-temporal-legacy.spdx.json",
-      "sha256": "8024354fea850029d20063f51df51288652dd4af5929aa0bb4e0e7396b2223b3"
+      "sha256": "ddc30c16a86b68a2f9bfe9f0ec291a4cda332d04cee7b01f2f513714bf1a46ad"
     },
     {
       "artifact": "sbom-temporal-tools-legacy.spdx.json",
       "file": "sbom-temporal-tools-legacy.spdx.json",
-      "sha256": "a85fe40d29202581f7bab77e1b61d0935328bfa797a077324132f8f922bfdae6"
+      "sha256": "23c004777f4dd97c3797132f4057bcd4c2afb7d254565dee12a8856c05c5e138"
     },
     {
       "artifact": "sbom-temporal-tools.spdx.json",
       "file": "sbom-temporal-tools.spdx.json",
-      "sha256": "e9a1e22eb3f7faaa7efaba200807a68680c99e33528263f3c2c83b8fb87b6a37"
+      "sha256": "3e78120d93780413836e3af72037cec0078dec3c81b4decbe9c8dde708aadf48"
     },
     {
       "artifact": "sbom-temporal-ui.spdx.json",
       "file": "sbom-temporal-ui.spdx.json",
-      "sha256": "f1e99e6932a42961433aa67f224ae7923ef11569d3c094204aa8849474f31e4a"
+      "sha256": "f4ed642ae52e5675dcebda2af561c53aae4562bd6bd36e48d3afda921962771e"
     },
     {
       "artifact": "sbom-temporal.spdx.json",
       "file": "sbom-temporal.spdx.json",
-      "sha256": "e7705b3828dd8431035eba00412ee9c5f00cdf2c6272c4183e2661ff215e11e2"
+      "sha256": "20df77a70888fcbd9962461d35d0c35227b85bf1f0a5f9d1f65930cb9f6eed68"
     },
     {
       "artifact": "sbom-website.spdx.json",
       "file": "sbom-website.spdx.json",
-      "sha256": "5d7866d4db434a4295147626a2e387c19f34c10bb1777afd24e18f8566d1618e"
+      "sha256": "dd699a3b64cc686afdcad2fed5a696cc433bc9f8661d36e2f13d411b07e21da4"
     },
     {
       "artifact": "sbom-worker.spdx.json",
       "file": "sbom-worker.spdx.json",
-      "sha256": "cb329f47706162b2f7116827f29518a9d6b78c764c3341d6b7579865030f8c31"
+      "sha256": "ad8c69e0259f73007276b915cae8b5b304e0c5ebddd0658b41a81905a5363737"
     },
     {
       "artifact": "sbom-workflow-mcp.spdx.json",
       "file": "sbom-workflow-mcp.spdx.json",
-      "sha256": "1dc5e3e72f9dc59aeb865138aee67d634cf5b669c8c55f70fe4bccca1796f964"
+      "sha256": "797bbdad0b4ad4bd01410abb5b868728e39ec7a148d656c5f758bc0472aa79e2"
     },
     {
       "artifact": "vulnerabilities-agent-images",
       "file": "vulnerabilities-miniapp-builder.json",
-      "sha256": "568ee34fcec2a21ac1749b091dcfbc89828aa47a1d0ff2349ca89e7740f93351"
+      "sha256": "0d241077b86b0a52bcd3e51b5f339b19bc95a2443891e1b1b86e28964359268b"
     },
     {
       "artifact": "vulnerabilities-agent-images",
       "file": "vulnerabilities-pi-agent-default.json",
-      "sha256": "ae20b114c0b2afdaeeccb8fa1d8a9b722097f54261c5319b21cffd5bc97a036d"
+      "sha256": "740f5bc3499f9b2389eeef7fd67573fdcb1e4a0c95581b22b970374d302cd480"
     },
     {
       "artifact": "vulnerabilities-agent-images",
       "file": "vulnerabilities-pi-base.json",
-      "sha256": "f80d90748fd3eea0172472c40a4849c914ec57046cdf6b300f740d618896177c"
+      "sha256": "ec0ba84150141f5b508c1570fe269c2b24a5cee5231a24e45f1611bf7ee42eb6"
     },
     {
       "artifact": "vulnerabilities-agentgateway",
       "file": "vulnerabilities.json",
-      "sha256": "8595d34544fe0a6f8f66186672aa6dc9bd76cb9599ec4f5c236b75623ab8085b"
+      "sha256": "d79e719499a1c775c034faa2cbb5bc1e33c6d1ffd783cb40355e341185877ca5"
     },
     {
       "artifact": "vulnerabilities-backend",
       "file": "vulnerabilities.json",
-      "sha256": "399ad3c9d218b60bc6c82826dd7e9be2465e8178b2ba577beb06dc786365e50e"
+      "sha256": "8531a3e1e6aa8119c9c699ecf80bf4a3f6b07ae152c41b306e082647e1532105"
     },
     {
       "artifact": "vulnerabilities-docker-broker",
       "file": "vulnerabilities.json",
-      "sha256": "51ad9bd61081635fe368b0f30f6c6b1f1194d7d3128c5d8adcc6ceb08a7689bd"
+      "sha256": "5f1f9d7367a8e3ed2fcc1ddd41daea78fb442fa8bf7cb083c5bb067fccfaffdf"
     },
     {
       "artifact": "vulnerabilities-frontend",
       "file": "vulnerabilities.json",
-      "sha256": "ff52758346e39f5cb29aa703b126e580aa9102ef3aeb3022eb269b43554be46b"
+      "sha256": "79b92b905e935b70ad71ee44039c167e42b17fde5952a5eb2efa5d54c82243d3"
     },
     {
       "artifact": "vulnerabilities-maxio",
       "file": "vulnerabilities.json",
-      "sha256": "b398ee29e6fce0f8fa32cfa0b8a85f9d3d569e15970c584ce5ae0ab5484ad4a4"
+      "sha256": "dab9ec092a78efefccd37c37fb424c1fdb49acc4eb0c57e05e47a626f79bba34"
     },
     {
       "artifact": "vulnerabilities-otel-collector",
       "file": "vulnerabilities.json",
-      "sha256": "cc149dbbbcf7a315b36a448b57e20ff1b60237c299d508632d06da8d93a8a56f"
+      "sha256": "0d5a2d091bab0e760dfc979c9f4a4dc54ba235be9a3fbe149edddb7a268715ab"
     },
     {
       "artifact": "vulnerabilities-postgres",
       "file": "vulnerabilities.json",
-      "sha256": "5882048d30c5ff0218a934a2a7d18601aa4c69f7353fd106436117c883d07da5"
+      "sha256": "3200116cdaec3830879e1b118924fb88b456bf3930fef142d00aac9d37bcb85d"
     },
     {
       "artifact": "vulnerabilities-stt",
       "file": "vulnerabilities.json",
-      "sha256": "253518c2c584b3614c4e3aa0988ecf83b41b1a76bc744e71051b9c23f481850d"
+      "sha256": "5c873db6323adc2ed6cc5bc620ab8e4516a0d06a22215f045c60f4f05b25a2fb"
     },
     {
       "artifact": "vulnerabilities-temporal",
       "file": "vulnerabilities.json",
-      "sha256": "5d1b989ec97dda479074b243ac64d826bc960dd262e36fc02fff4a45ebff2075"
+      "sha256": "c0e429878927c6ec56583ccde2cdf3884d9663745c9c2e99594f45948ef846f1"
     },
     {
       "artifact": "vulnerabilities-temporal-controller",
       "file": "vulnerabilities.json",
-      "sha256": "056cb97f884098ae94b1ab676fd5560e45867fe54bb433c02a44598c09ec05e4"
+      "sha256": "f71d3c6aed65bbfc8fd1c27d36506915ee45af3321d920a6632917fd13c8ee85"
     },
     {
       "artifact": "vulnerabilities-temporal-legacy",
       "file": "vulnerabilities.json",
-      "sha256": "669199bc93040172ad709311d39c869c21f9d5c8d0b45693fcae77a18ce60c64"
+      "sha256": "3ca0fb6f2e8e302a582ed179ede49dc6bb8c07c295ed6d532b3d42a524ee6fa9"
     },
     {
       "artifact": "vulnerabilities-temporal-tools",
       "file": "vulnerabilities.json",
-      "sha256": "56d0a7a2d82dfc84a79096f1b03be73714ee9ad3fdd86d4b1125c2242b50ff51"
+      "sha256": "b3c4863afff9eeb2ef1bb5164a462311dc2b015357585d6fdf4b6735cc3124ed"
     },
     {
       "artifact": "vulnerabilities-temporal-tools-legacy",
       "file": "vulnerabilities.json",
-      "sha256": "49ededaf782c577848830229040dfa43773da1d0e79c2c41f71c8c8b8b159ed8"
+      "sha256": "b2db2df1907f60fa42017f8d3e8c0106bebd52821074cb0c9fe42985caff9bea"
     },
     {
       "artifact": "vulnerabilities-temporal-ui",
       "file": "vulnerabilities.json",
-      "sha256": "896e4f8f651ad88dea77e05bd0b8466d90496282cb88d7004413743af484fa7b"
+      "sha256": "cf20b449d23d807a2be1266770617f903ebf785da3ec0e38a65e0cecc3282e02"
     },
     {
       "artifact": "vulnerabilities-website",
       "file": "vulnerabilities.json",
-      "sha256": "4c6e0b5a6e309294e3502716b9837c414055bf0765dbe3fb20555672e936ad1f"
+      "sha256": "a065f17dc38832657c7cfccd1f9576392529b05c81e273f1fde22067c689feed"
     },
     {
       "artifact": "vulnerabilities-worker",
       "file": "vulnerabilities.json",
-      "sha256": "082b7c2d6339f5cc030efbe71fa5a1c619b50cabe92e0d2ad19038de7b4b55e9"
+      "sha256": "ccb7ea0d4a4c2eecf28b0859bc9af47a81d3b0c40d2c7b2fc6ff553ca56dd733"
     },
     {
       "artifact": "vulnerabilities-workflow-mcp",
       "file": "vulnerabilities.json",
-      "sha256": "afbe02ded43fa3b27a515b9f96a40c2eaabf62546fbac2e83020fa00dfeebae8"
+      "sha256": "0b06d17401165e425a84514ee0ef23c49c8da2634209d41b43d16eee339551bb"
     }
   ],
   "inventories": {
@@ -225,8 +225,8 @@
       "packages_sha256": "375e7725c0f7b2ea4bb9f80bf6267b2ca53fa274c425f8f2b2ea7107e8ca2c31"
     },
     "sbom-miniapp-builder.spdx.json": {
-      "package_count": 31,
-      "packages_sha256": "973af107fb4d84b77d225cdd275037a0304dd478ff9080496f8b17fb5764a1c3"
+      "package_count": 1153,
+      "packages_sha256": "c4a20d76cc89892f9e3e93049c9ef27dee3b1617dff674df526f85b995dc5de7"
     },
     "sbom-otel-collector.spdx.json": {
       "package_count": 1091,
@@ -26482,6 +26482,21 @@
       "fixed_versions": [],
       "reports": [
         "vulnerabilities-agentgateway/vulnerabilities.json"
+      ]
+    },
+    {
+      "package": "rand",
+      "version": "0.8.5",
+      "type": "rust-crate",
+      "advisory": "GHSA-cq8v-f236-94qc",
+      "severity": "Low",
+      "namespace": "github:language:rust",
+      "fix_state": "fixed",
+      "fixed_versions": [
+        "0.8.6"
+      ],
+      "reports": [
+        "vulnerabilities-agent-images/vulnerabilities-miniapp-builder.json"
       ]
     },
     {

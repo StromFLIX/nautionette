@@ -98,11 +98,11 @@ commit `94bb46f81440f84dd2007bd14ddf41791d20bec2`. This is the latest successful
 pre-update CI, not a claim about post-update images or a running deployment.
 The baseline contained **1,720** distinct package/version/advisory/namespace/fix
 tuples. After implementing the updates, all **40** JSON files from successful
-[CI 43509214606](https://github.com/StromFLIX/nautionette/actions/runs/43509214606)
-for `0b7439069038e793beb6f1d6b5588a13a66dee63` were downloaded and inspected too.
+[CI 43512596141](https://github.com/StromFLIX/nautionette/actions/runs/43512596141)
+for `0a0b02307fa1a1ea49b6042c3e49606bcf20e8fe` were downloaded and inspected too.
 The [complete finding ledger](dependency-audit-2026-11-13-images.json) now records
 that tested candidate's original artifact/file SHA-256s, **20** full-inventory
-counts/fingerprints and **1,884** distinct tuples. The larger scope includes the
+counts/fingerprints and **1,885** distinct tuples. The larger scope includes the
 four previously unscanned maintenance/recovery images; it is not evidence that
 updating the application introduced all the additional findings. Multiple
 binaries/images can duplicate a finding. No severity, unfixed issue or generic
@@ -116,22 +116,24 @@ the actual candidate-bundled maintenance controller**. These four contexts were
 missing from the earlier SBOM matrix. Regression tests require coverage of every
 repository Dockerfile and the deployment controller's exact source-bundle builder.
 
-The first candidate's actual PostgreSQL SBOM confirms **17.12** and gosu's embedded
+The tested candidate's actual PostgreSQL SBOM confirms **17.12** and gosu's embedded
 **Go 1.27.4**; its Grype report contains only the three distro BusyBox matches,
 with **GO-2026-6859 absent**. All 24 CI jobs succeeded, including real Chromium /
 WebKit, native ArtCraft, offline compiler/runtime isolation, PostgreSQL volume
 reuse/privilege drop, MaxIO and Temporal migration/replay/restore tests. This is
 image/test evidence for that SHA, not a substitute for the final pushed SHA's gates.
 
-Inspection also found a genuine scanner blind spot: the compiler image's initial
-SPDX listed only **31 OS/image entries**, not its Cargo dependencies. Syft's image
-defaults do not enable its directory-oriented Cargo.lock cataloger. CI now adds
+Inspection of initial implementation CI 43509214606 found a genuine scanner blind
+spot: the compiler SPDX listed only **31 OS/image entries**, not Cargo dependencies.
+Syft's image defaults omit its directory-oriented Cargo.lock cataloger. CI now adds
 `+rust-cargo-lock-cataloger` through `.github/syft-miniapp.yaml`, **preserving all
 normal image catalogers**, and fails if any external locked crate is missing from
-the actual image SPDX. The image retains `/sdk/template/Cargo.lock` and its vendor
-sources. The ledger records the earlier incomplete scan honestly; the final CI's
-compiler SPDX/Grype artifacts provide the expanded Rust inventory. This inventories
-optional/vendored source too, not proof every crate is linked into every miniapp.
+the actual image SPDX. The corrected CI 43512596141/compiler SPDX has **1,153
+entries**, including all **29** external crates from `/sdk/template/Cargo.lock`
+and upstream development locks in `/sdk/vendor`. The assertion requires the SDK
+lock as the provenance: an unrelated vendor dev lock must not satisfy it. The
+ledger now contains the corrected scan. This inventories optional/vendored source
+too, not proof every crate is linked into every miniapp.
 
 Observed baseline runtimes include Python **3.13.18**, Node **24.22.3**, npm
 **11.21.2**, uv **0.13.7**, BusyBox's copied static binary **1.38.0**, distro
@@ -188,6 +190,16 @@ are the reasons/next actions for its categories, not a vulnerability allowlist:
   using only private disposable migration/recovery networks meanwhile. Some
   embedded server pseudo-version CPE/advisory matches are not reliable evidence
   of the actual server release, so retain rather than silently dismiss them.
+- **Vendored development lock rand 0.8.5:** the corrected compiler scan exposes
+  two low-severity **GHSA-cq8v-f236-94qc / RUSTSEC-2026-0097** matches (fix 0.8.6).
+  SPDX provenance is `/sdk/vendor/foldhash/Cargo.lock` and
+  `/sdk/vendor/memchr/Cargo.lock`, not `/sdk/template/Cargo.lock`. Rand is absent
+  from the SDK's 29-crate resolved graph and is not built into its application
+  through these unused upstream dev/test lockfiles. Keep these observations
+  visible. Required follow-up: consume parent crate releases that refresh their
+  packaged dev locks, or revisit if those test graphs are ever executed. Do not
+  mutate checksummed vendor files, add an unused rand override, or exclude the
+  files from scanning merely to erase findings.
 - **npm's own nested glob/minimatch:** **GHSA-3g3m-2fjr-6pw4** (glob 13.0.6 →
   14.0.2) and **GHSA-g3hv-75wg-m249** (minimatch 10.2.5 → 11.0.1) occur in
   the globally installed npm 11.21.2 tool bundle. This is separate from the
@@ -217,8 +229,8 @@ are the reasons/next actions for its categories, not a vulnerability allowlist:
 Report-only image scanning remains visible; application `npm audit` still blocks
 CI. No authentication, networks, credentials, volume retention or security gate
 was weakened. The ledger identifies its exact tested image source SHA; use the
-final pushed candidate's new artifacts for final counts, especially the corrected
-Cargo inventory. It is not a claim about live deployments or other architectures.
+final pushed candidate's new artifacts for final counts. The corrected Cargo
+inventory was already verified in the cited successful run. It is not a claim about live deployments or other architectures.
 
 ## Current upstream pins and intentional holds
 
