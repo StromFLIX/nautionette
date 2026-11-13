@@ -55,6 +55,14 @@ def test_hooks_use_only_existing_coolify_credentials_and_preserve_custom_hooks(m
     assert "python3 -m scripts.coolify_release" in workflow
 
 
+def test_helper_container_names_fit_docker_dns_labels():
+    first = Path("a" * 100)
+    second = Path("b" * 100)
+    assert len(host.name(first, "server")) <= 63
+    assert host.name(first, "server") != host.name(second, "server")
+    assert host.name(first, "server") == host.name(first, "server")
+
+
 @pytest.fixture
 def operation(tmp_path, monkeypatch):
     (tmp_path / "context").mkdir()

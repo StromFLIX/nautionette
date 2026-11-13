@@ -8,6 +8,7 @@ failures keep Temporal offline and never attempt a schema downgrade.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -205,7 +206,9 @@ def preflight(path: Path, app: str, target: str) -> dict:
 
 
 def name(path: Path, kind: str) -> str:
-    return "nt-temporal-" + path.name + "-" + kind
+    # Docker accepts long names, but its embedded DNS still needs labels <=63.
+    identity = hashlib.sha256(path.name.encode()).hexdigest()[:20]
+    return "nt-temporal-" + identity + "-" + kind
 
 
 def remove(path: Path, kind: str):
