@@ -147,7 +147,18 @@ at that tested commit. The Action resolves the tag to a full SHA, checks staging
 pins Coolify, verifies the queued deployment's actual commit, and checks authenticated
 component health and output storage connectivity. It never means "deploy whatever
 is now on main". It promotes source commits, not identical prebuilt image digests.
-No data copy happens on release.
+No production-to-staging data copy happens on release.
+
+Temporal server/schema upgrades are now part of deployment via native Coolify
+pre/post hooks in the existing Docker broker. Staging migrates first; production
+runs the same reviewed migration only when promoting that verified candidate.
+No host SSH keys are added to the deployment GitHub environments. The pre-hook
+runs a detached, scoped controller that verifies a private backup restore before
+consecutive-minor schema/server upgrades; the post-hook and broker health fence
+verify the final version and exact revision. Failures never silently downgrade
+or initialize an existing database. Existing custom hooks are not overwritten.
+See [Temporal deployment automation](temporal-upgrade.md) for downtime, failure,
+retry, backup, timeout and fresh-install requirements.
 
 Promotion now also requires the latest non-skipped staging **Deploy** run for
 that exact commit to have completed successfully, with successful component

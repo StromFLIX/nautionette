@@ -79,7 +79,9 @@ class Rehearsal:
 
     def build(self, version: str, kind: str) -> str:
         tag = f"{self.prefix}/{kind}:{version}"
-        dockerfile = "Dockerfile" if kind == "legacy" else f"Dockerfile.{kind}"
+        dockerfile = {"legacy": "Dockerfile.legacy", "server": "Dockerfile", "tools": "Dockerfile.tools"}[
+            kind
+        ]
         # Build output contains no credentials and is useful when CI fails.
         subprocess.run(
             [
@@ -107,6 +109,10 @@ class Rehearsal:
             "-d",
             "--name",
             name,
+            "--label",
+            f"com.docker.compose.project={self.prefix}",
+            "--label",
+            "com.docker.compose.service=postgres",
             "--network",
             self.network,
             "--network-alias",
@@ -134,7 +140,9 @@ class Rehearsal:
                     raise
                 time.sleep(2)
 
-    def start(self, image: str, db: str = "postgres") -> tuple[str, str]:
+    def start(
+        self, image: str, db: str = "postgres", fence: tuple[str, str] | None = None
+    ) -> tuple[str, str]:
         name = f"{self.prefix}-server-{len(self.containers)}"
         self.containers.append(name)
         self.docker(
@@ -142,6 +150,10 @@ class Rehearsal:
             "-d",
             "--name",
             name,
+            "--label",
+            f"com.docker.compose.project={self.prefix}",
+            "--label",
+            "com.docker.compose.service=temporal",
             "--network",
             self.network,
             "-p",
@@ -166,6 +178,18 @@ class Rehearsal:
             "DEFAULT_NAMESPACE_RETENTION=7d",
             "-e",
             "DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml",
+            *(
+                [
+                    "-e",
+                    f"TEMPORAL_MAINTENANCE_APP={fence[0]}",
+                    "-e",
+                    f"TEMPORAL_DEPLOY_COMMIT={fence[1]}",
+                    "-v",
+                    "/var/lib/nautionette-temporal/fences:/etc/temporal/maintenance:ro",
+                ]
+                if fence
+                else []
+            ),
             image,
         )
         self.wait(

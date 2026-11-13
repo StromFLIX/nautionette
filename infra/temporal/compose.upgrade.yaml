@@ -1,11 +1,11 @@
-# Opt-in maintained server deployment. Read docs/temporal-upgrade.md FIRST.
-# Merge after the root docker-compose.yaml; paths are relative to that root.
-# No startup migrations: existing databases must be upgraded deliberately.
+# Compatibility overlay for older manual migration commands.
+# The root Compose now ships this configuration; automatic deployments migrate
+# via the durable pre-deploy job described in docs/temporal-upgrade.md.
 services:
   temporal:
     build:
       context: ./infra/temporal
-      dockerfile: Dockerfile.server
+      dockerfile: Dockerfile
       args:
         TEMPORAL_VERSION: 1.32.2
     environment:

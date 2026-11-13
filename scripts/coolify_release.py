@@ -372,6 +372,43 @@ def build_metadata_matches(api: Coolify, app: str, commit: str, release_tag: str
     return values.get("APP_VERSION") == commit and (values.get("APP_RELEASE_TAG") or "") == release_tag
 
 
+def temporal_maintenance(api: Coolify, app: str, target: str, commit: str):
+    from scripts.temporal_deploy import TemporalDeployment
+
+    return TemporalDeployment(api, app, target, commit)
+
+
+def preserve_temporal_shards(api: Coolify, app: str, shards: str) -> None:
+    if not isinstance(shards, str) or not shards.isdecimal() or int(shards) < 1:
+        raise ValueError("Invalid Temporal history shard count")
+    path = f"/applications/{app}/envs"
+    values = {row.get("key"): row.get("value") for row in api.call(path) if not row.get("is_preview", False)}
+    if values.get("TEMPORAL_NUM_HISTORY_SHARDS") != shards:
+        api.call(
+            path + "/bulk",
+            "PATCH",
+            {
+                "data": [
+                    {
+                        "key": "TEMPORAL_NUM_HISTORY_SHARDS",
+                        "value": shards,
+                        "is_buildtime": True,
+                        "is_runtime": True,
+                        "is_literal": True,
+                    }
+                ]
+            },
+        )
+        rows = api.call(path)
+        if not any(
+            row.get("key") == "TEMPORAL_NUM_HISTORY_SHARDS"
+            and row.get("value") == shards
+            and not row.get("is_preview", False)
+            for row in rows
+        ):
+            raise RuntimeError("Coolify did not persist the existing Temporal shard count")
+
+
 def deploy(target: str, commit: str, release_tag: str = "") -> str | None:
     # Metadata describes this deployment's intent, not any tag on the source.
     if release_tag and (
@@ -385,12 +422,21 @@ def deploy(target: str, commit: str, release_tag: str = "") -> str | None:
     required("APP_TOKEN")
     timeout = health_timeout()
     if api.deployed(app, commit) and build_metadata_matches(api, app, commit, release_tag):
+        maintenance = temporal_maintenance(api, app, target, commit)
+        maintenance.prepare()
         wait_for_coolify_health(api, app, commit, timeout)
         wait_for_health(target, timeout)
+        maintenance.finish()
         return None
     staging = identifier(required("COOLIFY_STAGING_APPLICATION_UUID")) if target == "production" else app
-    if str(api.call(f"/applications/{staging}").get("description") or "").startswith("[nautionette-refresh:"):
-        raise RuntimeError("Staging refresh maintenance guard is active; finish/recover the refresh first")
+    for guarded in {app, staging}:
+        description = str(api.call(f"/applications/{guarded}").get("description") or "")
+        if description.startswith("[nautionette-refresh:") or (
+            guarded != app and description.startswith("[nautionette-temporal:")
+        ):
+            raise RuntimeError(
+                "Staging refresh/Temporal maintenance guard is active; finish/recover it first"
+            )
     if target == "production":
         if staging == app or not api.deployed(staging, commit):
             raise RuntimeError("Release must be the exact commit currently deployed successfully in staging")
@@ -408,6 +454,11 @@ def deploy(target: str, commit: str, release_tag: str = "") -> str | None:
         "GITHUB_REPOSITORY"
     ):
         raise RuntimeError("Coolify application uses a different repository")
+    # All source/release/staging gates have passed. Migration is durable and
+    # finishes before any new application/server container can be deployed.
+    maintenance = temporal_maintenance(api, app, target, commit)
+    shards = maintenance.prepare()
+    preserve_temporal_shards(api, app, shards)
     api.call(
         f"/applications/{app}",
         "PATCH",
@@ -460,7 +511,8 @@ def deploy(target: str, commit: str, release_tag: str = "") -> str | None:
     if len(deployments) != 1 or deployments[0].get("resource_uuid") != app:
         raise RuntimeError("Unexpected deployment acknowledgement; inspect Coolify before retrying")
     deployment = identifier(deployments[0].get("deployment_uuid", ""))
-    deadline = time.monotonic() + 1800
+    # The detached pre-hook may include a large verified backup/restore.
+    deadline = time.monotonic() + 7200
     while time.monotonic() < deadline:
         state = api.call(f"/deployments/{deployment}")
         status = state.get("status")
@@ -480,6 +532,7 @@ def deploy(target: str, commit: str, release_tag: str = "") -> str | None:
     )
     wait_for_coolify_health(api, app, commit, timeout)
     wait_for_health(target, timeout)
+    maintenance.finish()
     return deployment
 
 

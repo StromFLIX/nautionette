@@ -546,6 +546,12 @@ async def quarantine() -> None:
 def launch(path: Path, prod: str, stage: str, apply: bool) -> None:
     if prod == stage:
         raise ValueError("Source and destination must differ")
+    for app in (prod, stage):
+        marker = Path("/var/lib/nautionette-temporal") / ("active-" + checked_id(app))
+        if marker.exists():
+            operation = load(marker.parent / "runs" / checked_id(marker.read_text().strip()))
+            if operation.get("status") != "completed" and not operation.get("safe_to_retry"):
+                raise RuntimeError("Temporal deployment maintenance is unfinished; refresh is blocked")
     active = ROOT / "active-run"
     if active.exists():
         previous = load(ROOT / "runs" / checked_id(active.read_text().strip()))

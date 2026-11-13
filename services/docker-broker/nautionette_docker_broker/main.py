@@ -22,7 +22,18 @@ from nautionette.telemetry import instrument_app
 from opentelemetry import propagate
 from pydantic import BaseModel, ConfigDict, Field
 
-from . import agent_run, artcraft, daemon, git_credentials, images, miniapps, monitor, packages, workers
+from . import (
+    agent_run,
+    artcraft,
+    daemon,
+    git_credentials,
+    images,
+    miniapps,
+    monitor,
+    packages,
+    temporal_maintenance,
+    workers,
+)
 from .config import INTERNAL_TOKEN
 
 
@@ -70,8 +81,12 @@ def healthz() -> dict[str, Any]:
         return {"status": "degraded", "docker": False, "error": str(exc)[:200]}
     state = images.snapshot()
     worker_state = workers.snapshot()
+    migration = temporal_maintenance.snapshot()
     return {
-        "status": "ok" if state["status"] == "ready" and worker_state["status"] == "ready" else "degraded",
+        "status": "ok"
+        if state["status"] == "ready" and worker_state["status"] == "ready" and migration["status"] == "ready"
+        else "degraded",
+        "temporal_migration": migration,
         "docker": True,
         "images": state["images"],
         "image_status": state["status"],

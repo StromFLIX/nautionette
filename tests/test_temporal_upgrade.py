@@ -108,9 +108,9 @@ def test_unsafe_jump_partial_state_outage_or_reinitialization_never_mutates(
 def test_maintained_images_have_matching_pins_and_preserve_network_volume_contracts():
     base = yaml.safe_load((ROOT / "docker-compose.yaml").read_text())["services"]
     override = yaml.safe_load((ROOT / "infra/temporal/compose.upgrade.yaml").read_text())["services"]
-    # Routine deployment stays on the known legacy line until operational migration.
+    # Maintained default is pinned by source, not a stale Coolify env default.
     assert base["temporal"]["build"]["context"] == "./infra/temporal"
-    assert "1.29.7" in base["temporal"]["build"]["args"]["TEMPORAL_VERSION"]
+    assert base["temporal"]["build"]["args"]["TEMPORAL_VERSION"] == "1.32.2"
     assert set(override) == {"temporal", "temporal-schema"}
     assert "postgres-data:/var/lib/postgresql/data" in base["postgres"]["volumes"]
     assert "networks" not in override["temporal"]
@@ -122,7 +122,7 @@ def test_maintained_images_have_matching_pins_and_preserve_network_volume_contra
     assert schema["networks"] == ["data"]
     assert schema["read_only"] is True
     assert "temporal-schema" not in base["temporal"]["depends_on"]
-    server = (ROOT / "infra/temporal/Dockerfile.server").read_text()
+    server = (ROOT / "infra/temporal/Dockerfile").read_text()
     assert "FROM temporalio/server:${TEMPORAL_VERSION}" in server
     assert "COPY --from=tools /usr/local/bin/temporal" in server
     assert "USER temporal" in server

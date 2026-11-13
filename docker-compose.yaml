@@ -373,7 +373,8 @@ services:
     build:
       context: ./infra/temporal
       args:
-        TEMPORAL_VERSION: ${TEMPORAL_VERSION:-1.29.7}
+        # Repository pin: old Coolify env defaults must not freeze server versions.
+        TEMPORAL_VERSION: 1.32.2
     image: ${STACK_NAMESPACE:-nautionette}/temporal:dev
     restart: unless-stopped
     environment:
@@ -383,11 +384,16 @@ services:
       POSTGRES_PWD: ${POSTGRES_PASSWORD}
       POSTGRES_SEEDS: postgres
       DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development-sql.yaml
-      DEFAULT_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
-      DEFAULT_NAMESPACE_RETENTION: ${TEMPORAL_HISTORY_RETENTION_DAYS:-7}d
+      # Schema and namespace initialization are explicit maintenance operations.
+      NUM_HISTORY_SHARDS: ${TEMPORAL_NUM_HISTORY_SHARDS:-4}
+      TEMPORAL_MAINTENANCE_APP: ${TEMPORAL_MAINTENANCE_APP:-}
+      TEMPORAL_DEPLOY_COMMIT: ${APP_VERSION:-dev}
       # Temporal is on more than one network; without this it binds to whichever
       # interface it happens to see first and the rest of the stack gets refused.
       BIND_ON_IP: 0.0.0.0
+    # Public-to-this-container fence only: no backup, private logs or DB secrets.
+    volumes:
+      - /var/lib/nautionette-temporal/fences:/etc/temporal/maintenance:ro
     networks: [internal, data]
     depends_on:
       postgres:
@@ -410,6 +416,28 @@ services:
       start_period: 60s
       retries: 10
     <<: *logging
+
+  temporal-schema:
+    profiles: [maintenance]
+    build:
+      context: ./infra/temporal
+      dockerfile: Dockerfile.tools
+      args:
+        TEMPORAL_VERSION: 1.32.2
+    image: ${STACK_NAMESPACE:-nautionette}/temporal-schema:dev
+    restart: "no"
+    environment:
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-temporal}
+      POSTGRES_PWD: ${POSTGRES_PASSWORD}
+      POSTGRES_SEEDS: postgres
+    networks: [data]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    cap_drop: [ALL]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   postgres:
     build:

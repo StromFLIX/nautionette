@@ -1,0 +1,9 @@
+{
+  "target": "1.32.2",
+  "releases": [
+    {"version": "1.29.7", "core": "1.18", "visibility": "1.9"},
+    {"version": "1.30.9", "core": "1.18", "visibility": "1.13"},
+    {"version": "1.31.5", "core": "1.19", "visibility": "1.14"},
+    {"version": "1.32.2", "core": "1.19", "visibility": "1.14"}
+  ]
+}

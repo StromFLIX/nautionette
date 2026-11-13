@@ -94,6 +94,10 @@ class FakeDocker:
             def list(self, filters=None, all=False):
                 if not broker.up:
                     raise RuntimeError("docker is unreachable")
+                if isinstance((filters or {}).get("label"), str) and filters["label"].startswith(
+                    "nautionette.temporal.project="
+                ):
+                    return []
                 broker.last_filters = filters
                 return list(broker.listed)
 
@@ -457,7 +461,7 @@ def test_every_deployed_compose_service_has_a_healthcheck(repo_root):
     deployed = {
         name
         for name, service in compose["services"].items()
-        if not set(service.get("profiles", [])) & {"debug", "images"}
+        if not set(service.get("profiles", [])) & {"debug", "images", "maintenance"}
     }
     assert deployed == {
         "agentgateway",

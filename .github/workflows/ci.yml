@@ -213,6 +213,8 @@ jobs:
       - run: uv sync --locked --all-packages
       - name: Rehearse every server minor with durable histories and restored backups
         run: uv run --locked python -m scripts.check_temporal_upgrade
+      - name: Native deployment hooks, durable controller and isolated backup restore
+        run: uv run --locked python -m scripts.check_temporal_deployment
 
   images:
     name: Image (${{ matrix.name }})

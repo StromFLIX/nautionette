@@ -301,6 +301,7 @@ def api(monkeypatch):
                 return [
                     {"key": "APP_VERSION", "value": COMMIT if self.accept_version else "stale"},
                     {"key": "APP_RELEASE_TAG", "value": self.release_tag},
+                    {"key": "TEMPORAL_NUM_HISTORY_SHARDS", "value": "4"},
                     *self.output_envs,
                 ]
             return {
@@ -314,6 +315,15 @@ def api(monkeypatch):
 
     fake = Fake()
     monkeypatch.setattr(release, "Coolify", lambda: fake)
+
+    class Maintenance:
+        def prepare(self):
+            return "4"
+
+        def finish(self):
+            pass
+
+    monkeypatch.setattr(release, "temporal_maintenance", lambda *args: Maintenance())
     monkeypatch.setattr(release, "healthy", lambda target: None)
     monkeypatch.setattr(release, "staging_verified", lambda repository, commit: True)
     monkeypatch.setenv("COOLIFY_APPLICATION_UUID", "prod")

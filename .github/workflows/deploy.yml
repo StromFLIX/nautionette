@@ -35,8 +35,8 @@ jobs:
         (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
         github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
-    # 30m Coolify deployment + up to 30m health grace + checkout/API overhead.
-    timeout-minutes: 65
+    # Up to 105m durable migration + normal deploy, health and staging smokes.
+    timeout-minutes: 180
     environment: ${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
     steps:
       # Environment rules evaluate the event ref: production allows main + v* tags.
@@ -56,7 +56,7 @@ jobs:
           APP_URL: ${{ vars.APP_URL }}
           APP_TOKEN: ${{ secrets.APP_TOKEN }}
           DEPLOY_HEALTH_TIMEOUT_SECONDS: ${{ vars.DEPLOY_HEALTH_TIMEOUT_SECONDS }}
-        run: python3 scripts/coolify_release.py
+        run: python3 -m scripts.coolify_release
       - name: Verify isolated mini-app lifecycle (staging only)
         if: github.event_name == 'workflow_run'
         env:

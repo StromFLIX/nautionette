@@ -165,9 +165,11 @@ test restores. Protect backups as secrets. See [output storage](chat-outputs.md)
 ## Update or stop
 
 Back up before an update and inspect release notes. Temporal's migration off the
-legacy auto-setup image requires a separate maintenance window: follow the
-[consecutive-minor upgrade and restore runbook](temporal-upgrade.md), not a tag
-substitution. The maintained overlay is opt-in until each stack is migrated.
+legacy auto-setup image requires a maintenance window: follow the
+[automatic deployment and manual initialization runbook](temporal-upgrade.md), not
+a tag substitution. Coolify deployments run migration hooks automatically;
+manual Compose updates do not. Migrate existing data before starting the maintained
+server default, and explicitly initialize genuinely empty installations.
 
 In a normal branch checkout:
 
