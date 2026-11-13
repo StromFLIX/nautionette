@@ -29,9 +29,11 @@ async def run():
     controller = "nautionette-temporal-" + fixture.prefix
     services = {}
     try:
-        fixture.docker("network", "create", fixture.network)
+        fixture.docker("network", "create", "--internal", fixture.network)
         client.networks.create(internal)
-        fixture.postgres("postgres")
+        pg = fixture.postgres("postgres")
+        # Coolify adds a shared network as well as Compose's private data net.
+        client.networks.get(internal).connect(pg, aliases=["postgres-coolify"])
         # Match the real preflight discovery: Coolify had persisted a 1.29.0 build arg.
         legacy = fixture.build("1.29.0", "legacy")
         old, address = fixture.start(legacy)

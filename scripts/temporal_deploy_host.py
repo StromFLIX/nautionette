@@ -143,6 +143,18 @@ def schemas(stack: dict) -> tuple[str, str]:
     )
 
 
+def private_data_network(temporal: dict, postgres: dict) -> str:
+    common = set(temporal["NetworkSettings"]["Networks"]) & set(postgres["NetworkSettings"]["Networks"])
+    # Coolify also attaches its shared application/proxy network. Never run
+    # migration servers there: select the one Engine-internal data network.
+    private = [
+        name for name in common if json.loads(docker("network", "inspect", name))[0].get("Internal") is True
+    ]
+    if len(private) != 1:
+        raise RuntimeError("Cannot establish the private PostgreSQL network")
+    return private[0]
+
+
 def preflight(path: Path, app: str, target: str) -> dict:
     rows = storage.containers()
     stack = storage.inventory(rows, app, target)
@@ -165,10 +177,7 @@ def preflight(path: Path, app: str, target: str) -> dict:
         raise RuntimeError("Unsupported Temporal version/schema pair; refusing automatic migration")
     temporal = next(row for row in rows if row["Id"] == member(stack, "temporal"))
     postgres = next(row for row in rows if row["Id"] == member(stack, "postgres"))
-    data = set(temporal["NetworkSettings"]["Networks"]) & set(postgres["NetworkSettings"]["Networks"])
-    if len(data) != 1:
-        raise RuntimeError("Cannot establish the private PostgreSQL network")
-    stack["data_network"] = next(iter(data))
+    stack["data_network"] = private_data_network(temporal, postgres)
     settings = storage.env(temporal)
     if (
         settings.get("DB") != "postgres12"

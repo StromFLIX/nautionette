@@ -55,6 +55,18 @@ def test_hooks_use_only_existing_coolify_credentials_and_preserve_custom_hooks(m
     assert "python3 -m scripts.coolify_release" in workflow
 
 
+def test_preflight_selects_private_data_network_not_coolifys_shared_network(monkeypatch):
+    container = {"NetworkSettings": {"Networks": {"data": {}, "coolify": {}}}}
+    monkeypatch.setattr(host, "docker", lambda *args: json.dumps([{"Internal": args[-1] == "data"}]))
+    assert host.private_data_network(container, container) == "data"
+    monkeypatch.setattr(host, "docker", lambda *args: json.dumps([{"Internal": False}]))
+    with pytest.raises(RuntimeError, match="private PostgreSQL"):
+        host.private_data_network(container, container)
+    monkeypatch.setattr(host, "docker", lambda *args: json.dumps([{"Internal": True}]))
+    with pytest.raises(RuntimeError, match="private PostgreSQL"):
+        host.private_data_network(container, container)
+
+
 def test_helper_container_names_fit_docker_dns_labels():
     first = Path("a" * 100)
     second = Path("b" * 100)
