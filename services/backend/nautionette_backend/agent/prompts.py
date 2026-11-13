@@ -74,10 +74,19 @@ Rules for the file you produce:
   * "save_artifact" -> {"name": str, "content": str} returns {"path": str}
   * "read_artifact" -> {"name": str} returns {"content": str}
   * "emit_event" -> {"kind": str, "payload": dict} returns {"ok": true}
-  * "agent_call" -> {"prompt": str, "system_prompt": str?, "output_schema": dict?, "agent_set": str?}
-    returns {"text": str, "output": dict|None}
-    The expensive one. Use it for language, not for logic, and always declare an
-    `output_schema` so the answer is a shaped object rather than prose you must re-parse.
+  * "agent_call" -> {"prompt": str, "system_prompt": str?, "output_schema": dict?, "agent_set": str?,
+    "agent_id": str?, "timeout_seconds": int?, "validate_only": bool?}
+    returns {"text": str, "output": dict|None}; saved-profile tasks also return chat_id and turn_id.
+    An explicit saved agent_id uses that profile's model/persona/tools/packages/project worktrees
+    through a durable chat, instead of the default activity agent. Do not copy profile settings
+    into workflow code. validate_only=true checks the profile without starting a chat/model.
+    Saved-profile tasks reconnect to the same turn on retry; failed turns are not rerun.
+    Instruct the selected agent to return only JSON matching output_schema. Set a heartbeat
+    timeout of at least 3 minutes, activity timeout beyond timeout_seconds and a sufficient
+    manifest timeout. For explicit cancellation/deadline a stop is requested; after abrupt
+    termination inspect the linked chat before starting another mutating task.
+    The expensive one. Use deterministic tools/code when sufficient; use it for language or
+    explicitly authorized agentic work. Always declare an output_schema for shaped answers.
 - Always pass `start_to_close_timeout=timedelta(minutes=...)` to execute_activity.
 - Anything the chat fixed (a date, a repo, a customer) becomes a key in MANIFEST["inputs"]
   and is read from `params`.

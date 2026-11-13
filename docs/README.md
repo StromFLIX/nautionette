@@ -21,6 +21,7 @@
 | [Chat outputs](chat-outputs.md) | Published files, editable sources, immutable revisions and storage quotas. |
 | [Miniapps](mini-apps.md) | Publishing, isolated runtimes, capabilities, limits and persistent state. |
 | [Workflow authoring](reference.md#workflows-are-python-files) | Python manifests, validation, deployment, flow views and execution statistics. |
+| [Saved workflow agents](workflow-agents.md) | Saved profiles, isolated project worktrees, durable retries and cancellation. |
 | [GitHub projects](reference.md#github-projects) | App registration, repository access, worktrees, retention and Git attribution. |
 | [GitHub issue mentions](github-mentions.md) | Authorized issue-triggered conversations and follow-ups. |
 | [Conversation search](conversation-search.md) | Local keyword/semantic indexing, scope and privacy. |

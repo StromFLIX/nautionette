@@ -7,14 +7,18 @@ strings. All of them are deterministic except "agent_call".
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 import httpx
+import jsonschema
 from temporalio import activity
 
 log = logging.getLogger("worker.activities")
@@ -35,6 +39,25 @@ def _headers() -> dict[str, str]:
 async def agent_call(params: dict[str, Any]) -> dict[str, Any]:
     """One agent step. Structured output in, one JSON object out."""
     info = activity.info()
+    if "agent_id" in params:
+        try:
+            return await _profile_agent_call(params)
+        except asyncio.CancelledError:
+            # Worker redeployment reconnects; an explicit Temporal cancellation
+            # requests a normal chat stop. Abrupt workflow termination cannot
+            # deliver cancellation and still requires inspecting the linked chat.
+            if (
+                activity.is_cancelled()
+                and not activity.is_worker_shutdown()
+                and not params.get("validate_only")
+            ):
+                try:
+                    async with httpx.AsyncClient(timeout=30) as client:
+                        stopped = await client.delete(_profile_task_url(), headers=_headers())
+                        stopped.raise_for_status()
+                except Exception:  # noqa: BLE001 - preserve cancellation, report uncertain cleanup
+                    log.exception("Could not stop cancelled saved-agent task %s", _profile_task_url())
+            raise
     payload = {
         "prompt": params.get("prompt", ""),
         "system_prompt": params.get("system_prompt"),
@@ -56,6 +79,62 @@ async def agent_call(params: dict[str, Any]) -> dict[str, Any]:
     schema = params.get("output_schema")
     if schema and result.get("output") is None:
         raise RuntimeError("agent returned text where a structured object was declared")
+    return result
+
+
+def _profile_task_url() -> str:
+    info = activity.info()
+    key = hashlib.sha256(f"{info.workflow_run_id}:{info.activity_id}".encode()).hexdigest()
+    return f"{BACKEND_URL}/internal/agent/tasks/{key}"
+
+
+async def _profile_agent_call(params: dict[str, Any]) -> dict[str, Any]:
+    """Reconnect to one durable chat turn instead of replaying side effects.
+
+    This key excludes the activity attempt, but includes the workflow run ID so
+    the next scheduled execution starts a fresh task. Profile settings/projects
+    are snapshotted at admission by the backend, not copied from workflow input.
+    """
+    url = _profile_task_url()
+    deadline = time.monotonic() + int(params.get("timeout_seconds") or AGENT_TIMEOUT_SECONDS)
+    async with httpx.AsyncClient(timeout=httpx.Timeout(60, connect=10)) as client:
+        response = await client.post(
+            url,
+            json={
+                "agent_id": params["agent_id"],
+                "prompt": params.get("prompt", ""),
+                "validate_only": params.get("validate_only", False),
+            },
+            headers=_headers(),
+        )
+        response.raise_for_status()
+        result = response.json()
+        if params.get("validate_only"):
+            if not result.get("validated") or not result.get("ok"):
+                raise RuntimeError("Saved agent profile validation failed")
+            return result
+        while "ok" not in result:
+            if time.monotonic() >= deadline:
+                stopped = await client.delete(url, headers=_headers())
+                stopped.raise_for_status()
+                raise TimeoutError(
+                    f"Saved agent task timed out; stop requested for chat {result.get('chat_id')}"
+                )
+            activity.heartbeat({"chat_id": result.get("chat_id"), "turn_id": result.get("turn_id")})
+            await asyncio.sleep(10)
+            response = await client.get(url, headers=_headers())
+            response.raise_for_status()
+            result = response.json()
+    if not result.get("ok"):
+        raise RuntimeError(result.get("error") or "Saved agent task failed")
+    schema = params.get("output_schema")
+    if schema:
+        text = result.get("text", "").strip()
+        if text.startswith("```json") and text.endswith("```"):
+            text = text[7:-3].strip()
+        output = json.loads(text)
+        jsonschema.validate(output, schema)
+        result["output"] = output
     return result
 
 
