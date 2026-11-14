@@ -1,10 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { releaseDownloads, appleDistributionURL, loadDownloads, RELEASE_API } from './releases.mjs'
+import { brand } from './brand.mjs'
+import { releaseDownloads, appleDistributionURL, loadDownloads, RELEASE_API, RELEASES_URL } from './releases.mjs'
 
 function asset (suffix, extra = {}) {
   return { name: `nautionette-v1.2.3-${suffix}`, state: 'uploaded', size: 100,
-    browser_download_url: `https://github.com/StromFLIX/nautionette/releases/download/v1.2.3/nautionette-v1.2.3-${suffix}`, ...extra }
+    browser_download_url: `${brand.repository}/releases/download/v1.2.3/nautionette-v1.2.3-${suffix}`, ...extra }
 }
 function documentStub () {
   const nodes = Object.fromEntries(['release-status', 'release-downloads', 'ios-status'].map(id => [id, {
@@ -13,12 +14,18 @@ function documentStub () {
   return { getElementById: id => nodes[id], createElement: () => ({}) }
 }
 
+test('release API and download links share the canonical brand repository', () => {
+  assert.equal(RELEASES_URL, `${brand.repository}/releases`)
+  assert.equal(RELEASE_API, `https://api.github.com/repos${new URL(brand.repository).pathname}/releases/latest`)
+})
+
 test('published release assets map to exact platform downloads, not guessed URLs', () => {
   const release = { tag_name: 'v1.2.3', assets: [
     ...['mac-arm64.dmg', 'mac-x64.dmg', 'linux-x86_64.AppImage', 'win-x64.exe', 'release.apk'].map(suffix => asset(suffix)),
     asset('debug.apk'), asset('ios-unsigned-archive.zip'),
     asset('release.apk', { state: 'new' }), asset('release.apk', { size: 0 }),
     asset('release.apk', { browser_download_url: 'https://evil.example/download.apk' }),
+    asset('release.apk', { browser_download_url: 'https://github.com/other/repo/releases/download/v1.2.3/nautionette-v1.2.3-release.apk' }),
     asset('release.apk', { name: 'nautionette-v0.0.1-release.apk' })
   ] }
   const downloads = releaseDownloads(release)

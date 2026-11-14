@@ -187,7 +187,7 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
     template = website / "index.template.html"
     if template.exists():
         html = template.read_text()
-        for key in ["name", "tagline", "description"]:
+        for key in ["name", "tagline", "description", "repository"]:
             html = html.replace("{{brand." + key + "}}", escape(brand[key], quote=True))
         html = html.replace('"/assets/denkzeug-icon.svg"', f'"/assets/denkzeug-icon.svg?v={logo_version}"')
         html = re.sub(r'href="/favicon\.svg(?:\?[^"]*)?"', f'href="/favicon.svg?v={logo_version}"', html)

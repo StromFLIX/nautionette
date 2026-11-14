@@ -1,5 +1,8 @@
-export const RELEASES_URL = 'https://github.com/StromFLIX/nautionette/releases'
-export const RELEASE_API = 'https://api.github.com/repos/StromFLIX/nautionette/releases/latest'
+import { brand } from './brand.mjs'
+
+const repository = new URL(brand.repository)
+export const RELEASES_URL = `${brand.repository}/releases`
+export const RELEASE_API = `https://api.github.com/repos${repository.pathname}/releases/latest`
 
 // Only link assets GitHub actually published. A failed/pending platform build
 // must never produce a fabricated /latest/download URL or a dead button.
@@ -11,7 +14,7 @@ export function releaseDownloads (release) {
     if (asset.state !== 'uploaded' || !asset.size || !asset.name?.startsWith(prefix)) continue
     let url
     try { url = new URL(asset.browser_download_url) } catch { continue }
-    if (url.origin !== 'https://github.com' || !url.pathname.startsWith('/StromFLIX/nautionette/releases/download/')) continue
+    if (url.origin !== repository.origin || !url.pathname.startsWith(`${repository.pathname}/releases/download/`)) continue
     const suffix = asset.name.slice(prefix.length)
     const labels = {
       'mac-arm64.dmg': 'macOS · Apple silicon',

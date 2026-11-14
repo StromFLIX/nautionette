@@ -55,8 +55,17 @@ def test_repository_cutover_syncs_links_and_release_reads_but_not_runtime_identi
         assert "git clone https://github.com/StromFLIX/denkzeug.git" in text
         assert "cd denkzeug\n" in text
         assert "StromFLIX/nautionette" not in text
-    for name in ("docs/staging.md", "docs/github-pipelines.md", "services/website/brand.mjs"):
+    for name in (
+        "docs/staging.md",
+        "docs/github-pipelines.md",
+        "services/website/brand.mjs",
+        "services/website/index.html",
+    ):
         assert "StromFLIX/denkzeug" in files[ROOT / name].decode()
+    html = files[ROOT / "services/website/index.html"].decode()
+    assert "StromFLIX/nautionette" not in html
+    assert 'data-copy="git clone https://github.com/StromFLIX/denkzeug"' in html
+    assert 'href="https://github.com/StromFLIX/denkzeug/releases"' in html
     workflow = files[ROOT / "workflows/prepare_nautionette_release.py"].decode()
     assert 'REPO = "StromFLIX/denkzeug"' in workflow
     assert '@workflow.defn(name="prepare_nautionette_release")' in workflow

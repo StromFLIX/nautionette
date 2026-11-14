@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { definitions, definitionFor, setupDefinition } from './definitions.mjs'
 import { createField, nextGeneration, visibleCells } from './activity.mjs'
 import { appURL } from './urls.mjs'
+import { brand } from './brand.mjs'
 
 const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8')
 
@@ -134,7 +135,7 @@ test('website keeps working deployment and release contracts with reusable vecto
   for (const heading of ['Free', 'Remote', 'Extensible', 'Create', 'Process', 'Show']) assert.ok(html.includes(`>${heading}</h3>`))
   for (const id of ['app-link', 'release-status', 'release-downloads', 'ios-status']) assert.ok(html.includes(`id="${id}"`))
   assert.ok(html.includes('https://getartcraft.com/'))
-  assert.ok(html.includes('https://github.com/StromFLIX/nautionette#run-it'))
+  assert.ok(html.includes(`${brand.repository}#run-it`))
   for (const asset of ['assets/denkzeug-icon.svg', 'assets/fonts/Sora.woff2', 'assets/fonts/SourceSerif4.woff2']) assert.ok(existsSync(new URL(asset, import.meta.url)))
   const svg = readFileSync(new URL('./assets/denkzeug-icon.svg', import.meta.url), 'utf8')
   assert.ok(svg.includes('<path'))

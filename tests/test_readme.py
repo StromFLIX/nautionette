@@ -57,7 +57,8 @@ def test_readme_is_a_short_branded_front_page_with_real_images_and_status_badges
     assert len(text.splitlines()) < 230
     assert "sslip.io" not in text
     assert "actions/workflows/ci.yml/badge.svg?branch=main" in text
-    assert "img.shields.io/github/v/release/StromFLIX/nautionette" in text
+    repository = brand["repository"].removeprefix("https://github.com/")
+    assert f"img.shields.io/github/v/release/{repository}" in text
     html = Links()
     html.feed(text)
     screenshots = [image for image in html.images if image["src"].startswith("services/website/assets/")]
@@ -120,8 +121,9 @@ def test_documentation_paths_and_local_section_links_resolve():
 
 
 def test_existing_website_readme_deep_links_keep_working():
-    html = (ROOT / "services/website/index.template.html").read_text()
-    fragments = re.findall(r"https://github\.com/StromFLIX/nautionette#([a-z0-9-]+)", html)
+    html = (ROOT / "services/website/index.html").read_text()
+    repository = json.loads((ROOT / "branding/brand.json").read_text())["repository"]
+    fragments = re.findall(re.escape(repository) + r"#([a-z0-9-]+)", html)
     assert {"run-it", "mini-apps", "workflows-are-python-files"}.issubset(fragments)
     assert set(fragments).issubset(anchors(README.read_text()))
 
