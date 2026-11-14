@@ -136,6 +136,8 @@ test('website keeps working deployment and release contracts with reusable vecto
   for (const id of ['app-link', 'release-status', 'release-downloads', 'ios-status']) assert.ok(html.includes(`id="${id}"`))
   assert.ok(html.includes('https://getartcraft.com/'))
   assert.ok(html.includes(`${brand.repository}#run-it`))
+  assert.ok(html.includes('Existing instance addresses and installer filenames keep their Nautionette names for compatibility.'))
+  assert.ok(!html.includes('Repository links, instance addresses and installation commands still use'))
   for (const asset of ['assets/denkzeug-icon.svg', 'assets/fonts/Sora.woff2', 'assets/fonts/SourceSerif4.woff2']) assert.ok(existsSync(new URL(asset, import.meta.url)))
   const svg = readFileSync(new URL('./assets/denkzeug-icon.svg', import.meta.url), 'utf8')
   assert.ok(svg.includes('<path'))

@@ -1,9 +1,10 @@
 # Denkzeug — shared brand direction
 
 The approved website direction now carries through the application. Display names,
-logos, typography and visual hierarchy use Denkzeug. Domains, environment variable
-names, repository links, package/app IDs, installer filenames and API contracts stay
-unchanged until the separately approved technical migration.
+logos, typography and visual hierarchy use Denkzeug. Repository links follow the
+canonical repository in `branding/brand.json`, now `StromFLIX/denkzeug`. Domains,
+environment variable names, package/app IDs, installer filenames and API contracts
+retain their existing identities; a repository rename does not migrate them.
 
 ## Design intent
 
