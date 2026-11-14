@@ -8,24 +8,28 @@ export const RELEASE_API = `https://api.github.com/repos${repository.pathname}/r
 // must never produce a fabricated /latest/download URL or a dead button.
 export function releaseDownloads (release) {
   if (!release || release.draft || release.prerelease || typeof release.tag_name !== 'string') return []
-  const prefix = `nautionette-${release.tag_name}-`
-  const downloads = []
-  for (const asset of release.assets || []) {
-    if (asset.state !== 'uploaded' || !asset.size || !asset.name?.startsWith(prefix)) continue
-    let url
-    try { url = new URL(asset.browser_download_url) } catch { continue }
-    if (url.origin !== repository.origin || !url.pathname.startsWith(`${repository.pathname}/releases/download/`)) continue
-    const suffix = asset.name.slice(prefix.length)
-    const labels = {
-      'mac-arm64.dmg': 'macOS · Apple silicon',
-      'mac-x64.dmg': 'macOS · Intel',
-      'linux-x86_64.AppImage': 'Linux · x64',
-      'win-x64.exe': 'Windows · x64',
-      'release.apk': 'Android · APK'
-    }
-    if (labels[suffix]) downloads.push({ label: labels[suffix], url: url.href, name: asset.name })
+  // Never rename existing release assets. Prefer new names if a transitional
+  // release publishes both; show exactly one real uploaded asset per platform.
+  const prefixes = [...new Set([brand.artifactPrefix, 'nautionette'])].map(name => `${name}-${release.tag_name}-`)
+  const downloads = new Map()
+  const labels = {
+    'mac-arm64.dmg': 'macOS · Apple silicon',
+    'mac-x64.dmg': 'macOS · Intel',
+    'linux-x86_64.AppImage': 'Linux · x64',
+    'win-x64.exe': 'Windows · x64',
+    'release.apk': 'Android · APK'
   }
-  return downloads.sort((a, b) => a.label.localeCompare(b.label))
+  for (const prefix of prefixes) {
+    for (const asset of release.assets || []) {
+      if (asset.state !== 'uploaded' || !asset.size || !asset.name?.startsWith(prefix)) continue
+      let url
+      try { url = new URL(asset.browser_download_url) } catch { continue }
+      if (url.origin !== repository.origin || url.username || url.password || !url.pathname.startsWith(`${repository.pathname}/releases/download/`)) continue
+      const suffix = asset.name.slice(prefix.length)
+      if (labels[suffix] && !downloads.has(suffix)) downloads.set(suffix, { label: labels[suffix], url: url.href, name: asset.name })
+    }
+  }
+  return [...downloads.values()].sort((a, b) => a.label.localeCompare(b.label))
 }
 
 export function appleDistributionURL (value) {

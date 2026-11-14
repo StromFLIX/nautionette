@@ -16,7 +16,8 @@ The website's editable HTML is `services/website/index.template.html`; its gener
 Frontend components import `{ brand }` from `src/brand.js` (`name`, `tagline`,
 `description`, `logo`, `colors`, `defaultTheme`). Its generated `src/brand-data.json`
 is bundled by Vite, rather than importing a public-directory file as a module.
-Python services use `from nautionette.brand import NAME`. Electron uses
+New Python integrations can use `from denkzeug.brand import NAME`; the existing
+import remains an alias to the same module. Electron uses
 `desktop/brand.json`; Pi runtime/extension manifests and the agent-instruction
 Markdown are synchronized too. Edit `AGENTS.template.md` for those instructions.
 Use existing semantic theme tokens, not hardcoded light colors in components.
@@ -54,15 +55,22 @@ Do not independently redraw or manually copy marks into each platform. See
 - Keep forms, keyboard navigation, authentication, drafts, saved themes/skins,
   accessibility preferences and small-screen safe areas intact.
 
-## Deliberately unchanged until the next migration
+## Technical-name transition
 
-Domains and instance addresses; environment variable names; repository URLs;
-Python/npm package names and imports; Docker image names; app IDs and signing
-identities; OAuth/custom-URI schemes; IPC/miniapp bridge names and message types;
-API paths and tool IDs; database, telemetry and local-storage namespaces;
-installer artifact names and updater identity. Existing user-selected names,
-Git identities and old saved content are data, not branding to rewrite.
+Public origins, repository URL and the installer filename prefix are fields in
+`brand.json`. Sync updates active documentation, client download metadata and
+release-preparation links. Newly built installers use `denkzeug-*`; old published
+assets are not renamed and remain downloadable.
 
-Display names, visible copy, favicons, window/app labels and permission descriptions
-should say Denkzeug. Legacy technical tokens such as `nautionette-skin` stay accepted
-for compatibility, even when their UI calls them Denkzeug design packs.
+New mini-app code uses `window.denkzeug`; new skin exports use `denkzeug-skin`;
+new desktop return links use `denkzeug://`. Compatibility aliases accept existing
+code, packs and links. Fresh desktop profiles and fresh `.env.example` installations
+use Denkzeug names without moving an existing profile, queue, bucket or volume.
+
+Package distribution names, installed app IDs/signing identities, updater identity,
+existing resource labels/volumes, database and browser-storage keys, workflow types
+and saved user content remain stable. Python aliases share their original module
+objects, including mutable service singletons and serialization identities.
+See [the migration matrix](../docs/technical-naming-migration.md) before removing
+any compatibility path; Git identities and user-authored content are not branding
+that can be globally rewritten.

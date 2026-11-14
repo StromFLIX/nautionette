@@ -6,6 +6,11 @@ tweak the active design's tokens, and download packs to share. Preferences and t
 library are saved on this device and synchronized between tabs; they are not
 instance settings and do not travel with your account.
 
+New exports use the `denkzeug-skin` format marker. Existing `nautionette-skin`
+version-2 packs remain accepted with the same validation rules. Loading an old
+saved library does not rewrite its markers; explicitly exporting a pack uses the
+new spelling. Database/browser-storage names are unchanged.
+
 ## Two complete examples
 
 - [Winamp Classic](../services/frontend/src/skin-examples/winamp-classic.skin.json):
@@ -42,7 +47,7 @@ keeps installed packs.
 
 ```json
 {
-  "format": "nautionette-skin",
+  "format": "denkzeug-skin",
   "version": 2,
   "id": "my-studio",
   "name": "My Studio",

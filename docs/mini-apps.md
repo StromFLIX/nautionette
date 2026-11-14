@@ -23,11 +23,16 @@ Apps are **not pinned by default**. `PATCH` with `expected_revision`, `pinned: t
 ## Browser contract
 
 ```javascript
-await nautionette.ready
-const state = await nautionette.request('/state')
-const changed = await nautionette.request('/increment', { method: 'POST' })
-window.addEventListener('nautionette-theme', event => { /* optional */ })
+await denkzeug.ready
+const state = await denkzeug.request('/state')
+const changed = await denkzeug.request('/increment', { method: 'POST' })
+window.addEventListener('denkzeug-theme', event => { /* optional */ })
 ```
+
+`window.denkzeug` is the canonical API. Existing saved apps using `window.nautionette`
+continue to work: both names reference the same frozen bridge, promise and request
+stream. Both theme-event names are emitted. Published app source and SQLite data
+are not rewritten as part of branding; use the new spelling for new apps.
 
 The host supplies theme tokens as CSS variables (for example `--surface-app`, `--text`, `--accent`) and interface scale. The bridge generates a fresh request ID for mutations unless the app supplies a previously retained ID.
 

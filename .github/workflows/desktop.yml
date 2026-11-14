@@ -58,7 +58,7 @@ jobs:
         run: xvfb-run -a node scripts/smoke-desktop.mjs
       - uses: actions/upload-artifact@v7
         with:
-          name: nautionette-desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          name: denkzeug-desktop-${{ matrix.platform }}-${{ matrix.arch }}
           path: |
             services/frontend/out/desktop/*.dmg
             services/frontend/out/desktop/*.exe

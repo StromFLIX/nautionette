@@ -87,18 +87,18 @@ jobs:
         run: |
           bash scripts/sign-android-release.sh \
             android/app/build/outputs/apk/release/app-release-unsigned.apk \
-            "out/nautionette-${GITHUB_REF_NAME}-release.apk"
+            "out/denkzeug-${GITHUB_REF_NAME}-release.apk"
 
       - name: Name debug APK after the commit
         if: "!startsWith(github.ref, 'refs/tags/v')"
         run: |
           mkdir -p out
           cp android/app/build/outputs/apk/debug/app-debug.apk \
-             "out/nautionette-${GITHUB_SHA::7}-debug.apk"
+             "out/denkzeug-${GITHUB_SHA::7}-debug.apk"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: nautionette-apk
+          name: denkzeug-apk
           path: services/frontend/out/*.apk
           if-no-files-found: error
           retention-days: 30

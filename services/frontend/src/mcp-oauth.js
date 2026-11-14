@@ -1,7 +1,7 @@
 import { brand } from './brand.js'
 
 export function desktopOAuth () {
-  const bridge = globalThis.nautionetteDesktop?.oauth
+  const bridge = (globalThis.denkzeugDesktop || globalThis.nautionetteDesktop)?.oauth
   return bridge?.version === 1 && ['prepare', 'authorize', 'cancel'].every(key => typeof bridge[key] === 'function') ? bridge : null
 }
 

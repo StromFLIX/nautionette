@@ -56,7 +56,7 @@ function stylesheet (css, assets) {
 }
 
 export function validateSkin (data) {
-  if (!record(data) || data.format !== 'nautionette-skin' || data.version !== 2) fail(`Use a ${brand.name} skin pack (version 2) or a legacy theme export.`)
+  if (!record(data) || !['denkzeug-skin', 'nautionette-skin'].includes(data.format) || data.version !== 2) fail(`Use a ${brand.name} skin pack (version 2) or a legacy theme export.`)
   if (bytes(JSON.stringify(data)) > MAX_SKIN_BYTES) fail('Skin packs must be smaller than 512 KB.')
   if (typeof data.id !== 'string' || !ID.test(data.id)) fail('Skin id must start with a lowercase letter and contain only letters, digits and hyphens (up to 64 characters).')
   if (typeof data.name !== 'string' || !data.name.trim() || data.name.length > 80) fail('Skin name is required (up to 80 characters).')
@@ -76,7 +76,9 @@ export function validateSkin (data) {
   }
   stylesheet(data.css, assets)
   // Whitelist export fields: never copy workspace/account data or prototypes.
-  return { format: 'nautionette-skin', version: 2, id: data.id, name: data.name.trim(),
+  // Preserve the spelling of persisted legacy packs; only an explicit export
+  // changes their format marker. Loading preferences must not rewrite user data.
+  return { format: data.format, version: 2, id: data.id, name: data.name.trim(),
     author: data.author || '', description: data.description || '', base: data.base,
     tokens: { ...data.tokens }, css: data.css, assets: { ...assets } }
 }
@@ -89,7 +91,7 @@ export function importDesign (text) {
 }
 
 export function exportSkin (skin, overrides = {}) {
-  return JSON.stringify(validateSkin({ ...skin, tokens: { ...skin.tokens, ...overrides } }), null, 2)
+  return JSON.stringify(validateSkin({ ...skin, format: 'denkzeug-skin', tokens: { ...skin.tokens, ...overrides } }), null, 2)
 }
 
 export function installSkin (library, input) {

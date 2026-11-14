@@ -29,6 +29,20 @@ test('web, mobile and old markers are not desktop OAuth capabilities', () => {
   delete globalThis.nautionetteDesktop
 })
 
+test('canonical desktop bridge is preferred while older installed clients remain supported', () => {
+  const canonical = fixture().bridge, legacy = fixture().bridge
+  try {
+    globalThis.denkzeugDesktop = { oauth: canonical }
+    globalThis.nautionetteDesktop = { oauth: legacy }
+    assert.equal(desktopOAuth(), canonical)
+    delete globalThis.denkzeugDesktop
+    assert.equal(desktopOAuth(), legacy)
+  } finally {
+    delete globalThis.denkzeugDesktop
+    delete globalThis.nautionetteDesktop
+  }
+})
+
 test('CLI-owned login uses detected port and preserves POST; receiver ID never overwrites capture ID', async () => {
   const f = fixture()
   const controller = oauthConnection({ ...f, interval: 1, context: () => 'instance' })

@@ -19,13 +19,13 @@ Known production resource:
 - Application: `88veejhhzve4rjcnxzlyjzbo`
 - Server: `hetzner-1`, `94.130.151.7`
 - Repository: `StromFLIX/denkzeug`, branch `main`, Docker Compose
-- App: `https://app.nautionette.stromflix.com`
-- Site: `https://nautionette.stromflix.com`
+- App: `https://app.denkzeug.ai`
+- Site: `https://denkzeug.ai`
 
 Desired staging domains (DNS records supplied by the owner):
 
-- Backend: `https://app.nautionette.stage.stromflix.com`
-- Website: `https://nautionette.stage.stromflix.com`
+- Backend: `https://app.stage.denkzeug.ai`
+- Website: `https://stage.denkzeug.ai`
 
 ## 1. Provision without starting a cloned database
 
@@ -47,9 +47,9 @@ STACK_NAMESPACE=nautionette-stage
 APP_ENVIRONMENT=staging
 BACKEND_PORT=18080
 WEBSITE_PORT=18081
-APP_URL=https://app.nautionette.stage.stromflix.com
-GITHUB_APP_PUBLIC_URL=https://app.nautionette.stage.stromflix.com
-CORS_ORIGINS=https://app.nautionette.stage.stromflix.com
+APP_URL=https://app.stage.denkzeug.ai
+GITHUB_APP_PUBLIC_URL=https://app.stage.denkzeug.ai
+CORS_ORIGINS=https://app.stage.denkzeug.ai
 ```
 
 Use a different Compose project (Coolify normally uses the new application UUID).

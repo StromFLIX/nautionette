@@ -26,7 +26,8 @@ const primaryInstance = app.requestSingleInstanceLock()
 if (!primaryInstance) app.quit()
 else {
   app.on('second-instance', (_event, argv) => {
-    const link = argv.find(value => typeof value === 'string' && value.startsWith('nautionette:'))
+    const link = argv.find(value => typeof value === 'string' &&
+      (value.startsWith('denkzeug:') || value.startsWith('nautionette:')))
     if (link) appReturns.activate(link)
     else {
       const window = BrowserWindow.getAllWindows().find(item => !item.isDestroyed())
@@ -104,7 +105,11 @@ if (primaryInstance) app.whenReady().then(() => {
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null)
   // Development must not replace an installed app's OS handler. Packaged
   // installers declare this protocol too; the URL can only focus an owner.
-  if (app.isPackaged) returnProtocol = app.setAsDefaultProtocolClient('nautionette') || app.isDefaultProtocolClient('nautionette')
+  if (app.isPackaged) {
+    returnProtocol = app.setAsDefaultProtocolClient('denkzeug') || app.isDefaultProtocolClient('denkzeug')
+    // Retain already-issued/older browser return links during the transition.
+    app.setAsDefaultProtocolClient('nautionette')
+  }
   const root = path.resolve(__dirname, '../dist')
   protocol.handle('capacitor', request => {
     const file = assetPath(root, request.url)

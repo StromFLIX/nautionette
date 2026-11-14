@@ -38,6 +38,31 @@ async function mockApps (context, js) {
   return { state, item, apps, calls, writes, network, reads }
 }
 
+test('Denkzeug and legacy mini-app names share one isolated bridge and mutation stream', async ({ page, context }) => {
+  const { calls } = await mockApps(context, `
+    const themes = new Set();
+    for (const name of ['denkzeug-theme', 'nautionette-theme']) addEventListener(name, () => {
+      themes.add(name); document.body.dataset.themes = [...themes].sort().join(',');
+    });
+    denkzeug.ready.then(async()=>{
+      document.body.dataset.alias = String(denkzeug === nautionette && Object.isFrozen(denkzeug));
+      const render = value => document.querySelector('#value').textContent = String(value.value);
+      render(await denkzeug.request('/state'));
+      document.querySelector('#increment').onclick = async()=>{
+        await denkzeug.request('/increment', {method:'POST'});
+        render(await nautionette.request('/state'));
+      };
+    });`)
+  await page.goto('/apps/counter')
+  const app = page.frameLocator('iframe[title="Counter"]')
+  await expect(app.locator('body')).toHaveAttribute('data-alias', 'true')
+  await expect(app.locator('body')).toHaveAttribute('data-themes', 'denkzeug-theme,nautionette-theme')
+  await expect(app.locator('#value')).toHaveText('0')
+  await app.getByRole('button', { name: 'Increment' }).click()
+  await expect(app.locator('#value')).toHaveText('1')
+  expect(calls.filter(call => call.payload.method === 'POST')).toHaveLength(1)
+})
+
 for (const width of [1440, 390, 320]) {
   test(`app bridge, mobile navigation, pins and durable reload at ${width}px`, async ({ page, context }) => {
     const { calls, writes } = await mockApps(context)

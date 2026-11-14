@@ -88,7 +88,7 @@ python -m http.server 9080 --directory services/website
 Existing deployment configuration (`APP_URL`, `APP_ENVIRONMENT`,
 `IOS_DOWNLOAD_URL`) still goes through `entrypoint.sh`. The container copies all
 local modules, fonts and SVG assets. The release loader continues to link only
-published installers under their unchanged `nautionette-*` filenames; unavailable platform builds never
+published `denkzeug-*` installers and legacy `nautionette-*` assets; unavailable platform builds never
 produce a fabricated download URL.
 
 ```sh

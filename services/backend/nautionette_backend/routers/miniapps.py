@@ -66,10 +66,11 @@ def miniapp_contract() -> dict:
         "frontend": (
             "Provide self-contained html (body markup), css and js strings. Inline scripts also work. "
             "No external scripts/styles/assets/network/storage/popups/forms/frames. "
-            "Embed images/fonts as data URLs. Use nautionette.ready and "
-            "nautionette.request('/state', {method:'GET'}); mutations use POST "
+            "Embed images/fonts as data URLs. Use denkzeug.ready and "
+            "denkzeug.request('/state', {method:'GET'}); mutations use POST "
             "and optional retained request_id. "
-            "Request results are JSON values. Listen for nautionette-theme for theme updates. "
+            "Request results are JSON values. Listen for denkzeug-theme for theme updates. "
+            "Existing nautionette.ready/request and nautionette-theme remain compatibility aliases. "
             "Never request the instance bearer token."
         ),
         "backend": (
@@ -133,11 +134,11 @@ def miniapp_contract() -> dict:
                     "button{padding:12px}"
                 ),
                 "js": (
-                    "nautionette.ready.then(async()=>{ "
+                    "denkzeug.ready.then(async()=>{ "
                     "const render=v=>document.querySelector('#count').textContent=v.value; "
-                    "render(await nautionette.request('/state')); "
+                    "render(await denkzeug.request('/state')); "
                     "document.querySelector('#increment').onclick=async()=>"
-                    "render(await nautionette.request('/increment',{method:'POST'})); });"
+                    "render(await denkzeug.request('/increment',{method:'POST'})); });"
                 ),
             },
             "backend": {

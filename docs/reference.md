@@ -223,7 +223,7 @@ The **Desktop** workflow (`.github/workflows/desktop.yml`) builds on pushes to
 | Windows | NSIS installer (EXE) | x64 |
 
 A `v<semver>` tag (for example `v1.2.3`) sets the desktop version and attaches
-`nautionette-v1.2.3-<mac|linux|win>-<arch>.<dmg|AppImage|exe>` to the same GitHub
+`denkzeug-v1.2.3-<mac|linux|win>-<arch>.<dmg|AppImage|exe>` to the same GitHub
 Release as Android. Branch/PR builds are available as Actions artifacts only.
 Packaging retries transient HTTP 429/5xx and network failures up to three attempts
 with 30/60-second backoff; checksum, compilation and signing errors fail normally.
@@ -287,8 +287,8 @@ public URL, not a signing credential.
 The **Android** workflow (`.github/workflows/android.yml`) builds debug APKs for
 pushes to `main`, pull requests and manual branch runs. Pushing a `v*` tag builds
 a release APK, aligns it, signs it, verifies the signature and attaches
-`nautionette-<tag>-release.apk` to the GitHub Release. Both paths also upload the
-`nautionette-apk` Actions artifact. Tag builds fail if signing secrets are missing;
+`denkzeug-<tag>-release.apk` to the GitHub Release. Both paths also upload the
+`denkzeug-apk` Actions artifact. Tag builds fail if signing secrets are missing;
 they never fall back to a debug or unsigned APK.
 
 ### One-time signing setup
@@ -348,7 +348,7 @@ not opened in the app's WebView or handed to an unauthenticated download URL.
 No broad storage permission is needed. Browser downloads work as before.
 
 This requires the updated APK, not just a server deployment. The **Android** GitHub
-Actions run publishes the `nautionette-apk` artifact for every push to `main`.
+Actions run publishes the `denkzeug-apk` artifact for every push to `main`.
 Install that APK to get the native save bridge. For a manual device check, save a
 PDF, an editable source and a preview from Outputs; verify their bytes and names
 in the selected destination, then check cancellation and retry.
@@ -870,7 +870,7 @@ organization approval may be required. **Repository access** reopens GitHub's ch
 
 GitHub must reach the instance over HTTPS. For local development, use a public HTTPS
 tunnel to the web frontend (including its `/api` proxy); localhost alone cannot receive
-webhooks. Set `GITHUB_APP_PUBLIC_URL=https://nautionette.example.com` in Compose to
+webhooks. Set `GITHUB_APP_PUBLIC_URL=https://denkzeug.example.com` in Compose to
 preconfigure the URL, or enter it in Projects. Use the same stable public origin for
 the frontend and backend callbacks. Behind an extra authentication proxy, allow the
 `/api/projects/github-app/start`, `/callback`, `/installed`, and `/webhook` paths:

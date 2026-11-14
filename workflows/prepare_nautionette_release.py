@@ -55,6 +55,8 @@ WEB = "https://github.com/" + REPO
 API = "https://api.github.com/repos/" + REPO
 STAGING = "tstmjujqyyl3zkvtwb0sx8nc"
 PRODUCTION = "88veejhhzve4rjcnxzlyjzbo"
+STAGING_URL = "https://app.stage.denkzeug.ai"
+PRODUCTION_URL = "https://app.denkzeug.ai"
 SEMVER = r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
 SHA = r"[0-9a-f]{40}"
 CATEGORIES = ["Features", "Fixes", "Breaking changes", "Upgrade instructions", "Maintenance"]
@@ -259,7 +261,7 @@ def publish_summary(tag, sha, previous, notes, checks, warnings, timestamp):
 ## Warnings and remaining manual checks
 {warning_text}
 - Coolify status/history is not an authenticated component health test or proof of manual acceptance testing.
-  Test [staging](https://app.nautionette.stage.stromflix.com) before publishing.
+  Test [staging]({STAGING_URL}) before publishing.
 - Repository/environment secrets, deployment enablement and branch/tag permissions are not proven here.
   See [pipeline setup]({WEB}/blob/main/docs/github-pipelines.md).
 - Staging must still run `{sha}` when you publish. If a newer staging deployment starts,
@@ -299,7 +301,7 @@ A failed push may leave the new tag locally.
 - [Open the Deploy Action]({WEB}/actions/workflows/deploy.yml), select the run for **{tag}**,
   and wait for success. A skipped or merely started run is not a deployment success.
 - [Open the published release]({WEB}/releases/tag/{tag}).
-- [Test the production app](https://app.nautionette.stromflix.com).
+- [Test the production app]({PRODUCTION_URL}).
 - If promotion is rejected because staging advanced, rerun preparation and choose a fresh version as needed.
   Never move `{tag}` to bypass the guard.
 """  # noqa: S608 - Markdown instructions, not a SQL query.
@@ -753,7 +755,7 @@ or evidence limitations. Include no assumed test results. If a claim has no suit
             summary = (
                 f"# {DISPLAY_NAME} release preparation blocked\n\n{reason}\n\n## Your next steps\n"
                 "1. Resolve the blocker above; no release/tag was created and no deployment was started.\n"
-                "2. Review [staging](https://app.nautionette.stage.stromflix.com), "
+                f"2. Review [staging]({STAGING_URL}), "
                 f"[Deploy Actions]({WEB}/actions/workflows/deploy.yml), "
                 f"[existing releases]({WEB}/releases), "
                 f"and [pipeline setup]({WEB}/blob/main/docs/github-pipelines.md).\n"

@@ -3,6 +3,7 @@
 const http = require('node:http')
 const crypto = require('node:crypto')
 const brand = require('./brand.json')
+const { isAppReturn } = require('./oauth-return.cjs')
 const LIMIT = 65536
 
 function redirectURL (value, ephemeral = false) {
@@ -32,7 +33,7 @@ function callbackFields (params, state) {
 function callbackPage (returnURL) {
   const nonce = crypto.randomBytes(16).toString('hex')
   const name = brand.name.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char])
-  const link = typeof returnURL === 'string' && /^nautionette:\/\/oauth-return\/[a-f0-9]{64}$/.test(returnURL)
+  const link = isAppReturn(returnURL)
     ? `<a href="${returnURL}">Open ${name}</a>` : ''
   return { nonce, html: `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Return to ${name}</title>
 <style>body{font:16px system-ui;background:${brand.colors.paper};color:${brand.colors.ink};display:grid;place-items:center;min-height:95vh;margin:0}main{max-width:440px;padding:32px}h1{font-size:28px;letter-spacing:-.04em}a{display:inline-block;background:${brand.colors.ink};color:${brand.colors.white};text-decoration:none;padding:12px 20px;border-radius:8px}a:focus-visible{outline:2px solid ${brand.colors.agentStrong};outline-offset:4px}p{line-height:1.6}</style>

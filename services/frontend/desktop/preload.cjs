@@ -5,7 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 ipcRenderer.on('window:fullscreen', (_event, fullscreen) => {
   document.documentElement.classList.toggle('desktop-fullscreen', fullscreen === true)
 })
-contextBridge.exposeInMainWorld('nautionetteDesktop', {
+const bridge = {
   windowControlsOverlay: process.platform !== 'darwin',
   oauth: {
     version: 1,
@@ -13,4 +13,7 @@ contextBridge.exposeInMainWorld('nautionetteDesktop', {
     authorize: payload => ipcRenderer.invoke('oauth:authorize', payload),
     cancel: () => ipcRenderer.invoke('oauth:cancel')
   }
-})
+}
+contextBridge.exposeInMainWorld('denkzeugDesktop', bridge)
+// Older installed renderers still use the same narrow, authenticated IPC API.
+contextBridge.exposeInMainWorld('nautionetteDesktop', bridge)

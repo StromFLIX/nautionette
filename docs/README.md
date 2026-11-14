@@ -1,6 +1,6 @@
 # Denkzeug documentation
 
-[Back to the project](../README.md) · [Website](https://nautionette.stromflix.com/)
+[Back to the project](../README.md) · [Website](https://denkzeug.ai/)
 
 ## Start here
 
@@ -39,6 +39,8 @@
   timings, limitations and the authenticated HTTP/SSE benchmark.
 - [Deployment pipelines](github-pipelines.md) — CI, releases, images and deployment checks.
 - [Repository rename](repository-rename.md) — staged GitHub rename without changing runtime/storage identity.
+- [Technical-name migration](technical-naming-migration.md) — Denkzeug defaults, compatibility aliases,
+  external callback migration and the stateful identities that must not be blindly renamed.
 - [Isolated staging](staging.md) — provisioning, production-data snapshots and
   quarantine precautions. This is an operator procedure, not the normal quick start.
 - [Current dependency audit](dependency-audit-2026-11-13.md),

@@ -14,8 +14,8 @@ Your agents, workflows and miniapps. A self-hosted home for the work that comes 
 </p>
 
 <p align="center">
-  <a href="https://nautionette.stromflix.com/">Website</a> ·
-  <a href="https://nautionette.stromflix.com/#workspace">Screenshot tour</a> ·
+  <a href="https://denkzeug.ai/">Website</a> ·
+  <a href="https://denkzeug.ai/#workspace">Screenshot tour</a> ·
   <a href="#run-it">Set up an instance</a> ·
   <a href="docs/README.md">Documentation</a> ·
   <a href="https://github.com/StromFLIX/denkzeug/releases">Downloads</a>
@@ -30,7 +30,7 @@ computer or phone.
   <a href="services/website/assets/product-tour/chat.png"><img src="services/website/assets/product-tour/chat.png" width="73%" alt="Actual Denkzeug desktop app: agents and chats beside a conversation and its published output." /></a>
   <a href="services/website/assets/product/phone.png"><img src="services/website/assets/product/phone.png" width="22%" alt="Actual Denkzeug phone app: the same conversation’s Outputs view with editable files and a PDF." /></a>
 </p>
-<p align="center"><sub>Actual app screenshots with demo data. Click to enlarge, or <a href="https://nautionette.stromflix.com/#workspace">explore the screenshot tour</a>.</sub></p>
+<p align="center"><sub>Actual app screenshots with demo data. Click to enlarge, or <a href="https://denkzeug.ai/#workspace">explore the screenshot tour</a>.</sub></p>
 
 ## Free. Remote. Extensible.
 
@@ -170,10 +170,10 @@ data, technical identities and compatibility paths.
 
 ---
 
-**Naming:** Denkzeug is the display name. Internal paths, environment variables,
-package IDs and installer filenames retain `nautionette` for compatibility.
-The [GitHub repository rename](docs/repository-rename.md) is a separate operation;
-it must not rename storage or runtime identities.
+**Naming:** Public links, new downloads and new installation defaults use Denkzeug.
+[Compatibility aliases and the migration matrix](docs/technical-naming-migration.md)
+keep existing apps, workflows, credentials and data working. Do not copy new
+namespace/queue/bucket defaults over an existing deployment or rename its storage.
 
 **Licensing:** this repository does not yet include a project-wide `LICENSE` file.
 Third-party code, fonts and other bundled assets retain their own licenses.

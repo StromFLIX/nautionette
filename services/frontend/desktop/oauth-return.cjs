@@ -17,7 +17,10 @@ function createFocusOwner ({ BrowserWindow, app, platform = process.platform }) 
     return true
   }
 }
-const PREFIX = 'nautionette://oauth-return/'
+const PREFIX = 'denkzeug://oauth-return/'
+function isAppReturn (value) {
+  return typeof value === 'string' && /^(?:denkzeug|nautionette):\/\/oauth-return\/[a-f0-9]{64}$/.test(value)
+}
 
 function createAppReturns ({ focus, now = Date.now, lifetime = 120000 }) {
   const pending = new Map()
@@ -40,12 +43,12 @@ function createAppReturns ({ focus, now = Date.now, lifetime = 120000 }) {
   function activate (value) {
     prune()
     // Strict spelling also rejects query strings, credentials, paths and ports.
-    if (typeof value !== 'string' || !/^nautionette:\/\/oauth-return\/[a-f0-9]{64}$/.test(value)) return false
-    const token = value.slice(PREFIX.length), item = pending.get(token)
+    if (!isAppReturn(value)) return false
+    const token = value.slice(value.lastIndexOf('/') + 1), item = pending.get(token)
     if (!item) return false
     pending.delete(token)
     return foreground(item.owner)
   }
   return { issue, foreground, activate, clear, close: () => pending.clear() }
 }
-module.exports = { createAppReturns, createFocusOwner }
+module.exports = { createAppReturns, createFocusOwner, isAppReturn }

@@ -36,6 +36,21 @@ test('published release assets map to exact platform downloads, not guessed URLs
   assert.deepEqual(releaseDownloads(null), [])
 })
 
+test('canonical installer names win without breaking old releases or duplicating platforms', () => {
+  const old = asset('release.apk')
+  const canonical = { ...old, name: old.name.replace('nautionette-', `${brand.artifactPrefix}-`),
+    browser_download_url: old.browser_download_url.replace('/nautionette-', `/${brand.artifactPrefix}-`) }
+  for (const assets of [[old, canonical], [canonical, old]]) {
+    const snapshot = JSON.stringify(assets)
+    const downloads = releaseDownloads({ tag_name: 'v1.2.3', assets })
+    assert.equal(downloads.length, 1)
+    assert.equal(downloads[0].name, canonical.name)
+    assert.equal(JSON.stringify(assets), snapshot)
+  }
+  assert.equal(releaseDownloads({ tag_name: 'v1.2.3', assets: [old] })[0].name, old.name)
+  assert.equal(releaseDownloads({ tag_name: 'v1.2.3', assets: [canonical] })[0].name, canonical.name)
+})
+
 test('Apple distribution accepts only public Apple installation links', () => {
   assert.equal(appleDistributionURL('https://testflight.apple.com/join/abcd'), 'https://testflight.apple.com/join/abcd')
   assert.equal(appleDistributionURL('https://apps.apple.com/us/app/example/id123456'), 'https://apps.apple.com/us/app/example/id123456')

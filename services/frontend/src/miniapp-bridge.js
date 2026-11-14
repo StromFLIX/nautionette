@@ -14,9 +14,13 @@ function bootstrap () {
       port.postMessage({ kind: 'request', id, path, method: options.method || 'GET', body: options.body ?? null, request_id: options.request_id || '' })
     })
   }
-  Object.defineProperty(window, 'nautionette', { value: Object.freeze({ ready, request }) })
+  const api = Object.freeze({ ready, request })
+  Object.defineProperty(window, 'denkzeug', { value: api })
+  // Saved mini-app source is user data. Keep the old API as the SAME bridge,
+  // not a second connection or request stream; never rewrite published apps.
+  Object.defineProperty(window, 'nautionette', { value: api })
   window.addEventListener('message', event => {
-    if (port || event.source !== parent || event.data?.kind !== 'nautionette:init' || !event.ports[0]) return
+    if (port || event.source !== parent || !['denkzeug:init', 'nautionette:init'].includes(event.data?.kind) || !event.ports[0]) return
     port = event.ports[0]
     port.onmessage = ({ data }) => {
       if (data.kind === 'theme') {
@@ -25,6 +29,7 @@ function bootstrap () {
         }
         document.documentElement.style.colorScheme = data.dark ? 'dark' : 'light'
         if (/^[0-9]+%$/.test(data.fontSize)) document.documentElement.style.fontSize = data.fontSize
+        window.dispatchEvent(new CustomEvent('denkzeug-theme', { detail: data.tokens }))
         window.dispatchEvent(new CustomEvent('nautionette-theme', { detail: data.tokens }))
       } else if (data.kind === 'response') {
         const item = pending.get(data.id)
@@ -68,7 +73,7 @@ export function connectMiniapp (frame, invoke, theme) {
     finally { clearTimeout(timer); controllers.delete(controller) }
   }
   channel.port1.start()
-  frame.contentWindow.postMessage({ kind: 'nautionette:init' }, '*', [channel.port2])
+  frame.contentWindow.postMessage({ kind: 'denkzeug:init' }, '*', [channel.port2])
   const setTheme = value => { if (!closed) channel.port1.postMessage({ kind: 'theme', ...value }) }
   setTheme(theme)
   return { setTheme, close () { closed = true; channel.port1.close(); controllers.forEach(item => item.abort()); controllers.clear() } }

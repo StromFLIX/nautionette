@@ -44,7 +44,7 @@
         </p>
         <input
           v-if="isNative" v-model="serverUrl" class="field" style="margin-bottom: 8px"
-          type="url" inputmode="url" placeholder="https://nautionette.example.com"
+          type="url" inputmode="url" placeholder="https://denkzeug.example.com"
         />
         <input
           v-model="token" class="field" type="password" placeholder="access token" aria-label="Access token"
@@ -79,7 +79,7 @@ import { currentTokens, preferences } from './preferences'
 import { syncSystemBars } from './system-bars'
 import { useChatActivity } from './chat-activity'
 
-const desktopOverlay = globalThis.nautionetteDesktop?.windowControlsOverlay === true
+const desktopOverlay = (globalThis.denkzeugDesktop || globalThis.nautionetteDesktop)?.windowControlsOverlay === true
 const DEFAULT_WIDTH = 320
 const route = useRoute()
 const router = useRouter()

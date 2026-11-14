@@ -43,20 +43,20 @@ jobs:
             -derivedDataPath out/simulator \
             MARKETING_VERSION="$(node -p 'require(\"./package.json\").version')" \
             CODE_SIGNING_ALLOWED=NO build
-          ditto -c -k --keepParent out/simulator/Build/Products/Debug-iphonesimulator/App.app out/nautionette-ios-simulator.zip
+          ditto -c -k --keepParent out/simulator/Build/Products/Debug-iphonesimulator/App.app out/denkzeug-ios-simulator.zip
       - name: Archive for devices without signing
         # This is a build artifact, NOT a sideloadable IPA or App Store release.
         run: |
           xcodebuild -project ios/App/App.xcodeproj -scheme App \
             -configuration Release -destination 'generic/platform=iOS' \
-            -archivePath out/Nautionette.xcarchive \
+            -archivePath out/Denkzeug.xcarchive \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             MARKETING_VERSION="$(node -p 'require(\"./package.json\").version')" \
             CODE_SIGNING_ALLOWED=NO archive
-          ditto -c -k --keepParent out/Nautionette.xcarchive out/nautionette-ios-unsigned-archive.zip
+          ditto -c -k --keepParent out/Denkzeug.xcarchive out/denkzeug-ios-unsigned-archive.zip
       - uses: actions/upload-artifact@v7
         with:
-          name: nautionette-ios-builds
-          path: services/frontend/out/nautionette-ios-*.zip
+          name: denkzeug-ios-builds
+          path: services/frontend/out/denkzeug-ios-*.zip
           if-no-files-found: error
           retention-days: 30

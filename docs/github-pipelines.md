@@ -42,7 +42,7 @@ are already deliberate operations.
 | --- | --- | --- |
 | Variable | `COOLIFY_URL` | `https://coolify.admin.stromflix.com` |
 | Variable | `COOLIFY_APPLICATION_UUID` | `tstmjujqyyl3zkvtwb0sx8nc` |
-| Variable | `APP_URL` | `https://app.nautionette.stage.stromflix.com` |
+| Variable | `APP_URL` | `https://app.stage.denkzeug.ai` |
 | Secret | `COOLIFY_TOKEN` | Permanent Coolify API token with application read/update/deploy access |
 | Secret | `APP_TOKEN` | Existing staging Denkzeug login/access token |
 
@@ -53,7 +53,7 @@ are already deliberate operations.
 | Variable | `COOLIFY_URL` | `https://coolify.admin.stromflix.com` |
 | Variable | `COOLIFY_APPLICATION_UUID` | `88veejhhzve4rjcnxzlyjzbo` |
 | Variable | `COOLIFY_STAGING_APPLICATION_UUID` | `tstmjujqyyl3zkvtwb0sx8nc` |
-| Variable | `APP_URL` | `https://app.nautionette.stromflix.com` |
+| Variable | `APP_URL` | `https://app.denkzeug.ai` |
 | Secret | `COOLIFY_TOKEN` | Permanent Coolify API token with production read/update/deploy and staging read access |
 | Secret | `APP_TOKEN` | Existing production Denkzeug login/access token |
 

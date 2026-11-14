@@ -108,7 +108,7 @@ existing literal substring filters and tool/session summaries.
 ```sh
 uv run pytest tests/backend/test_chat_search.py
 SEARCH_TEST_MODEL_CACHE=/tmp/search-model uv run python -c \
-  "from nautionette_backend.search_model import load_encoder; load_encoder('/tmp/search-model')"
+  "from denkzeug_backend.search_model import load_encoder; load_encoder('/tmp/search-model')"
 SEARCH_TEST_MODEL_CACHE=/tmp/search-model uv run pytest tests/backend/test_chat_search_model.py
 cd services/frontend
 npm test

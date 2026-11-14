@@ -21,12 +21,13 @@ try {
     window.show()
     window.focus()
   })
-  await expect(page.getByPlaceholder('https://nautionette.example.com')).toBeVisible({ timeout: 20000 })
+  await expect(page.getByPlaceholder('https://denkzeug.example.com')).toBeVisible({ timeout: 20000 })
   expect(await page.evaluate(() => ({
-    desktop: globalThis.nautionetteDesktop?.oauth?.version,
+    desktop: globalThis.denkzeugDesktop?.oauth?.version,
+    legacyDesktop: globalThis.nautionetteDesktop?.oauth?.version,
     node: typeof globalThis.require,
     origin: location.origin
-  }))).toEqual({ desktop: 1, node: 'undefined', origin: 'capacitor://localhost' })
+  }))).toEqual({ desktop: 1, legacyDesktop: 1, node: 'undefined', origin: 'capacitor://localhost' })
   // No menu can reappear with Alt. A small draggable strip replaces both old
   // rows; native caption buttons remain OS-owned, outside renderer hit-testing.
   expect(await application.evaluate(({ Menu }) => Menu.getApplicationMenu())).toBeNull()
@@ -87,12 +88,12 @@ try {
   expect(fixedResponse.status).toBe(400) // No state installed: arbitrary local requests rejected.
   await page.evaluate(() => globalThis.nautionetteDesktop.oauth.cancel())
   console.log('Desktop OAuth: fixed port 12798 bound, rejected unsolicited request, then closed')
-  const formReceiver = await page.evaluate(() => globalThis.nautionetteDesktop.oauth.prepare('http://localhost:0/callback'))
+  const formReceiver = await page.evaluate(() => globalThis.denkzeugDesktop.oauth.prepare('http://localhost:0/callback'))
   const formUrl = 'https://login.example.test/authorize?' + new URLSearchParams({
     state, redirect_uri: formReceiver.redirect_uri, response_type: 'code', response_mode: 'form_post',
     code_challenge: 'x'.repeat(43), code_challenge_method: 'S256'
   })
-  const formCallback = page.evaluate(({ receiver, state, url }) => globalThis.nautionetteDesktop.oauth.authorize({
+  const formCallback = page.evaluate(({ receiver, state, url }) => globalThis.denkzeugDesktop.oauth.authorize({
     id: receiver.id, state, authorization_url: url, response_mode: 'form_post'
   }), { receiver: formReceiver, state, url: formUrl })
   let formReceived = false
@@ -107,7 +108,7 @@ try {
   expect(await formCallback).toEqual({ method: 'POST', fields: { state, code: 'synthetic-form-code', session_state: 'synthetic-session' } })
   console.log(`Desktop OAuth: form_post callback received on actual localhost port ${formReceiver.port}`)
   await page.reload()
-  await expect(page.getByPlaceholder('https://nautionette.example.com')).toBeVisible({ timeout: 20000 })
+  await expect(page.getByPlaceholder('https://denkzeug.example.com')).toBeVisible({ timeout: 20000 })
   expect(errors).toEqual([])
   console.log('Packaged desktop: local assets, instance setup, isolated renderer and route reload OK')
 } finally {

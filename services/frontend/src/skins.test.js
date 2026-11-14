@@ -25,6 +25,9 @@ test('v1 theme compatibility and versioned skin round trips without account data
   assert.deepEqual(importDesign('{"version":1,"theme":"sand","overrides":{}}'), { kind: 'theme', theme: 'sand', overrides: {} })
   const skin = validateSkin(pack({ credentials: 'private', messages: ['not exported'] }))
   const exported = JSON.parse(exportSkin(skin, { 'radius-sm': 0 }))
+  assert.equal(skin.format, 'nautionette-skin') // Persisted packs are not rewritten on load.
+  assert.equal(exported.format, 'denkzeug-skin')
+  assert.equal(validateSkin(pack({ format: 'denkzeug-skin' })).format, 'denkzeug-skin')
   assert.equal(exported.credentials, undefined)
   assert.equal(exported.messages, undefined)
   assert.equal(exported.tokens['radius-sm'], 0)

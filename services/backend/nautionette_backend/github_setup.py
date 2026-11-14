@@ -53,7 +53,7 @@ def public_origin(value: str) -> str:
             raise ValueError
     except ValueError as exc:
         raise HTTPException(
-            422, "GitHub needs a public HTTPS instance URL, such as https://nautionette.example.com"
+            422, "GitHub needs a public HTTPS instance URL, such as https://denkzeug.example.com"
         ) from exc
     return f"https://{host}"
 
@@ -73,6 +73,70 @@ def status() -> dict[str, Any]:
         or os.environ.get("GITHUB_APP_PUBLIC_URL", "")
         or next((connection["public_url"] for connection in connections if connection["public_url"]), ""),
     }
+
+
+async def migrate_public_url(connection_id: str, public_url: str, callbacks_updated: bool) -> dict:
+    """Move local App metadata only after its owner updates GitHub registration.
+
+    Callback URLs cannot be edited/read through the GitHub App API. Require an
+    explicit owner attestation AND independently verify the webhook destination.
+    Never rewrite credentials or in-progress browser-bound setup state.
+    """
+    origin = public_origin(public_url)
+    if not callbacks_updated:
+        raise HTTPException(
+            409, "Update GitHub callback/setup/webhook URLs first, then confirm callbacks_updated"
+        )
+    configured = os.environ.get("GITHUB_APP_PUBLIC_URL", "")
+    if configured and public_origin(configured) != origin:
+        raise HTTPException(
+            409, "Update GITHUB_APP_PUBLIC_URL and redeploy before migrating the saved App origin"
+        )
+    config = projects.app_config(connection_id)
+    hook = await projects.github("GET", "/app/hook/config", projects.app_jwt(config))
+    if hook.get("url") != origin + BASE_PATH + "/webhook":
+        raise HTTPException(
+            409, "GitHub webhook URL does not match the requested instance; keep the old origin"
+        )
+    app_id = str(config["app_id"])
+    changed = []
+    with db.transaction() as connection:
+        selected = connection.execute(
+            "SELECT config FROM github_project_connections WHERE id = ?", (connection_id,)
+        ).fetchone()
+        if not selected or json.loads(selected["config"]).get("app_id") != config["app_id"]:
+            raise HTTPException(
+                409, "GitHub connection changed during verification; re-read it before retrying"
+            )
+        if connection.execute(
+            "SELECT 1 FROM github_app_setups WHERE expires_at >= ? LIMIT 1", (time.time(),)
+        ).fetchone():
+            raise HTTPException(
+                409, "Finish pending GitHub setup attempts or let them expire before migrating"
+            )
+        for row in connection.execute("SELECT id, config FROM github_project_connections").fetchall():
+            current = json.loads(row["config"])
+            if str(current.get("app_id")) == app_id:
+                current["public_url"] = origin
+                connection.execute(
+                    "UPDATE github_project_connections SET config = ? WHERE id = ?",
+                    (json.dumps(current), row["id"]),
+                )
+                changed.append(row["id"])
+        registered = connection.execute(
+            "SELECT value FROM settings WHERE key = ?", (REGISTERED_SETTING,)
+        ).fetchone()
+        if registered:
+            current = json.loads(registered["value"])
+            if str(current.get("app_id")) == app_id:
+                current["public_url"] = origin
+                connection.execute(
+                    "UPDATE settings SET value = ? WHERE key = ?", (json.dumps(current), REGISTERED_SETTING)
+                )
+    for identifier in changed:
+        projects.invalidate_tokens(identifier)
+    bus.publish("projects.github_event", {"event": "public_url_changed", "connection_id": connection_id})
+    return {"public_url": origin, "connection_ids": changed}
 
 
 def begin(

@@ -47,7 +47,7 @@ jobs:
       - name: Shared display branding matches every build context
         run: |
           python3 scripts/sync_brand.py --check
-          uv run pytest tests/test_branding.py tests/test_readme.py tests/backend/test_display_brand.py tests/backend/test_build_metadata.py
+          uv run pytest tests/test_branding.py tests/test_readme.py tests/test_import_aliases.py tests/backend/test_display_brand.py tests/backend/test_build_metadata.py
 
       - name: Lint
         run: uv run ruff check --output-format github .
@@ -113,7 +113,7 @@ jobs:
         run: uv run pytest tests/backend/test_chat_draining.py tests/backend/test_chat_restart_process.py tests/backend/test_chat_recovery.py tests/backend/test_chat_finalization.py tests/backend/test_chat_queue.py tests/backend/test_chat_activity.py tests/backend/test_chat_sessions.py tests/backend/test_chat_branches.py tests/backend/test_chat_branch_projects.py
 
       - name: GitHub connections, migrations and project credentials
-        run: uv run pytest tests/backend/test_github_connections.py tests/backend/test_github_setup.py tests/backend/test_projects.py tests/backend/test_worktree_retention.py tests/backend/test_project_changes.py tests/backend/test_project_credentials.py tests/broker/test_projects.py tests/broker/test_git_credentials.py
+        run: uv run pytest tests/backend/test_github_connections.py tests/backend/test_github_setup.py tests/backend/test_github_origin_migration.py tests/backend/test_projects.py tests/backend/test_worktree_retention.py tests/backend/test_project_changes.py tests/backend/test_project_credentials.py tests/broker/test_projects.py tests/broker/test_git_credentials.py
 
       - name: Committed workflows still validate
         run: uv run --package nautionette-workflow-mcp python scripts/check_workflows.py
@@ -568,3 +568,5 @@ jobs:
           cp .env.example .env
           MAXIO_SECRET_KEY="$(openssl rand -hex 32)" \
             docker compose --profile images --profile debug --profile observability config --quiet
+      - name: New installation defaults and preserved upgrade identities
+        run: python3 scripts/check_compose_identity.py

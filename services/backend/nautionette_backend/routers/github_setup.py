@@ -22,6 +22,20 @@ class Connect(BaseModel):
     new_app: bool = False
 
 
+class PublicOrigin(BaseModel):
+    public_url: str = Field(max_length=2048)
+    callbacks_updated: bool = False
+
+
+@router.put(
+    github_setup.BASE_PATH + "/{connection_id}/public-url",
+    dependencies=[Depends(require_user)],
+    operation_id="migrate_github_project_origin",
+)
+async def migrate_public_url(connection_id: str, payload: PublicOrigin):
+    return await github_setup.migrate_public_url(connection_id, payload.public_url, payload.callbacks_updated)
+
+
 def failure_response(error: HTTPException) -> HTMLResponse:
     return HTMLResponse(
         '<!doctype html><html lang="en"><meta charset="utf-8">'

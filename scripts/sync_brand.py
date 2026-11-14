@@ -32,6 +32,13 @@ def validate_brand(brand: dict) -> None:
             raise ValueError(f"Missing display brand field: {key}")
     if not re.fullmatch(r"https://github\.com/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+", brand["repository"]):
         raise ValueError("Brand repository must be a canonical HTTPS GitHub owner/repository URL.")
+    for key in ("website", "app", "stagingWebsite", "stagingApp"):
+        if not re.fullmatch(
+            r"https://(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}", brand.get(key, "")
+        ):
+            raise ValueError(f"Brand {key} must be a public HTTPS origin without a path.")
+    if not re.fullmatch(r"[a-z][a-z0-9-]{0,47}", brand.get("artifactPrefix", "")):
+        raise ValueError("Brand artifactPrefix must be a lowercase filename prefix.")
     for key in [
         "paper",
         "white",
@@ -121,6 +128,7 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
             lambda match: match[1] + json.dumps(brand["name"]),
             design.read_text(),
         )
+        text = re.sub(r'("format"\s*:\s*)"nautionette-skin"', r'\1"denkzeug-skin"', text)
         files[design] = text.encode()
     tokens = {
         "paper": "paper",
@@ -156,7 +164,23 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
     # Public repository references have one source of truth. Do not touch GHCR
     # paths, runtime namespaces, deployment domains, or historical audit records.
     repository = brand["repository"].removeprefix("https://github.com/")
-    for name in ("README.md", "docs/self-hosting.md", "docs/github-pipelines.md", "docs/staging.md"):
+    public_origins = {
+        "https://nautionette.stromflix.com": brand["website"],
+        "https://denkzeug.ai": brand["website"],
+        "https://app.nautionette.stromflix.com": brand["app"],
+        "https://app.denkzeug.ai": brand["app"],
+        "https://nautionette.stage.stromflix.com": brand["stagingWebsite"],
+        "https://stage.denkzeug.ai": brand["stagingWebsite"],
+        "https://app.nautionette.stage.stromflix.com": brand["stagingApp"],
+        "https://app.stage.denkzeug.ai": brand["stagingApp"],
+    }
+    for name in (
+        "README.md",
+        "docs/README.md",
+        "docs/self-hosting.md",
+        "docs/github-pipelines.md",
+        "docs/staging.md",
+    ):
         path = root / name
         if path.exists():
             text = re.sub(
@@ -168,6 +192,8 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
             text = re.sub(
                 r"^cd (?:nautionette|denkzeug)$", "cd " + repository.split("/")[1], text, flags=re.M
             )
+            for old, new in public_origins.items():
+                text = text.replace(old, new)
             files[path] = text.encode()
     release_workflow = root / "workflows/prepare_nautionette_release.py"
     if release_workflow.exists():
@@ -183,6 +209,13 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
             text,
         )
         text = re.sub(r'^REPO = "[^"]*"', lambda _: "REPO = " + json.dumps(repository), text, flags=re.M)
+        for name, value in (("STAGING_URL", brand["stagingApp"]), ("PRODUCTION_URL", brand["app"])):
+            text = re.sub(
+                rf'^{name} = "[^"]*"',
+                lambda _, value=value, name=name: name + " = " + json.dumps(value),
+                text,
+                flags=re.M,
+            )
         files[release_workflow] = text.encode()
     template = website / "index.template.html"
     if template.exists():
@@ -201,13 +234,15 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
     html = re.sub(r'href="/favicon\.svg(?:\?[^"]*)?"', f'href="/favicon.svg?v={logo_version}"', html)
     files[index] = html.encode()
     # Display metadata only: preserve appId, package name, protocol schemes,
-    # artifact names, desktopName, data paths and the existing updater identity.
+    # desktopName, existing data paths and the existing updater identity.
+    # Download filenames are presentation, not an installed application ID.
     package = frontend / "package.json"
     text = package.read_text()
     for key, value in {
         "description": f"{brand['name']} desktop and mobile client for your self-hosted instance",
         "author": f"{brand['name']} contributors",
         "productName": brand["name"],
+        "artifactName": brand["artifactPrefix"] + "-v${version}-${os}-${arch}.${ext}",
         "NSMicrophoneUsageDescription": f"Record dictation for your {brand['name']} instance.",
     }.items():
         text = re.sub(

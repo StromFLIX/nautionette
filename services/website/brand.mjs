@@ -5,6 +5,11 @@ export const brand = Object.freeze({
   "description": "Your agents, workflows and miniapps. A self-hosted tool for thought.",
   "defaultTheme": "denkzeug",
   "repository": "https://github.com/StromFLIX/denkzeug",
+  "website": "https://denkzeug.ai",
+  "app": "https://app.denkzeug.ai",
+  "stagingWebsite": "https://stage.denkzeug.ai",
+  "stagingApp": "https://app.stage.denkzeug.ai",
+  "artifactPrefix": "denkzeug",
   "colors": {
     "paper": "#f8f9fc",
     "white": "#ffffff",

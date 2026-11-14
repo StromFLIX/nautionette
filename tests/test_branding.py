@@ -25,6 +25,16 @@ def test_brand_config_rejects_unsafe_copy_and_non_color_css():
     ):
         with pytest.raises(ValueError, match="canonical HTTPS GitHub"):
             validate_brand({**brand, "repository": repository})
+    for field in ("website", "app", "stagingWebsite", "stagingApp"):
+        for origin in (
+            "http://app.example.com",
+            "https://user:pass@app.example.com",
+            "https://app.example.com/path",
+        ):
+            with pytest.raises(ValueError, match="public HTTPS origin"):
+                validate_brand({**brand, field: origin})
+    with pytest.raises(ValueError, match="filename prefix"):
+        validate_brand({**brand, "artifactPrefix": "../unsafe"})
     with pytest.raises(ValueError, match="six-digit hex"):
         validate_brand({**brand, "colors": {**brand["colors"], "paper": "url(https://example.test)"}})
 
@@ -36,8 +46,8 @@ def test_display_branding_does_not_change_technical_identity():
     assert package["build"]["productName"] == capacitor["appName"] == brand["name"]
     assert package["name"] == "nautionette-frontend"
     assert package["build"]["appId"] == capacitor["appId"] == "dev.nautionette.app"
-    assert package["build"]["protocols"][0]["schemes"] == ["nautionette"]
-    assert package["build"]["artifactName"].startswith("nautionette-")
+    assert package["build"]["protocols"][0]["schemes"] == ["denkzeug", "nautionette"]
+    assert package["build"]["artifactName"].startswith(brand["artifactPrefix"] + "-")
 
 
 def test_repository_cutover_syncs_links_and_release_reads_but_not_runtime_identity(monkeypatch):
@@ -73,10 +83,26 @@ def test_repository_cutover_syncs_links_and_release_reads_but_not_runtime_identi
         assert json.loads(files[ROOT / name])["repository"] == brand["repository"]
     package = json.loads(files[ROOT / "services/frontend/package.json"])
     assert package["build"]["appId"] == "dev.nautionette.app"
-    assert package["build"]["protocols"][0]["schemes"] == ["nautionette"]
+    assert package["build"]["protocols"][0]["schemes"] == ["denkzeug", "nautionette"]
     assert "ghcr.io/stromflix/nautionette/pi-" in files[ROOT / "docs/github-pipelines.md"].decode()
-    assert "app.nautionette.stage.stromflix.com" in files[ROOT / "docs/staging.md"].decode()
+    assert "app.stage.denkzeug.ai" in files[ROOT / "docs/staging.md"].decode()
+    assert 'STAGING_URL = "https://app.stage.denkzeug.ai"' in workflow
+    assert 'PRODUCTION_URL = "https://app.denkzeug.ai"' in workflow
     assert ROOT / "docker-compose.yaml" not in files
+
+
+def test_native_download_names_follow_branding_without_changing_installed_ids():
+    brand = json.loads((ROOT / "branding/brand.json").read_text())
+    prefix = brand["artifactPrefix"]
+    for workflow in ("android", "desktop", "ios"):
+        assert prefix + "-" in (ROOT / f".github/workflows/{workflow}.yml").read_text()
+    assert (
+        f'"out/{prefix}-${{GITHUB_REF_NAME}}-release.apk"'
+        in (ROOT / ".github/workflows/android.yml").read_text()
+    )
+    source = (ROOT / "services/frontend/desktop/main.cjs").read_text()
+    assert "setAsDefaultProtocolClient('denkzeug')" in source
+    assert "setAsDefaultProtocolClient('nautionette')" in source
 
 
 def test_original_solid_logo_has_no_nested_strokes_or_raster_dependency():

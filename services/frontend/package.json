@@ -12,8 +12,8 @@
     "directories": { "output": "out/desktop" },
     "files": ["dist/**/*", "desktop/**/*", "package.json"],
     "asar": true,
-    "protocols": [{ "name": "Denkzeug return", "schemes": ["nautionette"] }],
-    "artifactName": "nautionette-v${version}-${os}-${arch}.${ext}",
+    "protocols": [{ "name": "Denkzeug return", "schemes": ["denkzeug", "nautionette"] }],
+    "artifactName": "denkzeug-v${version}-${os}-${arch}.${ext}",
     "mac": {
       "target": ["dmg"],
       "category": "public.app-category.productivity",

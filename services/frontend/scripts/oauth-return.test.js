@@ -6,15 +6,19 @@ const { createAppReturns, createFocusOwner } = returns
 test('focus-only links return to the exact owner once, never receive OAuth parameters', () => {
   const focused = [], registry = createAppReturns({ focus: owner => { focused.push(owner); return true } })
   const a = registry.issue(17), b = registry.issue(29)
-  assert.match(a, /^nautionette:\/\/oauth-return\/[a-f0-9]{64}$/)
+  assert.match(a, /^denkzeug:\/\/oauth-return\/[a-f0-9]{64}$/)
   for (const value of [a + '?code=secret', a + '#state=secret', a.replace('oauth-return', 'mcp'),
-    a.replace('nautionette:', 'https:'), 'nautionette://oauth-return/' + 'f'.repeat(64)]) {
+    a.replace('denkzeug:', 'https:'), 'nautionette://oauth-return/' + 'f'.repeat(64),
+    'denkzeug://user:pass@oauth-return/' + 'a'.repeat(64), a + '/', a.toUpperCase()]) {
     assert.equal(registry.activate(value), false)
   }
   assert.deepEqual(focused, [])
-  assert.equal(registry.activate(b), true)
+  // Accept an older browser's focus-only scheme, but consume the same token
+  // once across both names. No provider callback or credential enters it.
+  assert.equal(registry.activate(b.replace('denkzeug:', 'nautionette:')), true)
   assert.deepEqual(focused, [29])
   assert.equal(registry.activate(b), false)
+  assert.equal(registry.activate(b.replace('denkzeug:', 'nautionette:')), false)
   registry.clear(17)
   assert.equal(registry.activate(a), false)
 })
