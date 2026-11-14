@@ -170,8 +170,10 @@ data, technical identities and compatibility paths.
 
 ---
 
-**Naming:** Denkzeug is the display name. Repository paths, environment variables,
-package IDs and installer filenames still use `nautionette` for compatibility.
+**Naming:** Denkzeug is the display name. Internal paths, environment variables,
+package IDs and installer filenames retain `nautionette` for compatibility.
+The [GitHub repository rename](docs/repository-rename.md) is a separate operation;
+it must not rename storage or runtime identities.
 
 **Licensing:** this repository does not yet include a project-wide `LICENSE` file.
 Third-party code, fonts and other bundled assets retain their own licenses.

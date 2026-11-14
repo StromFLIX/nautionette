@@ -49,6 +49,7 @@ MANIFEST = {
     "timeout_minutes": 30,
     "tags": ["github", "release", "manual", "read-only"],
 }
+# Generated from branding/brand.json by scripts/sync_brand.py.
 REPO = "StromFLIX/nautionette"
 WEB = "https://github.com/" + REPO
 API = "https://api.github.com/repos/" + REPO
@@ -336,11 +337,10 @@ class PrepareNautionetteRelease:
         return result
 
     async def pages(self, tool):
+        owner, repo = REPO.split("/")
         rows = []
         for page in range(1, 51):
-            batch = await self.mcp(
-                tool, {"owner": "StromFLIX", "repo": "nautionette", "page": page, "perPage": 100}
-            )
+            batch = await self.mcp(tool, {"owner": owner, "repo": repo, "page": page, "perPage": 100})
             if not isinstance(batch, list):
                 raise ValueError("Unexpected pagination shape from " + tool)
             rows.extend(batch)

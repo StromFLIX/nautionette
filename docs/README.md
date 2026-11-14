@@ -38,6 +38,7 @@
 - [Project-chat latency investigation](spikes/project-chat-ttft.md) — measured startup
   timings, limitations and the authenticated HTTP/SSE benchmark.
 - [Deployment pipelines](github-pipelines.md) — CI, releases, images and deployment checks.
+- [Repository rename](repository-rename.md) — staged GitHub rename without changing runtime/storage identity.
 - [Isolated staging](staging.md) — provisioning, production-data snapshots and
   quarantine precautions. This is an operator procedure, not the normal quick start.
 - [Current dependency audit](dependency-audit-2026-11-13.md),

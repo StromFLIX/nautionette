@@ -30,6 +30,8 @@ def validate_brand(brand: dict) -> None:
     for key in ["tagline", "description", "interfaceFont", "defaultTheme", "repository"]:
         if not isinstance(brand.get(key), str) or not brand[key].strip():
             raise ValueError(f"Missing display brand field: {key}")
+    if not re.fullmatch(r"https://github\.com/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+", brand["repository"]):
+        raise ValueError("Brand repository must be a canonical HTTPS GitHub owner/repository URL.")
     for key in [
         "paper",
         "white",
@@ -151,6 +153,22 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
         files[root / "images/agent-sets/default/AGENTS.md"] = (
             agent_template.read_text().replace("{{brand.name}}", brand["name"]).encode()
         )
+    # Public repository references have one source of truth. Do not touch GHCR
+    # paths, runtime namespaces, deployment domains, or historical audit records.
+    repository = brand["repository"].removeprefix("https://github.com/")
+    for name in ("README.md", "docs/self-hosting.md", "docs/github-pipelines.md", "docs/staging.md"):
+        path = root / name
+        if path.exists():
+            text = re.sub(
+                r"StromFLIX/(?:nautionette|denkzeug)(?=\.git\b|[^A-Za-z0-9_.-]|$)",
+                repository,
+                path.read_text(),
+            )
+            # Clone instructions default to the repository's directory name.
+            text = re.sub(
+                r"^cd (?:nautionette|denkzeug)$", "cd " + repository.split("/")[1], text, flags=re.M
+            )
+            files[path] = text.encode()
     release_workflow = root / "workflows/prepare_nautionette_release.py"
     if release_workflow.exists():
         text = re.sub(
@@ -164,6 +182,7 @@ def expected_files(root: Path = ROOT) -> dict[Path, bytes]:
             lambda match: match[1] + json.dumps(f"Prepare {brand['name']} release"),
             text,
         )
+        text = re.sub(r'^REPO = "[^"]*"', lambda _: "REPO = " + json.dumps(repository), text, flags=re.M)
         files[release_workflow] = text.encode()
     template = website / "index.template.html"
     if template.exists():

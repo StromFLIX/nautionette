@@ -35,6 +35,72 @@ def test_project_settings_are_user_only_and_never_return_private_key(client, ano
     assert anonymous.put("/api/projects/github-app", json={}).status_code == 401
 
 
+@pytest.mark.parametrize("status", ["ready", "archived", "failed"])
+async def test_readding_renamed_repository_preserves_project_and_refreshes_metadata(db, monkeypatch, status):
+    project_id = ready_project(db, "StromFLIX/nautionette")
+    db.execute("UPDATE projects SET status = ? WHERE id = ?", (status, project_id))
+    projects.save_connection({"app_id": "1", "installation_id": "2"})
+    token = AsyncMock(return_value="token")
+    monkeypatch.setattr(projects, "installation_token", token)
+    monkeypatch.setattr(
+        projects,
+        "github",
+        AsyncMock(
+            return_value={
+                "id": 123,
+                "full_name": "StromFLIX/denkzeug",
+                "default_branch": "new-default",
+            }
+        ),
+    )
+    clone = AsyncMock()
+    monkeypatch.setattr(projects, "clone", clone)
+    chat = db.create_chat("Existing work", "default")
+    directory = projects.PROJECTS_DIR / ".sessions" / project_id / chat["id"]
+    directory.mkdir(parents=True)
+    (directory / "unfinished.txt").write_text("keep this")
+    result = await projects.add_repository("StromFLIX/denkzeug")
+    await asyncio.sleep(0)  # Let a failed checkout's retry task run.
+    assert result["id"] == project_id
+    assert result["full_name"] == "StromFLIX/denkzeug"
+    assert result["default_branch"] == "new-default"
+    assert len(db.query("SELECT * FROM projects")) == 1
+    assert (directory / "unfinished.txt").read_text() == "keep this"
+    assert projects.checkout(project_id).is_dir()
+    token.assert_any_await(123, "1-2")
+    if status == "failed":
+        assert result["status"] == "cloning"
+        assert clone.call_args.args[0]["full_name"] == "StromFLIX/denkzeug"
+    else:
+        clone.assert_not_called()
+        assert projects.prepare_worktrees(chat["id"], [project_id])["project_remotes"] == {
+            project_id: "StromFLIX/denkzeug",
+        }
+
+
+async def test_readding_from_foreign_connection_cannot_rename_existing_project(db, monkeypatch):
+    project_id = ready_project(db)
+    projects.save_connection({"app_id": "3", "installation_id": "4"})
+    monkeypatch.setattr(projects, "installation_token", AsyncMock(return_value="token"))
+    monkeypatch.setattr(
+        projects,
+        "github",
+        AsyncMock(
+            return_value={
+                "id": 123,
+                "full_name": "owner/renamed",
+                "default_branch": "other",
+            }
+        ),
+    )
+    with pytest.raises(HTTPException, match="another GitHub connection"):
+        await projects.add_repository("owner/renamed")
+    assert (
+        db.one("SELECT full_name FROM projects WHERE id = ?", (project_id,))["full_name"]
+        == "owner/repository"
+    )
+
+
 def test_selection_requires_ready_checkouts(db):
     project_id = ready_project(db)
     assert projects.selection([project_id, project_id]) == [project_id]

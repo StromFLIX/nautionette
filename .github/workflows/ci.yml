@@ -519,7 +519,11 @@ jobs:
       - name: Publish tested agent images
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
-          REPOSITORY: ${{ github.repository }}
+          # Image identity is independent of the source repo name. Keep the
+          # existing namespace through a rename; opt into a registry move only
+          # after coordinating AGENT_IMAGE_REGISTRY_PREFIX on deployments.
+          # Forks retain their own namespace unless explicitly configured.
+          REPOSITORY: ${{ vars.AGENT_IMAGE_REPOSITORY || (github.repository_id == '1353247647' && 'StromFLIX/nautionette') || github.repository }}
           BASE_HASH: ${{ steps.images.outputs.base }}
           DEFAULT_HASH: ${{ steps.images.outputs.default }}
           MINIAPP_HASH: ${{ steps.images.outputs.miniapp }}

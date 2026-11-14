@@ -233,6 +233,16 @@ async def add_repository(full_name: str, connection_id: str = "") -> dict[str, A
     if existing:
         if existing["connection_id"] != connection_id:
             raise HTTPException(409, "This repository already belongs to another GitHub connection")
+        # GitHub's numeric ID survives a rename. Refresh the canonical name even
+        # if a rename webhook was missed, without replacing the saved checkout.
+        db.execute(
+            "UPDATE projects SET full_name = ?, default_branch = ? WHERE id = ?",
+            (repository["full_name"], repository["default_branch"], existing["id"]),
+        )
+        existing = existing | {
+            "full_name": repository["full_name"],
+            "default_branch": repository["default_branch"],
+        }
         if existing["status"] == "archived":
             if not checkout(existing["id"]).is_dir():
                 raise HTTPException(409, "The saved checkout is missing")

@@ -20,8 +20,9 @@ jobs:
     name: End to end
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # Stable GitHub repository ID: survives renames, still excludes forks.
     # A fork has no key, and a red run there would only ever mean "no secret".
-    if: github.repository == 'StromFLIX/nautionette'
+    if: github.repository_id == '1353247647'
     steps:
       - uses: actions/checkout@v7
 

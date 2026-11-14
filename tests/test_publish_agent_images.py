@@ -110,6 +110,34 @@ def test_all_images_must_be_published_from_local_tested_tags(monkeypatch):
     assert sleeps == []
 
 
+def test_repository_rename_does_not_change_configured_image_namespace(monkeypatch):
+    configure(monkeypatch)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "StromFLIX/denkzeug")
+    calls, _ = fake_docker(monkeypatch, [(0, "Pushed\n")] * 3)
+    publish.main()
+    assert all("ghcr.io/stromflix/nautionette/" in args[-1] for args in calls)
+
+
+def test_image_namespace_can_be_moved_explicitly_after_deployment_coordination(monkeypatch):
+    configure(monkeypatch)
+    monkeypatch.setenv("REPOSITORY", "StromFLIX/denkzeug")
+    calls, _ = fake_docker(monkeypatch, [(0, "Pushed\n")] * 3)
+    publish.main()
+    assert all("ghcr.io/stromflix/denkzeug/" in args[-1] for args in calls)
+
+
+def test_upstream_workflows_survive_source_rename_without_redirects():
+    root = Path(__file__).resolve().parents[1]
+    ci = (root / ".github/workflows/ci.yml").read_text()
+    smoke = (root / ".github/workflows/smoke.yml").read_text()
+    assert "if: github.repository_id == '1353247647'" in smoke
+    assert "github.repository == 'StromFLIX/nautionette'" not in smoke
+    assert (
+        "REPOSITORY: ${{ vars.AGENT_IMAGE_REPOSITORY || "
+        "(github.repository_id == '1353247647' && 'StromFLIX/nautionette') || github.repository }}"
+    ) in ci
+
+
 def test_second_image_failure_is_not_reported_as_success(monkeypatch):
     configure(monkeypatch)
     calls, _ = fake_docker(

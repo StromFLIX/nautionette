@@ -225,6 +225,17 @@ After the offline image tests pass, **main push/manual CI only** publishes:
 
 - `ghcr.io/stromflix/nautionette/pi-base:<base-context-hash>`
 - `ghcr.io/stromflix/nautionette/pi-agent-default:<agent-and-base-context-hash>`
+- `ghcr.io/stromflix/nautionette/miniapp-builder:<sdk-context-hash>`
+
+The upstream GHCR namespace is intentionally stable across a GitHub repository
+rename. CI identifies upstream by numeric repository ID `1353247647`, not by name.
+An optional Actions repository variable **`AGENT_IMAGE_REPOSITORY`** overrides the
+publication namespace (`owner/repository`, without `ghcr.io/` or a trailing slash).
+Forks default to their own repository namespace. Changing this variable does not
+update deployments: coordinate `AGENT_IMAGE_REGISTRY_PREFIX` separately, publish
+all three images first, and verify package pull permissions. See the
+[repository rename runbook](repository-rename.md). Keep the existing namespace
+for a source-only rename; no registry move is required.
 
 The publish step uses the job's scoped `GITHUB_TOKEN` (`packages: write`); PRs do
 not log in or publish. Publication must succeed before CI can trigger Deploy.
@@ -243,7 +254,7 @@ offline tests and publication step alongside the existing default set.
 
 1. Merge the changes and wait for a successful main CI image publication. Ensure
    repository/organization policy permits this job's `packages: write` permission.
-2. For this public repository's non-secret runtime images, make the two GHCR
+2. For this public repository's non-secret runtime images, make the three GHCR
    packages public in their package settings if anonymous pulls are desired.
    New GHCR packages are private by default. Do not make packages public if you
    have added private code/configuration to the image contexts. Alternatively,

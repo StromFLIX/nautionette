@@ -1,5 +1,6 @@
 import json
 import math
+from pathlib import Path
 
 import pytest
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageStat
@@ -17,6 +18,13 @@ def test_brand_config_rejects_unsafe_copy_and_non_color_css():
     for name in ["bad\nname", "../name", "<script>", ""]:
         with pytest.raises(ValueError):
             validate_brand({**brand, "name": name})
+    for repository in (
+        "https://example.com/o/r",
+        "https://github.com/o/r;echo",
+        "https://github.com/o/r.git/",
+    ):
+        with pytest.raises(ValueError, match="canonical HTTPS GitHub"):
+            validate_brand({**brand, "repository": repository})
     with pytest.raises(ValueError, match="six-digit hex"):
         validate_brand({**brand, "colors": {**brand["colors"], "paper": "url(https://example.test)"}})
 
@@ -30,7 +38,36 @@ def test_display_branding_does_not_change_technical_identity():
     assert package["build"]["appId"] == capacitor["appId"] == "dev.nautionette.app"
     assert package["build"]["protocols"][0]["schemes"] == ["nautionette"]
     assert package["build"]["artifactName"].startswith("nautionette-")
-    assert brand["repository"] == "https://github.com/StromFLIX/nautionette"
+
+
+def test_repository_cutover_syncs_links_and_release_reads_but_not_runtime_identity(monkeypatch):
+    brand_path = ROOT / "branding/brand.json"
+    brand = json.loads(brand_path.read_text()) | {"repository": "https://github.com/StromFLIX/denkzeug"}
+    read_text = Path.read_text
+
+    def renamed_source(path, *args, **kwargs):
+        return json.dumps(brand) if path == brand_path else read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", renamed_source)
+    files = expected_files()
+    for name in ("README.md", "docs/self-hosting.md"):
+        text = files[ROOT / name].decode()
+        assert "git clone https://github.com/StromFLIX/denkzeug.git" in text
+        assert "cd denkzeug\n" in text
+        assert "StromFLIX/nautionette" not in text
+    for name in ("docs/staging.md", "docs/github-pipelines.md", "services/website/brand.mjs"):
+        assert "StromFLIX/denkzeug" in files[ROOT / name].decode()
+    workflow = files[ROOT / "workflows/prepare_nautionette_release.py"].decode()
+    assert 'REPO = "StromFLIX/denkzeug"' in workflow
+    assert '@workflow.defn(name="prepare_nautionette_release")' in workflow
+    for name in ("services/frontend/src/brand-data.json", "images/pi-base/brand.json"):
+        assert json.loads(files[ROOT / name])["repository"] == brand["repository"]
+    package = json.loads(files[ROOT / "services/frontend/package.json"])
+    assert package["build"]["appId"] == "dev.nautionette.app"
+    assert package["build"]["protocols"][0]["schemes"] == ["nautionette"]
+    assert "ghcr.io/stromflix/nautionette/pi-" in files[ROOT / "docs/github-pipelines.md"].decode()
+    assert "app.nautionette.stage.stromflix.com" in files[ROOT / "docs/staging.md"].decode()
+    assert ROOT / "docker-compose.yaml" not in files
 
 
 def test_original_solid_logo_has_no_nested_strokes_or_raster_dependency():

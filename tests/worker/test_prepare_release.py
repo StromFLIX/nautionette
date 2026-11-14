@@ -118,6 +118,26 @@ def preparation(monkeypatch):
     return Preparation()
 
 
+async def test_repository_cutover_uses_one_identity_for_reads_guards_and_publish_links(
+    preparation, monkeypatch
+):
+    repo = "StromFLIX/denkzeug"
+    web = "https://github.com/" + repo
+    monkeypatch.setattr(release, "REPO", repo)
+    monkeypatch.setattr(release, "WEB", web)
+    monkeypatch.setattr(release, "API", "https://api.github.com/repos/" + repo)
+    preparation.app["git_repository"] = repo
+    preparation.report["changes"][0]["source"] = f"{web}/commit/{SHA}"
+    summary = (await preparation.run({"version": "minor"}))["summary"]
+    assert f"git push {web}.git" in summary
+    assert f"{web}/releases/new?tag=v1.8.0" in summary
+    inventories = [
+        args for tool, args in preparation.calls if tool in {"github_list_tags", "github_list_releases"}
+    ]
+    assert len(inventories) == 4
+    assert all(args["owner"] == "StromFLIX" and args["repo"] == "denkzeug" for args in inventories)
+
+
 @pytest.mark.parametrize("path", CONTROL_PATHS)
 @pytest.mark.parametrize(
     "content", ["# Edited policy documentation", "# New manual promotion implementation"]

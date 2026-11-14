@@ -200,7 +200,10 @@ def test_foreign_installations_and_malformed_webhooks_cannot_change_settings(db,
     assert anonymous.post(github_setup.BASE_PATH + "/webhook", content=b"{}").status_code == 401
 
 
-def test_push_webhooks_update_metadata_without_touching_chat_worktrees(db, anonymous, tmp_path, monkeypatch):
+@pytest.mark.parametrize("event", ["push", "repository"])
+def test_rename_webhooks_update_metadata_without_touching_chat_worktrees(
+    db, anonymous, tmp_path, monkeypatch, event
+):
     projects.save_connection({"app_id": "12", "installation_id": "34", "webhook_secret": "secret"})
     db.execute(
         "INSERT INTO projects (id, repository_id, full_name, default_branch, status, connection_id) "
@@ -211,10 +214,11 @@ def test_push_webhooks_update_metadata_without_touching_chat_worktrees(db, anony
     local = tmp_path / "unfinished.txt"
     local.write_text("keep my changes")
     payload = {
+        "action": "renamed",
         "installation": {"id": 34},
         "repository": {"id": 99, "full_name": "owner/new", "default_branch": "main"},
     }
-    assert send_webhook(anonymous, payload, event="push").status_code == 200
+    assert send_webhook(anonymous, payload, event=event).status_code == 200
     project = db.one("SELECT * FROM projects WHERE repository_id = 99")
     assert project["full_name"] == "owner/new" and project["default_branch"] == "main"
     assert local.read_text() == "keep my changes"

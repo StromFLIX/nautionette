@@ -41,6 +41,16 @@ test('Git credentials only match selected HTTPS GitHub repositories and expire',
   assert.equal(credential(request, environment), '')
 })
 
+test('a fresh turn after a rename authorizes only the new canonical repository path', (t) => {
+  const previous = credentialEnvironment(t)
+  const environment = projectEnvironment({ ...job, project_remotes: { [selected]: 'owner/renamed' } }, {
+    credentialsFile: previous.NAUTIONETTE_PROJECT_CREDENTIALS_FILE,
+  })
+  replaceCredentials(environment, [{ ...job.project_credentials[0], full_name: 'owner/renamed' }])
+  assert.equal(credential('protocol=https\nhost=github.com\npath=owner/repository.git\n\n', environment), '')
+  assert.match(credential('protocol=https\nhost=github.com\npath=owner/renamed.git\n\n', environment), /password=turn-secret/)
+})
+
 test('Git settings authorize only mounted safe directories and never persist credentials', () => {
   assert.deepEqual(projectEnvironment({}), {})
   const environment = projectEnvironment(job)
@@ -154,6 +164,14 @@ for (const empty of [false, true]) {
       git('-C', firstPath, 'push', 'origin', 'HEAD:refs/heads/main')
       assert.equal(git('--git-dir', remote, 'show', 'main:first.txt'), 'first chat')
       assert.equal(git('--git-dir', metadata, 'for-each-ref', '--format=%(refname)', 'refs/heads'), empty ? '' : 'refs/heads/main')
+      // A rename updates only origin: local commits, dirty files and chat refs survive.
+      const renamed = { ...first, project_remotes: { [selected]: 'owner/renamed' } }
+      prepareProjects(renamed, { projectsRoot: firstRoot, repositoriesRoot: metadataRoot })
+      assert.equal(git('-C', firstPath, 'remote', 'get-url', 'origin'), 'https://github.com/owner/renamed.git')
+      assert.equal(git('-C', firstPath, 'rev-parse', 'HEAD'), firstHead)
+      assert.equal(git('--git-dir', metadata, 'rev-parse', baselineRef), baseline)
+      assert.equal(readFileSync(join(firstPath, 'unfinished.txt'), 'utf8'), 'keep this\n')
+      git('--git-dir', metadata, 'remote', 'set-url', 'origin', remote)
       writeFileSync(join(secondPath, 'second.txt'), 'second chat\n')
       git('-C', secondPath, 'add', '.')
       git('-C', secondPath, 'commit', '-m', 'Second chat')

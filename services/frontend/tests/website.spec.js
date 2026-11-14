@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
+import { brand } from '../../website/brand.mjs'
 import { definitions } from '../../website/definitions.mjs'
 import { productTour } from '../../website/product-tour-data.mjs'
 
@@ -248,8 +249,8 @@ test('blocked storage, clipboard denial and unsafe instance URLs have usable fal
   await expect(page.getByRole('button', { name: 'Pause activity' })).toBeVisible()
   await page.getByLabel('Definition language').selectOption('ja')
   await expect(page.locator('#definition')).toHaveText(definitions.ja)
-  await expect(page.locator('#app-link')).toHaveAttribute('href', 'https://github.com/StromFLIX/nautionette')
-  await expect(page.locator('.setup-card code')).toHaveText('git clone https://github.com/StromFLIX/nautionette')
+  await expect(page.locator('#app-link')).toHaveAttribute('href', brand.repository)
+  await expect(page.locator('.setup-card code')).toHaveText(`git clone ${brand.repository}`)
   await page.getByRole('button', { name: 'Copy command' }).click()
   await expect(page.getByRole('status', { name: '' }).filter({ hasText: 'Select the command below' })).toBeVisible()
 })
