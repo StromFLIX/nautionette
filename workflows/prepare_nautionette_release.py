@@ -50,7 +50,7 @@ MANIFEST = {
     "tags": ["github", "release", "manual", "read-only"],
 }
 # Generated from branding/brand.json by scripts/sync_brand.py.
-REPO = "StromFLIX/nautionette"
+REPO = "StromFLIX/denkzeug"
 WEB = "https://github.com/" + REPO
 API = "https://api.github.com/repos/" + REPO
 STAGING = "tstmjujqyyl3zkvtwb0sx8nc"

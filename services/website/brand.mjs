@@ -4,7 +4,7 @@ export const brand = Object.freeze({
   "tagline": "A tool for thought. Yours to shape.",
   "description": "Your agents, workflows and miniapps. A self-hosted tool for thought.",
   "defaultTheme": "denkzeug",
-  "repository": "https://github.com/StromFLIX/nautionette",
+  "repository": "https://github.com/StromFLIX/denkzeug",
   "colors": {
     "paper": "#f8f9fc",
     "white": "#ffffff",

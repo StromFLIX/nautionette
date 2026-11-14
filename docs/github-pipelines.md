@@ -1,6 +1,6 @@
 # GitHub owns deployments and staging refreshes
 
-Both operations run from **StromFLIX/nautionette → Actions**, not from a Denkzeug
+Both operations run from **StromFLIX/denkzeug → Actions**, not from a Denkzeug
 workflow. Replacing production cannot kill the GitHub runner. Neither pipeline
 creates Denkzeug chats or sends result notifications. Skips/no-ops stay silent
 in Denkzeug; failures remain visible in GitHub Actions.

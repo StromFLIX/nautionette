@@ -18,7 +18,7 @@ Known production resource:
 - Project `nautionette`: `gmmxgjx13nnmc9u3hw41vrpe`
 - Application: `88veejhhzve4rjcnxzlyjzbo`
 - Server: `hetzner-1`, `94.130.151.7`
-- Repository: `StromFLIX/nautionette`, branch `main`, Docker Compose
+- Repository: `StromFLIX/denkzeug`, branch `main`, Docker Compose
 - App: `https://app.nautionette.stromflix.com`
 - Site: `https://nautionette.stromflix.com`
 

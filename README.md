@@ -8,8 +8,8 @@
 Your agents, workflows and miniapps. A self-hosted home for the work that comes next.</p>
 
 <p align="center">
-  <a href="https://github.com/StromFLIX/nautionette/actions/workflows/ci.yml"><img src="https://github.com/StromFLIX/nautionette/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
-  <a href="https://github.com/StromFLIX/nautionette/releases"><img src="https://img.shields.io/github/v/release/StromFLIX/nautionette?color=657ade" alt="Latest release" /></a>
+  <a href="https://github.com/StromFLIX/denkzeug/actions/workflows/ci.yml"><img src="https://github.com/StromFLIX/denkzeug/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" /></a>
+  <a href="https://github.com/StromFLIX/denkzeug/releases"><img src="https://img.shields.io/github/v/release/StromFLIX/denkzeug?color=657ade" alt="Latest release" /></a>
   <a href="docs/self-hosting.md"><img src="https://img.shields.io/badge/Docker_Engine-28%2B-657ade?logo=docker&logoColor=white" alt="Docker Engine 28 or newer" /></a>
 </p>
 
@@ -18,7 +18,7 @@ Your agents, workflows and miniapps. A self-hosted home for the work that comes 
   <a href="https://nautionette.stromflix.com/#workspace">Screenshot tour</a> ·
   <a href="#run-it">Set up an instance</a> ·
   <a href="docs/README.md">Documentation</a> ·
-  <a href="https://github.com/StromFLIX/nautionette/releases">Downloads</a>
+  <a href="https://github.com/StromFLIX/denkzeug/releases">Downloads</a>
 </p>
 
 Denkzeug connects conversations, useful files and repeatable work. Chat with agents
@@ -79,8 +79,8 @@ connection for builds, tool downloads and your model provider. Node.js and Pytho
 are not needed on the host for the Docker setup.
 
 ```sh
-git clone https://github.com/StromFLIX/nautionette.git
-cd nautionette
+git clone https://github.com/StromFLIX/denkzeug.git
+cd denkzeug
 cp .env.example .env
 ```
 
@@ -138,8 +138,8 @@ installing a desktop or phone client does not install the backend.
 | Client | Availability |
 | --- | --- |
 | **Web** | Open your instance in a browser. |
-| **Desktop** | macOS Apple silicon/Intel, Windows x64 and Linux x64 installers in [Releases](https://github.com/StromFLIX/nautionette/releases). Desktop installers are currently unsigned. |
-| **Android** | Sideload the release APK from [Releases](https://github.com/StromFLIX/nautionette/releases). |
+| **Desktop** | macOS Apple silicon/Intel, Windows x64 and Linux x64 installers in [Releases](https://github.com/StromFLIX/denkzeug/releases). Desktop installers are currently unsigned. |
+| **Android** | Sideload the release APK from [Releases](https://github.com/StromFLIX/denkzeug/releases). |
 | **iOS** | Source builds and unsigned CI archives; installation requires your own Apple signing/provisioning. Not a public installable IPA. |
 
 [Client builds, signing and platform notes](docs/reference.md#desktop-and-ios-builds)
@@ -161,7 +161,7 @@ installing a desktop or phone client does not install the backend.
 ## Contributing
 
 Bug reports, reproducible examples and focused pull requests are welcome. Use
-[Issues](https://github.com/StromFLIX/nautionette/issues) for bugs and proposals.
+[Issues](https://github.com/StromFLIX/denkzeug/issues) for bugs and proposals.
 For a change, explain what it does and how you tested it; preserve existing user
 data, technical identities and compatibility paths.
 

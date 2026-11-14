@@ -28,8 +28,8 @@ are not required for this Docker setup.
 The examples use a POSIX shell; on Windows, use Git Bash or WSL for these commands.
 
 ```sh
-git clone https://github.com/StromFLIX/nautionette.git
-cd nautionette
+git clone https://github.com/StromFLIX/denkzeug.git
+cd denkzeug
 cp .env.example .env
 ```
 
